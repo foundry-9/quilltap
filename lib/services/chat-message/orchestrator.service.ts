@@ -1062,7 +1062,13 @@ async function processMessage(
     ),
   )
 
-  const { cachedCompressionResponse, preSearchedMemories, recallSignals, stopKeepAlive } = await runPreContextPreCompute({
+  const {
+    cachedCompressionResponse,
+    preSearchedMemories,
+    recallSignals,
+    preSearchedQueryEmbedding,
+    stopKeepAlive,
+  } = await runPreContextPreCompute({
     chatId,
     userId,
     chat,
@@ -1137,6 +1143,7 @@ async function processMessage(
       // Proactive memory recall results
       preSearchedMemories,
       recallSignals,
+      preSearchedQueryEmbedding,
       // Memory recap: uncensored fallback for dangerous chats. Off-duty
       // chats opt out, so the fallback is not engaged for them.
       uncensoredFallbackOptions: (isChatActiveDangerous(chat) && dangerSettings && cheapLLMSelection)

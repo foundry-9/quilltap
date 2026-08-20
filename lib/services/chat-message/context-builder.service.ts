@@ -7,7 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
-import type { SemanticSearchResult } from '@/lib/memory/memory-service'
+import type { SemanticSearchResult, SearchQueryEmbedding } from '@/lib/memory/memory-service'
 import type { MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
@@ -77,6 +77,12 @@ export interface BuildMessageContextOptions {
   preSearchedMemories?: SemanticSearchResult[]
   /** Turn-level recall signals from the proactive distillation (retrospective cadence). */
   recallSignals?: MemorySearchExtraction
+  /**
+   * Query text + vector the proactive memory search already embedded. Reused
+   * (never re-embedded) by the per-turn conversation-summary list when the
+   * pre-searched memories are the ones this turn uses.
+   */
+  preSearchedQueryEmbedding?: SearchQueryEmbedding
   /** Whether to generate a memory recap for this character (chat start or character join) */
   generateMemoryRecap?: boolean
   /** Uncensored fallback options for memory recap in dangerous chats */
@@ -552,6 +558,7 @@ export async function buildMessageContext(
     cachedCompressionMessageCount,
     preSearchedMemories,
     recallSignals,
+    preSearchedQueryEmbedding,
     generateMemoryRecap: requestMemoryRecap,
     uncensoredFallbackOptions,
   } = options
@@ -729,6 +736,7 @@ export async function buildMessageContext(
     // Proactive memory recall
     preSearchedMemories,
     recallSignals,
+    preSearchedQueryEmbedding,
     // Memory recap (chat start or character join)
     generateMemoryRecap: shouldGenerateRecap,
     uncensoredFallbackOptions,

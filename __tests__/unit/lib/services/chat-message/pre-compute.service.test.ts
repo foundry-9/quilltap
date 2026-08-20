@@ -239,6 +239,61 @@ describe('pre-compute.service', () => {
       )
     })
 
+    it('hands back the vector the memory search embedded, for reuse later in the turn', async () => {
+      // The per-turn conversation-summary list rides this vector instead of
+      // embedding the same sentence a second time, so it has to survive the
+      // trip out of the proactive task.
+      const captured = new Float32Array([0.25, 0.5, 0.25])
+      ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({
+        success: true,
+        result: { keywords: ['storm'], paraphrase: 'They are talking about the storm.' },
+      })
+      ;(mockSearchMemoriesSemantic as jest.Mock).mockImplementation(
+        async (_characterId: string, query: string, options: any) => {
+          options.captureQueryEmbedding?.({ query, embedding: captured })
+          return [{ id: 'm1', content: 'memory 1' }]
+        },
+      )
+
+      const result = await runPreContextPreCompute(baseOptions({
+        cheapLLMSelection: baseCheapLLM,
+        content: 'and then the storm hit',
+        existingMessages: [
+          { type: 'message', role: 'ASSISTANT', content: 'past', participantId: 'p-char' } as any,
+        ],
+      }))
+
+      expect(result.preSearchedQueryEmbedding).toEqual({
+        query: 'They are talking about the storm.',
+        embedding: captured,
+      })
+    })
+
+    it('still reports the embedded vector when the search finds no memories', async () => {
+      const captured = new Float32Array([1, 0])
+      ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({
+        success: true,
+        result: { keywords: ['storm'], paraphrase: 'They are talking about the storm.' },
+      })
+      ;(mockSearchMemoriesSemantic as jest.Mock).mockImplementation(
+        async (_characterId: string, query: string, options: any) => {
+          options.captureQueryEmbedding?.({ query, embedding: captured })
+          return []
+        },
+      )
+
+      const result = await runPreContextPreCompute(baseOptions({
+        cheapLLMSelection: baseCheapLLM,
+        content: 'and then the storm hit',
+        existingMessages: [
+          { type: 'message', role: 'ASSISTANT', content: 'past', participantId: 'p-char' } as any,
+        ],
+      }))
+
+      expect(result.preSearchedMemories).toBeUndefined()
+      expect(result.preSearchedQueryEmbedding?.embedding).toBe(captured)
+    })
+
     it('passes null for occurredWithin when no window was resolved', async () => {
       ;(mockExtractMemorySearchKeywords as jest.Mock).mockResolvedValue({
         success: true,

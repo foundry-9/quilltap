@@ -149,7 +149,7 @@ Recall reaches the model as plain second-person prose appended to the new user m
 Sections are appended to the new user message in this order, separated by `---`:
 
 1. Aurora Core packet
-2. Commonplace Book recall (scene state → recap → relevant memories → inter-character memories → knowledge → retrospective recall)
+2. Commonplace Book recall (scene state → recap → relevant memories → inter-character memories → knowledge → relevant past conversations → retrospective recall). The relevant-past-conversations section is present only when the instance-wide `memoryRecall.perTurnConversationSummaries` setting is on (off by default); otherwise that list reaches the character through the recap, the fold-posted `relevant-conversations` whisper, or the retrospective mini-recap.
 3. Suparṇā mail
 4. "Nothing to add" turn-skip note
 

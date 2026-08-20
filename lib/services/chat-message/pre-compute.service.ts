@@ -28,7 +28,11 @@ import {
   type CachedCompressionResponse,
 } from './compression-cache.service'
 import { extractMemorySearchKeywords, extractVisibleConversation, stripToolArtifacts, type MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
-import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
+import {
+  searchMemoriesSemantic,
+  type SemanticSearchResult,
+  type SearchQueryEmbedding,
+} from '@/lib/memory/memory-service'
 import type { RecallContext } from '@/lib/memory/recall-tags'
 import { recentlyWhisperedIdSet } from '@/lib/memory/recall-history'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
@@ -73,6 +77,14 @@ export interface PreContextPreComputeResult {
   cachedCompressionResponse: CachedCompressionResponse | undefined
   preSearchedMemories: SemanticSearchResult[] | undefined
   /**
+   * The query text and vector the proactive memory search embedded. Threaded
+   * into buildContext so the per-turn conversation-summary list (when the
+   * instance-wide `memoryRecall.perTurnConversationSummaries` setting is on)
+   * rides the same vector instead of paying for a second embedding call.
+   * Undefined when the proactive path didn't run or its embedding failed.
+   */
+  preSearchedQueryEmbedding: SearchQueryEmbedding | undefined
+  /**
    * The turn-level recall signals the proactive keyword distillation emitted
    * (retrospective / timeRange / entities / paraphrase). Threaded into
    * buildContext so the retrospective cadence (enlarged head + mini-recap)
@@ -94,6 +106,7 @@ export async function runPreContextPreCompute(
   ])
   const preSearchedMemories = recallOutcome?.memories
   const recallSignals = recallOutcome?.signals
+  const preSearchedQueryEmbedding = recallOutcome?.queryEmbedding
 
   // Keep-alive pings during the upcoming buildMessageContext (especially long
   // when compression is regenerating). Only armed when compression is enabled
@@ -115,6 +128,7 @@ export async function runPreContextPreCompute(
     cachedCompressionResponse,
     preSearchedMemories,
     recallSignals,
+    preSearchedQueryEmbedding,
     stopKeepAlive: () => {
       if (keepAliveInterval) {
         clearInterval(keepAliveInterval)
@@ -167,6 +181,8 @@ async function compressionTask(
 interface ProactiveRecallOutcome {
   memories: SemanticSearchResult[] | undefined
   signals: MemorySearchExtraction | undefined
+  /** The vector this task embedded for `searchQuery`, for downstream reuse. */
+  queryEmbedding: SearchQueryEmbedding | undefined
 }
 
 async function proactiveRecallTask(
@@ -312,6 +328,9 @@ async function proactiveRecallTask(
     }
   }
 
+  // Captured by `searchMemoriesSemantic` the moment it embeds `searchQuery`.
+  let queryEmbedding: SearchQueryEmbedding | undefined
+
   try {
     const memoryResults = await searchMemoriesSemantic(
       character.id,
@@ -319,6 +338,9 @@ async function proactiveRecallTask(
       {
         userId,
         limit: 20,
+        captureQueryEmbedding: captured => {
+          queryEmbedding = captured
+        },
         minImportance: 0.3,
         recallContext,
         // Episodic recall: entity anchoring always (a verbatim place name
@@ -337,7 +359,7 @@ async function proactiveRecallTask(
     )
 
     if (memoryResults.length > 0) {
-      return { memories: memoryResults.slice(0, 10), signals }
+      return { memories: memoryResults.slice(0, 10), signals, queryEmbedding }
     }
   } catch (error) {
     logger.warn('Proactive memory recall: memory search failed, falling back to default', {
@@ -347,5 +369,5 @@ async function proactiveRecallTask(
     })
   }
 
-  return { memories: undefined, signals }
+  return { memories: undefined, signals, queryEmbedding }
 }
