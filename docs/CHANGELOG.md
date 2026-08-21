@@ -4,6 +4,16 @@
 
 ### 4.9-dev
 
+#### The DeepSeek plugin can tell when it is thinking (bug 86)
+
+`isThinkingEnabled(body)` decided whether an outgoing request was a thinking request by looking for `thinking: { type: 'enabled' }` in the body it was about to send. That answers "what did we ask for?" when the question is "what will the model do?" — the V4 models reason with `parameters: {}`, which is the default state, so a profile that had never touched the thinking option was judged not to be thinking. `stripThinkingIncompatibleParams` never ran, and `temperature`, `top_p`, `frequency_penalty`, and `presence_penalty` were sent into a request that ignores them. DeepSeek discards them silently, so nothing errored.
+
+`willRunThinkingTurn(body)` replaces it and asks the two questions in the order the host's `evaluateThinkingTurn` asks them: the profile's explicit `thinking: enabled` / `disabled` first, then the model's own habit from `STATIC_MODELS.thinksByDefault`. No signature change was needed — both call sites already pass a body carrying `model`. The model lookup is an exact id match, matching the host, so a model DeepSeek serves that the static catalogue does not list contributes no habit and behaves as before.
+
+The plugin README claimed thinking mode was a `deepseek-v4-pro` feature reached through profile parameters, which is the belief that produced the predicate. It now says both V4 models reason by default and that `thinking` exists mainly to turn reasoning off, with a "Thinks by default" column in the model table. The connection-profile editor's own help text carried the same misapprehension and was corrected with it: "(model default)" means thinking is ON.
+
+Also added the migration test that should have shipped with bug 85: `retire-prefill-on-thinking-profiles-v1` now has coverage for what it clears (thinking-active DeepSeek and Ollama rows) and, more importantly, what it leaves alone — thinking-off profiles, uncatalogued models, other providers, rows already at 0, stored nulls, and unparseable `parameters`.
+
 #### DeepSeek thinking models stop 400ing on every character turn (bug 85)
 
 A chat on a DeepSeek profile using `deepseek-v4-flash` greeted you and then died on every turn after, with HTTP 400: "The `reasoning_content` in the thinking mode must be passed back to the API". The error text points at history; the cause is the trailing `[Name]` prefill.
@@ -23,7 +33,7 @@ The prefill default now also asks whether the profile will run a thinking turn:
 
 A non-thinking DeepSeek or Ollama profile keeps the prefill, which is the stronger anchor and what weak models need most — that was bug 68's stated objection to a blanket provider rule, and it is preserved rather than re-incurred.
 
-Two adjacent DeepSeek plugin defects found while investigating are filed separately as [bug 86](developer/bugs/bug-86-deepseek-thinking-detection.md): `isThinkingEnabled` infers thinking state from the outgoing request body, which is wrong for a model that thinks by default, and the plugin README documents thinking as a `deepseek-v4-pro` feature. Neither causes the 400.
+Two adjacent DeepSeek plugin defects found while investigating were filed separately as [bug 86](developer/bugs/fixed/bug-86-deepseek-thinking-detection.md) and are fixed below. Neither caused the 400.
 
 #### A failed image generation says what actually went wrong (bug 84)
 

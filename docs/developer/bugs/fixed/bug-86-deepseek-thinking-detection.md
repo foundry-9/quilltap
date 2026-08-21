@@ -2,15 +2,39 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
-| **Found** | 2026-08-21, while fixing [bug 85](fixed/bug-85-deepseek-thinking-prefill-400.md) — recorded there under "Worth folding in" and split out so the fixed entry does not become the home of an unfixed defect |
+| **Status** | **FIXED in v4** (2026-08-21) |
+| **Fixed** | 2026-08-21 |
+| **Found** | 2026-08-21, while fixing [bug 85](bug-85-deepseek-thinking-prefill-400.md) — recorded there under "Worth folding in" and split out so the fixed entry does not become the home of an unfixed defect |
 | **Severity** | Low — nothing errors. Params DeepSeek ignores are sent anyway, and the plugin's README misdescribes which models reason |
 | **Who it bites** | anyone on a DeepSeek profile using a V4 model with `thinking` left at `(model default)`, which is the default state. The wasted params are silently discarded by DeepSeek, so the only visible symptom is the README sending users to `deepseek-v4-pro` for a feature `deepseek-v4-flash` already has |
 | **Provenance** | v4's own; found while fixing bug 85 |
 | **Symptom** | `stripThinkingIncompatibleParams` never runs on a profile that reasons by default, so `temperature`, `top_p`, `frequency_penalty`, and `presence_penalty` go out on a request whose thinking mode ignores them. Separately, the plugin README tells the reader thinking mode is a `deepseek-v4-pro` feature reached through profile parameters |
 | **Defect site** | `plugins/dist/qtap-plugin-deepseek/provider.ts:51-58` (`isThinkingEnabled`) and the plugin's `README.md` |
+| **Fix site** | `qtap-plugin-deepseek` 1.0.21 — `willRunThinkingTurn(body)` replaces `isThinkingEnabled(body)` in `provider.ts`, reading `body.model` against `STATIC_MODELS.thinksByDefault` when the profile has made no choice; `README.md` and the options-schema help text corrected; `__tests__/unit/plugins/deepseek-thinking-params.test.ts` |
 | **v5 status** | Not investigated — v5's DeepSeek path was not examined for this |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
+
+---
+
+**FIXED in v4 (2026-08-21).** `isThinkingEnabled(body)` is gone. Its
+replacement, `willRunThinkingTurn(body)`, asks the two questions in the order
+the host's `evaluateThinkingTurn` asks them — the profile's explicit
+`thinking: enabled` / `disabled` first, then the model's own habit from
+`STATIC_MODELS.thinksByDefault` — so an unset `thinking` on a V4 model now
+resolves to *thinking*, and `stripThinkingIncompatibleParams` runs. No
+signature change was needed: both call sites already pass a body carrying
+`model`.
+
+The model lookup is an exact id match, matching the host. A model DeepSeek
+serves that the static catalogue does not list — `deepseek-v4-flash-vision-exp`
+today — contributes no habit and falls to `false`, which is the pre-existing
+behaviour rather than a guess.
+
+The README now says both V4 models reason by default and that `thinking` exists
+mainly to turn reasoning *off*; the model table gained a "Thinks by default"
+column. The connection-profile editor's own help text carried the same
+misapprehension and was corrected with it — *"(model default)" means thinking
+is ON*.
 
 ---
 

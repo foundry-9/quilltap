@@ -85,7 +85,7 @@ const optionsSchema: ProviderOptionsSchema = {
     {
       title: 'DeepSeek Options',
       helpText:
-        'Thinking mode enables DeepSeek\'s extended reasoning. While enabled, temperature, top_p, and frequency / presence penalties are ignored. Reasoning effort is only effective with thinking enabled.',
+        'The V4 models reason before answering by default, so "(model default)" means thinking is ON — set Disabled to turn it off. While thinking, temperature, top_p, and frequency / presence penalties are ignored, and Quilltap anchors multi-character turns in prose rather than with a [Name] prefill, which DeepSeek rejects mid-thinking.',
       fields: [
         {
           key: 'thinking',

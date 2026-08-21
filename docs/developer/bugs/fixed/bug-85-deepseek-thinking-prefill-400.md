@@ -33,7 +33,7 @@ rather than vetoes.
 the predicate function step 2 proposed, and only DeepSeek and Ollama declare
 one. The Z.AI fold-in listed under "Worth folding in" was examined and left
 alone; the DeepSeek plugin's own two defects are now
-[bug 86](../bug-86-deepseek-thinking-detection.md).
+[bug 86](bug-86-deepseek-thinking-detection.md).
 
 ---
 

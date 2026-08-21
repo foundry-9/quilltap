@@ -11529,6 +11529,31 @@ var OpenAICompatibleProvider = class {
 };
 var rewriteLogger = createPluginLogger("host-rewrite");
 
+// models.ts
+var STATIC_MODELS = [
+  {
+    id: "deepseek-v4-flash",
+    name: "DeepSeek V4 Flash",
+    contextWindow: 1048576,
+    maxOutputTokens: 393216,
+    supportsImages: false,
+    supportsTools: true,
+    supportsThinking: true,
+    thinksByDefault: true
+  },
+  {
+    id: "deepseek-v4-pro",
+    name: "DeepSeek V4 Pro",
+    contextWindow: 1048576,
+    maxOutputTokens: 393216,
+    supportsImages: false,
+    supportsTools: true,
+    supportsThinking: true,
+    thinksByDefault: true
+  }
+];
+var STATIC_MODEL_IDS = STATIC_MODELS.map((m) => m.id);
+
 // provider.ts
 var DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 var DEEPSEEK_PROFILE_PARAM_ALLOWLIST = [
@@ -11539,12 +11564,19 @@ var DEEPSEEK_PROFILE_PARAM_ALLOWLIST = [
   "thinking",
   "reasoning_effort"
 ];
-function isThinkingEnabled(body) {
+function willRunThinkingTurn(body) {
   const thinking = body.thinking;
-  return typeof thinking === "object" && thinking !== null && thinking.type === "enabled";
+  if (typeof thinking === "object" && thinking !== null) {
+    const type = thinking.type;
+    if (type === "enabled") return true;
+    if (type === "disabled") return false;
+  }
+  const model = typeof body.model === "string" ? body.model : void 0;
+  if (!model) return false;
+  return STATIC_MODELS.find((m) => m.id === model)?.thinksByDefault === true;
 }
 function stripThinkingIncompatibleParams(body) {
-  if (!isThinkingEnabled(body)) return;
+  if (!willRunThinkingTurn(body)) return;
   delete body.temperature;
   delete body.top_p;
   delete body.frequency_penalty;
@@ -11824,31 +11856,6 @@ var DeepSeekProvider = class extends OpenAICompatibleProvider {
     }
   }
 };
-
-// models.ts
-var STATIC_MODELS = [
-  {
-    id: "deepseek-v4-flash",
-    name: "DeepSeek V4 Flash",
-    contextWindow: 1048576,
-    maxOutputTokens: 393216,
-    supportsImages: false,
-    supportsTools: true,
-    supportsThinking: true,
-    thinksByDefault: true
-  },
-  {
-    id: "deepseek-v4-pro",
-    name: "DeepSeek V4 Pro",
-    contextWindow: 1048576,
-    maxOutputTokens: 393216,
-    supportsImages: false,
-    supportsTools: true,
-    supportsThinking: true,
-    thinksByDefault: true
-  }
-];
-var STATIC_MODEL_IDS = STATIC_MODELS.map((m) => m.id);
 
 // node_modules/@quilltap/plugin-utils/dist/tools/index.mjs
 var TOOL_NAME_ALIASES = {
@@ -12218,7 +12225,7 @@ var optionsSchema = {
   groups: [
     {
       title: "DeepSeek Options",
-      helpText: "Thinking mode enables DeepSeek's extended reasoning. While enabled, temperature, top_p, and frequency / presence penalties are ignored. Reasoning effort is only effective with thinking enabled.",
+      helpText: 'The V4 models reason before answering by default, so "(model default)" means thinking is ON \u2014 set Disabled to turn it off. While thinking, temperature, top_p, and frequency / presence penalties are ignored, and Quilltap anchors multi-character turns in prose rather than with a [Name] prefill, which DeepSeek rejects mid-thinking.',
       fields: [
         {
           key: "thinking",

@@ -26,6 +26,7 @@ import type {
   StreamChunk,
   LLMMessage,
 } from './types';
+import { STATIC_MODELS } from './models';
 
 const DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
 
@@ -46,19 +47,49 @@ const DEEPSEEK_PROFILE_PARAM_ALLOWLIST = [
   'reasoning_effort',
 ] as const;
 
-// Params DeepSeek ignores when thinking mode is enabled. Strip them so we
-// don't send conflicting signals.
-function isThinkingEnabled(body: Record<string, unknown>): boolean {
+/**
+ * Whether the request we are about to send will be answered by a thinking
+ * turn.
+ *
+ * Two facts, in that order — the same shape the host's `evaluateThinkingTurn`
+ * uses, and for the same reason:
+ *
+ *   1. **The profile's explicit choice.** `thinking: { type: 'enabled' }` or
+ *      `{ type: 'disabled' }`, already normalized onto the body by
+ *      `normalizeProfileParam`.
+ *   2. **The model's own habit.** Absent a choice, the V4 models reason
+ *      anyway — `deepseek-v4-flash` returns `reasoning_content` on a profile
+ *      carrying `parameters: {}`, which is the default state.
+ *
+ * Reading only the body was the bug (bug 86): it answers "what did we ask
+ * for?" when the question is "what will the model do?", so a profile that had
+ * never touched the thinking option was judged not to be thinking and the
+ * params below were sent into a request that ignores them.
+ *
+ * The model lookup is an exact id match against the static catalogue, matching
+ * the host. A model DeepSeek serves that the catalogue does not list (an
+ * experimental id, say) contributes no habit and falls to `false`.
+ */
+function willRunThinkingTurn(body: Record<string, unknown>): boolean {
   const thinking = body.thinking;
-  return (
-    typeof thinking === 'object' &&
-    thinking !== null &&
-    (thinking as { type?: string }).type === 'enabled'
-  );
+  if (typeof thinking === 'object' && thinking !== null) {
+    const type = (thinking as { type?: string }).type;
+    if (type === 'enabled') return true;
+    if (type === 'disabled') return false;
+  }
+
+  const model = typeof body.model === 'string' ? body.model : undefined;
+  if (!model) return false;
+  return STATIC_MODELS.find((m) => m.id === model)?.thinksByDefault === true;
 }
 
+/**
+ * Strip the params DeepSeek ignores while thinking, so we don't send
+ * conflicting signals. Call after the profile params have been applied — it
+ * reads `body.thinking` and `body.model`.
+ */
 function stripThinkingIncompatibleParams(body: Record<string, unknown>): void {
-  if (!isThinkingEnabled(body)) return;
+  if (!willRunThinkingTurn(body)) return;
   delete body.temperature;
   delete body.top_p;
   delete body.frequency_penalty;
