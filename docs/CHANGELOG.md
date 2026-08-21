@@ -4,6 +4,27 @@
 
 ### 4.9-dev
 
+#### DeepSeek thinking models stop 400ing on every character turn (bug 85)
+
+A chat on a DeepSeek profile using `deepseek-v4-flash` greeted you and then died on every turn after, with HTTP 400: "The `reasoning_content` in the thinking mode must be passed back to the API". The error text points at history; the cause is the trailing `[Name]` prefill.
+
+In a multi-character chat each reply is anchored to one character, either by appending an assistant message containing `[Character Name]` or by appending a prose instruction to the system prompt. `isMultiCharacterChat` counts one LLM seat as multi-character, so a plain one-character chat takes the anchor too. DeepSeek's thinking mode reads a request ending on an assistant message as a turn to continue and demands the `reasoning_content` that produced it — which a synthetic prefill has none of. The greeting escapes because `lib/chat/initial-greeting.ts` applies no anchor at all.
+
+The predicate deciding which anchor to use was provider-shaped (`PREFILL_HOSTILE_PROVIDERS`, holding `ANTHROPIC`) when the property is model-shaped. Two of the three known hostilities are thinking failures, not provider quirks: Ollama's chat template never opens the reasoning block behind a prefilled turn (bug 68), and DeepSeek 400s (this bug). Only Anthropic's is genuinely structural, so that one stays a provider rule.
+
+The prefill default now also asks whether the profile will run a thinking turn:
+
+- `ModelInfo` gained `supportsThinking` and `thinksByDefault`. The two are separate because providers differ — `deepseek-v4-flash` reasons with `parameters: {}`, while Anthropic and Ollama thinking is opt-in per profile.
+- `TextProviderPlugin` gained `thinkingTurnRule`, naming the `parameters` key that switches reasoning on or off and which values mean which. It is declarative rather than a predicate function because the connection-profile editor needs the same answer in the browser, where a server-side plugin closure can't be called; it serialises out through `/api/v1/providers`. DeepSeek and Ollama declare one; no other provider's behaviour changes.
+- `lib/llm/thinking-turn.ts` holds the one pure evaluator both sides run — an explicit profile choice wins, else the model's `thinksByDefault`, else no. `providerRegistry.profileRunsThinkingTurn()` joins it to the plugin table server-side.
+- `defaultMultiCharacterPrefill(provider, runsThinkingTurn)` returns false for a thinking profile. `profileUsesNamePrefill` is unchanged in spirit: a stored boolean still outranks every default, so ticking the box back on is honoured.
+- The profile editor re-seeds the checkbox when the model changes, corrects a stored-null row once the model list loads, and warns when the box is ticked on a thinking profile.
+- Migration `retire-prefill-on-thinking-profiles-v1` clears the stored `1` on existing DeepSeek and Ollama profiles that are running a thinking turn. Those rows got their `1` from the old provider default at creation, not from a user choice, and it outranks any default fix. Rows already at `0`, and profiles not running a thinking turn, are untouched. The migration carries a frozen copy of the two plugins' rules, because migrations run before the plugin registry is up.
+
+A non-thinking DeepSeek or Ollama profile keeps the prefill, which is the stronger anchor and what weak models need most — that was bug 68's stated objection to a blanket provider rule, and it is preserved rather than re-incurred.
+
+Two adjacent DeepSeek plugin defects found while investigating are filed separately as [bug 86](developer/bugs/bug-86-deepseek-thinking-detection.md): `isThinkingEnabled` infers thinking state from the outgoing request body, which is wrong for a model that thinks by default, and the plugin README documents thinking as a `deepseek-v4-pro` feature. Neither causes the 400.
+
 #### A failed image generation says what actually went wrong (bug 84)
 
 When `generate_image` failed, the notice above the composer read `Failed to generate image` and the toast read `Image generation failed: Unknown error` — every time, no matter the cause. Asking for an image in a chat with no image profile resolved is the common case, and the remedy is right there in the server's own sentence: `Image generation is not enabled for this chat`.

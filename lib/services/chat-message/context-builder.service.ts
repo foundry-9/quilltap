@@ -14,6 +14,7 @@ import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { profileUsesNamePrefill } from '@/lib/llm/multi-character-prefill'
+import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
@@ -908,7 +909,16 @@ export async function buildMessageContext(
     applyMultiCharacterTurnAnchor(
       formattedMessages,
       character.name,
-      profileUsesNamePrefill(connectionProfile),
+      // The thinking answer only matters for a profile that never chose —
+      // `profileUsesNamePrefill` honours a stored boolean over any default.
+      profileUsesNamePrefill(
+        connectionProfile,
+        profileRunsThinkingTurn(
+          connectionProfile.provider,
+          connectionProfile.modelName,
+          connectionProfile.parameters as Record<string, unknown> | null | undefined
+        )
+      ),
     )
   }
 

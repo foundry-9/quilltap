@@ -25,6 +25,30 @@ describe('defaultMultiCharacterPrefill', () => {
     expect(defaultMultiCharacterPrefill(undefined)).toBe(true)
     expect(defaultMultiCharacterPrefill('')).toBe(true)
   })
+
+  it('is off for a profile that will run a thinking turn, on any provider', () => {
+    // Bug 85: DeepSeek 400s on continuing a thinking turn whose
+    // `reasoning_content` it never saw; bug 68: Ollama never opens the
+    // reasoning block behind a prefilled turn.
+    for (const provider of ['DEEPSEEK', 'OLLAMA', 'OPENAI', 'Z_AI']) {
+      expect(defaultMultiCharacterPrefill(provider, true)).toBe(false)
+    }
+    expect(defaultMultiCharacterPrefill(null, true)).toBe(false)
+  })
+
+  it('keeps the prefill for a thinking-capable provider that is not thinking', () => {
+    // Bug 68 rejected a blanket provider rule for precisely this: the prefill
+    // is the stronger anchor, and weak non-thinking models need it most.
+    expect(defaultMultiCharacterPrefill('DEEPSEEK', false)).toBe(true)
+    expect(defaultMultiCharacterPrefill('OLLAMA', false)).toBe(true)
+  })
+
+  it('leaves Anthropic off whether or not it is thinking', () => {
+    // Anthropic's is the one genuine provider rule: it rejects an assistant
+    // tail outright, thinking or not.
+    expect(defaultMultiCharacterPrefill('ANTHROPIC', false)).toBe(false)
+    expect(defaultMultiCharacterPrefill('ANTHROPIC', true)).toBe(false)
+  })
 })
 
 describe('profileUsesNamePrefill', () => {
@@ -43,6 +67,22 @@ describe('profileUsesNamePrefill', () => {
     expect(profileUsesNamePrefill({ provider: 'OPENAI', multiCharacterPrefill: null })).toBe(true)
     expect(profileUsesNamePrefill({ provider: 'ANTHROPIC' })).toBe(false)
     expect(profileUsesNamePrefill({ provider: 'OPENAI' })).toBe(true)
+  })
+
+  it('lets a stored true outrank the thinking default', () => {
+    // The tri-state exists so the user may overrule us. Bug 85 seeds the
+    // right default and warns in the editor; it does not veto.
+    expect(
+      profileUsesNamePrefill({ provider: 'DEEPSEEK', multiCharacterPrefill: true }, true)
+    ).toBe(true)
+  })
+
+  it('falls back to the thinking-aware default when the profile never chose', () => {
+    expect(profileUsesNamePrefill({ provider: 'DEEPSEEK' }, true)).toBe(false)
+    expect(profileUsesNamePrefill({ provider: 'DEEPSEEK' }, false)).toBe(true)
+    expect(profileUsesNamePrefill({ provider: 'DEEPSEEK', multiCharacterPrefill: null }, true)).toBe(
+      false
+    )
   })
 
   it('does not mistake false for absent', () => {

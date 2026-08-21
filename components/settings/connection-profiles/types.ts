@@ -2,9 +2,9 @@
  * Type definitions for connection profiles
  */
 
-import type { ProviderOptionsSchema } from '@quilltap/plugin-types'
+import type { ProviderOptionsSchema, ThinkingTurnRule } from '@quilltap/plugin-types'
 
-export type { ProviderOptionsSchema }
+export type { ProviderOptionsSchema, ThinkingTurnRule }
 
 export interface ApiKey {
   id: string
@@ -63,6 +63,13 @@ export interface ProviderConfig {
    * provider-options panel.
    */
   optionsSchema?: ProviderOptionsSchema | null
+  /**
+   * The provider plugin's `thinkingTurnRule`: which `parameters` key switches
+   * reasoning on or off, and which values mean which. Feeds
+   * `evaluateThinkingTurn` so the editor can seed the multi-character prefill
+   * box the way the server would (bug 85). Null when the plugin declares none.
+   */
+  thinkingTurnRule?: ThinkingTurnRule | null
 }
 
 export interface ConnectionProfile {

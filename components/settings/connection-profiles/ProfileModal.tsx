@@ -12,6 +12,7 @@ import type { ApiKey, ProviderConfig, ProfileFormData, ConnectionProfile } from 
 import { ProviderOptionsPanel } from './ProviderOptionsPanel'
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names'
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
+import { evaluateThinkingTurn } from '@/lib/llm/thinking-turn'
 import { providerAcceptsApiKey } from '@/lib/llm/api-key-support'
 
 interface ProfileModalProps {
@@ -222,6 +223,36 @@ export function ProfileModal({
   const activeProviderConfig = providers.find((p) => p.name === form.formData.provider)
   const optionsSchema = activeProviderConfig?.optionsSchema ?? null
 
+  // Will this profile run a thinking turn? Same evaluator the server runs, fed
+  // the plugin's declared rule and the selected model's static facts — which
+  // is why the rule is declarative rather than a plugin closure (bug 85). It
+  // decides the multi-character prefill default below, and the warning that
+  // goes with it.
+  const runsThinkingTurn = evaluateThinkingTurn({
+    rule: activeProviderConfig?.thinkingTurnRule ?? null,
+    parameters: form.formData.parameters,
+    model: getSelectedModelInfo(),
+  })
+
+  // A stored row that never chose (null — pre-4.9, or an import) shows the
+  // provider default until the model list arrives, because the thinking half
+  // of the answer needs the model's static facts. Correct it once, so the box
+  // matches what the server will actually do and a save cannot freeze the
+  // wrong answer into the column (bug 85). Only ever fires for a null row, so
+  // it can never overwrite a choice the user made.
+  const storedPrefillIsUnset =
+    profile?.id !== undefined && (profile.multiCharacterPrefill ?? null) === null
+  useEffect(() => {
+    if (!storedPrefillIsUnset || fetchedModelsWithInfo.length === 0) return
+    form.setField(
+      'multiCharacterPrefill',
+      defaultMultiCharacterPrefill(form.formData.provider, runsThinkingTurn)
+    )
+    // Re-running on every keystroke would fight the checkbox; the model list
+    // landing is the one event that changes the answer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storedPrefillIsUnset, fetchedModelsWithInfo, runsThinkingTurn])
+
   // Directive state: schema fields marked `affects: 'modelInput'` toggle
   // between ModelSelector and free-text entry. The panel writes the
   // parameter through `setParameter` and fires the directive in lockstep,
@@ -274,6 +305,9 @@ export function ProfileModal({
           (takesBaseUrl && form.formData.baseUrl) || undefined
         )
       )
+      // No model is chosen yet at this point, so only the provider rule can
+      // speak; `handleModelChange` re-seeds once the model is known and its
+      // thinking habit can be read.
       form.setField('multiCharacterPrefill', defaultMultiCharacterPrefill(newProvider))
     }
   }
@@ -281,6 +315,25 @@ export function ProfileModal({
   // Handle model change - auto-fill name if empty (new profile only)
   const handleModelChange = (modelName: string) => {
     form.setField('modelName', modelName)
+
+    // Re-seed the multi-character turn anchor now the model is known: a model
+    // that reasons unasked (deepseek-v4-flash) breaks on a `[Name]` prefill,
+    // and the user never opted into thinking so nothing else would warn them
+    // (bug 85). A seed, never a clamp — the box below stays editable.
+    if (!profile?.id) {
+      const modelInfo = fetchedModelsWithInfo.find((m) => m.id === modelName) || null
+      form.setField(
+        'multiCharacterPrefill',
+        defaultMultiCharacterPrefill(
+          form.formData.provider,
+          evaluateThinkingTurn({
+            rule: activeProviderConfig?.thinkingTurnRule ?? null,
+            parameters: form.formData.parameters,
+            model: modelInfo,
+          })
+        )
+      )
+    }
 
     // Auto-fill name with PROVIDER/MODEL if name is empty and this is a new
     // profile. A second profile on the same provider+model is exactly the
@@ -842,6 +895,17 @@ export function ProfileModal({
                       Anthropic&apos;s recent models reject a request handed over mid-turn and will
                       return an error on every multi-character reply. Leave this unticked unless you
                       know your model tolerates it.
+                    </p>
+                  )}
+                {form.formData.multiCharacterPrefill &&
+                  defaultMultiCharacterPrefill(form.formData.provider) &&
+                  runsThinkingTurn && (
+                    <p className="qt-text-xs qt-text-warning ml-6">
+                      This model reasons before it answers, and a turn handed over already opened
+                      sits badly with that: some providers refuse the request outright, others
+                      quietly swallow the reasoning altogether. A model that deliberates over whose
+                      turn it is rarely needs the name put in its mouth — leave this unticked unless
+                      you have watched yours cope.
                     </p>
                   )}
               </div>

@@ -16,11 +16,18 @@
  *
  *   - Anthropic 4.6+ **rejects** a request that ends with an assistant message
  *     ("This model does not support assistant message prefill"), which is why
- *     Anthropic profiles default to off.
- *   - Ollama opens a thinking model's reasoning block from the chat template
- *     at the start of the assistant turn. A prefill means the block is never
- *     opened, so `message.thinking` comes back empty however the profile's
- *     Enable Thinking box is set (bug 68).
+ *     Anthropic profiles default to off. This one really is a property of the
+ *     provider: it holds whether or not thinking is on.
+ *   - A model that will run a **thinking** turn. Two providers are on record
+ *     breaking on a prefill only while thinking — Ollama never opens the
+ *     reasoning block behind a prefilled turn, so `message.thinking` comes
+ *     back empty (bug 68), and DeepSeek 400s demanding the
+ *     `reasoning_content` that produced an assistant turn a synthetic prefill
+ *     never had (bug 85). They are also the population that needs the anchor
+ *     least: a model spending tokens working out whose turn it is does not
+ *     need `[Name]` put in its mouth. The question is asked per profile
+ *     through `lib/llm/thinking-turn`, not per provider, so a thinking-off
+ *     Ollama or DeepSeek profile keeps the stronger anchor.
  *   - Some models visibly spend their reply working out whether `[Name]` was
  *     an instruction to them or a previous speaker's slip.
  *
@@ -33,29 +40,47 @@
  * @module lib/llm/multi-character-prefill
  */
 
-/** Providers whose models cannot take an assistant prefill at all. */
+/**
+ * Providers whose models cannot take an assistant prefill at all, thinking or
+ * not. Anthropic is the only genuine member: 4.6+ hard-rejects an assistant
+ * tail. Resist adding a provider here because one of its *models* misbehaves —
+ * that is what `runsThinkingTurn` is for (bug 85).
+ */
 const PREFILL_HOSTILE_PROVIDERS = new Set(['ANTHROPIC'])
 
 /**
- * The value a newly created profile should start with, given its provider.
- * Off for Anthropic (4.6+ hard-rejects an assistant tail), on everywhere else
- * — the historic behaviour.
+ * The value a newly created profile should start with.
+ *
+ * Off for Anthropic (4.6+ hard-rejects an assistant tail) and off for any
+ * profile that will run a thinking turn (bugs 68 and 85); on everywhere else,
+ * which is the historic behaviour and the stronger anchor for the weak models
+ * that need one.
+ *
+ * `runsThinkingTurn` is the answer from `lib/llm/thinking-turn` — the caller
+ * supplies it because working it out needs the provider plugin, which the
+ * browser cannot reach. Omit it and only the provider rule applies.
  */
-export function defaultMultiCharacterPrefill(provider: string | null | undefined): boolean {
+export function defaultMultiCharacterPrefill(
+  provider: string | null | undefined,
+  runsThinkingTurn = false
+): boolean {
+  if (runsThinkingTurn) return false
   if (!provider) return true
   return !PREFILL_HOSTILE_PROVIDERS.has(provider.toUpperCase())
 }
 
 /**
  * Whether this profile anchors a multi-character turn with the `[Name]`
- * prefill. An explicit stored choice always wins; a null/absent one falls back
- * to the provider default.
+ * prefill. An explicit stored choice always wins — including a stored `true`
+ * on a thinking model, because the tri-state exists so the user may overrule
+ * us — and a null/absent one falls back to the default above.
  */
 export function profileUsesNamePrefill(
-  profile: { provider?: string | null; multiCharacterPrefill?: boolean | null }
+  profile: { provider?: string | null; multiCharacterPrefill?: boolean | null },
+  runsThinkingTurn = false
 ): boolean {
   if (typeof profile.multiCharacterPrefill === 'boolean') {
     return profile.multiCharacterPrefill
   }
-  return defaultMultiCharacterPrefill(profile.provider)
+  return defaultMultiCharacterPrefill(profile.provider, runsThinkingTurn)
 }

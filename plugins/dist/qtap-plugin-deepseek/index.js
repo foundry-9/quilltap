@@ -11833,7 +11833,9 @@ var STATIC_MODELS = [
     contextWindow: 1048576,
     maxOutputTokens: 393216,
     supportsImages: false,
-    supportsTools: true
+    supportsTools: true,
+    supportsThinking: true,
+    thinksByDefault: true
   },
   {
     id: "deepseek-v4-pro",
@@ -11841,7 +11843,9 @@ var STATIC_MODELS = [
     contextWindow: 1048576,
     maxOutputTokens: 393216,
     supportsImages: false,
-    supportsTools: true
+    supportsTools: true,
+    supportsThinking: true,
+    thinksByDefault: true
   }
 ];
 var STATIC_MODEL_IDS = STATIC_MODELS.map((m) => m.id);
@@ -12267,6 +12271,20 @@ var plugin = {
    * Connection-profile options schema rendered by the host's profile editor.
    */
   getProviderOptionsSchema: () => optionsSchema,
+  /**
+   * Which profile option decides whether a turn will be a thinking turn.
+   * The host needs the answer to pick the multi-character turn anchor:
+   * DeepSeek's thinking mode reads a trailing assistant `[Name]` prefill as a
+   * turn to continue and 400s demanding the `reasoning_content` that produced
+   * it, which a synthetic prefill has none of (bug 85). `(model default)` —
+   * the empty string — leaves the answer to the model's `thinksByDefault`
+   * flag, and both V4 models reason unasked.
+   */
+  thinkingTurnRule: {
+    optionKey: "thinking",
+    enabledValues: ["enabled"],
+    disabledValues: ["disabled"]
+  },
   createProvider: (_baseUrl) => {
     return new DeepSeekProvider();
   },

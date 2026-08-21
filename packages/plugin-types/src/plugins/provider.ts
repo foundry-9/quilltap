@@ -187,6 +187,23 @@ export interface ModelInfo {
   supportsImages?: boolean;
   /** Whether this model supports tool/function calling */
   supportsTools?: boolean;
+  /**
+   * Whether this model is capable of a reasoning ("thinking") turn at all.
+   *
+   * Distinct from `thinksByDefault`: a model may be capable of thinking yet
+   * only do so when the profile asks for it.
+   */
+  supportsThinking?: boolean;
+  /**
+   * Whether this model runs a thinking turn **without being asked** — i.e.
+   * with no thinking option set on the connection profile.
+   *
+   * The two facts are separate because providers differ: DeepSeek's V4 tier
+   * reasons out of the box, while Anthropic's extended thinking and Ollama's
+   * thinking channel are opt-in per profile. The host uses this as the
+   * fallback answer when the profile sets no thinking option of its own.
+   */
+  thinksByDefault?: boolean;
   /** Description of the model */
   description?: string;
   /** Pricing information */
@@ -196,6 +213,38 @@ export interface ModelInfo {
     /** Price per 1M output tokens */
     output: number;
   };
+}
+
+/**
+ * How the host can tell whether a connection profile on this provider will
+ * run a reasoning ("thinking") turn.
+ *
+ * Thinking changes what a request may look like. Two providers are already on
+ * record refusing an assistant `[Name]` prefill *only* while thinking: Ollama
+ * never opens the reasoning block behind a prefilled turn, and DeepSeek 400s
+ * on continuing a thinking turn whose `reasoning_content` it never saw. The
+ * host needs a per-profile answer to seed the right multi-character turn
+ * anchor, and only the plugin knows which option key it reads.
+ *
+ * Deliberately declarative rather than a predicate function: the same answer
+ * is needed in the connection-profile editor, which runs in the browser and
+ * cannot call into a server-side plugin. A rule serialises; a closure does
+ * not.
+ *
+ * The rule answers only the *explicit* half — "has this profile switched
+ * thinking on or off?". When the profile says nothing, the host falls back to
+ * the selected model's `thinksByDefault` flag.
+ */
+export interface ThinkingTurnRule {
+  /**
+   * The `parameters` key on the connection profile that switches thinking on
+   * or off. Must match a field key from `getProviderOptionsSchema()`.
+   */
+  optionKey: string;
+  /** Values of that key meaning thinking is ON. */
+  enabledValues?: (string | number | boolean)[];
+  /** Values of that key meaning thinking is OFF. */
+  disabledValues?: (string | number | boolean)[];
 }
 
 /**
@@ -596,6 +645,16 @@ export interface TextProviderPlugin {
    * Falls back to 8192 if not specified
    */
   defaultContextWindow?: number;
+
+  /**
+   * How to tell whether a profile on this provider will run a thinking turn
+   * (optional).
+   *
+   * Omit it and the host judges by the selected model's `thinksByDefault`
+   * flag alone. Declare it when the provider has a profile option that turns
+   * reasoning on or off, so an explicit choice outranks the model default.
+   */
+  thinkingTurnRule?: ThinkingTurnRule;
 
   /**
    * Describe provider-specific configuration fields the connection-profile

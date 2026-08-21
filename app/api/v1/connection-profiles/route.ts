@@ -23,6 +23,7 @@ import { badRequest, serverError, notFound, successResponse, created, conflict }
 import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill';
+import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
 
 // Disable caching
@@ -176,12 +177,16 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     if (multiCharacterPrefill !== undefined && typeof multiCharacterPrefill !== 'boolean') {
       return badRequest('multiCharacterPrefill must be a boolean');
     }
-    // Clients that don't send the field get the provider default — off for
-    // Anthropic (4.6+ rejects an assistant tail), on everywhere else.
+    // Clients that don't send the field get the resolved default — off for
+    // Anthropic (4.6+ rejects an assistant tail) and off for a profile that
+    // will run a thinking turn (bug 85), on everywhere else.
     const resolvedMultiCharacterPrefill =
       typeof multiCharacterPrefill === 'boolean'
         ? multiCharacterPrefill
-        : defaultMultiCharacterPrefill(provider);
+        : defaultMultiCharacterPrefill(
+            provider,
+            profileRunsThinkingTurn(provider, modelName, parameters)
+          );
 
     // Default supportsImageUpload from the historic per-provider capability map
     // so clients that don't send the field keep their current behavior on providers

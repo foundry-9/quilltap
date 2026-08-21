@@ -28,4 +28,5 @@ export type {
   EmbeddingResult,
   EmbeddingOptions,
   ProviderOptionsSchema,
+  ThinkingTurnRule,
 } from '@quilltap/plugin-types';

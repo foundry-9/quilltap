@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-ollama",
-  "version": "1.0.44",
+  "version": "1.0.45",
   "description": "Ollama provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
@@ -12,7 +12,7 @@
     "clean": "rm -f index.js"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^2.5.6",
+    "@quilltap/plugin-types": "^2.5.8",
     "@quilltap/plugin-utils": "^2.4.0"
   },
   "devDependencies": {

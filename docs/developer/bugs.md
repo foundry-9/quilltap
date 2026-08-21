@@ -5,21 +5,30 @@
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work and browser verification
-**Status**: Bugs **1–84** are **fixed in v4**. **Bug 85 is open** — filed
-2026-08-21, and the only open entry in this catalogue. It is a DeepSeek thinking
-model that greets you and then 400s on every later turn, and its error text points
-squarely away from its cause: the message names `reasoning_content` and history,
-but the culprit is the trailing assistant `[Name]` prefill the multi-character
-anchor appends. DeepSeek's thinking mode reads that as continuing an assistant
-turn and demands the reasoning that produced it, which a synthetic prefill has
-none of. Laid beside the two hostilities
-`lib/llm/multi-character-prefill.ts` already documents, it makes a point the
-individual entries did not: two of the three — Ollama's never-opened reasoning
-block (bug 68) and this one — are *thinking* failures wearing a provider's name,
-and only Anthropic's assistant-tail rejection is genuinely about the provider.
-The predicate is provider-shaped, so each new thinking model has to be discovered
-the hard way. The proposed repair scopes hostility to thinking-capable models
-instead — the question the module's own header says it is trying to answer. Bug 84 (filed and fixed 2026-08-21) is a field with no reader: the SSE
+**Status**: Bugs **1–85** are **fixed in v4**. **Bug 86 is open** — filed
+2026-08-21 as a split-off from 85, and the only open entry in this catalogue: the
+DeepSeek plugin decides whether it is thinking by inspecting the request body it
+is about to send, which answers "what did we ask for?" when the question is "what
+will the model do?" — a V4 model with no `thinking` key reasons anyway, so the
+params thinking mode ignores go out with it. Nothing errors; the plugin README
+carries the same misapprehension. Bug 85 (filed and fixed 2026-08-21) was a
+DeepSeek thinking model that greeted you and then 400ed on every later turn, with
+an error text pointing squarely away from its cause: the message names
+`reasoning_content` and history, but the culprit was the trailing assistant
+`[Name]` prefill the multi-character anchor appends. DeepSeek's thinking mode
+reads that as continuing an assistant turn and demands the reasoning that
+produced it, which a synthetic prefill has none of. Laid beside the two
+hostilities `lib/llm/multi-character-prefill.ts` already documented, it made a
+point the individual entries did not: two of the three — Ollama's never-opened
+reasoning block (bug 68) and this one — are *thinking* failures wearing a
+provider's name, and only Anthropic's assistant-tail rejection is genuinely about
+the provider. Hostility is now scoped to thinking-capable *models*: `ModelInfo`
+carries `supportsThinking`/`thinksByDefault`, a provider plugin declares a
+serialisable `thinkingTurnRule` naming its own option key, one pure evaluator
+answers for host and profile editor alike, and a migration clears the stored `1`
+on the rows the old blanket default wrote. A non-thinking DeepSeek or Ollama
+profile keeps the prefill — bug 68's objection preserved rather than re-incurred.
+Bug 84 (filed and fixed 2026-08-21) is a field with no reader: the SSE
 emitter hoists a failing tool's human-readable sentence to `error`, a sibling of
 `result`, *because `result` is null on failure* — and the Salon looked for it one
 level down at `result?.error`, so a `generate_image` refusal that named its own
@@ -463,7 +472,8 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 82 | [three leading system messages break strict local chat templates](bugs/fixed/bug-82-three-leading-system-messages.md) | 2026-08-19 | 2026-08-19 | High (for local models) | Every non-opening turn dies with `Jinja Exception: System message must be at the beginning` on Qwen-family templates — the greeting sends one system block and works, a normal turn sends three and is refused before a token is generated | `collapseLeadingSystemMessages` (`@quilltap/plugin-utils` 2.4.0) folds the leading run at request-build time; Ollama calls it unconditionally, OAC via `acceptsRepeatedSystemMessages: false` — the flag defaults true, so hosted subclasses stay byte-identical | Owed |
 | 83 | [a V8 GC race kills a jest worker and fails an arbitrary suite](bugs/fixed/bug-83-v8-sparkplug-worker-segfault.md) | 2026-08-20 | 2026-08-20 | Medium (dev tooling) | ~1 full unit run in 5 loses a worker to a SIGSEGV in V8's mark-compact ([nodejs/node#62393](https://github.com/nodejs/node/issues/62393)) and fails a different innocent suite each time; months of misattribution to the native SQLCipher binding trained a "just rerun it" reflex | `package.json` jest scripts (`node --no-sparkplug`) + `armSparkplugGuard()` in `jest.global-setup.js`, now shared by `jest.integration.config.ts` | Nothing owed (no V8 in Rust) |
 | 84 | [the tool-result error sentence is carried to the client and then ignored](bugs/fixed/bug-84-tool-error-sentence-never-reaches-the-ui.md) | 2026-08-21 | 2026-08-21 | Low (cosmetic, but it defeats a field added for exactly this purpose, and hides the one sentence naming the remedy) | A failed `generate_image` shows `Failed to generate image` / `Image generation failed: Unknown error`, while the frame carried `error: "Error: Image generation is not enabled for this chat"`. The emitter hoists the text to a sibling of `result` *because `result` is null on failure* and says so in its comment; `trackToolResult` destructures only `{index, name, success, result}` and reads `result?.error`, one level too deep, so the fallback fires every time | `resolveToolResultErrorText(...)` in `app/salon/[id]/hooks/useSSEStreaming.ts` — reads the sibling `error` first, falls back to `result?.error`, and strips the executor's leading `Error: `; `trackToolResult`'s `generate_image` failure branch renders it into both the notice and the toast | Owed — v5 reproduces it exactly (`chat-stream.reducer.ts:379`, `salon-conversation.ts:2947`) and now absorbs the fix in a drift catch-up. v5 dogfood finding #99 |
-| 85 | [a DeepSeek thinking model 400s on every multi-character turn](bugs/bug-85-deepseek-thinking-prefill-400.md) | 2026-08-21 |  | High (every turn after the greeting 500s; one-switch workaround, but nothing points at it) | A `deepseek-v4-flash` seat greets you and then dies on every later turn with a 400: *the `reasoning_content` in the thinking mode must be passed back to the API*. The message misleads — it is not about history. The multi-character anchor appends a trailing assistant `[Name]` prefill (`multi-character-prefill.ts` → `context-builder.service.ts:556-562`), DeepSeek's thinking mode reads that as continuing an assistant turn and demands the reasoning that produced it, and a synthetic prefill has none. `isMultiCharacterChat` counts a single AI seat, so every character chat is affected; the greeting escapes only because it applies no anchor | Scope prefill-hostility to **thinking-capable models, not providers**. Two of the three known hostilities (Ollama bug 68, this one) are thinking failures wearing a provider's name; only Anthropic's is structural. The provider-level one-liner is what bug 68 explicitly rejected — it would strip the anchor from non-thinking profiles *"where it works and is the stronger anchor"*. Needs a thinking capability on `ModelInfo`, a plugin-side predicate for the opt-in providers (bug 68 rightly refused to let the host read plugin option keys), **and a migration** for rows storing the old blanket `1` | Faithful — `multi_character_prefill.rs:38` carries the identical one-element hostile list, comment ported verbatim. Owes the reshaped predicate, not a list entry; worth coordinating as a design before v4 lands it |
+| 85 | [a DeepSeek thinking model 400s on every multi-character turn](bugs/fixed/bug-85-deepseek-thinking-prefill-400.md) | 2026-08-21 | 2026-08-21 | High (every turn after the greeting 500s; one-switch workaround, but nothing points at it) | A `deepseek-v4-flash` seat greets you and then dies on every later turn with a 400: *the `reasoning_content` in the thinking mode must be passed back to the API*. The message misleads — it is not about history. The multi-character anchor appends a trailing assistant `[Name]` prefill, DeepSeek's thinking mode reads that as continuing an assistant turn and demands the reasoning that produced it, and a synthetic prefill has none. `isMultiCharacterChat` counts a single AI seat, so every character chat is affected; the greeting escapes only because it applies no anchor | Prefill-hostility scoped to **thinking-capable models, not providers**. `ModelInfo.supportsThinking`/`.thinksByDefault` + `TextProviderPlugin.thinkingTurnRule` (`@quilltap/plugin-types` 2.5.8); one pure evaluator in `lib/llm/thinking-turn.ts` run by both the host (`providerRegistry.profileRunsThinkingTurn`) and the profile editor — which is why the hook is a serialisable *rule* rather than the predicate function the filing proposed; `defaultMultiCharacterPrefill(provider, runsThinkingTurn)`; declarations in `qtap-plugin-deepseek` 1.0.20 and `qtap-plugin-ollama` 1.0.45 only, where the hostility is observed; migration `retire-prefill-on-thinking-profiles-v1` clears the stored `1`. Anthropic keeps its provider rule; a stored boolean still outranks every default | Owed — `multi_character_prefill.rs:38` carries the identical one-element hostile list. Owes the reshaped predicate, the model flags, the plugin declaration and the migration, not a list entry |
+| 86 | [the DeepSeek plugin cannot tell when it is thinking](bugs/bug-86-deepseek-thinking-detection.md) | 2026-08-21 |  | Low (nothing errors) | `isThinkingEnabled(body)` asks whether *we sent* `thinking: enabled`, when the question is whether the *model will reason*. A V4 profile with `parameters: '{}'` sends no `thinking` key and reasons anyway, so `stripThinkingIncompatibleParams` never runs and `temperature`/`top_p`/the penalties go out on a request that ignores them. The plugin README carries the same misapprehension, documenting thinking as a `deepseek-v4-pro` feature | Decide from `params.model` against the `thinksByDefault` / `thinkingTurnRule` facts `models.ts` and `index.ts` now declare (bug 85), and correct the README | Not investigated |
 
 ### Families and reading order
 

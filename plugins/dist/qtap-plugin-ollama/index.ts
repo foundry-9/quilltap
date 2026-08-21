@@ -250,6 +250,22 @@ export const plugin: TextProviderPlugin = {
   getProviderOptionsSchema: () => optionsSchema,
 
   /**
+   * Which profile option decides whether a turn will be a thinking turn.
+   * The host needs the answer to pick the multi-character turn anchor: Ollama
+   * opens a thinking model's reasoning block from the chat template at the
+   * start of the assistant turn, so a `[Name]` prefill means the block is
+   * never opened and the reasoning is lost entirely (bug 68). No
+   * `thinksByDefault` fallback applies here — Ollama's models are whatever the
+   * user has pulled, so an unticked box is the only honest answer, and a
+   * thinking-off profile rightly keeps the stronger prefill anchor.
+   */
+  thinkingTurnRule: {
+    optionKey: 'enable_thinking',
+    enabledValues: [true],
+    disabledValues: [false],
+  },
+
+  /**
    * Factory method to create an Ollama LLM provider instance
    * Requires baseUrl parameter for Ollama server connection
    */

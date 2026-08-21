@@ -141,8 +141,12 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
         isDangerousCompatible: profile.isDangerousCompatible ?? false,
         allowToolUse: profile.allowToolUse ?? true,
         pseudoToolMode: profile.pseudoToolMode ?? 'auto',
-        // Null means the profile predates the field; show the provider default
-        // the server would resolve to, so the box reflects actual behaviour.
+        // Null means the profile predates the field (or arrived by import);
+        // show the provider default the server would resolve to, so the box
+        // reflects actual behaviour. The provider rule is all that is knowable
+        // here — the thinking half needs the plugin's rule and the model's
+        // facts, neither of which this hook is given. ProfileModal corrects a
+        // null row once the model list lands (bug 85).
         multiCharacterPrefill:
           profile.multiCharacterPrefill ?? defaultMultiCharacterPrefill(profile.provider),
         supportsImageUpload: profile.supportsImageUpload ?? false,

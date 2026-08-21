@@ -176,6 +176,7 @@ const PRETTY_LABELS: Record<string, string> = {
   'add-profile-allow-tool-use-field-v1': 'Adding tool-use flag to connection profiles',
   'add-pseudo-tool-mode-field-v1': 'Choosing the proper instrument for tool conversation',
   'add-profile-multi-character-prefill-field-v1': 'Deciding who is announced at the door',
+  'retire-prefill-on-thinking-profiles-v1': 'Excusing the doorman where the guest prefers to announce themselves',
   'add-profile-supports-image-upload-field-v1': 'Adding image-upload support to connection profiles',
   'add-connection-profile-model-class-field-v1': 'Adding model-class to connection profiles',
   'add-connection-profile-max-tokens-field-v1': 'Adding max-tokens to connection profiles',

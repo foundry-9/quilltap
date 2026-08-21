@@ -374,6 +374,8 @@ import { addSmartTypographySettingsFieldMigration } from './add-smart-typography
 import { createHelpDocChunksTableMigration } from './create-help-doc-chunks-table';
 // Per-profile multi-character [Name] turn anchor: multiCharacterPrefill column on connection_profiles
 import { addProfileMultiCharacterPrefillFieldMigration } from './add-profile-multi-character-prefill-field';
+// Turn that anchor off on profiles that run a thinking turn (bugs 68, 85)
+import { retirePrefillOnThinkingProfilesMigration } from './retire-prefill-on-thinking-profiles';
 
 /**
  * All available migrations.
@@ -748,6 +750,8 @@ export const migrations: Migration[] = [
   createHelpDocChunksTableMigration,
   // Per-profile multi-character [Name] turn anchor (replaces the Anthropic-only carve-out)
   addProfileMultiCharacterPrefillFieldMigration,
+  // Turn that anchor off on profiles that run a thinking turn (bugs 68, 85)
+  retirePrefillOnThinkingProfilesMigration,
 ];
 
 export {
@@ -1101,5 +1105,7 @@ export {
   createHelpDocChunksTableMigration,
   // Per-profile multi-character [Name] turn anchor (replaces the Anthropic-only carve-out)
   addProfileMultiCharacterPrefillFieldMigration,
+  // Turn that anchor off on profiles that run a thinking turn (bugs 68, 85)
+  retirePrefillOnThinkingProfilesMigration,
 };
 

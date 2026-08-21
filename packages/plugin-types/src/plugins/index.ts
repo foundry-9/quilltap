@@ -11,6 +11,7 @@ export type {
   ProviderCapabilities,
   AttachmentSupport,
   ModelInfo,
+  ThinkingTurnRule,
   EmbeddingModelInfo,
   ImageGenerationModelInfo,
   ImageProviderConstraints,

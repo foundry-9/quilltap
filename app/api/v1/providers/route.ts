@@ -50,6 +50,11 @@ export const GET = createContextHandler(async (req, context) => {
         capabilities: plugin.capabilities,
         configRequirements: plugin.config,
         optionsSchema: optionsSchema ?? null,
+        // How the profile editor tells whether the profile in front of the
+        // user will run a thinking turn, which decides the multi-character
+        // prefill default (bug 85). Declarative precisely so it can cross the
+        // wire — the browser cannot call a server-side plugin.
+        thinkingTurnRule: plugin.thinkingTurnRule ?? null,
       };
     });
 

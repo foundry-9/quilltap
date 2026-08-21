@@ -122,6 +122,12 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       missingCapabilities: metadata?.missingCapabilities,
       maxOutputTokens: staticInfo?.maxOutputTokens,
       contextWindow: staticInfo?.contextWindow,
+      // Thinking facts travel with the model so the connection-profile editor
+      // can seed the multi-character prefill box the way the server would
+      // (bug 85). `thinksByDefault` is the load-bearing one: a model that
+      // reasons unasked is one the user never opted into.
+      supportsThinking: staticInfo?.supportsThinking,
+      thinksByDefault: staticInfo?.thinksByDefault,
     };
   });
 

@@ -363,15 +363,22 @@ When in doubt, leave the setting on **Auto**. The keeper of the keys can always 
 
 When several characters share a room, each reply must be pinned to exactly one of them, or the model will cheerfully write the whole cast's evening for you. Quilltap has two ways of pinning it, and the **Announce the speaker in multi-character scenes ([Name] prefill)** checkbox decides which one this profile uses.
 
-**Ticked** — the turn is handed to the model already opened, with `[Marie]` written at the top of a reply she has not begun. Structurally she cannot be anyone else; the model has no choice but to continue the line it has been handed. The tag never reaches the transcript — Quilltap strips it on the way back. This is the firmer of the two grips, and it is what every profile but Anthropic starts with.
+**Ticked** — the turn is handed to the model already opened, with `[Marie]` written at the top of a reply she has not begun. Structurally she cannot be anyone else; the model has no choice but to continue the line it has been handed. The tag never reaches the transcript — Quilltap strips it on the way back. This is the firmer of the two grips, and it is where most profiles begin.
 
 **Unticked** — the same instruction is delivered in prose, appended quietly to the system prompt: *respond as Marie and only Marie, and never label anything with another participant's name.* The conversation is left ending on the user's turn, and the model begins its reply itself. A polite request rather than a hand on the elbow — but some models will not tolerate the hand.
 
-**When to untick it:**
+**Quilltap unticks it for you in two cases.** A new profile arrives with the box already settled, and it settles it against the prefill when either of these holds:
 
 - **Anthropic.** Their recent models refuse outright to accept a reply that someone else has already started, and will return an error on every multi-character turn. New Anthropic profiles therefore begin with the box unticked, and you should think twice before ticking it.
-- **Local thinking models (Ollama).** A ruminative model opens its deliberation at the very start of its turn — so if Quilltap has already opened the turn, the door to the study is shut before the model reaches it. The reply arrives with no thinking whatsoever, however firmly you have ticked *Enable Thinking*. If your local model reasons beautifully in a one-on-one chat and falls silent about it in a group, this checkbox is the culprit.
+- **Any model that will reason before it answers.** A thinking turn and a turn already opened are poor company. Some providers refuse the request outright — DeepSeek's V4 models reason whether or not you asked them to, and reply to a pre-opened turn with a brusque note about `reasoning_content` and nothing else. Others accept the request and quietly swallow the deliberation instead: a local Ollama model opens its study door at the very start of its turn, so if Quilltap has already opened the turn the door is shut before the model reaches it, and the reply arrives with no thinking whatsoever however firmly you have ticked *Enable Thinking*.
+
+  Quilltap judges this per profile rather than per provider, because the same provider will serve you a ruminative model and a plain one on the same key. Set **Thinking Mode** to *Disabled* (or leave *Enable Thinking* unticked) and the prefill — the firmer grip, and the one a plainer model benefits from most — comes back of its own accord. If you have watched your thinking model take the prefill in its stride, tick the box: an explicit choice outranks Quilltap's, always. A warning appears beneath it, and nothing more.
+
+**One case is left to your judgement:**
+
 - **Models that get suspicious.** A certain sort of model will spend a paragraph of its reply working out whether `[Marie]` was an instruction to it or a slip left behind by whoever spoke last. If you see the model narrating its own confusion about the name in the brackets, untick the box and the question stops being asked.
+
+**Profiles made before all this** were given the prefill by an older rule that only knew about Anthropic. Quilltap corrects them once, on the upgrade, and only where the profile is genuinely running a thinking turn — a DeepSeek profile that has been failing every turn since you made it should simply start working. Nothing else is touched, and a box you tick yourself is never touched again.
 
 Either way, Quilltap keeps a structural backstop: a reply that wanders off into another participant's turn is truncated at the first foreign name tag, whichever route pinned it. And single-character chats use neither route — there is only one person who could possibly be speaking.
 

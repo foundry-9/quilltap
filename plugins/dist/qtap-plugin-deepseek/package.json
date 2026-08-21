@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-deepseek",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "DeepSeek provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",
@@ -12,7 +12,7 @@
     "clean": "rm -f index.js"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^2.5.6",
+    "@quilltap/plugin-types": "^2.5.8",
     "@quilltap/plugin-utils": "^2.3.0",
     "openai": "^7.4.0"
   },

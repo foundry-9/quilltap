@@ -265,7 +265,9 @@ List all available providers, including both LLM providers and search providers.
       "configRequirements": {
         "requiresApiKey": true,
         "requiresBaseUrl": false
-      }
+      },
+      "optionsSchema": null,
+      "thinkingTurnRule": null
     },
     {
       "id": "SERPER",
@@ -289,6 +291,15 @@ List all available providers, including both LLM providers and search providers.
   "count": 2
 }
 ```
+
+LLM entries also carry `optionsSchema` — the plugin's
+`getProviderOptionsSchema()` output, or `null` when it declares none — and
+`thinkingTurnRule`, which names the `parameters` key that switches reasoning on
+or off (`{ optionKey, enabledValues, disabledValues }`) or `null` when the
+provider has no such option. The rule is declarative rather than a server-side
+predicate precisely so it can cross the wire: the connection-profile editor runs
+in the browser and needs the same answer the server gets, to seed
+`multiCharacterPrefill` (bug 85). Search-provider entries carry neither.
 
 **Provider Types:**
 
@@ -711,15 +722,25 @@ Create a connection profile.
 character whose turn it is. `true` appends an assistant message containing
 `[Character Name]` so the model structurally continues only that line; `false`
 appends a prose instruction to the system prompt instead, leaving the request
-ending on a user message. **Omit it and the server picks the provider default:
-`false` for Anthropic (4.6+ rejects an assistant tail), `true` elsewhere.** A
-stored `null` — a row older than
-`add-profile-multi-character-prefill-field-v1`, or a profile imported from a
-pre-4.9 bundle — resolves to that same provider default at use time. Turn it
-off for Ollama profiles with thinking enabled: Ollama opens the reasoning block
-from the chat template at the start of the assistant turn, so a prefill
-suppresses reasoning entirely (bug 68). `PUT` accepts the same field and
-rejects a non-boolean with `400`.
+ending on a user message. **Omit it and the server resolves a default: `false`
+for Anthropic (4.6+ rejects an assistant tail), `false` for any profile that
+will run a thinking turn, `true` otherwise.** A stored `null` — a row older
+than `add-profile-multi-character-prefill-field-v1`, or a profile imported from
+a pre-4.9 bundle — resolves to that same default at use time. A stored boolean
+always outranks it.
+
+"Will run a thinking turn" is answered per profile, not per provider, by
+`evaluateThinkingTurn` (`lib/llm/thinking-turn.ts`): the provider plugin's
+`thinkingTurnRule` says which key in `parameters` switches reasoning on or off,
+and when the profile has made no choice the selected model's `thinksByDefault`
+flag decides. A thinking turn and a prefilled assistant turn go badly together —
+DeepSeek rejects the request outright with *"The `reasoning_content` in the
+thinking mode must be passed back to the API"* (bug 85), and Ollama opens the
+reasoning block from the chat template at the start of the assistant turn, so a
+prefill suppresses reasoning entirely (bug 68). A thinking-*off* profile on
+either provider keeps the prefill, which is the stronger anchor.
+
+`PUT` accepts the same field and rejects a non-boolean with `400`.
 
 #### `GET /api/v1/connection-profiles/[id]`
 
@@ -1005,12 +1026,20 @@ Fetch models directly from a provider (live query, not cached).
       "deprecated": false,
       "experimental": false,
       "maxOutputTokens": 4096,
-      "contextWindow": 128000
+      "contextWindow": 128000,
+      "supportsThinking": true,
+      "thinksByDefault": false
     }
   ],
   "count": 3
 }
 ```
+
+`supportsThinking` and `thinksByDefault` come from the plugin's static
+`getModelInfo()` catalogue and are absent for a model it does not list. They are
+separate facts: the first is a capability, the second says the model reasons
+even when the profile never asked. The connection-profile editor reads the
+second to seed `multiCharacterPrefill` the way the server would.
 
 ---
 
