@@ -4,6 +4,14 @@
 
 ### 4.9-dev
 
+#### A failed image generation says what actually went wrong (bug 84)
+
+When `generate_image` failed, the notice above the composer read `Failed to generate image` and the toast read `Image generation failed: Unknown error` — every time, no matter the cause. Asking for an image in a chat with no image profile resolved is the common case, and the remedy is right there in the server's own sentence: `Image generation is not enabled for this chat`.
+
+The server had been sending that sentence all along. The SSE tool-result frame carries it in `error`, a sibling of `result`, specifically because `result` is null on failure. The Salon looked for it one level down at `result.error`, found nothing, and fell back to its generic strings — so the field had no reader anywhere in the app.
+
+The failure text is now resolved through one helper, `resolveToolResultErrorText`, which prefers the sibling `error`, keeps the old nested read as a fallback, and strips the executor's leading `Error: ` so the toast doesn't read "failed: Error: ...". Both the notice and the toast render the same resolved sentence.
+
 #### The intermittent jest worker segfault was V8's, not SQLCipher's (bug 83)
 
 For months, roughly one full `npm run test:unit` run in five ended with `A jest worker process ... was terminated by another process: signal=SIGSEGV` failing one arbitrary suite while every actual test passed, and a rerun always went green. It was assumed to be the known native-SQLCipher teardown flake fixed in June. A macOS crash report proved otherwise: the dying worker had no `better_sqlite3.node` loaded at all, and the faulting stack matched [nodejs/node#62393](https://github.com/nodejs/node/issues/62393) frame-for-frame — a V8 13.6 (Node 24) GC race where a mark-compact triggered inside Sparkplug's baseline prologue dereferences a junk frame slot. Upstream still reproduces it on Node 26, so the fix is the thread's proven workaround: disable the Sparkplug baseline compiler for test runs. The five jest scripts in `package.json` now launch `node --no-sparkplug node_modules/jest/bin/jest.js` (the flag isn't allowed in `NODE_OPTIONS`), and `jest.global-setup.js` appends `--no-sparkplug` to `process.execArgv` before any worker forks, so ad-hoc `npx jest` runs get protected workers too — jest-worker inherits the parent's `execArgv`. The integration config now shares that globalSetup, which also gives it the native-ABI self-heal. Nine consecutive full runs (half with a cleared transform cache) produced zero crashes; upstream's matrices report the same at larger sample sizes with no measurable wall-time cost. Also tightened while in there: `quantize-embeddings.test.ts` now closes its per-test in-memory database like every other real-binding suite. Filed as [bug 83](developer/bugs/fixed/bug-83-v8-sparkplug-worker-segfault.md).

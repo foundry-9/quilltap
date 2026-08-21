@@ -1,12 +1,18 @@
 # Bugs — defects surfaced by the v5 port
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-21
 **Codebase**: Quilltap v4.9.0-dev
 **Provenance**: the quilltap-v5 native port's differential harness, its
 dogfood walks against a copy of real data, and — from Bug 62 — v4's own
 feature-spec work and browser verification
-**Status**: Bugs **1–83** are **fixed in v4** — nothing in this catalogue is
-open. Bug 83 (filed and fixed 2026-08-20) is the intermittent jest worker
+**Status**: Bugs **1–84** are **fixed in v4** — nothing in this catalogue is
+open. Bug 84 (filed and fixed 2026-08-21) is a field with no reader: the SSE
+emitter hoists a failing tool's human-readable sentence to `error`, a sibling of
+`result`, *because `result` is null on failure* — and the Salon looked for it one
+level down at `result?.error`, so a `generate_image` refusal that named its own
+remedy displayed as `Unknown error`. One pure resolver now prefers the sibling,
+keeps the nested read as a fallback, and strips the executor's `Error: ` wrapper
+so the toast doesn't double it. Bug 83 (filed and fixed 2026-08-20) is the intermittent jest worker
 SIGSEGV, misattributed for months to the native SQLCipher binding and finally
 traced by a macOS crash report to an upstream V8 GC race
 ([nodejs/node#62393](https://github.com/nodejs/node/issues/62393)); the suite
@@ -443,7 +449,7 @@ One row per bug, newest last. **Bug** links to the entry; **Fix site** and
 | 81 | [an OpenAI-Compatible profile can never hold an API key](bugs/fixed/bug-81-oac-cannot-hold-an-api-key.md) | 2026-08-19 | 2026-08-19 | Medium | `requiresApiKey` answers two questions with one boolean, so OpenAI-Compatible is absent from the Add-New-API-Key provider list **and** from the profile form's key field — every hosted OpenAI-compatible endpoint that needs a bearer token is unconfigurable. Server-side, four call sites gated the key *lookup* on the same flag, so even an attached key never reached the wire | An optional `acceptsApiKey` capability answers the second question (`@quilltap/plugin-types` 2.5.7, absent = same answer as `requiresApiKey`); both UI gates and `useProfileForm`'s outbound guard read it via `lib/llm/api-key-support.ts`; the four services share `resolveConnectionProfileApiKey` | Owed |
 | 82 | [three leading system messages break strict local chat templates](bugs/fixed/bug-82-three-leading-system-messages.md) | 2026-08-19 | 2026-08-19 | High (for local models) | Every non-opening turn dies with `Jinja Exception: System message must be at the beginning` on Qwen-family templates — the greeting sends one system block and works, a normal turn sends three and is refused before a token is generated | `collapseLeadingSystemMessages` (`@quilltap/plugin-utils` 2.4.0) folds the leading run at request-build time; Ollama calls it unconditionally, OAC via `acceptsRepeatedSystemMessages: false` — the flag defaults true, so hosted subclasses stay byte-identical | Owed |
 | 83 | [a V8 GC race kills a jest worker and fails an arbitrary suite](bugs/fixed/bug-83-v8-sparkplug-worker-segfault.md) | 2026-08-20 | 2026-08-20 | Medium (dev tooling) | ~1 full unit run in 5 loses a worker to a SIGSEGV in V8's mark-compact ([nodejs/node#62393](https://github.com/nodejs/node/issues/62393)) and fails a different innocent suite each time; months of misattribution to the native SQLCipher binding trained a "just rerun it" reflex | `package.json` jest scripts (`node --no-sparkplug`) + `armSparkplugGuard()` in `jest.global-setup.js`, now shared by `jest.integration.config.ts` | Nothing owed (no V8 in Rust) |
-| 84 | [the tool-result error sentence is carried to the client and then ignored](bugs/bug-84-tool-error-sentence-never-reaches-the-ui.md) | 2026-08-21 |  | Low (cosmetic, but it defeats a field added for exactly this purpose, and hides the one sentence naming the remedy) | A failed `generate_image` shows `Failed to generate image` / `Image generation failed: Unknown error`, while the frame carried `error: "Error: Image generation is not enabled for this chat"`. The emitter hoists the text to a sibling of `result` *because `result` is null on failure* and says so in its comment; `trackToolResult` destructures only `{index, name, success, result}` and reads `result?.error`, one level too deep, so the fallback fires every time | Read `data.toolResult.error` first, keeping `result?.error` as the fallback; consider stripping the executor's leading `Error: ` at the display site | Faithful — v5 reproduces it exactly (`chat-stream.reducer.ts:379`, `salon-conversation.ts:2947`); absorbs the fix in a drift catch-up. v5 dogfood finding #99 |
+| 84 | [the tool-result error sentence is carried to the client and then ignored](bugs/fixed/bug-84-tool-error-sentence-never-reaches-the-ui.md) | 2026-08-21 | 2026-08-21 | Low (cosmetic, but it defeats a field added for exactly this purpose, and hides the one sentence naming the remedy) | A failed `generate_image` shows `Failed to generate image` / `Image generation failed: Unknown error`, while the frame carried `error: "Error: Image generation is not enabled for this chat"`. The emitter hoists the text to a sibling of `result` *because `result` is null on failure* and says so in its comment; `trackToolResult` destructures only `{index, name, success, result}` and reads `result?.error`, one level too deep, so the fallback fires every time | `resolveToolResultErrorText(...)` in `app/salon/[id]/hooks/useSSEStreaming.ts` — reads the sibling `error` first, falls back to `result?.error`, and strips the executor's leading `Error: `; `trackToolResult`'s `generate_image` failure branch renders it into both the notice and the toast | Owed — v5 reproduces it exactly (`chat-stream.reducer.ts:379`, `salon-conversation.ts:2947`) and now absorbs the fix in a drift catch-up. v5 dogfood finding #99 |
 
 ### Families and reading order
 
@@ -611,6 +617,19 @@ sides now simply disagree, silently, until the mirror lands. What v5 owes:
   sheet was always right.
 - Finding #30 is re-ruled from "v4-faithful, deliberately not fixed" to fixed
   upstream, and the m6 parity note for the composer popup is updated with it.
+
+**Bug 84 fires no tripwire either**, and for the same reason: v5 reproduces it
+faithfully, so nothing over there asserts a divergence. What v5 owes is two
+reads:
+
+- `apps/web/src/app/core/chat-stream.reducer.ts:379` — `applyToolResult` stores
+  `result: result.result` and drops the sibling `error`; carry it through onto
+  the call (or alongside it).
+- `screens/salon/salon-conversation.ts:2947` — the `generate_image` failure
+  branch reads `(call.result ?? {}).error`; prefer the carried `error`, keep the
+  nested read as the fallback, and strip a leading `Error: ` as v4 now does.
+- Finding #99 is re-ruled from "v4-faithful, deliberately not fixed" to fixed
+  upstream.
 
 ---
 

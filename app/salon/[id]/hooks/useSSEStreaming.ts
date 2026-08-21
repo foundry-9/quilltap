@@ -70,6 +70,12 @@ interface SSEEvent {
     name: string
     success: boolean
     result?: any
+    /**
+     * Human-readable failure text, set by the emitter only when `success` is
+     * false (the `result` field is usually null on error). Sibling of `result`,
+     * not nested inside it.
+     */
+    error?: string
   }
   provider?: string
   modelName?: string
@@ -112,6 +118,23 @@ interface SSEEvent {
     notes: string | null
     content?: string
   }
+}
+
+/**
+ * Pull the human-readable failure sentence out of a `toolResult` frame.
+ *
+ * The emitter (`lib/services/chat-message/tool-execution.service.ts`) puts the
+ * text in `error`, a **sibling** of `result`, because `result` itself is null on
+ * failure. The nested `result.error` read is kept only as a fallback in case a
+ * provider ever puts it there. The executor wraps the sentence in its own
+ * `Error: ` prefix, which is stripped so display sites don't read
+ * "Image generation failed: Error: ..." (Bug 84).
+ */
+export function resolveToolResultErrorText(
+  toolResult: { result?: unknown; error?: string } | undefined
+): string | undefined {
+  const raw = toolResult?.error || (toolResult?.result as { error?: string } | null | undefined)?.error
+  return raw?.replace(/^Error:\s*/, '').trim() || undefined
 }
 
 /**
@@ -390,7 +413,7 @@ export function useSSEStreaming({
   // after their detection) and run per-tool side effects (navigation, image
   // toasts, page callback).
   const trackToolResult = useCallback((data: SSEEvent) => {
-    const { index, name, success, result } = data.toolResult!
+    const { index, name, success, result, error } = data.toolResult!
 
     setStreamingToolBatches(prev => {
       if (prev.length === 0) return prev
@@ -421,12 +444,13 @@ export function useSSEStreaming({
         })
         showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
       } else {
+        const detail = resolveToolResultErrorText({ result, error })
         publishToolExecutionStatus({
           tool: name,
           status: 'error',
-          message: result?.error || 'Failed to generate image',
+          message: detail || 'Failed to generate image',
         })
-        showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
+        showErrorToast(`Image generation failed: ${detail || 'Unknown error'}`)
       }
     }
 

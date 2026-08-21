@@ -351,10 +351,13 @@ The quality of generated images depends on:
 
 **Common errors:**
 
+- "Image generation is not enabled for this chat" — no image profile resolves for this conversation's seats; set a default profile, or pick one for the chat (see *Selecting a Different Profile* above)
 - "Invalid API key" — API key is wrong or expired
 - "Insufficient credits" — Provider account is out of money
 - "Model not found" — Model is no longer available
 - "Rate limit exceeded" — Too many requests at once
+
+The notice above the composer and the toast both carry the reason verbatim, so the sentence you see is the one the machinery actually gave — no need to go spelunking in the logs for it.
 
 **Solutions:** Check error message and troubleshoot accordingly
 
