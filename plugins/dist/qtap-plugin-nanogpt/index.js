@@ -12812,7 +12812,8 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
       const choice = response.choices[0];
       const msg = choice.message;
       const msgWithReasoning = msg;
-      const reasoningContent = msgWithReasoning.reasoning ?? msgWithReasoning.reasoning_content;
+      const rawReasoning = msgWithReasoning.reasoning ?? msgWithReasoning.reasoning_content;
+      const reasoningContent = rawReasoning === (msg.content ?? "") ? void 0 : rawReasoning;
       const toolCalls = this.normalizeToolCalls(msg.tool_calls);
       return {
         content: msg.content ?? "",
@@ -12850,6 +12851,8 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
       let finishReason = null;
       let usage = null;
       let reasoningContent = "";
+      let contentSoFar = "";
+      let pendingReasoning = "";
       for await (const chunk of stream) {
         const choice = chunk.choices[0];
         if (!choice) {
@@ -12858,13 +12861,19 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
         }
         const delta = choice.delta;
         if (delta?.content) {
+          contentSoFar += delta.content;
           yield { content: delta.content, done: false };
         }
         const deltaWithReasoning = delta;
         const deltaReasoning = deltaWithReasoning?.reasoning ?? deltaWithReasoning?.reasoning_content;
         if (deltaReasoning) {
-          reasoningContent += deltaReasoning;
-          yield { content: "", done: false, reasoningContent };
+          pendingReasoning += deltaReasoning;
+          const looksLikeProseEcho = reasoningContent === "" && contentSoFar.length > 0 && contentSoFar.startsWith(pendingReasoning);
+          if (!looksLikeProseEcho) {
+            reasoningContent += pendingReasoning;
+            pendingReasoning = "";
+            yield { content: "", done: false, reasoningContent };
+          }
         }
         if (delta?.tool_calls) {
           for (const tcDelta of delta.tool_calls) {
@@ -12879,6 +12888,10 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
         if (choice.finish_reason) finishReason = choice.finish_reason;
         if (chunk.usage) usage = chunk.usage;
       }
+      if (pendingReasoning && !contentSoFar.startsWith(pendingReasoning)) {
+        reasoningContent += pendingReasoning;
+      }
+      pendingReasoning = "";
       const toolCalls = Array.from(toolCallAccumulator.values()).map((tc) => ({
         id: tc.id,
         type: "function",

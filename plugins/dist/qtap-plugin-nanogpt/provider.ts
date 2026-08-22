@@ -16,6 +16,9 @@
  *     routes — the main endpoint carries them in `delta.reasoning` /
  *     `message.reasoning`, with `reasoning_content` kept as a fallback for
  *     upstreams that speak the legacy dialect — display-only
+ *   - Suppress the gateway's occasional verbatim echo of the answer down
+ *     the reasoning channel (routing-dependent; would repeat the reply
+ *     under a thinking fold)
  *   - Accumulate streamed tool-call fragments
  */
 
@@ -167,9 +170,12 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
       const choice = response.choices[0];
       const msg = choice.message;
       // NanoGPT's /api/v1 endpoint returns reasoning in `message.reasoning`;
-      // `reasoning_content` is its legacy dialect, kept as a fallback.
+      // `reasoning_content` is its legacy dialect, kept as a fallback. The
+      // gateway sometimes (routing-dependent) echoes the answer itself down
+      // the reasoning field — drop the echo, keep real thinking.
       const msgWithReasoning = msg as { reasoning?: string; reasoning_content?: string };
-      const reasoningContent = msgWithReasoning.reasoning ?? msgWithReasoning.reasoning_content;
+      const rawReasoning = msgWithReasoning.reasoning ?? msgWithReasoning.reasoning_content;
+      const reasoningContent = rawReasoning === (msg.content ?? '') ? undefined : rawReasoning;
       const toolCalls = this.normalizeToolCalls(msg.tool_calls);
 
       return {
@@ -215,6 +221,14 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
       let finishReason: string | null = null;
       let usage: OpenAI.CompletionUsage | null = null;
       let reasoningContent = '';
+      let contentSoFar = '';
+      // Reasoning held back while it still replays the prose verbatim from
+      // its start. NanoGPT's gateway sometimes (routing-dependent) echoes the
+      // whole answer down the reasoning channel after the content stream
+      // ends; committing that echo would repeat the reply under a thinking
+      // fold. A held run that diverges from the prose is real thinking and
+      // commits in full; one still mirroring it at stream end is discarded.
+      let pendingReasoning = '';
 
       for await (const chunk of stream) {
         const choice = chunk.choices[0];
@@ -225,6 +239,7 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
         const delta = choice.delta;
 
         if (delta?.content) {
+          contentSoFar += delta.content;
           yield { content: delta.content, done: false };
         }
 
@@ -233,8 +248,16 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
         const deltaWithReasoning = delta as { reasoning?: string; reasoning_content?: string } | undefined;
         const deltaReasoning = deltaWithReasoning?.reasoning ?? deltaWithReasoning?.reasoning_content;
         if (deltaReasoning) {
-          reasoningContent += deltaReasoning;
-          yield { content: '', done: false, reasoningContent };
+          pendingReasoning += deltaReasoning;
+          const looksLikeProseEcho =
+            reasoningContent === '' &&
+            contentSoFar.length > 0 &&
+            contentSoFar.startsWith(pendingReasoning);
+          if (!looksLikeProseEcho) {
+            reasoningContent += pendingReasoning;
+            pendingReasoning = '';
+            yield { content: '', done: false, reasoningContent };
+          }
         }
 
         if (delta?.tool_calls) {
@@ -251,6 +274,13 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
         if (choice.finish_reason) finishReason = choice.finish_reason;
         if (chunk.usage) usage = chunk.usage;
       }
+
+      // A run still mirroring the prose at stream end is the gateway echo —
+      // discard it. (Anything that diverged was already committed above.)
+      if (pendingReasoning && !contentSoFar.startsWith(pendingReasoning)) {
+        reasoningContent += pendingReasoning;
+      }
+      pendingReasoning = '';
 
       const toolCalls = Array.from(toolCallAccumulator.values()).map((tc) => ({
         id: tc.id,

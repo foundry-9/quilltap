@@ -11,6 +11,11 @@
  *   3. The stream surfaces `delta.reasoning` — NanoGPT's main endpoint field
  *      (NOT the legacy `reasoning_content`, which is kept only as a
  *      fallback). Reading the wrong field leaves the thinking fold empty.
+ *   4. The gateway's occasional verbatim echo of the answer down the
+ *      reasoning channel (routing-dependent, seen live 2026-08-22) must be
+ *      suppressed — committing it repeats the whole reply under a thinking
+ *      fold anchored at the end of the prose. Real reasoning, which
+ *      diverges from the prose, must survive the guard.
  */
 
 import { NanoGPTProvider } from '@/plugins/dist/qtap-plugin-nanogpt/provider';
@@ -141,5 +146,76 @@ describe('NanoGPT reasoning on the wire', () => {
     }
 
     expect(received[received.length - 1].reasoningContent).toBe('old school');
+  });
+
+  it('drops a trailing reasoning echo that replays the prose verbatim', async () => {
+    async function* chunks() {
+      yield { choices: [{ delta: { content: 'The answer, ' } }] };
+      yield { choices: [{ delta: { content: 'in full.' } }] };
+      // Gateway echo: the whole answer re-emitted down the reasoning channel,
+      // split across chunks, after the content stream ends.
+      yield { choices: [{ delta: { reasoning: 'The answer, ' } }] };
+      yield { choices: [{ delta: { reasoning: 'in full.' }, finish_reason: 'stop' }] };
+      yield { choices: [], usage: { prompt_tokens: 1, completion_tokens: 5, total_tokens: 6 } };
+    }
+    const create = jest.fn().mockResolvedValue(chunks());
+    mockClient(create);
+
+    const provider = new NanoGPTProvider();
+    const received: { reasoningContent?: string; done: boolean; rawResponse?: unknown }[] = [];
+    for await (const chunk of provider.streamMessage(
+      { model: 'openai/gpt-5.5', messages: [{ role: 'user', content: 'hi' }] } as never,
+      'test-key'
+    )) {
+      received.push(chunk as never);
+    }
+
+    // No chunk — live or final — may surface the echo as reasoning.
+    expect(received.every((c) => !c.reasoningContent)).toBe(true);
+    const finalRaw = received[received.length - 1].rawResponse as {
+      choices: { message: { reasoning_content?: string } }[];
+    };
+    expect(finalRaw.choices[0].message.reasoning_content).toBeUndefined();
+  });
+
+  it('keeps post-prose reasoning that diverges from the prose', async () => {
+    async function* chunks() {
+      yield { choices: [{ delta: { content: 'Answer first.' } }] };
+      // Starts like the prose, then diverges — real thinking, not an echo.
+      yield { choices: [{ delta: { reasoning: 'Answer' } }] };
+      yield { choices: [{ delta: { reasoning: ' needs checking.' }, finish_reason: 'stop' }] };
+    }
+    const create = jest.fn().mockResolvedValue(chunks());
+    mockClient(create);
+
+    const provider = new NanoGPTProvider();
+    const received: { reasoningContent?: string; done: boolean }[] = [];
+    for await (const chunk of provider.streamMessage(
+      { model: 'openai/gpt-5.5', messages: [{ role: 'user', content: 'hi' }] } as never,
+      'test-key'
+    )) {
+      received.push(chunk as never);
+    }
+
+    expect(received[received.length - 1].reasoningContent).toBe('Answer needs checking.');
+  });
+
+  it('drops a non-streaming reasoning echo equal to the content', async () => {
+    const create = jest.fn().mockResolvedValue({
+      choices: [
+        { message: { content: 'Same text.', reasoning: 'Same text.' }, finish_reason: 'stop' },
+      ],
+      usage: { prompt_tokens: 1, completion_tokens: 2, total_tokens: 3 },
+    });
+    mockClient(create);
+
+    const provider = new NanoGPTProvider();
+    const response = await provider.sendMessage(
+      { model: 'openai/gpt-5.5', messages: [{ role: 'user', content: 'hi' }] } as never,
+      'test-key'
+    );
+
+    expect(response.content).toBe('Same text.');
+    expect(response.reasoningContent).toBeUndefined();
   });
 });
