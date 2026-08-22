@@ -101,6 +101,7 @@ async function collectFoldWhisperConversationIds(
  */
 const MEMORY_RECAP_PHASE_TIMEOUT_MS = 60_000
 import { getMemoryRecallSettings, getTabooSettings } from '@/lib/instance-settings'
+import { resolveStandingInstructionsSection } from '@/lib/chat/context/standing-instructions'
 import { generateMemoryRecap, rampLimit, type MemoryRecapResult } from '@/lib/memory/memory-recap'
 import { withTimeout } from '@/lib/promise-timeout'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
@@ -911,6 +912,32 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
+  // Standing instructions: the chat's project `instructions` plus the
+  // `instructions` of every group the responding character belongs to.
+  // Resolved here (async), rendered once, and handed to the synchronous
+  // builder — same shape as the Taboo read above. The resolver fails soft
+  // internally; this catch is a final backstop so the turn never dies for a
+  // section that is guidance, not payload.
+  let standingInstructions: string | null = null
+  try {
+    standingInstructions = await resolveStandingInstructionsSection({
+      projectId: chat.projectId ?? null,
+      characterId: character.id,
+    })
+    if (standingInstructions) {
+      logger.debug('[ContextManager] Standing instructions applied to system prompt', {
+        chatId: chat.id,
+        characterId: character.id,
+        sectionLength: standingInstructions.length,
+      })
+    }
+  } catch (error) {
+    logger.warn('[ContextManager] Failed to resolve standing instructions — continuing without them', {
+      chatId: chat.id,
+      error: getErrorMessage(error),
+    })
+  }
+
   const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
@@ -923,6 +950,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     scenarioText: options.chat.scenarioText ?? undefined,
     precompiledIdentityStack,
     tabooPhrases,
+    standingInstructions,
   })
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 

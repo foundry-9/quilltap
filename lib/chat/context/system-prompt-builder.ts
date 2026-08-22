@@ -279,6 +279,14 @@ export interface BuildSystemPromptOptions {
    * announcer, `self_inventory`).
    */
   tabooPhrases?: string[]
+  /**
+   * Rendered standing-instructions section (project + group `instructions`,
+   * see `lib/chat/context/standing-instructions.ts`), resolved by the async
+   * caller and passed down because this builder is deliberately synchronous.
+   * Omitting the option omits the section. Unlike Taboo, the section IS
+   * template-processed — a project/group prompt may address `{{char}}`.
+   */
+  standingInstructions?: string | null
 }
 
 export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
@@ -294,6 +302,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     scenarioText,
     precompiledIdentityStack,
     tabooPhrases,
+    standingInstructions,
   } = options
 
   const parts: string[] = []
@@ -349,6 +358,16 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
   const tabooSection = renderTabooSection(tabooPhrases)
   if (tabooSection) {
     parts.push(tabooSection)
+  }
+
+  // Standing instructions (project + group `instructions`). Stable per
+  // character per chat — it changes only when the user edits a project/group
+  // or a membership — so it lives here in the cacheable prefix, after the
+  // universal material and before the per-turn tool instructions. Emits
+  // nothing when absent (the Taboo byte-identity contract). Template-processed
+  // like the roleplay template so `{{char}}`/`{{user}}` resolve.
+  if (standingInstructions && standingInstructions.trim().length > 0) {
+    parts.push(processTemplate(standingInstructions, templateContext))
   }
 
   // Tool instructions (per-turn dynamic — varies with enabled tools, danger

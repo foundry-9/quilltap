@@ -128,7 +128,7 @@ export async function postProsperoConnectionProfileChangeAnnouncement(
 // configured cadence (default every 5 messages — see
 // `chatSettings.contextCompressionSettings.projectContextReinjectInterval`).
 //
-// Project info (description, instructions, linked document stores) and the
+// Project info (description, linked document stores) and the
 // instance-wide "Quilltap General" shelf are emitted as a single combined
 // announcement so Prospero speaks once per re-injection rather than twice.
 // ---------------------------------------------------------------------------
@@ -151,7 +151,6 @@ export interface ProsperoDocumentStoreInfo {
 export interface ProsperoProjectContext {
   name: string;
   description?: string | null;
-  instructions?: string | null;
   /** Document stores linked to the project (official store first, then alphabetical). */
   documentStores?: ProsperoDocumentStoreInfo[];
 }
@@ -177,7 +176,10 @@ export async function loadProsperoProjectContext(
   return {
     name: project.name,
     description: project.description,
-    instructions: project.instructions,
+    // `project.instructions` is deliberately NOT part of the whisper: it is a
+    // standing instruction injected into the cacheable system prompt every
+    // turn (lib/chat/context/standing-instructions.ts), so re-whispering it
+    // here would just duplicate it in context.
     documentStores,
   };
 }
@@ -285,7 +287,6 @@ function buildDocumentStoresSection(stores: ProsperoDocumentStoreInfo[]): string
  */
 function appendProjectBodySection(lines: string[], project: ProsperoProjectContext): boolean {
   const description = project.description?.trim();
-  const instructions = project.instructions?.trim();
   const stores = project.documentStores ?? [];
 
   if (description) {
@@ -293,26 +294,19 @@ function appendProjectBodySection(lines: string[], project: ProsperoProjectConte
     lines.push('');
     lines.push(description);
   }
-  if (instructions) {
-    if (description) lines.push('');
-    lines.push('**Project instructions:**');
-    lines.push('');
-    lines.push(instructions);
-  }
   if (stores.length) {
-    if (description || instructions) lines.push('');
+    if (description) lines.push('');
     lines.push(...buildDocumentStoresSection(stores));
   }
 
-  return Boolean(description) || Boolean(instructions) || stores.length > 0;
+  return Boolean(description) || stores.length > 0;
 }
 
 function projectHasContent(project: ProsperoProjectContext | null): boolean {
   if (!project) return false;
   const description = project.description?.trim();
-  const instructions = project.instructions?.trim();
   const storeCount = project.documentStores?.length ?? 0;
-  return Boolean(description) || Boolean(instructions) || storeCount > 0;
+  return Boolean(description) || storeCount > 0;
 }
 
 // ---------------------------------------------------------------------------

@@ -4,6 +4,17 @@
 
 ### 4.9-dev
 
+#### Project and group instructions are standing prompts in the system prompt
+
+Projects and groups each have an optional `instructions` field ("the prompt"); it is now injected into the stable, cacheable part of the system prompt instead of riding along in whispers (projects) or going nowhere at all (groups, whose field existed but had zero consumers).
+
+- New `lib/chat/context/standing-instructions.ts` resolves the chat's project instructions plus the instructions of every group the *responding character* belongs to (per-character, mirroring the group document-store tier), renders them as a `[STANDING INSTRUCTIONS]` section, and hands the string to `buildSystemPrompt`, which places it between the Taboo section and the tool instructions — inside cacheable system block 1. Empty emits nothing, byte-for-byte; group sources sort by name for cache determinism; every lookup fails soft. The section is template-processed (`{{char}}`/`{{user}}`).
+- Carina one-off queries mirror the insertion (after the scenario, before "Reference Query"), keyed to the answerer's groups and the chat's project. Help and Brahma chats are structurally excluded (separate prompt builders). `self_inventory`'s prompt reconstruction includes the section.
+- The Prospero project-context whisper no longer carries `instructions` (description and the store roster remain) — it would have duplicated the system-prompt copy every reinjection interval.
+- Groups gain the missing plumbing: `instructions` accepted by `POST /api/v1/groups` and `PUT /api/v1/groups/[id]` (it was declared in `GroupSchema` and persisted as `instructions.md` but rejected by the request validators), and the group editor gets a "Group Instructions" Markdown (Lexical) editor matching the project settings card. Projects already had the editor.
+- `PROMPT_CACHE_STRUCTURE_VERSION` bumped 3 → 4 (structural prompt change; all provider caches roll cold once).
+- Tests: `standing-instructions.test.ts` (resolver, renderer, builder placement, empty-inert byte-identity); golden prompt hash unchanged. Docs: PROMPT_ARCHITECTURE.md §2/§4/§8/§13, help `groups.md` and `project-settings.md`.
+
 #### NanoGPT: suppress the gateway's reasoning echo (plugin 1.0.2, bug 87)
 
 On some routed paths NanoGPT re-emits the entire answer down the reasoning channel after the content stream ends, so a turn rendered its whole reply a second time inside a thinking fold anchored at the end of the message. Intermittent and gateway-side: identical requests minutes apart streamed clean, and token accounting shows the echo was never billed as model output. The plugin now holds post-prose reasoning while it remains a verbatim prefix of the streamed prose — if it diverges it's real thinking and commits in full; if it still mirrors the prose at stream end it's the echo and is dropped (from live chunks, the final chunk, and the raw response). Non-streaming responses drop `message.reasoning` when it equals the content exactly. Genuine pre-content reasoning is untouched. Tests added to `nanogpt-reasoning.test.ts`.

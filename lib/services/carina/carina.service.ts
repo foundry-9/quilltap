@@ -38,6 +38,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { buildIdentityStack, buildPublicIdentityCard } from '@/lib/chat/context/system-prompt-builder';
+import { resolveStandingInstructionsSection } from '@/lib/chat/context/standing-instructions';
+import { processTemplate } from '@/lib/templates/processor';
 import {
   buildTools,
   streamMessage,
@@ -518,6 +520,33 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
     });
     if (scenarioText) {
       systemPrompt += `\n\n## Scenario\n${scenarioText}`;
+    }
+    // Standing instructions — the chat's project `instructions` plus the
+    // `instructions` of every group the answerer belongs to. Mirrors the
+    // Salon insertion (identity → world → who's asking → what you remember);
+    // template-processed like the Salon path so `{{char}}` resolves to the
+    // answerer. Fails soft: a broken store never loses the query.
+    try {
+      const standingInstructions = await resolveStandingInstructionsSection({
+        projectId: chat.projectId ?? null,
+        characterId: answerer.id,
+      });
+      if (standingInstructions) {
+        systemPrompt += `\n\n${processTemplate(standingInstructions, { char: answerer.name, user: 'User' })}`;
+        logger.debug('[Carina] Standing instructions applied to query prompt', {
+          context: 'carina',
+          chatId,
+          answererId: answerer.id,
+          sectionLength: standingInstructions.length,
+        });
+      }
+    } catch (error) {
+      logger.warn('[Carina] Failed to resolve standing instructions — continuing without them', {
+        context: 'carina',
+        chatId,
+        answererId: answerer.id,
+        error: getErrorMessage(error),
+      });
     }
     // Tell the answerer who is consulting them — the surface-level view any
     // character would have of someone addressing them (name/title/pronouns/

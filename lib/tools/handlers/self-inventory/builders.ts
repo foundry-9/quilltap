@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { buildSystemPrompt, buildOtherParticipantsInfo, type OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
+import { resolveStandingInstructionsSection } from '@/lib/chat/context/standing-instructions';
 import { resolveConnectionProfile } from '@/lib/chat/connection-resolver';
 import { getModelContextLimit, resolveContextWindow } from '@/lib/llm/model-context-data';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
@@ -512,6 +513,20 @@ export async function buildPromptSection(
   // and the async instance-settings read isn't worth threading through for a
   // reporting path. The reconstructed prompt is therefore missing the Taboo
   // section a real turn would carry — a known, accepted fidelity gap.
+  //
+  // Standing instructions (project + group `instructions`) ARE included:
+  // they are substantive conduct guidance a character should be able to
+  // introspect, and the repos are already in hand. Fails soft like the live
+  // path.
+  let standingInstructions: string | null = null;
+  try {
+    standingInstructions = await resolveStandingInstructionsSection({
+      projectId: chat.projectId ?? null,
+      characterId: character.id,
+    });
+  } catch (err) {
+  }
+
   const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
@@ -520,6 +535,7 @@ export async function buildPromptSection(
     timestampConfig: chat.timestampConfig ?? null,
     isInitialMessage: false,
     scenarioText: chat.scenarioText ?? null,
+    standingInstructions,
   });
 
   const characterCount = systemPrompt.length;

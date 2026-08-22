@@ -25,7 +25,7 @@ For one Salon turn, in wire order:
 
 | # | Role | Content | Varies |
 |---|---|---|---|
-| 1 | `system` | **Identity stack** + roleplay template + math-notation note + Taboo section + tool instructions + tool reinforcement | Per character (cacheable prefix) |
+| 1 | `system` | **Identity stack** + roleplay template + math-notation note + Taboo section + standing instructions (project/group) + tool instructions + tool reinforcement | Per character (cacheable prefix) |
 | 2 | `system` | **Identity reminder** — fully static "you are {{char}} and only {{char}}" | Character name only |
 | 3 | `system` | **Compressed-history block** — the rolling summary, only when budget compression fired | Every few turns |
 | — | `system` | Agent-mode instructions, when agent mode is on (inserted after the system group) | Rare |
@@ -76,8 +76,9 @@ Same file. Takes the identity stack (precompiled or freshly built) and appends, 
 1. **Roleplay template** — the chat's `roleplayTemplateId`, inherited from project default → user default on first use and then persisted onto the chat (`getRoleplayTemplate` in `lib/services/chat-message/participant-resolver.service.ts`). Template-processed.
 2. **Math-notation note** — universal, template-free. The Salon renders KaTeX only for `$$…$$`; single-`$` is deliberately disabled so prose like "$50 … $20" is not eaten as math. Without this note models reach for `$x$` or `\(x\)` and their formulas render as literal text.
 3. **Taboo section** — the instance-wide forbidden-phrase list (`instance_settings['taboo']`, Settings → Chat → Taboo). Read asynchronously by the caller and handed down, because this builder is synchronous by design. An empty list emits nothing at all, byte-for-byte. Phrases are emitted verbatim and never template-processed — a user phrase may legitimately contain `{{…}}`. The preamble's wording is load-bearing; read the comment on `TABOO_SECTION_PREAMBLE` before editing it.
-4. **Tool instructions** — native tool rules, simple-JSON instructions, or text-block instructions, selected per turn by the orchestrator from the resolved tool mode.
-5. **Tool reinforcement** — one character-voiced line, only when tools are present: "*When {{char}} uses workspace tools, they CALL them…*"
+4. **Standing instructions** — the chat's project `instructions` plus the `instructions` of every group the *responding character* belongs to (`lib/chat/context/standing-instructions.ts`), resolved async by the caller like Taboo and rendered `[STANDING INSTRUCTIONS]` → one headed block per source, groups sorted by name for cache determinism. Stable per character per chat — it changes only when a project/group is edited or a membership changes — which is why it may live in the cacheable prefix even though project *context* (description, store roster) was deliberately moved out to Prospero whispers in Phase E: the whisper content is turn-variable, instructions are not. Empty emits nothing, byte-for-byte. Unlike Taboo the section IS template-processed (`{{char}}`/`{{user}}`), matching the roleplay-template precedent. Help and Brahma chats never see it (separate builders); Carina one-off queries mirror it (see §13).
+5. **Tool instructions** — native tool rules, simple-JSON instructions, or text-block instructions, selected per turn by the orchestrator from the resolved tool mode.
+6. **Tool reinforcement** — one character-voiced line, only when tools are present: "*When {{char}} uses workspace tools, they CALL them…*"
 
 The `{{timestamp}}` template variable is populated here **only** when `timestampConfig.autoPrepend` is false; the auto-prepend path is a Host whisper instead.
 
@@ -124,7 +125,7 @@ Everything the old architecture concatenated into the system prompt now has a sp
 | Silent-mode rule | **The Host** | `postHostSilentModeAnnouncement` |
 | Timestamp | **The Host** | `timestamp`, on the `autoPrepend` cadence |
 | Off-scene character cards | **The Host** | First time a non-participant workspace character is name-dropped in real dialogue; idempotent via `hostEvent.introducedCharacterIds` |
-| Project context, general shelf | **Prospero** | Chat start, then every `projectContextReinjectInterval` messages |
+| Project context, general shelf | **Prospero** | Chat start, then every `projectContextReinjectInterval` messages. Carries description + store roster only — `project.instructions` moved into the standing-instructions block of system block 1 (§4) and is deliberately absent from the whisper |
 | Group stores / personal vault | **Prospero** | Targeted whisper to the responding character, same cadence |
 | Current outfit, wardrobe, outfit changes | **Aurora** | Opening-outfit whisper; outfit-change whispers from the wardrobe job |
 | Conversation summary | **The Librarian** | Rolling-summary fold |
@@ -209,9 +210,9 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 |---|---|---|
 | **Help chats** | `lib/help-chat/system-prompt-builder.ts` | Same identity preamble and identity reminder, plus a help-assistant role, page documentation context, and other help characters. No roleplay template, scene state, timestamps, Concierge, or project context. |
 | **Brahma Console** | `lib/brahma-console/system-prompt-builder.ts` | Character-less neutral brief. No identity, no personality, no page context, no memories. Optional SQL-access section when `run_sql` is enabled. |
-| **Carina** | `lib/services/carina/carina.service.ts` | `buildIdentityStack` + an explicit scenario section + a "Reference Query / Who Is Asking" section built from the asker's public identity card + the answerer's own memory recall. No conversation history — the isolation is the point. |
-| **`self_inventory`** | `lib/tools/handlers/self-inventory/builders.ts` | Reconstructs the prompt for introspection. Known fidelity gap: it omits the Taboo section a live turn carries. |
-| **Character-voiced announcer** | `lib/services/announcer/character-voiced.ts` | `buildSystemPrompt` with no Taboo phrases. |
+| **Carina** | `lib/services/carina/carina.service.ts` | `buildIdentityStack` + an explicit scenario section + the standing-instructions section (project + the answerer's groups, mirrored insertion) + a "Reference Query / Who Is Asking" section built from the asker's public identity card + the answerer's own memory recall. No conversation history — the isolation is the point. |
+| **`self_inventory`** | `lib/tools/handlers/self-inventory/builders.ts` | Reconstructs the prompt for introspection, including standing instructions. Known fidelity gap: it omits the Taboo section a live turn carries. |
+| **Character-voiced announcer** | `lib/services/announcer/character-voiced.ts` | `buildSystemPrompt` with no Taboo phrases and no standing instructions. |
 
 ## 14. Traps
 
@@ -227,6 +228,7 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 | File | Role |
 |---|---|
 | `lib/chat/context/system-prompt-builder.ts` | `buildIdentityStack`, `buildSystemPrompt`, `buildIdentityReinforcement`, `buildPublicIdentityCard`, `renderTabooSection` |
+| `lib/chat/context/standing-instructions.ts` | Resolve + render project/group `instructions` for the standing-instructions section |
 | `lib/services/system-prompt-compiler/compiler.ts` | Compile / cache / invalidate `chats.compiledIdentityStacks` |
 | `lib/chat/context-manager.ts` | `buildContext` — budget, memory, knowledge, scene state, whisper emission, final message assembly |
 | `lib/services/chat-message/context-builder.service.ts` | History filtering, whisper role normalization, opaque body swap, multi-character anchoring |

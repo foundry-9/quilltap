@@ -21,6 +21,14 @@ Every Group keeps an **official document store** of its very own. Inside it you
 will find:
 
 - **A Description** — a few lines on what the Group is and what it's for.
+- **Standing Instructions** — an optional prompt slipped into every member's
+  system prompt, in every chat they grace. Where the Description tells *you* what
+  the club is for, the Instructions tell the *members* how to comport themselves —
+  a house style, a code of conduct, a standing order from the committee. Like
+  everything else a Group provides, they follow the member: a fellow guest in the
+  same chat who isn't in the Group neither sees nor obeys them. They ride along
+  even when a member is consulted for a quick one-off answer (an `@Name?` aside),
+  though the Help desk and the Brahma Console remain outside their jurisdiction.
 - **A Scenarios shelf** — chat-starters that members can reach for when a new
   conversation is struck up.
 - **A Knowledge cabinet** — reference material the members can consult and search,
@@ -86,8 +94,9 @@ characters.
   invited into a chat.
 - **Link or unlink stores** — attach any of your existing document stores to the
   Group so its members can reach them as well.
-- **Edit the particulars** — name, description, colour, and icon are all yours to
-  change.
+- **Edit the particulars** — name, description, standing instructions, colour, and
+  icon are all yours to change. The Instructions get a proper writing desk — the
+  same rich Markdown editor the Projects enjoy — and may run to 10,000 characters.
 
 Any member may add, edit, or remove files in the Group's official store and in any
 store linked to it — these shelves are working shelves, not glass cases.

@@ -69,6 +69,13 @@ Character Guidelines:
 - All characters receive the instructions
 - Instructions persist across sessions
 - Updates apply to new messages immediately
+- One-off Carina consultations (`@Name:` / `@Name?`) in project chats carry them too
+- Help chats and the Brahma Console do not
+
+Instructions live in the stable part of each character's system prompt, so they
+are always in view — and providers can keep that portion of the prompt cached
+between turns. Groups have the very same arrangement for their members; see
+[Groups](groups.md).
 
 ## Tool Settings
 
