@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { ImageProfileParameters } from './ImageProfileParameters'
 
 interface ApiKey {
@@ -43,6 +43,7 @@ const FALLBACK_PROVIDERS: ImageProviderInfo[] = [
   { value: 'OPENAI', label: 'OpenAI (DALL-E / GPT Image)', defaultModels: ['gpt-image-2', 'gpt-image-1', 'dall-e-3', 'dall-e-2'], apiKeyProvider: 'OPENAI' },
   { value: 'GROK', label: 'Grok (xAI)', defaultModels: ['grok-2-image'], apiKeyProvider: 'GROK' },
   { value: 'GOOGLE', label: 'Google Gemini', defaultModels: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'], apiKeyProvider: 'GOOGLE', legacyNames: ['GOOGLE_IMAGEN'] },
+  { value: 'Z_AI', label: 'Z.AI (CogView / GLM-Image)', defaultModels: ['cogview-4-250304', 'glm-image'], apiKeyProvider: 'Z_AI' },
 ]
 
 // Build a legacy name mapping from provider data
@@ -87,6 +88,8 @@ export function ImageProfileForm({
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [isFetchingModels, setIsFetchingModels] = useState(false)
   const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [modelsSource, setModelsSource] = useState<'provider' | 'builtin' | null>(null)
+  const [modelsFetchError, setModelsFetchError] = useState<string | null>(null)
   const [isValidatingKey, setIsValidatingKey] = useState(false)
   const [keyValidationStatus, setKeyValidationStatus] = useState<string | null>(null)
   const [imageProviders, setImageProviders] = useState<ImageProviderInfo[]>(FALLBACK_PROVIDERS)
@@ -126,41 +129,49 @@ export function ImageProfileForm({
     }
   }, [isFetchingProviders, imageProviders, formData.provider])
 
-  // Fetch available models when provider or API key changes
-  useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        setIsFetchingModels(true)
-        // Normalize provider name for API calls (e.g., GOOGLE_IMAGEN -> GOOGLE)
-        const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
-        const url = new URL('/api/v1/image-profiles', window.location.origin)
-        url.searchParams.set('action', 'list-models')
-        url.searchParams.set('provider', normalizedProvider)
-        if (formData.apiKeyId) {
-          url.searchParams.set('apiKeyId', formData.apiKeyId)
-        }
+  // Query the provider (or its plugin's built-in list) for image models.
+  // Shared by the auto-load below and the explicit Fetch Models button.
+  const fetchModels = useCallback(async () => {
+    try {
+      setIsFetchingModels(true)
+      setModelsFetchError(null)
+      // Normalize provider name for API calls (e.g., GOOGLE_IMAGEN -> GOOGLE)
+      const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
+      const url = new URL('/api/v1/image-profiles', window.location.origin)
+      url.searchParams.set('action', 'list-models')
+      url.searchParams.set('provider', normalizedProvider)
+      if (formData.apiKeyId) {
+        url.searchParams.set('apiKeyId', formData.apiKeyId)
+      }
 
-        const res = await fetch(url.toString())
-        if (res.ok) {
-          const data = await res.json()
-          setAvailableModels(data.models)
-        } else {
-          // Fall back to default models from provider info
-          const providerInfo = imageProviders.find(p => p.value === normalizedProvider || p.value === formData.provider)
-          setAvailableModels(providerInfo?.defaultModels || [])
-        }
-      } catch (err) {
-        // Fall back to default models on error
-        const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
+      const res = await fetch(url.toString())
+      if (res.ok) {
+        const data = await res.json()
+        setAvailableModels(data.models)
+        setModelsSource(data.source === 'provider' ? 'provider' : 'builtin')
+        setModelsFetchError(data.fetchError || null)
+      } else {
+        // Fall back to default models from provider info
         const providerInfo = imageProviders.find(p => p.value === normalizedProvider || p.value === formData.provider)
         setAvailableModels(providerInfo?.defaultModels || [])
-      } finally {
-        setIsFetchingModels(false)
+        setModelsSource('builtin')
       }
+    } catch (err) {
+      // Fall back to default models on error
+      const normalizedProvider = normalizeProviderName(formData.provider, imageProviders)
+      const providerInfo = imageProviders.find(p => p.value === normalizedProvider || p.value === formData.provider)
+      setAvailableModels(providerInfo?.defaultModels || [])
+      setModelsSource('builtin')
+    } finally {
+      setIsFetchingModels(false)
     }
-
-    fetchModels()
   }, [formData.provider, formData.apiKeyId, imageProviders])
+
+  // Fetch available models when provider or API key changes
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- model list is server state re-synced whenever provider/key change; the same callback backs the explicit Fetch Models button
+    fetchModels()
+  }, [fetchModels])
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
@@ -380,20 +391,52 @@ export function ImageProfileForm({
         <label className="qt-label mb-1">
           Model
         </label>
-        <select
-          value={formData.modelName}
-          onChange={e => setFormData(prev => ({ ...prev, modelName: e.target.value }))}
-          disabled={isFetchingModels}
-          className="qt-select"
-        >
-          {(availableModels.length > 0 ? availableModels : (imageProviders.find(p => p.value === formData.provider)?.defaultModels || [])).map(
-            model => (
-              <option key={model} value={model}>
-                {model}
-              </option>
-            )
-          )}
-        </select>
+        <div className="flex gap-2">
+          <select
+            value={formData.modelName}
+            onChange={e => setFormData(prev => ({ ...prev, modelName: e.target.value }))}
+            disabled={isFetchingModels}
+            className="flex-1 qt-select"
+          >
+            {(() => {
+              const listed = availableModels.length > 0
+                ? availableModels
+                : (imageProviders.find(p => p.value === formData.provider)?.defaultModels || [])
+              // Keep a saved model selectable even when the fetched list omits it
+              const options = formData.modelName && !listed.includes(formData.modelName)
+                ? [formData.modelName, ...listed]
+                : listed
+              return options.map(model => (
+                <option key={model} value={model}>
+                  {model}
+                </option>
+              ))
+            })()}
+          </select>
+          <button
+            type="button"
+            onClick={fetchModels}
+            disabled={!formData.apiKeyId || isFetchingModels}
+            title={formData.apiKeyId ? 'Query the provider for its image models' : 'Select an API key first'}
+            className="qt-button px-3 py-2 qt-button-primary"
+          >
+            {isFetchingModels ? 'Fetching...' : 'Fetch Models'}
+          </button>
+        </div>
+        {!isFetchingModels && modelsSource === 'provider' && (
+          <p className="qt-text-success text-sm mt-1">
+            ✓ {availableModels.length} image {availableModels.length === 1 ? 'model' : 'models'} fetched from the provider
+          </p>
+        )}
+        {!isFetchingModels && modelsSource === 'builtin' && (
+          <p className="qt-text-xs mt-1">
+            {modelsFetchError
+              ? `Couldn't fetch from the provider (${modelsFetchError}) — showing the plugin's built-in list.`
+              : formData.apiKeyId
+                ? "Showing the plugin's built-in model list."
+                : "Showing the plugin's built-in model list — select an API key and Fetch Models to query the provider."}
+          </p>
+        )}
         {validationErrors.modelName && (
           <p className="qt-text-destructive text-sm mt-1">{validationErrors.modelName}</p>
         )}

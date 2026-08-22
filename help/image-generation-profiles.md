@@ -43,7 +43,7 @@ Sensible defaults are already in place: **avatars arrive in portrait**, **story 
 The profiles list shows:
 
 - **Profile Name** — Name you gave the profile
-- **Provider** — Which image service (DALL-E, Midjourney, Stable Diffusion, etc.)
+- **Provider** — Which image service (OpenAI, Google, Grok, OpenRouter, Z.AI)
 - **Default Badge** — If this is the default image generation profile
 - **Status** — Whether configuration is complete
 - **Actions** — Buttons to edit or delete the profile
@@ -52,31 +52,33 @@ The profiles list shows:
 
 ### Step 1: Get an API Key
 
-First, obtain an API key from an image generation provider:
+First, obtain an API key from one of the image generation providers Quilltap actually speaks to:
 
-**DALL-E (OpenAI):**
+**OpenAI (DALL-E / GPT Image):**
 
 1. Go to platform.openai.com
 2. Create or use an existing OpenAI API key
 3. Return to Quilltap
 
-**Stable Diffusion:**
+**Google (Imagen / Gemini image models):**
 
-1. Create account at stability.ai
-2. Get your API key from the console
-3. Copy and save it
+1. Visit Google AI Studio (aistudio.google.com)
+2. Create a Gemini API key
 
-**Midjourney:**
+**Grok (xAI):**
 
-1. Use Midjourney Discord bot (different setup)
-2. Or use third-party API wrapper
-3. Get API key from wrapper service
+1. Visit console.x.ai
+2. Create an API key
 
-**Other Providers:**
+**OpenRouter:**
 
-1. Check their documentation
-2. Obtain API key
-3. Store it securely
+1. Visit openrouter.ai
+2. Create an API key — one key opens the door to every image-capable model they route
+
+**Z.AI (CogView / GLM-Image):**
+
+1. Visit z.ai and open the API platform
+2. Create an API key
 
 ### Step 2: Add the Key to Quilltap
 
@@ -100,10 +102,12 @@ First, obtain an API key from an image generation provider:
 
    **Model Selection:**
    - **Model** — Select which image model to use
-     - OpenAI GPT Image: gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini (legacy DALL-E: dall-e-3, dall-e-2)
-     - Stable Diffusion: Various model versions
-     - Midjourney: Different subscription tiers
-   - **Available Models** — Click to see what's available
+     - OpenAI: gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini (legacy DALL-E: dall-e-3, dall-e-2)
+     - Google: Imagen models and image-capable Gemini models
+     - Grok: grok-imagine-image, grok-imagine-image-pro, grok-2-image
+     - OpenRouter: every image-output model they route
+     - Z.AI: cogview-4-250304, glm-image
+   - **Fetch Models** — Once an API key is chosen, press this to ask the provider itself which image models your key can reach. A green tally confirms the list came straight from the establishment; otherwise you're looking at the plugin's built-in list, and the note beneath says so plainly — no pretence either way. Only models that genuinely produce images are shown; the chat, embedding, and video sorts are firmly shooed away.
 
    **Configuration:**
    - **Default Size** — Image dimensions (1024x1024, 512x512, etc.)
@@ -180,7 +184,7 @@ Some chats may have a different image profile selected. To check:
 
 The quality of generated images depends on:
 
-- **Provider quality** — DALL-E, Midjourney, etc. have different capabilities
+- **Provider quality** — each provider's models have different capabilities
 - **Model version** — Newer models usually produce better results
 - **Prompt quality** — Detailed descriptions produce better results
 - **Settings** — Quality, size, and style settings affect output
@@ -188,37 +192,35 @@ The quality of generated images depends on:
 
 ## Supported Image Providers
 
-### DALL-E (OpenAI)
+These are the establishments Quilltap can actually commission a picture from — no more, no fewer. (Midjourney, Stable Diffusion, and local engines such as ComfyUI are not supported.)
 
-- **Models:** DALL-E 3, DALL-E 2
+### OpenAI (DALL-E / GPT Image)
+
+- **Models:** GPT Image family (gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini) and legacy DALL-E 3 / DALL-E 2
 - **Strengths:** Good all-around quality, text in images
-- **Sizes:** 1024x1024, 1024x1792, 1792x1024 (varies by model)
+- **Sizes:** 1024x1024, 1024x1536, 1536x1024 (GPT Image); 1024x1792, 1792x1024 (DALL-E 3)
 - **Quality:** Standard, HD
-- **Cost:** Medium ($0.04-$0.12 per image depending on size/quality)
 
-### Stable Diffusion
+### Google (Imagen / Gemini)
 
-- **Providers:** Stability AI, others
-- **Models:** Multiple versions available
-- **Strengths:** Fast, flexible, good control
-- **Sizes:** Various
-- **Quality:** Variable
-- **Cost:** Low to Medium
+- **Models:** Imagen 4 family via the predict API; image-capable Gemini models (e.g. gemini-2.5-flash-image) via generateContent
+- **Strengths:** Strong photorealism, aspect-ratio control, negative prompts (Imagen)
 
-### Midjourney
+### Grok (xAI)
 
-- **Access:** Via Discord bot or API
-- **Strengths:** High quality, artistic results
-- **Styles:** Many options
-- **Upscaling:** Available
-- **Cost:** Subscription-based
+- **Models:** grok-imagine-image, grok-imagine-image-pro, and legacy grok-2-image
+- **Strengths:** Fast, aspect-ratio control; the pro model renders at 2k
 
-### Other Providers
+### OpenRouter
 
-- **Grok** — Text-to-image capability
-- **Custom providers** — Self-hosted or alternative services
-- **Comfy UI** — Local image generation
-- Check each provider's documentation for capabilities
+- **Models:** Whichever image-output models OpenRouter routes at the moment — Fetch Models asks their catalogue directly
+- **Strengths:** One key, many ateliers
+
+### Z.AI (CogView / GLM-Image)
+
+- **Models:** cogview-4-250304, glm-image
+- **Strengths:** Discrete recommended sizes up to 1664x928 / 928x1664; economical
+- **Note:** Image URLs returned by Z.AI are valid for 30 days; Quilltap saves the picture locally on arrival, so this is Z.AI's concern rather than yours
 
 ## Configuration Tips
 

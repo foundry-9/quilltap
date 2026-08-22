@@ -205,24 +205,22 @@ describe('OpenRouterImageProvider', () => {
     expect(models).not.toEqual(FALLBACK_IMAGE_MODELS)
   })
 
-  it('falls back to the built-in model list when the API reports no image models', async () => {
+  it('throws when the API reports no image models, so callers can label the fallback honestly', async () => {
     mockModelsList.mockResolvedValue({
       async *[Symbol.asyncIterator]() {
         yield { result: { data: [{ id: 'vendor/talks', output_modalities: ['text'] }] } }
       },
     })
 
-    const models = await provider.getAvailableModels(apiKey)
-
-    expect(models).toEqual(FALLBACK_IMAGE_MODELS)
+    await expect(provider.getAvailableModels(apiKey)).rejects.toThrow(
+      'no image-output models'
+    )
   })
 
-  it('falls back to the built-in model list when discovery is unavailable', async () => {
+  it('throws when discovery is unavailable, so callers can label the fallback honestly', async () => {
     mockModelsList.mockRejectedValue(new Error('network unavailable'))
 
-    const models = await provider.getAvailableModels(apiKey)
-
-    expect(models).toEqual(FALLBACK_IMAGE_MODELS)
+    await expect(provider.getAvailableModels(apiKey)).rejects.toThrow('network unavailable')
   })
 
   it('returns the built-in model list when no API key is provided', async () => {

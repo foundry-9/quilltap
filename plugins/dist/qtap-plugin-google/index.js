@@ -52443,10 +52443,13 @@ var GoogleImagenProvider = class {
     this.supportedModels = [...IMAGEN_MODELS, ...GEMINI_IMAGE_MODELS];
   }
   /**
-   * Check if a model uses the Gemini generateContent API
+   * Check if a model uses the Gemini generateContent API.
+   * Any gemini-* model routes here — live-fetched IDs (e.g.
+   * gemini-2.0-flash-preview-image-generation) must not fall through to the
+   * Imagen predict endpoint, which only serves imagen-* models.
    */
   isGeminiImageModel(model) {
-    return GEMINI_IMAGE_MODELS.some(
+    return model.startsWith("gemini") || GEMINI_IMAGE_MODELS.some(
       (m2) => model === m2 || model.startsWith(`${m2}-`) || model.includes(m2)
     );
   }
@@ -52616,8 +52619,59 @@ var GoogleImagenProvider = class {
       return false;
     }
   }
-  async getAvailableModels() {
-    return this.supportedModels;
+  /**
+   * List image-generation models.
+   *
+   * Without an API key this is the curated static list (friendly names).
+   * With a key, the Gemini API's models list is paged through and filtered to
+   * entries that genuinely produce images: imagen-* models exposing the
+   * `predict` method, and gemini models with "image" in their ID exposing
+   * `generateContent` (image-output Gemini variants carry it in the name).
+   * Video models (veo-*) and text-only models never match. Throws on
+   * transport failure or an empty result so the caller can fall back to
+   * `supportedModels` and label the list as built-in rather than live.
+   */
+  async getAvailableModels(apiKey) {
+    if (!apiKey) {
+      return [...this.supportedModels];
+    }
+    const imageModels = [];
+    let pageToken;
+    do {
+      const url = new URL("https://generativelanguage.googleapis.com/v1beta/models");
+      url.searchParams.set("pageSize", "1000");
+      if (pageToken) {
+        url.searchParams.set("pageToken", pageToken);
+      }
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        headers: { "x-goog-api-key": apiKey }
+      });
+      if (!response.ok) {
+        throw new Error(`Google models list failed: HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      for (const model of data.models ?? []) {
+        const id = (model.name ?? "").replace(/^models\//, "");
+        if (!id) continue;
+        const methods = model.supportedGenerationMethods ?? [];
+        const isImagen = id.startsWith("imagen-") && methods.includes("predict");
+        const isGeminiImage = id.startsWith("gemini") && id.includes("image") && methods.includes("generateContent");
+        if (isImagen || isGeminiImage) {
+          imageModels.push(id);
+        }
+      }
+      pageToken = data.nextPageToken;
+    } while (pageToken);
+    if (imageModels.length === 0) {
+      throw new Error("Google models list contained no image-generation models for this API key");
+    }
+    imageModels.sort();
+    logger2.debug("Discovered Google image-generation models", {
+      context: "GoogleImagenProvider.getAvailableModels",
+      count: imageModels.length
+    });
+    return imageModels;
   }
 };
 

@@ -182,9 +182,63 @@ describe('GrokImageProvider', () => {
   });
 
   describe('getAvailableModels', () => {
-    it('should return all supported models', async () => {
+    const originalFetch = global.fetch;
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+    });
+
+    it('should return all supported models without an API key', async () => {
       const models = await provider.getAvailableModels();
       expect(models).toEqual(['grok-imagine-image', 'grok-imagine-image-pro', 'grok-2-image']);
+    });
+
+    it('queries the dedicated image-generation-models endpoint with an API key', async () => {
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          models: [
+            { id: 'grok-imagine-image-2.0', aliases: ['grok-imagine-image'] },
+            { id: 'grok-2-image-1212', aliases: [] },
+          ],
+        }),
+      });
+      global.fetch = fetchMock as unknown as typeof fetch;
+
+      const models = await provider.getAvailableModels(mockApiKey);
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.x.ai/v1/image-generation-models',
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: `Bearer ${mockApiKey}` }),
+        })
+      );
+      expect(models).toEqual(['grok-2-image-1212', 'grok-imagine-image', 'grok-imagine-image-2.0']);
+    });
+
+    it('accepts the alternate data-keyed response shape', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ data: [{ id: 'grok-imagine-image' }] }),
+      }) as unknown as typeof fetch;
+
+      const models = await provider.getAvailableModels(mockApiKey);
+      expect(models).toEqual(['grok-imagine-image']);
+    });
+
+    it('throws on an HTTP error so callers can label the fallback honestly', async () => {
+      global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 401 }) as unknown as typeof fetch;
+
+      await expect(provider.getAvailableModels(mockApiKey)).rejects.toThrow('HTTP 401');
+    });
+
+    it('throws when the endpoint lists no models', async () => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ models: [] }),
+      }) as unknown as typeof fetch;
+
+      await expect(provider.getAvailableModels(mockApiKey)).rejects.toThrow('no image-generation models');
     });
   });
 });

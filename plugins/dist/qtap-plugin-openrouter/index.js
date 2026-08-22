@@ -44877,7 +44877,9 @@ Use a ${params.style} artistic style.`;
    * Get available image generation models.
    * Dynamically discovers models via the OpenRouter models API by checking
    * each model's output_modalities for "image" support.
-   * Falls back to the static list if no API key is provided or the API call fails.
+   * Returns the static list if no API key is provided; with a key, throws on
+   * transport failure or an empty result so the caller can fall back to
+   * `supportedModels` and label the list as built-in rather than live.
    */
   async getAvailableModels(apiKey) {
     if (!apiKey) {
@@ -44886,52 +44888,42 @@ Use a ${params.style} artistic style.`;
       });
       return [...FALLBACK_IMAGE_MODELS];
     }
-    try {
-      const client = new OpenRouter({
-        apiKey,
-        httpReferer: process.env.BASE_URL || "http://localhost:3000",
-        appTitle: getQuilltapUserAgent()
-      });
-      const pages = await client.models.list();
-      const imageModels = [];
-      for await (const page of pages) {
-        for (const model of page.result?.data ?? []) {
-          const modelAny = model;
-          const outputModalities = modelAny.output_modalities || modelAny.outputModalities;
-          if (Array.isArray(outputModalities) && outputModalities.includes("image")) {
-            imageModels.push(model.id);
-            continue;
-          }
-          const outputModality = modelAny.architecture?.outputModality;
-          if (typeof outputModality === "string" && outputModality.includes("image")) {
-            imageModels.push(model.id);
-            continue;
-          }
-          const genMethods = modelAny.supported_generation_methods;
-          if (Array.isArray(genMethods) && genMethods.includes("image")) {
-            imageModels.push(model.id);
-            continue;
-          }
+    const client = new OpenRouter({
+      apiKey,
+      httpReferer: process.env.BASE_URL || "http://localhost:3000",
+      appTitle: getQuilltapUserAgent()
+    });
+    const pages = await client.models.list();
+    const imageModels = [];
+    for await (const page of pages) {
+      for (const model of page.result?.data ?? []) {
+        const modelAny = model;
+        const outputModalities = modelAny.output_modalities || modelAny.outputModalities;
+        if (Array.isArray(outputModalities) && outputModalities.includes("image")) {
+          imageModels.push(model.id);
+          continue;
+        }
+        const outputModality = modelAny.architecture?.outputModality;
+        if (typeof outputModality === "string" && outputModality.includes("image")) {
+          imageModels.push(model.id);
+          continue;
+        }
+        const genMethods = modelAny.supported_generation_methods;
+        if (Array.isArray(genMethods) && genMethods.includes("image")) {
+          imageModels.push(model.id);
+          continue;
         }
       }
-      if (imageModels.length > 0) {
-        logger3.info("Discovered image generation models from OpenRouter API", {
-          context: "OpenRouterImageProvider.getAvailableModels",
-          count: imageModels.length,
-          models: imageModels.slice(0, 10)
-        });
-        return imageModels;
-      }
-      logger3.warn("No image models found via API, using fallback list", {
-        context: "OpenRouterImageProvider.getAvailableModels"
-      });
-      return [...FALLBACK_IMAGE_MODELS];
-    } catch (error) {
-      logger3.error("Failed to fetch image models from OpenRouter API, using fallback list", {
-        context: "OpenRouterImageProvider.getAvailableModels"
-      }, error instanceof Error ? error : void 0);
-      return [...FALLBACK_IMAGE_MODELS];
     }
+    if (imageModels.length === 0) {
+      throw new Error("OpenRouter listed no image-output models for this API key");
+    }
+    logger3.info("Discovered image generation models from OpenRouter API", {
+      context: "OpenRouterImageProvider.getAvailableModels",
+      count: imageModels.length,
+      models: imageModels.slice(0, 10)
+    });
+    return imageModels;
   }
 };
 

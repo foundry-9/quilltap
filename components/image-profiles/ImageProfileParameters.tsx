@@ -123,6 +123,35 @@ export function ImageProfileParameters({
         </div>
       )
 
+    case 'Z_AI':
+      return (
+        <div className="space-y-4 border-t qt-border-default pt-4">
+          <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
+
+          {/* Size */}
+          <div>
+            <label className="qt-label mb-1">
+              Default Size
+            </label>
+            <select
+              value={parameters.size || '1024x1024'}
+              onChange={e => handleChange('size', e.target.value)}
+              className="qt-select"
+            >
+              <option value="1024x1024">Square (1024x1024)</option>
+              <option value="1280x1280">Square (1280x1280)</option>
+              <option value="1568x1056">Landscape (1568x1056)</option>
+              <option value="1664x928">Wide (1664x928)</option>
+              <option value="1472x1104">Landscape (1472x1104)</option>
+              <option value="1056x1568">Portrait (1056x1568)</option>
+              <option value="928x1664">Tall (928x1664)</option>
+              <option value="1104x1472">Portrait (1104x1472)</option>
+            </select>
+            <p className="qt-text-xs mt-1">Z.AI&apos;s recommended sizes for CogView and GLM-Image</p>
+          </div>
+        </div>
+      )
+
     case 'GROK':
       return (
         <div className="border-t qt-border-default pt-4">

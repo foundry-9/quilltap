@@ -3,7 +3,7 @@
   "name": "qtap-plugin-grok",
   "title": "Grok Provider",
   "description": "Provides Grok xAI models and image generation for Quilltap",
-  "version": "1.0.50",
+  "version": "1.0.51",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",

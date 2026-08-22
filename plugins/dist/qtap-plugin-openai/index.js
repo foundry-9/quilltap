@@ -11705,8 +11705,35 @@ var OpenAIImageProvider = class {
       return false;
     }
   }
-  async getAvailableModels() {
-    return this.supportedModels;
+  /**
+   * List image-generation models.
+   *
+   * Without an API key this is the curated static list. With a key, GET
+   * /v1/models is queried and filtered to the Images-API families
+   * (`dall-e-*`, `gpt-image-*`) — the endpoint reflects what the account can
+   * actually reach (e.g. gpt-image models gated behind org verification), so
+   * the filtered list is the honest answer. Throws on transport failure or an
+   * empty result so the caller can fall back to `supportedModels` and label
+   * the list as built-in rather than live.
+   */
+  async getAvailableModels(apiKey) {
+    if (!apiKey) {
+      return [...this.supportedModels];
+    }
+    const client = new OpenAI({
+      apiKey,
+      defaultHeaders: { "User-Agent": getQuilltapUserAgent() }
+    });
+    const response = await client.models.list();
+    const imageModels = response.data.map((m) => m.id).filter((id) => /^(dall-e|gpt-image)/.test(id)).sort();
+    if (imageModels.length === 0) {
+      throw new Error("OpenAI /v1/models listed no image-generation models for this API key");
+    }
+    logger2.debug("Discovered OpenAI image-generation models", {
+      context: "OpenAIImageProvider.getAvailableModels",
+      count: imageModels.length
+    });
+    return imageModels;
   }
 };
 

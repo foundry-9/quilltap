@@ -88,7 +88,56 @@ export class GrokImageProvider implements ImageProviderBase {
     }
   }
 
-  async getAvailableModels(): Promise<string[]> {
-    return this.supportedModels;
+  /**
+   * List image-generation models.
+   *
+   * Without an API key this is the curated static list. With a key, xAI's
+   * dedicated GET /v1/image-generation-models endpoint is queried — unlike
+   * the OpenAI-compatible /v1/models it returns exactly the models that can
+   * produce images, so no name-pattern guessing is needed. The response's
+   * top-level key has shifted between `models` and `data` across doc
+   * revisions, so both are accepted; aliases ride along as selectable IDs.
+   * Throws on transport failure or an empty result so the caller can fall
+   * back to `supportedModels` and label the list as built-in rather than live.
+   */
+  async getAvailableModels(apiKey?: string): Promise<string[]> {
+    if (!apiKey) {
+      return [...this.supportedModels];
+    }
+
+    const response = await fetch(`${this.baseUrl}/image-generation-models`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'User-Agent': getQuilltapUserAgent(),
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`xAI image-generation-models list failed: HTTP ${response.status}`);
+    }
+
+    const payload = (await response.json()) as {
+      models?: { id?: string; aliases?: string[] }[];
+      data?: { id?: string; aliases?: string[] }[];
+    };
+    const entries = payload.models ?? payload.data ?? [];
+    const ids = new Set<string>();
+    for (const entry of entries) {
+      if (entry.id) ids.add(entry.id);
+      for (const alias of entry.aliases ?? []) {
+        if (alias) ids.add(alias);
+      }
+    }
+
+    if (ids.size === 0) {
+      throw new Error('xAI listed no image-generation models for this API key');
+    }
+
+    const imageModels = Array.from(ids).sort();
+    logger.debug('Discovered Grok image-generation models', {
+      context: 'GrokImageProvider.getAvailableModels',
+      count: imageModels.length,
+    });
+    return imageModels;
   }
 }

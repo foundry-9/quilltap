@@ -910,16 +910,23 @@ List available image generation providers from the plugin registry.
 Get available image generation models for a provider.
 
 **Query Parameters**:
-- `provider` (required) - Provider name (e.g., "OPENAI", "ETERNAL_AI")
+- `provider` (required) - Provider name (e.g., "OPENAI", "Z_AI")
 - `apiKeyId` - API key ID to fetch models dynamically (optional)
+
+With an `apiKeyId`, the provider's own API is queried and filtered to models
+that genuinely produce images. `source` reports where the list came from:
+`"provider"` for a live fetch, `"builtin"` for the plugin's curated list (no
+key given, or the live fetch failed — in which case `fetchError` carries the
+reason). Only live-fetched lists are cached in `provider_models`.
 
 **Response**:
 
 ```json
 {
   "provider": "OPENAI",
-  "models": ["gpt-image-1", "dall-e-3", "dall-e-2"],
-  "supportedModels": ["gpt-image-1", "dall-e-3", "dall-e-2"]
+  "models": ["gpt-image-1", "gpt-image-2"],
+  "supportedModels": ["gpt-image-2", "gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini", "dall-e-3", "dall-e-2"],
+  "source": "provider"
 }
 ```
 

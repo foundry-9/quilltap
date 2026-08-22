@@ -131,8 +131,12 @@ async function handleListModels(req: NextRequest, context: RequestContext) {
       return badRequest(`Provider ${provider} is not available`);
     }
 
-    // Get available models
+    // Get available models. `source` is honest: 'provider' only when the
+    // provider's API was actually queried and answered; otherwise 'builtin'
+    // (the plugin's curated list), with the live-fetch error surfaced.
     let models: string[] = [];
+    let source: 'provider' | 'builtin' = 'builtin';
+    let fetchError: string | undefined;
 
     if (apiKeyId) {
       const apiKey = await context.repos.connections.findApiKeyById(apiKeyId);
@@ -143,35 +147,50 @@ async function handleListModels(req: NextRequest, context: RequestContext) {
 
       try {
         models = await imageProvider.getAvailableModels(apiKey.key_value);
+        source = 'provider';
+        logger.debug('[Image Profiles v1] Live-fetched image models', {
+          provider,
+          count: models.length,
+        });
       } catch (error) {
+        fetchError = error instanceof Error ? error.message : String(error);
         logger.error('[Image Profiles v1] Failed to get models with API key', { provider }, error instanceof Error ? error : undefined);
         models = imageProvider.supportedModels;
       }
     } else {
       models = imageProvider.supportedModels;
+      logger.debug('[Image Profiles v1] No API key; returning built-in image models', {
+        provider,
+        count: models.length,
+      });
     }
 
-    // Cache the fetched image models in the database
-    try {
-      await context.repos.providerModels.upsertModelsForProvider(
-        provider,
-        models.map(modelId => ({
-          modelId,
-          displayName: modelId,
-        })),
-        'image',
-        undefined
-      );
-    } catch (cacheError) {
-      logger.warn('[Image Profiles v1] Failed to cache image models', {
-        error: cacheError instanceof Error ? cacheError.message : String(cacheError),
-      });
+    // Cache only genuinely live-fetched image models in the database — the
+    // built-in list would masquerade as provider-confirmed on later reads.
+    if (source === 'provider') {
+      try {
+        await context.repos.providerModels.upsertModelsForProvider(
+          provider,
+          models.map(modelId => ({
+            modelId,
+            displayName: modelId,
+          })),
+          'image',
+          undefined
+        );
+      } catch (cacheError) {
+        logger.warn('[Image Profiles v1] Failed to cache image models', {
+          error: cacheError instanceof Error ? cacheError.message : String(cacheError),
+        });
+      }
     }
 
     return NextResponse.json({
       provider,
       models,
       supportedModels: imageProvider.supportedModels,
+      source,
+      ...(fetchError ? { fetchError } : {}),
     });
   } catch (error) {
     logger.error('[Image Profiles v1] Error in list-models', {}, error instanceof Error ? error : undefined);
