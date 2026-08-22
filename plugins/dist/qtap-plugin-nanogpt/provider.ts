@@ -12,8 +12,10 @@
  *
  *   - Forward function tools and tool_choice
  *   - Forward response_format (JSON mode / JSON Schema)
- *   - Surface `reasoning_content` deltas from the many reasoning models
- *     NanoGPT routes (DeepSeek-style wire format), display-only
+ *   - Surface reasoning deltas from the many reasoning models NanoGPT
+ *     routes — the main endpoint carries them in `delta.reasoning` /
+ *     `message.reasoning`, with `reasoning_content` kept as a fallback for
+ *     upstreams that speak the legacy dialect — display-only
  *   - Accumulate streamed tool-call fragments
  */
 
@@ -164,7 +166,10 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
 
       const choice = response.choices[0];
       const msg = choice.message;
-      const reasoningContent = (msg as { reasoning_content?: string }).reasoning_content;
+      // NanoGPT's /api/v1 endpoint returns reasoning in `message.reasoning`;
+      // `reasoning_content` is its legacy dialect, kept as a fallback.
+      const msgWithReasoning = msg as { reasoning?: string; reasoning_content?: string };
+      const reasoningContent = msgWithReasoning.reasoning ?? msgWithReasoning.reasoning_content;
       const toolCalls = this.normalizeToolCalls(msg.tool_calls);
 
       return {
@@ -223,7 +228,10 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
           yield { content: delta.content, done: false };
         }
 
-        const deltaReasoning = (delta as { reasoning_content?: string } | undefined)?.reasoning_content;
+        // `delta.reasoning` on the main endpoint; `reasoning_content` is the
+        // legacy dialect some routed upstreams still speak.
+        const deltaWithReasoning = delta as { reasoning?: string; reasoning_content?: string } | undefined;
+        const deltaReasoning = deltaWithReasoning?.reasoning ?? deltaWithReasoning?.reasoning_content;
         if (deltaReasoning) {
           reasoningContent += deltaReasoning;
           yield { content: '', done: false, reasoningContent };

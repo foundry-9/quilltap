@@ -136,6 +136,56 @@ exports[`Provider options schemas DeepSeek exposes an options schema 1`] = `
 }
 `;
 
+exports[`Provider options schemas NanoGPT exposes an options schema 1`] = `
+{
+  "groups": [
+    {
+      "fields": [
+        {
+          "default": "",
+          "enumValues": [
+            {
+              "label": "(model default)",
+              "value": "",
+            },
+            {
+              "label": "None",
+              "value": "none",
+            },
+            {
+              "label": "Minimal",
+              "value": "minimal",
+            },
+            {
+              "label": "Low",
+              "value": "low",
+            },
+            {
+              "label": "Medium",
+              "value": "medium",
+            },
+            {
+              "label": "High",
+              "value": "high",
+            },
+            {
+              "label": "XHigh",
+              "value": "xhigh",
+            },
+          ],
+          "helpText": "Any value other than None switches reasoning on; None switches it off; (model default) leaves the decision to the model — a \`:thinking\` id thinks, the rest generally do not. Not every model exposes its reasoning text even when it reasons.",
+          "key": "reasoning_effort",
+          "label": "Reasoning Effort",
+          "type": "enum",
+        },
+      ],
+      "helpText": "NanoGPT routes each request to the named model's own establishment, so reasoning behaviour is ultimately the model's: \`:thinking\`-suffixed ids reason by default, and Reasoning Effort below asks any reasoning-capable model to think harder or not at all. Deliberations stream into the Salon's thinking fold (display only; never re-fed to the model). Reasoning tokens bill as output tokens — a generous effort on a verbose model is a generous invoice.",
+      "title": "NanoGPT Options",
+    },
+  ],
+}
+`;
+
 exports[`Provider options schemas Ollama exposes an options schema 1`] = `
 {
   "groups": [

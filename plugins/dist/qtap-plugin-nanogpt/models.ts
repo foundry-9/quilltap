@@ -73,6 +73,22 @@ export const STATIC_MODELS: ModelInfo[] = [
     supportsImages: false,
     supportsTools: true,
   },
+  // NanoGPT's `:thinking` model-id suffix selects a model's reasoning
+  // variant, which reasons without being asked. `thinksByDefault` tells the
+  // host so, keeping the multi-character `[Name]` prefill off such a profile
+  // (bug 85's lesson). Only catalogued ids get this habit — an uncatalogued
+  // `X:thinking` pick relies on the profile's explicit Reasoning Effort
+  // option instead, which always outranks the habit.
+  {
+    id: 'anthropic/claude-sonnet-5:thinking',
+    name: 'Claude Sonnet 5 — Thinking (via NanoGPT)',
+    contextWindow: 200000,
+    maxOutputTokens: 64000,
+    supportsImages: false,
+    supportsTools: true,
+    supportsThinking: true,
+    thinksByDefault: true,
+  },
   {
     id: 'google/gemini-3.1-pro-preview',
     name: 'Gemini 3.1 Pro Preview (via NanoGPT)',

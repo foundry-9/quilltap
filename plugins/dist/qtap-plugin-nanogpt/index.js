@@ -12811,7 +12811,8 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
       );
       const choice = response.choices[0];
       const msg = choice.message;
-      const reasoningContent = msg.reasoning_content;
+      const msgWithReasoning = msg;
+      const reasoningContent = msgWithReasoning.reasoning ?? msgWithReasoning.reasoning_content;
       const toolCalls = this.normalizeToolCalls(msg.tool_calls);
       return {
         content: msg.content ?? "",
@@ -12859,7 +12860,8 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
         if (delta?.content) {
           yield { content: delta.content, done: false };
         }
-        const deltaReasoning = delta?.reasoning_content;
+        const deltaWithReasoning = delta;
+        const deltaReasoning = deltaWithReasoning?.reasoning ?? deltaWithReasoning?.reasoning_content;
         if (deltaReasoning) {
           reasoningContent += deltaReasoning;
           yield { content: "", done: false, reasoningContent };
@@ -12978,6 +12980,22 @@ var STATIC_MODELS = [
     maxOutputTokens: 64e3,
     supportsImages: false,
     supportsTools: true
+  },
+  // NanoGPT's `:thinking` model-id suffix selects a model's reasoning
+  // variant, which reasons without being asked. `thinksByDefault` tells the
+  // host so, keeping the multi-character `[Name]` prefill off such a profile
+  // (bug 85's lesson). Only catalogued ids get this habit — an uncatalogued
+  // `X:thinking` pick relies on the profile's explicit Reasoning Effort
+  // option instead, which always outranks the habit.
+  {
+    id: "anthropic/claude-sonnet-5:thinking",
+    name: "Claude Sonnet 5 \u2014 Thinking (via NanoGPT)",
+    contextWindow: 2e5,
+    maxOutputTokens: 64e3,
+    supportsImages: false,
+    supportsTools: true,
+    supportsThinking: true,
+    thinksByDefault: true
   },
   {
     id: "google/gemini-3.1-pro-preview",
@@ -13701,6 +13719,32 @@ var cheapModels = {
   defaultModel: "openai/gpt-5-mini",
   recommendedModels: ["openai/gpt-5-mini", "openai/gpt-5-nano", "auto-model-basic"]
 };
+var optionsSchema = {
+  groups: [
+    {
+      title: "NanoGPT Options",
+      helpText: "NanoGPT routes each request to the named model's own establishment, so reasoning behaviour is ultimately the model's: `:thinking`-suffixed ids reason by default, and Reasoning Effort below asks any reasoning-capable model to think harder or not at all. Deliberations stream into the Salon's thinking fold (display only; never re-fed to the model). Reasoning tokens bill as output tokens \u2014 a generous effort on a verbose model is a generous invoice.",
+      fields: [
+        {
+          key: "reasoning_effort",
+          label: "Reasoning Effort",
+          type: "enum",
+          default: "",
+          helpText: "Any value other than None switches reasoning on; None switches it off; (model default) leaves the decision to the model \u2014 a `:thinking` id thinks, the rest generally do not. Not every model exposes its reasoning text even when it reasons.",
+          enumValues: [
+            { value: "", label: "(model default)" },
+            { value: "none", label: "None" },
+            { value: "minimal", label: "Minimal" },
+            { value: "low", label: "Low" },
+            { value: "medium", label: "Medium" },
+            { value: "high", label: "High" },
+            { value: "xhigh", label: "XHigh" }
+          ]
+        }
+      ]
+    }
+  ]
+};
 var plugin = {
   metadata,
   icon: {
@@ -13725,6 +13769,24 @@ var plugin = {
   toolFormat: "openai",
   cheapModels,
   defaultContextWindow: 131072,
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
+  /**
+   * Which profile option decides whether a turn will be a thinking turn.
+   * The host needs the answer to pick the multi-character turn anchor —
+   * several of the model families NanoGPT routes (DeepSeek's among them)
+   * refuse a synthetic `[Name]` prefill mid-thinking (bug 85). Any effort
+   * other than `none` requests reasoning; `(model default)` — the empty
+   * string — falls through to the selected model's `thinksByDefault` habit
+   * (the `:thinking`-suffixed catalogue entries).
+   */
+  thinkingTurnRule: {
+    optionKey: "reasoning_effort",
+    enabledValues: ["minimal", "low", "medium", "high", "xhigh"],
+    disabledValues: ["none"]
+  },
   createProvider: (_baseUrl) => {
     return new NanoGPTProvider();
   },

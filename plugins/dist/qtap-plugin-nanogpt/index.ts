@@ -15,7 +15,7 @@
  * One NanoGPT API key covers all three capabilities.
  */
 
-import type { TextProviderPlugin, ImageProviderConstraints, EmbeddingModelInfo } from './types';
+import type { TextProviderPlugin, ImageProviderConstraints, EmbeddingModelInfo, ProviderOptionsSchema } from './types';
 import { NanoGPTProvider } from './provider';
 import { NanoGPTImageProvider } from './image-provider';
 import { NanoGPTEmbeddingProvider } from './embedding-provider';
@@ -106,6 +106,46 @@ const cheapModels = {
   recommendedModels: ['openai/gpt-5-mini', 'openai/gpt-5-nano', 'auto-model-basic'],
 };
 
+/**
+ * Connection-profile options rendered by the host's profile editor.
+ *
+ * `reasoning_effort` is NanoGPT's one reasoning switch, forwarded verbatim:
+ * any value other than `none` asks the routed model to think (NanoGPT maps
+ * the scale onto each upstream's own dial), `none` asks it not to, and blank
+ * defers to the model — where a `:thinking`-suffixed model id thinks and
+ * everything else typically does not. Reasoning arrives on the wire as the
+ * `reasoning` delta field and streams into the Salon's thinking fold
+ * (display only; never re-fed).
+ */
+const optionsSchema: ProviderOptionsSchema = {
+  groups: [
+    {
+      title: 'NanoGPT Options',
+      helpText:
+        'NanoGPT routes each request to the named model\'s own establishment, so reasoning behaviour is ultimately the model\'s: `:thinking`-suffixed ids reason by default, and Reasoning Effort below asks any reasoning-capable model to think harder or not at all. Deliberations stream into the Salon\'s thinking fold (display only; never re-fed to the model). Reasoning tokens bill as output tokens — a generous effort on a verbose model is a generous invoice.',
+      fields: [
+        {
+          key: 'reasoning_effort',
+          label: 'Reasoning Effort',
+          type: 'enum',
+          default: '',
+          helpText:
+            'Any value other than None switches reasoning on; None switches it off; (model default) leaves the decision to the model — a `:thinking` id thinks, the rest generally do not. Not every model exposes its reasoning text even when it reasons.',
+          enumValues: [
+            { value: '', label: '(model default)' },
+            { value: 'none', label: 'None' },
+            { value: 'minimal', label: 'Minimal' },
+            { value: 'low', label: 'Low' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' },
+            { value: 'xhigh', label: 'XHigh' },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 export const plugin: TextProviderPlugin = {
   metadata,
 
@@ -135,6 +175,26 @@ export const plugin: TextProviderPlugin = {
   toolFormat: 'openai',
   cheapModels,
   defaultContextWindow: 131072,
+
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
+
+  /**
+   * Which profile option decides whether a turn will be a thinking turn.
+   * The host needs the answer to pick the multi-character turn anchor —
+   * several of the model families NanoGPT routes (DeepSeek's among them)
+   * refuse a synthetic `[Name]` prefill mid-thinking (bug 85). Any effort
+   * other than `none` requests reasoning; `(model default)` — the empty
+   * string — falls through to the selected model's `thinksByDefault` habit
+   * (the `:thinking`-suffixed catalogue entries).
+   */
+  thinkingTurnRule: {
+    optionKey: 'reasoning_effort',
+    enabledValues: ['minimal', 'low', 'medium', 'high', 'xhigh'],
+    disabledValues: ['none'],
+  },
 
   createProvider: (_baseUrl?: string) => {
     return new NanoGPTProvider();

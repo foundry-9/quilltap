@@ -4,6 +4,13 @@
 
 ### 4.9-dev
 
+#### NanoGPT gains thinking options (plugin 1.0.1)
+
+- New connection-profile options schema with **Reasoning Effort** (none / minimal / low / medium / high / xhigh), forwarded as NanoGPT's `reasoning_effort` parameter. Any value other than `none` requests reasoning; blank defers to the model.
+- `thinkingTurnRule` declared on the plugin so multi-character turns on a thinking profile anchor in prose instead of the `[Name]` prefill (bug 85's rule), with `anthropic/claude-sonnet-5:thinking` catalogued as thinks-by-default; uncatalogued `:thinking` picks rely on the explicit effort setting.
+- Fixed reasoning display: NanoGPT's main endpoint carries reasoning in `delta.reasoning` / `message.reasoning`, not the legacy `reasoning_content` the plugin was reading (which is now the fallback). Without this the thinking fold stayed empty for most routed reasoning models.
+- Tests: `nanogpt-reasoning.test.ts` (rule/schema partition, catalogue habits, both wire dialects); NanoGPT joins the options-schema snapshot test.
+
 #### NanoGPT is a bundled provider (chat, images, embeddings)
 
 New bundled plugin `qtap-plugin-nanogpt` (1.0.0) adds NanoGPT (nano-gpt.com), a pay-as-you-go gateway fronting 600+ chat models, 200+ image models, and two dozen embedding models behind one OpenAI-compatible API and a single new `NANOGPT` API key type.

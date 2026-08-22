@@ -245,7 +245,9 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 
 - A pay-as-you-go gateway seating six hundred models and more at one table — OpenAI's, Anthropic's, Google's, the open-weight houses', and NanoGPT's own `auto-model` maîtres d'hôtel, which choose a model for you — all behind a single key that also serves image generation and embeddings
 - Fetch Models asks the gateway for its current register, so the picker stays honest as the catalogue turns over
-- Routed thinking models stream their deliberations into the Salon's thinking fold (display only — never fed back), just as they would at the front door of their own establishments
+- Routed thinking models stream their deliberations into the Salon's thinking fold (display only — never fed back), just as they would at the front door of their own establishments. A model id wearing the `:thinking` suffix is the reasoning variant of its house and deliberates without being asked
+- **Reasoning Effort** — NanoGPT's one dial for the whole arcade. Any setting other than *None* asks the routed model to reason, from *Minimal* through *XHigh* (NanoGPT translates the scale into each establishment's own dialect); *None* asks it to come straight to the point; and *(model default)* leaves the matter to the model — a `:thinking` id thinks, the rest generally do not. Two candles of caution: not every model shows its working even when it reasons, and reasoning tokens bill as output tokens, so a generous effort on a verbose model makes for a generous invoice
+- Multi-character scenes mind the same etiquette here as everywhere: a profile that will run a thinking turn — by an effort you set, or by a `:thinking` model's own habit — anchors turns in prose rather than with the `[Name]` prefill some reasoning models refuse mid-thought
 
 - Multiple model sizes (Flash, Pro)
 - Good for vision tasks
