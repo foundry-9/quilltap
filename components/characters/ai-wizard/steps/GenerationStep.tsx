@@ -12,7 +12,8 @@ import ReactMarkdown from 'react-markdown'
 import { QtapLink } from '@/components/qtap/QtapLink'
 import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
 import type { GeneratableField, GenerationProgress, GeneratedCharacterData } from '../types'
-import { FIELD_LABELS, normalizeGeneratedScenarios } from '../types'
+import { FIELD_LABELS, FIELD_HINT_KEYS, normalizeGeneratedScenarios } from '../types'
+import { PROMPT_FIELD_HINTS, type PromptFieldHint } from '@/components/prompt-fields/field-hints'
 
 interface GenerationStepProps {
   generating: boolean
@@ -331,6 +332,11 @@ export function GenerationStep({
           const content = getFieldContent(field)
           const hasError = !!progress.errors[field]
           const isExpanded = expandedField === field
+          // Shared voice hint (see PROMPT_FIELD_HINTS) so the reviewer can
+          // compare the generated text's form of address against the expected shape.
+          const hintKey = FIELD_HINT_KEYS[field]
+          const hint: PromptFieldHint | undefined = hintKey ? PROMPT_FIELD_HINTS[hintKey] : undefined
+          const voiceExample = hint?.example
 
           return (
             <div
@@ -368,7 +374,14 @@ export function GenerationStep({
                   {hasError ? (
                     <p className="text-sm qt-text-destructive">{progress.errors[field]}</p>
                   ) : content ? (
-                    renderFieldPreview(field)
+                    <>
+                      {voiceExample && (
+                        <p className="text-xs qt-text-secondary">
+                          Written as: <em>{voiceExample}</em>
+                        </p>
+                      )}
+                      {renderFieldPreview(field)}
+                    </>
                   ) : (
                     <p className="text-sm qt-text-secondary">No content generated</p>
                   )}

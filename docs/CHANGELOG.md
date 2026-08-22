@@ -4,6 +4,18 @@
 
 ### 4.9-dev
 
+#### The system prompt addresses the character consistently (person consistency)
+
+Implements `docs/developer/features/complete/prompt-person-consistency.md`. The assembled system prompt mixed grammatical person — the identity preamble says "You are {{char}}" while the aliases, pronouns, and physical-appearance blocks spoke *about* the character in the third person, and the pronouns block literally instructed the character to use its own pronouns "when referring to this character." All blocks whose referent is the speaking character are now second person, and author-carried fields get referent-fixing wrappers.
+
+- **Wording** (`lib/chat/context/system-prompt-builder.ts`, mirrored in `lib/help-chat/system-prompt-builder.ts`): aliases ("You also go by…"), pronouns ("Your pronouns are… Use them whenever you refer to yourself in narration"), physical appearance ("This is how you look — …", wrapper only; the body stays noun phrases because it is shared with the image pipelines), plus wrappers on manifesto ("The following you hold as true about yourself, without question."), personality ("The following is what you know about yourself. Others do not see it unless you show them."), and example dialogues ("This is how you speak."). Outward-facing renderers (public identity card, other-participants info, Host whispers) stay third person — their referent is someone other than the reader.
+- **Cache invalidation for old chats:** `chats.compiledIdentityStacks` is now a stamped envelope `{ version, stacks }` keyed to a new `IDENTITY_STACK_BUILDER_VERSION` constant colocated with `buildIdentityStack`. Reads require strict version equality; legacy bare maps, older, and newer stamps all read as stale and rebuild lazily through the existing read-through path (no migration). A stale map is discarded on merge, never blended into. A golden-hash table in `__tests__/unit/cache-determinism/system-prompt.test.ts` (`IDENTITY_STACK_GOLDENS`) makes forgetting the bump impossible in both directions. Shipped as version 1 (stamp only, output-neutral) then version 2 (this wording).
+- **No `PROMPT_CACHE_STRUCTURE_VERSION` bump** — wording within existing blocks, no layout change (per the bump policy in `lib/llm/cache-key.ts`).
+- **Generators:** `lib/services/character-field-semantics.ts` bucket definitions now each state who the field addresses, with worked examples (and the stray "unless she shares it" is now "unless they share it"); the AI Wizard's `FIELD_PROMPTS`, Summon From Lore's `CHARACTER_BASICS_PROMPT`, and the Character Optimizer's shared suggestion rules close their per-service gaps — the optimizer is explicitly told never to flip a field's form of address while rewording it.
+- **UI:** new shared `PromptFieldLabel` component (`components/prompt-fields/PromptFieldLabel.tsx`) with single-sourced hint copy (`components/prompt-fields/field-hints.ts`, the client mirror of `character-field-semantics.ts`). Character create/edit forms, the system-prompts editor, physical-description prompts, project and group instructions, roleplay templates, and the AI review panes (Wizard, Summon From Lore, Optimizer) all show a per-field "Written as: …" worked example in the field's correct form of address. This also converges the create/edit forms' previously divergent helper wording.
+- Both prompt goldens updated (`7517f7d9b496d20b` → `937ea8197a65d022`, `74c9b488b4a1517c` → `bc37032e92411263`) with reasons recorded inline; the new sentences are pinned by named assertions.
+- Deferred, filed separately: field-aware guidance for in-chat vault writes to managed fields (`docs/developer/features/vault-managed-field-write-guidance.md`).
+
 #### Tool reinforcement addresses the character directly (and stops saying "they CALLS them")
 
 The final block of the system prompt was written in the third person ("When Ariadne uses workspace tools, *she* CALLS them"), sitting immediately after several sections that address the character as "you" — including the identity preamble that opens the prompt. It is now second person: "When you use workspace tools, you CALL them."
@@ -13,7 +25,7 @@ The final block of the system prompt was written in the third person ("When Aria
 - Applied in both copies: `lib/chat/context/system-prompt-builder.ts` and `lib/help-chat/system-prompt-builder.ts`.
 - No `PROMPT_CACHE_STRUCTURE_VERSION` bump — wording change, no layout change (per the bump policy in `lib/llm/cache-key.ts`), and the block is a per-turn addition rather than part of the cached `compiledIdentityStacks`.
 - Both cache-determinism goldens updated (`bd27b1ca407d9901` → `7517f7d9b496d20b`, `911204033cd41164` → `74c9b488b4a1517c`) with the reason recorded inline. The sentence is now pinned by its own named assertion as well, so a regression to third person fails readably instead of only as a digest mismatch.
-- Plan for the remaining person inconsistencies: `docs/developer/features/prompt-person-consistency.md`.
+- Plan for the remaining person inconsistencies: `docs/developer/features/complete/prompt-person-consistency.md`.
 
 #### Project and group instructions are standing prompts in the system prompt
 

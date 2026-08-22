@@ -18,6 +18,8 @@ import { useGroupMountPoints } from '../hooks/useGroupMountPoints'
 import { Icon } from '@/components/ui/icon'
 import StateEditorModal from '@/components/state/StateEditorModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
+import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import type { Group } from '../../types'
 
 export interface GroupDetailViewProps {
@@ -179,12 +181,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
             renders after the group has loaded, so mounting on groupId is
             enough for the editor to see the fetched value. */}
         <div>
-          <label className="block text-sm font-medium text-foreground mb-2">
-            Group Instructions
-          </label>
-          <p className="qt-text-xs qt-text-secondary mb-2">
-            Optional prompt included in the system prompt of every member character, in all of their chats.
-          </p>
+          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.groupInstructions} optional />
           <MarkdownLexicalEditor
             value={formData.instructions}
             onChange={(value) => setFormData(prev => ({ ...prev, instructions: value }))}

@@ -12,6 +12,8 @@ This guide covers system prompts, templates, and prompt engineering for characte
 
 A system prompt is a set of instructions you give to the AI, telling it how to behave as your character.
 
+**Write as though speaking to the character.** The assembled prompt addresses the character directly from its opening line onward, so a system prompt in the same register lands seamlessly: *"You are Ariadne. You answer plainly and you never flatter."* — never *"Ariadne is a librarian who answers plainly."* Every example in this guide follows that form.
+
 ### What System Prompts Do
 
 System prompts control:

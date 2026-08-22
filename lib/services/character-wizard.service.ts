@@ -161,6 +161,7 @@ Strict rules:
 - Avoid flowery prose; favour declarative statements.
 - Not a vantage-point field — nobody "sees" the manifesto, it is the truth the character is built on.
 - Every other field (identity, description, personality, physical, dialogues) should remain consistent with this.
+- Address the character themselves — the manifesto is delivered inside the character's own prompt and read by no one else: "You do not lie to Charlie, not even kindly."
 
 Format as a bulleted list of 3-5 core tenets.`,
 
@@ -173,7 +174,7 @@ Strict rules:
 - Never put public-facing identity facts here (those belong in IDENTITY).
 - Never describe physical appearance.
 
-Write as instructions for how the character behaves on the inside, not as a story.`,
+Address the character themselves — this field is their own self-knowledge, delivered inside their own prompt: "You keep your worry behind your teeth. You have never once asked for help first." Write as instructions for how the character behaves on the inside, not as a story.`,
 
   scenarios: `Generate 2-3 distinct scenarios for interactions with this character. Each scenario should have a short title and detailed content. Return as a JSON array: [{"title": "...", "content": "..."}]
 
@@ -185,6 +186,7 @@ Each scenario should:
 - Include the relationship context between the character and the person they're interacting with
 - Include any ongoing circumstances or events relevant to that setting
 - Be written in present tense, setting the scene for roleplay
+- Speak about the place and the circumstances, addressed to no one — the referent is the world, not a person: "The reading room is empty at this hour, rain against the high windows."
 - Focus on the environment and situation, not on changing how the character behaves (the character's personality remains consistent across scenarios unless the environment naturally warrants different behavior)`,
 
   exampleDialogues: `Write 2-3 example dialogue exchanges that demonstrate this character's voice and personality.
@@ -194,7 +196,7 @@ Format each exchange as:
 {{user}}: [User's response]
 {{char}}: [Character's follow-up]
 
-Show variety in the character's emotional range and speech patterns. Include *actions* and *expressions* in asterisks.`,
+The {{char}}: / {{user}}: labels carry the shape — write each line in that speaker's own first-person voice, exactly as they would say it. Show variety in the character's emotional range and speech patterns. Include *actions* and *expressions* in asterisks.`,
 
   firstMessage: `Write an engaging opening message from this character that starts a brand-new conversation (1-3 paragraphs).
 - Written in the character's own voice, consistent with their personality and speech patterns.

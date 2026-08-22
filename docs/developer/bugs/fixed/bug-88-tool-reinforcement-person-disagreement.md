@@ -4,7 +4,7 @@
 |---|---|
 | **Status** | **FIXED in v4** (2026-08-22) |
 | **Fixed** | 2026-08-22 |
-| **Found** | 2026-08-22, while auditing grammatical person across the assembled system prompt (see [prompt-person-consistency.md](../../features/prompt-person-consistency.md)) |
+| **Found** | 2026-08-22, while auditing grammatical person across the assembled system prompt (see [prompt-person-consistency.md](../../features/complete/prompt-person-consistency.md)) |
 | **Severity** | Low — nothing errors. A malformed sentence occupies the prompt's recency slot, and disagrees in person with every block above it |
 | **Who it bites** | every character in every chat with tools available. The ungrammatical variant bites every character with **no pronouns recorded** — which is the default state, since `pronouns` is optional and unset on most characters |
 | **Provenance** | v4's own. Introduced third-person-by-placeholder at `3f4d7a78a` (2026-02-05); the ungrammatical default arrived with `11c4d6c2d` (2026-03-19), the same commit that made the disagreement possible by adding the second-person identity preamble |
@@ -144,7 +144,7 @@ reintroduced pronoun lookup fails there in either spelling.
 ## Related
 
 The wider audit that found this is
-[prompt-person-consistency.md](../../features/prompt-person-consistency.md). It
+[prompt-person-consistency.md](../../features/complete/prompt-person-consistency.md). It
 records three further person inconsistencies in the same prompt — the aliases,
 pronouns, and physical-appearance blocks — of which the **pronouns block is the
 one whose literal reading is wrong**: *"Always use these pronouns when referring

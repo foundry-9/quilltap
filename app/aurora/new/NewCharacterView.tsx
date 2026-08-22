@@ -8,6 +8,8 @@ import { AIWizardModal, type GeneratedCharacterData, type GeneratedPhysicalDescr
 import { ImportModal } from '@/components/characters/system-prompts-editor/ImportModal'
 import type { PromptTemplate } from '@/components/characters/system-prompts-editor/types'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
+import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../shared/wizard-text-fields'
 import { saveGeneratedWardrobeItems } from '../shared/save-generated-wardrobe'
@@ -309,12 +311,7 @@ export function NewCharacterView() {
         </div>
 
         <div>
-          <label htmlFor="identity" className="block qt-label mb-2 text-foreground">
-            Identity (Optional)
-          </label>
-          <p className="text-xs qt-text-secondary mb-2">
-            What strangers know about the character on sight or by reputation &mdash; name, station, occupation, public reputation. The shallow first impression.
-          </p>
+          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.identity} optional htmlFor="identity" />
           <MarkdownLexicalEditor
             value={formData.identity}
             onChange={handleMarkdownFieldChange('identity')}
@@ -326,12 +323,7 @@ export function NewCharacterView() {
         </div>
 
         <div>
-          <label htmlFor="description" className="block qt-label mb-2 text-foreground">
-            Description (Optional)
-          </label>
-          <p className="text-xs qt-text-secondary mb-2">
-            How acquaintances perceive the character &mdash; behaviour, mannerisms, frequent verbal patterns. Not physical appearance (that lives in physical descriptions).
-          </p>
+          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.description} optional htmlFor="description" />
           <MarkdownLexicalEditor
             value={formData.description}
             onChange={handleMarkdownFieldChange('description')}
@@ -343,12 +335,7 @@ export function NewCharacterView() {
         </div>
 
         <div>
-          <label htmlFor="manifesto" className="block qt-label mb-2 text-foreground">
-            Manifesto (Optional)
-          </label>
-          <p className="text-xs qt-text-secondary mb-2">
-            The foundational tenets of this character &mdash; the basic truths that anchor everything else. What this character is, at root.
-          </p>
+          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.manifesto} optional htmlFor="manifesto" />
           <MarkdownLexicalEditor
             value={formData.manifesto}
             onChange={handleMarkdownFieldChange('manifesto')}
@@ -360,12 +347,7 @@ export function NewCharacterView() {
         </div>
 
         <div>
-          <label htmlFor="personality" className="block qt-label mb-2 text-foreground">
-            Personality (Optional)
-          </label>
-          <p className="text-xs qt-text-secondary mb-2">
-            What the character knows about themselves &mdash; inner drivers of speech and behaviour, motivations, beliefs.
-          </p>
+          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.personality} optional htmlFor="personality" />
           <MarkdownLexicalEditor
             value={formData.personality}
             onChange={handleMarkdownFieldChange('personality')}
@@ -377,12 +359,7 @@ export function NewCharacterView() {
         </div>
 
         <div>
-          <label htmlFor="scenario" className="block qt-label mb-2 text-foreground">
-            Scenario (Optional)
-          </label>
-          <p className="text-xs qt-text-secondary mb-2">
-            Describe the setting and context for conversations.
-          </p>
+          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.scenario} optional htmlFor="scenario" />
           <MarkdownLexicalEditor
             value={formData.scenario}
             onChange={handleMarkdownFieldChange('scenario')}
@@ -394,12 +371,7 @@ export function NewCharacterView() {
         </div>
 
         <div>
-          <label htmlFor="firstMessage" className="block qt-label mb-2 text-foreground">
-            First Message (Optional)
-          </label>
-          <p className="text-xs qt-text-secondary mb-2">
-            The character&rsquo;s opening message to start conversations.
-          </p>
+          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.firstMessage} optional htmlFor="firstMessage" />
           <MarkdownLexicalEditor
             value={formData.firstMessage}
             onChange={handleMarkdownFieldChange('firstMessage')}
@@ -411,12 +383,7 @@ export function NewCharacterView() {
         </div>
 
         <div>
-          <label htmlFor="exampleDialogues" className="block qt-label mb-2 text-foreground">
-            Example Dialogues (Optional)
-          </label>
-          <p className="text-xs qt-text-secondary mb-2">
-            Example conversations to guide the AI&rsquo;s responses.
-          </p>
+          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.exampleDialogues} optional htmlFor="exampleDialogues" />
           <MarkdownLexicalEditor
             value={formData.exampleDialogues}
             onChange={handleMarkdownFieldChange('exampleDialogues')}
@@ -428,21 +395,20 @@ export function NewCharacterView() {
         </div>
 
         <div>
-          <div className="flex items-center justify-between mb-2">
-            <label htmlFor="systemPrompt" className="block qt-label text-foreground">
-              System Prompt (Optional)
-            </label>
-            <button
-              type="button"
-              onClick={openTemplateImport}
-              className="qt-button-secondary text-xs px-2 py-1"
-            >
-              Import Template
-            </button>
-          </div>
-          <p className="text-xs qt-text-secondary mb-2">
-            Custom system instructions (will be combined with auto-generated prompt).
-          </p>
+          <PromptFieldLabel
+            hint={PROMPT_FIELD_HINTS.systemPrompt}
+            optional
+            htmlFor="systemPrompt"
+            actions={
+              <button
+                type="button"
+                onClick={openTemplateImport}
+                className="qt-button-secondary text-xs px-2 py-1"
+              >
+                Import Template
+              </button>
+            }
+          />
           <MarkdownLexicalEditor
             value={formData.systemPrompt}
             onChange={handleMarkdownFieldChange('systemPrompt')}

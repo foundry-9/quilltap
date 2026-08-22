@@ -5,6 +5,7 @@
  */
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
+import { PROMPT_FIELD_HINTS, type PromptFieldHintKey } from '@/components/prompt-fields/field-hints'
 
 // ============================================================================
 // WIZARD STATE
@@ -268,18 +269,40 @@ export const FIELD_LABELS: Record<GeneratableField, string> = {
   wardrobeItems: 'Wardrobe',
 }
 
+/**
+ * Maps wizard field keys to their `PROMPT_FIELD_HINTS` entries, for surfaces
+ * that show the shared hint copy (the checkbox descriptions below and the
+ * review pane in `GenerationStep`). Fields absent here (name, title,
+ * properties, wardrobeItems) have no prompt-voice hint.
+ */
+export const FIELD_HINT_KEYS: Partial<Record<GeneratableField, PromptFieldHintKey>> = {
+  identity: 'identity',
+  description: 'description',
+  manifesto: 'manifesto',
+  personality: 'personality',
+  scenarios: 'scenario',
+  exampleDialogues: 'exampleDialogues',
+  firstMessage: 'firstMessage',
+  systemPrompt: 'systemPrompt',
+  physicalDescription: 'physicalDescription',
+}
+
+// Checkbox descriptions single-source their field-vantage wording from
+// PROMPT_FIELD_HINTS (helpers only — the checkbox list is tight on space; the
+// worked examples surface in GenerationStep's review pane). Wizard-specific
+// operational notes are appended after the shared helper.
 export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
   name: 'The character\'s name',
   title: 'A short epithet or title (e.g., "The Wanderer")',
-  identity: 'Outside-view facts a stranger could know on sight: station, occupation, public reputation',
-  description: 'How acquaintances perceive the character: behaviour, mannerisms, verbal patterns (not appearance)',
-  manifesto: 'The foundational tenets—the basic truths that anchor the character',
-  personality: 'The character\'s own self-knowledge: inner drivers, motivations, beliefs',
-  scenarios: 'Generate 2-3 named scenarios with distinct settings and contexts for interactions',
-  exampleDialogues: 'Example conversations to guide AI responses',
-  firstMessage: 'The character\'s opening message when a new chat begins',
-  systemPrompt: 'Custom system instructions for AI roleplay',
+  identity: PROMPT_FIELD_HINTS.identity.helper,
+  description: PROMPT_FIELD_HINTS.description.helper,
+  manifesto: PROMPT_FIELD_HINTS.manifesto.helper,
+  personality: PROMPT_FIELD_HINTS.personality.helper,
+  scenarios: `${PROMPT_FIELD_HINTS.scenario.helper} Generates 2-3 named scenarios with distinct settings.`,
+  exampleDialogues: PROMPT_FIELD_HINTS.exampleDialogues.helper,
+  firstMessage: PROMPT_FIELD_HINTS.firstMessage.helper,
+  systemPrompt: PROMPT_FIELD_HINTS.systemPrompt.helper,
   properties: 'Structured facts: pronouns and aliases (nicknames others use)',
-  physicalDescription: 'Detailed physical description for image generation (the person only — clothing lives in the wardrobe)',
+  physicalDescription: `${PROMPT_FIELD_HINTS.physicalDescription.helper} The person only — clothing lives in the wardrobe.`,
   wardrobeItems: 'Clothing, accessories, hairstyles, and composite outfits (top, bottom, footwear, accessories, hair)',
 }

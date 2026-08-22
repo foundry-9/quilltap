@@ -73,15 +73,17 @@ When helping:
     parts.push(processedToolInstructions)
   }
 
-  // 4. Character personality (simplified - no scenario/dialogues for help)
+  // 4. Character personality (simplified - no scenario/dialogues for help).
+  // Second-person wrapper mirrors the Salon builder — see the WHY note in
+  // lib/chat/context/system-prompt-builder.ts.
   if (character.personality) {
     const processedPersonality = processTemplate(character.personality, templateContext)
-    parts.push(`## Character Personality\n${processedPersonality}`)
+    parts.push(`## Character Personality\nThe following is what you know about yourself. Others do not see it unless you show them.\n${processedPersonality}`)
   }
 
-  // 5. Character pronouns
+  // 5. Character pronouns — second person, mirroring the Salon builder.
   if (character.pronouns) {
-    parts.push(`## Character Pronouns\nThis character's pronouns are: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Always use these pronouns when referring to this character.`)
+    parts.push(`## Character Pronouns\nYour pronouns are ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Use them whenever you refer to yourself in narration, and expect others to use them for you.`)
   }
 
   // 6. Tool reinforcement. Second person, mirroring the Salon builder — see the

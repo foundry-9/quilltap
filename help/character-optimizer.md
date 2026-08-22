@@ -117,6 +117,8 @@ The optimizer will **not** touch names, pronouns, titles, first messages, or oth
 
 The optimizer enforces these vantage points strictly: it will not, for instance, slip a private mannerism into Identity, nor put public reputation into Personality. Each suggestion is sorted into the field whose vantage point matches the underlying memory.
 
+It also preserves each field's established form of address. Fields the character alone reads (Manifesto, Personality, System Prompts) are written to the character — *"You keep your worry behind your teeth"* — while fields only others read (Identity, Description) speak of the character from outside, and physical-description prompts remain bare descriptive phrases. Proposed text keeps to the voice its field already speaks in; if a suggestion seems to have wandered into the wrong register, that alone is fair grounds for Edit & Accept.
+
 ## What Counts as "About This Character"
 
 The optimizer only learns from memories *about the character themselves* — self-knowledge stored in their Commonplace Book. Memories the character holds about other participants (the user, other characters in a scene) are excluded, because letting another person's habits seep into a behavioural-pattern analysis would distort the character's own portrait. The strict cut also excludes a small legacy pile of unattributed memories from older Quilltap versions; if you find your candidate count surprisingly low, that may be why.

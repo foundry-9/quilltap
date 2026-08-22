@@ -1,6 +1,6 @@
 # Grammatical Person Consistency in Assembled Prompts
 
-**Status:** proposed — **§3.1 tool reinforcement is DONE** (see §3.1a)
+**Status:** implemented (2026-08-22) — §3 wording + §7.2 version stamp (builder v1 stamp, v2 wording), §4 generators, §5 UI (`PromptFieldLabel` + `components/prompt-fields/field-hints.ts`), §6 docs. §4.3 deferred as ordered, filed at [vault-managed-field-write-guidance](../vault-managed-field-write-guidance.md).
 **Author:** drafted with Ariadne, 2026-08-22
 **Scope:** v4 (`quilltap-server`). v5 absorbs it as ordinary drift.
 

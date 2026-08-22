@@ -50,14 +50,16 @@ On Anthropic, step 8 is impossible (Sonnet 4.6+ rejects a trailing `assistant` m
 
 1. `## Character Identity` — "You are {{char}}. Everything that follows defines who you are…"
 2. **Base system prompt** — the participant's `selectedSystemPromptId`, falling back to the character's `isDefault` prompt, falling back to nothing.
-3. `## Character Manifesto` — `character.manifesto`.
-4. `## Character Personality` — `character.personality`.
-5. `## Character Aliases` — "This character also goes by: …"
-6. `## Character Pronouns` — subject/object/possessive.
-7. `## Physical Appearance` — the selected physical description (`shortPrompt` → `mediumPrompt` → `longPrompt` → `completePrompt` → `fullDescription`, first non-empty), with its usage-context note.
-8. `## Example Dialogue Style` — `character.exampleDialogues`.
+3. `## Character Manifesto` — `character.manifesto`, under the wrapper "The following you hold as true about yourself, without question."
+4. `## Character Personality` — `character.personality`, under the wrapper "The following is what you know about yourself. Others do not see it unless you show them."
+5. `## Character Aliases` — "You also go by: …"
+6. `## Character Pronouns` — "Your pronouns are subject/object/possessive. Use them whenever you refer to yourself in narration…"
+7. `## Physical Appearance` — "This is how you look — …": the selected physical description (`shortPrompt` → `mediumPrompt` → `longPrompt` → `completePrompt` → `fullDescription`, first non-empty), with its usage-context note. The wrapper is second person; the body stays noun phrases because it is shared with the image pipelines.
+8. `## Example Dialogue Style` — `character.exampleDialogues`, under the wrapper "This is how you speak."
 
 Joined with `\n\n`. `{{char}}`, `{{user}}`, `{{scenario}}`, `{{persona}}` are resolved **here**, at compile time.
+
+Every block addresses the character in the second person — same register as the preamble — and the author-carried fields (3, 4, 8) get referent-fixing wrappers rather than any policing of the author's own person. Outward-facing renderers (§8's identity cards, Host whispers) stay third person: their referent is someone other than the reader. Design: [prompt-person-consistency](features/complete/prompt-person-consistency.md). **Any edit that changes this function's output must bump `IDENTITY_STACK_BUILDER_VERSION` (same file) and register a golden in `__tests__/unit/cache-determinism/system-prompt.test.ts`** — CI fails in both directions if you forget (see §6).
 
 ### What is deliberately *not* in the stack
 
@@ -78,7 +80,7 @@ Same file. Takes the identity stack (precompiled or freshly built) and appends, 
 3. **Taboo section** — the instance-wide forbidden-phrase list (`instance_settings['taboo']`, Settings → Chat → Taboo). Read asynchronously by the caller and handed down, because this builder is synchronous by design. An empty list emits nothing at all, byte-for-byte. Phrases are emitted verbatim and never template-processed — a user phrase may legitimately contain `{{…}}`. The preamble's wording is load-bearing; read the comment on `TABOO_SECTION_PREAMBLE` before editing it.
 4. **Standing instructions** — the chat's project `instructions` plus the `instructions` of every group the *responding character* belongs to (`lib/chat/context/standing-instructions.ts`), resolved async by the caller like Taboo and rendered `[STANDING INSTRUCTIONS]` → one headed block per source, groups sorted by name for cache determinism. Stable per character per chat — it changes only when a project/group is edited or a membership changes — which is why it may live in the cacheable prefix even though project *context* (description, store roster) was deliberately moved out to Prospero whispers in Phase E: the whisper content is turn-variable, instructions are not. Empty emits nothing, byte-for-byte. Unlike Taboo the section IS template-processed (`{{char}}`/`{{user}}`), matching the roleplay-template precedent. Help and Brahma chats never see it (separate builders); Carina one-off queries mirror it (see §13).
 5. **Tool instructions** — native tool rules, simple-JSON instructions, or text-block instructions, selected per turn by the orchestrator from the resolved tool mode.
-6. **Tool reinforcement** — one character-voiced line, only when tools are present: "*When {{char}} uses workspace tools, they CALL them…*"
+6. **Tool reinforcement** — one line, only when tools are present, second person like everything above it: "*When you use workspace tools, you CALL them — you do not merely describe calling them.*"
 
 The `{{timestamp}}` template variable is populated here **only** when `timestampConfig.autoPrepend` is false; the auto-prepend path is a Host whisper instead.
 
@@ -90,7 +92,7 @@ It deliberately **does not name the other participants**. An inline roster is ex
 
 ## 6. Compiling and caching the stack
 
-`lib/services/system-prompt-compiler/compiler.ts` builds the identity stack for every LLM-controlled CHARACTER participant and stores it on `chats.compiledIdentityStacks` (a JSON map keyed by participant ID; column added by `migrations/scripts/add-compiled-identity-stacks-field.ts`, see [DDL.md](DDL.md)).
+`lib/services/system-prompt-compiler/compiler.ts` builds the identity stack for every LLM-controlled CHARACTER participant and stores it on `chats.compiledIdentityStacks` (column added by `migrations/scripts/add-compiled-identity-stacks-field.ts`, see [DDL.md](DDL.md)). Since 4.9 the stored value is a **stamped envelope** `{ version, stacks: { participantId → stack } }`, where `version` is `IDENTITY_STACK_BUILDER_VERSION` (colocated with `buildIdentityStack`). Reads require strict version equality — absent, legacy bare-map, older, *and newer* (downgrade) all read as "nothing cached" and rebuild lazily through the read-through fallback; a stale map is discarded on merge, never blended into. Bumping the constant is how a wording change in the builder reaches every existing chat, with no migration.
 
 **Invalidation hooks** — the only places that recompile:
 

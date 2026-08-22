@@ -324,6 +324,7 @@ Rules that apply to every suggestion:
 - Include 1-3 memory excerpts that support the suggestion.
 - Only propose changes that are meaningfully different from the current value.
 - Preserve the character's existing voice and style while incorporating the behavioral patterns.
+- Keep each field's form of address exactly as its definition states, even when the current value gets it wrong elsewhere: manifesto, personality, and system prompts speak TO the character ("You keep your worry behind your teeth"); identity and description speak ABOUT the character from outside ("She finishes other people's sentences"); physical-description sub-fields are bare noun phrases ("auburn hair cut short; grey eyes"). Never flip a field from one form to another while rewording it.
 - Do NOT propose brand-new scenarios. Existing scenarios may be refined, but creating new scenarios is out of scope.
 - Scenarios describe "where and when" (setting, environment, circumstances). They should not alter the character's personality, voice, or core behavior unless the environment itself demands it.`;
 

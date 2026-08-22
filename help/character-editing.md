@@ -44,6 +44,18 @@ The edit interface has multiple tabs for different aspects of character:
 
 The Details tab contains all basic character information.
 
+### Who Is Being Spoken To
+
+Before putting pen to any field, pause for one question of etiquette: *who will be reading this?* Every field is delivered to somebody, and the graceful thing is to address that somebody directly.
+
+- **Fields only the character themselves ever reads** — the Manifesto, the Personality, the System Prompts — are written *to* the character, as one might leave instructions for a trusted colleague. Written as: *You do not lie to Charlie, not even kindly.* / *You keep your worry behind your teeth. You have never once asked for help first.* / *You are Ariadne. You answer plainly and you never flatter.*
+- **Fields only *other* characters ever read** — the Identity and the Description — are written *about* the character, from the outside, as an observer would put it. Written as: *Ariadne is a research librarian at the Athenaeum, known for finding what others gave up on.* / *She finishes other people's sentences, then apologises for it.*
+- **Physical Descriptions** are addressed to no one at all — bare descriptive phrases, because the very same text is handed to the image generators, which want nouns, not sentences about "you". Written as: *auburn hair cut short; grey eyes; a scar across the left knuckle*.
+- **Scenarios** are scene text, addressed to nobody — a stage set, not a letter. Written as: *The reading room is empty at this hour, rain against the high windows.*
+- **Example Dialogues** need no such fuss — the `{{char}}:` / `{{user}}:` format carries the shape on its own.
+
+The assembled system prompt addresses the character directly throughout, and each field's wrapper makes its vantage point plain — so text written for the right reader lands exactly where it should. The editor shows a "Written as:" worked example beneath each field as a reminder.
+
 ### Field-by-Field Editing
 
 **Name**
@@ -77,14 +89,16 @@ The Details tab contains all basic character information.
 - The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field (identity, description, personality, physical, dialogues) should remain consistent with
 - Not a vantage point — nobody "sees" the Manifesto; it is the load-bearing truth the character is built on. Foundational, declarative, contradiction-resistant
 - Click to edit. A Markdown property synced to the character vault as `manifesto.md` (vault path lookups are case-insensitive, so a hand-named `Manifesto.md` is matched too)
-- Example: "She is fundamentally incapable of betrayal. She believes the strong protect the weak. She has never broken a promise."
+- Only the character themselves ever reads it, so address them directly
+- Example: "You are fundamentally incapable of betrayal. You believe the strong protect the weak. You have never broken a promise."
 
 **Personality**
 
-- What the character knows about themselves — the internal driver of their speech and behaviour. Other characters don't see it unless she shares it
+- What the character knows about themselves — the internal driver of their speech and behaviour. Other characters don't see it unless they share it
 - Distinct from Description (outward) and Identity (public surface). This is the inner life
 - Edit to refine the engine room behind the curtain
-- Example: "Believes she's never deserved any of what's happened to her, and operates on a slow, simmering resentment she'd never admit to"
+- Only the character themselves ever reads it, so address them directly
+- Example: "You believe you've never deserved any of what's happened to you, and you operate on a slow, simmering resentment you'd never admit to"
 
 **Scenarios**
 

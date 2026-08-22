@@ -118,6 +118,32 @@ export interface BuildIdentityStackOptions {
 }
 
 /**
+ * Version of `buildIdentityStack`'s OUTPUT — the wording and layout of the
+ * blocks it emits. The system-prompt compiler
+ * (`lib/services/system-prompt-compiler/compiler.ts`) stamps this into
+ * `chats.compiledIdentityStacks` on write and requires strict equality on
+ * read: a stored stack with an absent, older, or newer stamp is treated as
+ * missing, so the read-through fallback rebuilds it with the current wording.
+ * (Newer matters on a downgrade — a rolled-back build must not consume stacks
+ * a later build wrote.) Rows written before the stamp existed are bare
+ * participantId→stack maps with no `version` key; they read as stale
+ * (effectively version 0) and rebuild lazily. No migration needed.
+ *
+ * Bump this whenever an edit to `buildIdentityStack` changes its output for
+ * unchanged inputs — wording, ordering, blocks added or removed. Forgetting is
+ * not an option: `__tests__/unit/cache-determinism/system-prompt.test.ts`
+ * binds this constant to a golden hash of the function's output
+ * (`IDENTITY_STACK_GOLDENS`), so editing without bumping fails on the hash
+ * and bumping without registering a new golden fails on the lookup.
+ *
+ * Distinct from `PROMPT_CACHE_STRUCTURE_VERSION` (`lib/llm/cache-key.ts`),
+ * which versions the whole prompt shape for PROVIDER caches. This constant
+ * versions one function's output for OUR compiled-stack cache; colocation
+ * with the function is deliberate so whoever edits the strings sees it.
+ */
+export const IDENTITY_STACK_BUILDER_VERSION = 2
+
+/**
  * Build just the static character-identity portion of the system prompt,
  * with chat-level template variables resolved. The result is suitable for
  * caching across turns within a chat.
@@ -159,34 +185,53 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
     parts.push(processTemplate(systemPromptContent, templateContext))
   }
 
+  // WHY the wrappers and second person throughout: the preamble above binds
+  // the model's identity slot with "You are {{char}}", so every block whose
+  // referent is the speaking character stays in the same register — a
+  // third-person sentence in this position reads as lore about someone else.
+  // Author-carried fields (manifesto, personality, example dialogues) get a
+  // referent-fixing wrapper instead of policing the author's own person: a
+  // body written as "Friday is warm" under "what you know about yourself"
+  // still lands in the right place. Outward-facing consumers
+  // (buildPublicIdentityCard, buildOtherParticipantsInfo, Host whispers)
+  // stay third person — their referent is someone other than the reader.
+  // See docs/developer/features/complete/prompt-person-consistency.md.
   if (character.manifesto) {
-    parts.push(`\n## Character Manifesto\n${processTemplate(character.manifesto, templateContext)}`)
+    parts.push(`\n## Character Manifesto\nThe following you hold as true about yourself, without question.\n${processTemplate(character.manifesto, templateContext)}`)
   }
 
   if (character.personality) {
-    parts.push(`\n## Character Personality\n${processTemplate(character.personality, templateContext)}`)
+    parts.push(`\n## Character Personality\nThe following is what you know about yourself. Others do not see it unless you show them.\n${processTemplate(character.personality, templateContext)}`)
   }
 
   if (character.aliases && character.aliases.length > 0) {
-    parts.push(`\n## Character Aliases\nThis character also goes by: ${character.aliases.join(', ')}\nOther characters and the user may refer to them by any of these names.`)
+    parts.push(`\n## Character Aliases\nYou also go by: ${character.aliases.join(', ')}. Others may address you by any of these names.`)
   }
 
+  // The "refer to yourself in narration" clause is what justifies this block:
+  // characters routinely narrate their own actions in third person ("Ariadne
+  // reaches for the folder"), and this is what makes that narration use the
+  // right pronouns.
   if (character.pronouns) {
-    parts.push(`\n## Character Pronouns\nThis character's pronouns are: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Always use these pronouns when referring to this character.`)
+    parts.push(`\n## Character Pronouns\nYour pronouns are ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Use them whenever you refer to yourself in narration, and expect others to use them for you.`)
   }
 
+  // Second-person WRAPPER only — the body stays third-person noun phrases,
+  // because the stored physicalDescription text is shared with the image
+  // pipelines (avatar prompts, appearance resolution, story backgrounds),
+  // and diffusion models take noun phrases, not "you have auburn hair".
   if (character.physicalDescription) {
     const desc = character.physicalDescription
     const contextNote = desc.usageContext ? ` (best used: ${desc.usageContext})` : ''
     const descText = desc.shortPrompt || desc.mediumPrompt || desc.longPrompt
       || desc.completePrompt || desc.fullDescription || ''
     if (descText) {
-      parts.push(`\n## Physical Appearance\n- "${desc.name}"${contextNote}: ${descText}`)
+      parts.push(`\n## Physical Appearance\nThis is how you look — "${desc.name}"${contextNote}: ${descText}`)
     }
   }
 
   if (character.exampleDialogues) {
-    parts.push(`\n## Example Dialogue Style\n${processTemplate(character.exampleDialogues, templateContext)}`)
+    parts.push(`\n## Example Dialogue Style\nThis is how you speak.\n${processTemplate(character.exampleDialogues, templateContext)}`)
   }
 
   return parts.join('\n\n').trim()

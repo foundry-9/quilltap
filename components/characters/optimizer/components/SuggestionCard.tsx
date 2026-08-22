@@ -11,6 +11,11 @@
 import { useState } from 'react';
 import { Icon } from '@/components/ui/icon';
 import type { OptimizerSuggestion, SuggestionDecision } from '../types';
+import {
+  PROMPT_FIELD_HINTS,
+  type PromptFieldHint,
+  type PromptFieldHintKey,
+} from '@/components/prompt-fields/field-hints';
 
 // Belt-and-braces guard: the optimizer service already coerces these fields,
 // but render paths shouldn't trust unknown JSON to be string-shaped.
@@ -51,6 +56,22 @@ const FIELD_LABELS: Record<string, string> = {
   wardrobeItems: 'Wardrobe',
   aliases: 'Alias',
   title: 'Title',
+};
+
+// Optimizer field key → shared prompt-field hint (PROMPT_FIELD_HINTS), for the
+// per-field voice line that makes a silent flip in form of address easy to
+// notice before approving. Fields absent here have no voice hint.
+const FIELD_HINT_KEYS: Record<string, PromptFieldHintKey> = {
+  identity: 'identity',
+  description: 'description',
+  manifesto: 'manifesto',
+  personality: 'personality',
+  scenarios: 'scenario',
+  exampleDialogues: 'exampleDialogues',
+  firstMessage: 'firstMessage',
+  systemPrompt: 'systemPrompt',
+  systemPrompts: 'systemPrompt',
+  physicalDescription: 'physicalDescription',
 };
 
 const FIELD_BADGE_CLASS: Record<string, string> = {
@@ -140,6 +161,9 @@ export function SuggestionCard({
 
   const fieldLabel = FIELD_LABELS[suggestion.field] ?? suggestion.field;
   const fieldBadge = FIELD_BADGE_CLASS[suggestion.field] ?? 'qt-badge-secondary';
+  const hintKey = FIELD_HINT_KEYS[suggestion.field] as PromptFieldHintKey | undefined;
+  const voiceHint: PromptFieldHint | undefined = hintKey ? PROMPT_FIELD_HINTS[hintKey] : undefined;
+  const voiceExample = voiceHint?.example;
   // For a refined sub-item show its name; for a brand-new system prompt show
   // the proposed name so the author knows what they're commissioning.
   const newItemName = suggestion.name ?? suggestion.title;
@@ -180,6 +204,13 @@ export function SuggestionCard({
 
       {/* Significance bar */}
       <SignificanceBar significance={suggestion.significance} />
+
+      {/* Voice hint: the form of address this field expects */}
+      {!editing && voiceExample && (
+        <p className="text-xs qt-text-secondary">
+          Written as: <em>{voiceExample}</em>
+        </p>
+      )}
 
       {/* Current vs proposed */}
       {!editing ? (

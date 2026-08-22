@@ -37,7 +37,13 @@ import {
   compileAllIdentityStacks,
   compileIdentityStackForParticipant,
 } from '@/lib/services/system-prompt-compiler/compiler'
+import { IDENTITY_STACK_BUILDER_VERSION } from '@/lib/chat/context/system-prompt-builder'
 import type { ChatMetadataBase, ChatParticipantBase } from '@/lib/schemas/types'
+
+/** Wrap a bare participantId→stack map in the current stamped envelope. */
+function stamped(stacks: Record<string, string>, version = IDENTITY_STACK_BUILDER_VERSION) {
+  return { version, stacks }
+}
 
 // ---------------------------------------------------------------------------
 // Test data helpers
@@ -99,18 +105,18 @@ describe('getCompiledIdentityStack', () => {
   })
 
   it('returns null when the participant key is absent', () => {
-    const chat = makeChat({ compiledIdentityStacks: { 'part-99': 'some stack' } })
+    const chat = makeChat({ compiledIdentityStacks: stamped({ 'part-99': 'some stack' }) })
     expect(getCompiledIdentityStack(chat, 'part-1')).toBeNull()
   })
 
   it('returns null when the stored value is an empty string', () => {
-    const chat = makeChat({ compiledIdentityStacks: { 'part-1': '' } })
+    const chat = makeChat({ compiledIdentityStacks: stamped({ 'part-1': '' }) })
     expect(getCompiledIdentityStack(chat, 'part-1')).toBeNull()
   })
 
   it('returns the cached stack string when present', () => {
     const stack = '## System Prompt\nYou are Friday.'
-    const chat = makeChat({ compiledIdentityStacks: { 'part-1': stack } })
+    const chat = makeChat({ compiledIdentityStacks: stamped({ 'part-1': stack }) })
     expect(getCompiledIdentityStack(chat, 'part-1')).toBe(stack)
   })
 
@@ -118,10 +124,31 @@ describe('getCompiledIdentityStack', () => {
     const stackA = 'Stack for A'
     const stackB = 'Stack for B'
     const chat = makeChat({
-      compiledIdentityStacks: { 'part-A': stackA, 'part-B': stackB },
+      compiledIdentityStacks: stamped({ 'part-A': stackA, 'part-B': stackB }),
     })
     expect(getCompiledIdentityStack(chat, 'part-A')).toBe(stackA)
     expect(getCompiledIdentityStack(chat, 'part-B')).toBe(stackB)
+  })
+
+  it('reads a legacy bare map as null, not as a stack', () => {
+    // Rows written before the version stamp are bare participantId→stack maps.
+    // They must read as stale so the read-through fallback rebuilds them.
+    const chat = makeChat({ compiledIdentityStacks: { 'part-1': '## Legacy stack' } })
+    expect(getCompiledIdentityStack(chat, 'part-1')).toBeNull()
+  })
+
+  it('reads a version mismatch as null, in both directions', () => {
+    const older = makeChat({
+      compiledIdentityStacks: stamped({ 'part-1': 'old' }, IDENTITY_STACK_BUILDER_VERSION - 1),
+    })
+    expect(getCompiledIdentityStack(older, 'part-1')).toBeNull()
+
+    // Newer matters on a downgrade: a rolled-back build must not consume
+    // stacks a later build wrote.
+    const newer = makeChat({
+      compiledIdentityStacks: stamped({ 'part-1': 'future' }, IDENTITY_STACK_BUILDER_VERSION + 1),
+    })
+    expect(getCompiledIdentityStack(newer, 'part-1')).toBeNull()
   })
 })
 
@@ -147,7 +174,10 @@ describe('compileAllIdentityStacks', () => {
     expect(updateChat).toHaveBeenCalledTimes(1)
     const [chatId, update] = updateChat.mock.calls[0] as [string, Record<string, unknown>]
     expect(chatId).toBe('chat-1')
-    const stacks = update.compiledIdentityStacks as Record<string, string>
+    const envelope = update.compiledIdentityStacks as { version: number; stacks: Record<string, string> }
+    // Every write is stamped with the current builder version.
+    expect(envelope.version).toBe(IDENTITY_STACK_BUILDER_VERSION)
+    const stacks = envelope.stacks
     // Both eligible participants should have a non-empty compiled stack
     expect(typeof stacks['part-a']).toBe('string')
     expect((stacks['part-a'] as string).length).toBeGreaterThan(0)
@@ -236,19 +266,64 @@ describe('compileIdentityStackForParticipant', () => {
     const participant = makeParticipant({ id: 'part-new' })
     const chat = makeChat({
       participants: [participant],
-      compiledIdentityStacks: { 'part-existing': '## Old Stack' },
+      compiledIdentityStacks: stamped({ 'part-existing': '## Old Stack' }),
     })
 
     await compileIdentityStackForParticipant(chat, 'part-new')
 
     expect(updateChat).toHaveBeenCalledTimes(1)
     const [, update] = updateChat.mock.calls[0] as [string, Record<string, unknown>]
-    const stacks = update.compiledIdentityStacks as Record<string, string>
+    const envelope = update.compiledIdentityStacks as { version: number; stacks: Record<string, string> }
+    expect(envelope.version).toBe(IDENTITY_STACK_BUILDER_VERSION)
+    const stacks = envelope.stacks
     // New participant stack is added as a non-empty string
     expect(typeof stacks['part-new']).toBe('string')
     expect((stacks['part-new'] as string).length).toBeGreaterThan(0)
-    // Existing entry is preserved
+    // Existing version-current entry is preserved
     expect(stacks['part-existing']).toBe('## Old Stack')
+  })
+
+  it('discards a stale-version map on merge rather than blending into it', async () => {
+    // Merging a fresh stack into a stale map and stamping the result current
+    // would produce an envelope whose stamp lies about its siblings. A version
+    // mismatch must be treated as an empty map.
+    const updateChat = jest.fn().mockResolvedValue(undefined)
+    getRepositories.mockReturnValue(makeRepos({ updateChat }))
+
+    const participant = makeParticipant({ id: 'part-new' })
+    const chat = makeChat({
+      participants: [participant],
+      compiledIdentityStacks: stamped(
+        { 'part-stale-sibling': '## Stale Stack' },
+        IDENTITY_STACK_BUILDER_VERSION - 1,
+      ),
+    })
+
+    await compileIdentityStackForParticipant(chat, 'part-new')
+
+    const [, update] = updateChat.mock.calls[0] as [string, Record<string, unknown>]
+    const envelope = update.compiledIdentityStacks as { version: number; stacks: Record<string, string> }
+    expect(envelope.version).toBe(IDENTITY_STACK_BUILDER_VERSION)
+    expect(typeof envelope.stacks['part-new']).toBe('string')
+    expect('part-stale-sibling' in envelope.stacks).toBe(false)
+  })
+
+  it('discards a legacy bare map on merge rather than blending into it', async () => {
+    const updateChat = jest.fn().mockResolvedValue(undefined)
+    getRepositories.mockReturnValue(makeRepos({ updateChat }))
+
+    const participant = makeParticipant({ id: 'part-new' })
+    const chat = makeChat({
+      participants: [participant],
+      compiledIdentityStacks: { 'part-legacy': '## Legacy Stack' },
+    })
+
+    await compileIdentityStackForParticipant(chat, 'part-new')
+
+    const [, update] = updateChat.mock.calls[0] as [string, Record<string, unknown>]
+    const envelope = update.compiledIdentityStacks as { version: number; stacks: Record<string, string> }
+    expect(envelope.version).toBe(IDENTITY_STACK_BUILDER_VERSION)
+    expect('part-legacy' in envelope.stacks).toBe(false)
   })
 
   it('does nothing when the participant ID is not found on the chat', async () => {
@@ -271,19 +346,44 @@ describe('compileIdentityStackForParticipant', () => {
     const participant = makeParticipant({ id: 'part-stale', controlledBy: 'user' })
     const chat = makeChat({
       participants: [participant],
-      compiledIdentityStacks: {
+      compiledIdentityStacks: stamped({
         'part-stale': '## Old stale stack',
         'part-other': '## Other',
-      },
+      }),
     })
 
     await compileIdentityStackForParticipant(chat, 'part-stale')
 
     expect(updateChat).toHaveBeenCalledTimes(1)
     const [, update] = updateChat.mock.calls[0] as [string, Record<string, unknown>]
-    const stacks = update.compiledIdentityStacks as Record<string, string>
-    expect('part-stale' in stacks).toBe(false)
-    expect(stacks['part-other']).toBe('## Other')
+    const envelope = update.compiledIdentityStacks as { version: number; stacks: Record<string, string> }
+    expect(envelope.version).toBe(IDENTITY_STACK_BUILDER_VERSION)
+    expect('part-stale' in envelope.stacks).toBe(false)
+    expect(envelope.stacks['part-other']).toBe('## Other')
+  })
+
+  it('clears a stale-version map on the drop path instead of rewriting it back', async () => {
+    // Participant not eligible AND the stored envelope is version-stale: there
+    // is nothing meaningful to drop, so the whole value is cleared (empty map
+    // → null column) rather than the stale map being persisted again.
+    const updateChat = jest.fn().mockResolvedValue(undefined)
+    getRepositories.mockReturnValue(makeRepos({ updateChat }))
+
+    const participant = makeParticipant({ id: 'part-stale', controlledBy: 'user' })
+    const chat = makeChat({
+      participants: [participant],
+      compiledIdentityStacks: stamped(
+        { 'part-stale': '## Old', 'part-other': '## Other' },
+        IDENTITY_STACK_BUILDER_VERSION - 1,
+      ),
+    })
+
+    await compileIdentityStackForParticipant(chat, 'part-stale')
+
+    expect(updateChat).toHaveBeenCalledTimes(1)
+    const [, update] = updateChat.mock.calls[0] as [string, Record<string, unknown>]
+    // Empty map writes null — the "nothing cached" state needs no version.
+    expect(update.compiledIdentityStacks).toBeNull()
   })
 
   it('does not throw when the repo update fails', async () => {

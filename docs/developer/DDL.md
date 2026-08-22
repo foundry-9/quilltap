@@ -508,7 +508,7 @@ CREATE TABLE "chats" (
   "activeTerminalSessionId" TEXT DEFAULT NULL,
   "rightPaneVerticalSplit" INTEGER DEFAULT 50,
   "allowCrossCharacterVaultReads" INTEGER DEFAULT 0,
-  "compiledIdentityStacks" TEXT DEFAULT NULL,
+  "compiledIdentityStacks" TEXT DEFAULT NULL,  -- JSON envelope { version, stacks: { participantId → compiled stack } } since 4.9; version = IDENTITY_STACK_BUILDER_VERSION, mismatched/legacy bare-map rows read as stale and rebuild lazily
   "courierCheckpoints" TEXT DEFAULT NULL,
   "commonplaceSceneCache" TEXT DEFAULT NULL,
   "commonplaceRecallHistory" TEXT DEFAULT NULL,

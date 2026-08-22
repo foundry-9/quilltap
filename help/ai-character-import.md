@@ -80,13 +80,13 @@ Three actions are available:
 
 Summon From Lore distinguishes the character fields by *vantage point*, plus the buckets that sit alongside them. The AI is instructed not to mix them up — the same trait should not appear in two places.
 
-- **Identity** — outside view; what strangers know on sight or by reputation (name, station, occupation, public reputation). Never private mannerisms or appearance.
-- **Description** — acquaintance view; behaviour, mannerisms, frequent verbal patterns. Never physical appearance — that lives in physical descriptions.
-- **Manifesto** — axiomatic core; the character's foundational tenets and most important facts of existence. Load-bearing truths that every other field should remain consistent with. Never opinions or trends.
-- **Personality** — internal view; the character's own self-knowledge, inner drivers, motivations, beliefs.
-- **System prompts** — stage direction for the model, written in second person; how to perform the character, not lore about them.
+- **Identity** — outside view; what strangers know on sight or by reputation (name, station, occupation, public reputation). Never private mannerisms or appearance. Written about the character from outside, because only *others* ever read it: *"Ariadne is a research librarian at the Athenaeum."*
+- **Description** — acquaintance view; behaviour, mannerisms, frequent verbal patterns. Never physical appearance — that lives in physical descriptions. Written about the character from outside, like Identity: *"She finishes other people's sentences and apologises afterwards."*
+- **Manifesto** — axiomatic core; the character's foundational tenets and most important facts of existence. Load-bearing truths that every other field should remain consistent with. Never opinions or trends. Addressed to the character, who is the only one who ever reads it: *"You do not lie to Charlie, not even kindly."*
+- **Personality** — internal view; the character's own self-knowledge, inner drivers, motivations, beliefs. Addressed to the character, whose self-knowledge it is: *"You keep your worry behind your teeth."*
+- **System prompts** — stage direction for the model, written as though speaking to the character (*"You are…"*, *"You always…"*); how to perform the character, not lore about them.
 - **Properties** — structured facts: pronouns and aliases. Only extracted when the source material actually supports them — the AI never invents placeholder pronouns.
-- **Physical descriptions** — appearance only, with nothing removable; generated as a separate step in five detail levels.
+- **Physical descriptions** — appearance only, with nothing removable; generated as a separate step in five detail levels. Bare descriptive phrases, never addressed to anyone — this text also feeds the image models, which want nouns, not sentences about "you": *"auburn hair cut short; grey eyes; a scar across the left knuckle."*
 - **Wardrobe** — everything removable: clothing, accessories, and composite outfits, kept strictly apart from the physical description.
 
 If your source material describes a character's looks, those details flow into the physical descriptions; her habitual coat flows into the wardrobe, not into her body's description. Similarly, foundational tenets (core beliefs, immutable principles) flow into the manifesto, not into personality or description.

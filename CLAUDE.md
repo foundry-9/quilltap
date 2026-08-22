@@ -156,6 +156,8 @@ Four vantage-point fields plus a foundational one (`manifesto`). **Not interchan
 - **personality** — what the character knows about themselves; the internal driver. Unseen by others unless shared.
 - **title** — the user's/character's own private framing (e.g. "the rival"). Not how others refer to them; out of optimizer scope.
 
+**Grammatical person follows the referent:** second person when the referent is the speaking character (`manifesto`, `personality`, system prompts, project/group `instructions` — all delivered inside the character's own prompt), third person when the referent is anyone else or the consumer is not a chat model (`identity`/`description` — read only by *others*; `physicalDescription` — noun phrases, shared with the image pipelines). Prompt-facing wrappers in `buildIdentityStack` fix the referent for author text; hint copy is single-sourced in `lib/services/character-field-semantics.ts` (server) and `components/prompt-fields/field-hints.ts` (client) — change them together. Any edit that changes `buildIdentityStack`'s output must bump `IDENTITY_STACK_BUILDER_VERSION` (same file) and register a golden; CI enforces both directions. Full design: `docs/developer/features/complete/prompt-person-consistency.md`.
+
 ### Personified-feature avatars
 
 When a personified feature "speaks" via a synthetic message, its avatar lives at `public/images/avatars/<feature>-avatar.webp` (lowercase, hyphenated; e.g. `lantern-avatar.webp`). Referenced as `/images/avatars/<feature>-avatar.webp`; resolved in `getMessageAvatar` (`app/salon/[id]/page.tsx`), keyed off `systemSender`.

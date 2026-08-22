@@ -35,6 +35,8 @@ The most important setting — custom instructions that apply to all project cha
 
 **Maximum length:** 10,000 characters
 
+**A word on address.** The instructions are slipped into each character's own system prompt — the character is the one reading them — so write as though speaking to the character directly. Written as: *You are helping Charlie draft sermon material; cite chapter and verse.* A third-person memorandum ("The characters should help Charlie…") reads, to its recipient, like lore about somebody else.
+
 ### Effective Instructions
 
 **Be Specific:**

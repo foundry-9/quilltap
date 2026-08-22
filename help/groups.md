@@ -29,6 +29,9 @@ will find:
   same chat who isn't in the Group neither sees nor obeys them. They ride along
   even when a member is consulted for a quick one-off answer (an `@Name?` aside),
   though the Help desk and the Brahma Console remain outside their jurisdiction.
+  Since the Instructions land in each member's own system prompt, write them as
+  though addressing the members directly. Written as: *You have known the others
+  here for years; you do not explain yourselves to each other.*
 - **A Scenarios shelf** — chat-starters that members can reach for when a new
   conversation is struck up.
 - **A Knowledge cabinet** — reference material the members can consult and search,
