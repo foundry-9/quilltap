@@ -4,6 +4,17 @@
 
 ### 4.9-dev
 
+#### Tool reinforcement addresses the character directly (and stops saying "they CALLS them")
+
+The final block of the system prompt was written in the third person ("When Ariadne uses workspace tools, *she* CALLS them"), sitting immediately after several sections that address the character as "you" — including the identity preamble that opens the prompt. It is now second person: "When you use workspace tools, you CALL them."
+
+- The third person was inherited, not chosen. The block went in (`3f4d7a78a`) with literal `his/her` / `he/she` placeholders; the follow-up fix (`11c4d6c2d`) replaced them with the character's real pronouns, addressing the generic-pronoun problem rather than the person — and added the second-person identity preamble in the same commit, creating the disagreement.
+- Removing the pronoun lookup fixes a live grammar bug: `character.pronouns?.subject || 'they'` rendered "they CALLS them — they does not merely describe calling them" for every character with no pronouns recorded. Second person needs no pronoun.
+- Applied in both copies: `lib/chat/context/system-prompt-builder.ts` and `lib/help-chat/system-prompt-builder.ts`.
+- No `PROMPT_CACHE_STRUCTURE_VERSION` bump — wording change, no layout change (per the bump policy in `lib/llm/cache-key.ts`), and the block is a per-turn addition rather than part of the cached `compiledIdentityStacks`.
+- Both cache-determinism goldens updated (`bd27b1ca407d9901` → `7517f7d9b496d20b`, `911204033cd41164` → `74c9b488b4a1517c`) with the reason recorded inline. The sentence is now pinned by its own named assertion as well, so a regression to third person fails readably instead of only as a digest mismatch.
+- Plan for the remaining person inconsistencies: `docs/developer/features/prompt-person-consistency.md`.
+
 #### Project and group instructions are standing prompts in the system prompt
 
 Projects and groups each have an optional `instructions` field ("the prompt"); it is now injected into the stable, cacheable part of the system prompt instead of riding along in whispers (projects) or going nowhere at all (groups, whose field existed but had zero consumers).

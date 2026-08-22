@@ -376,11 +376,24 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     parts.push(processTemplate(toolInstructions, templateContext))
   }
 
-  // Character-voiced tool reinforcement (only when tools are available).
+  // Tool reinforcement (only when tools are available).
+  //
+  // WHY second person: this is the LAST block in the prompt — the recency slot —
+  // and everything above it addresses the character directly ("You are {{char}}",
+  // Taboo's "anything you say", the standing-instructions preamble). It was third
+  // person only by inheritance: it went in (3f4d7a78a, 2026-02-05) with literal
+  // "his/her ... he/she" placeholders, and the fix that followed (11c4d6c2d,
+  // 2026-03-19) was aimed at the *pronoun* being generic, not at the person — the
+  // very same commit added the second-person identity preamble above, creating the
+  // disagreement without noticing it. Third person here was never a model finding.
+  //
+  // Flipping it also retires the pronoun lookup entirely, which killed a real bug:
+  // the `|| 'they'` default rendered "they CALLS them ... they does not", so every
+  // character with no pronouns recorded ended its prompt on an ungrammatical
+  // sentence. Second person needs no pronoun at all.
   if (toolInstructions) {
-    const subject = character.pronouns?.subject || 'they'
     const toolReinforcement = processTemplate(
-      `When {{char}} uses workspace tools, ${subject} CALLS them — ${subject} does not merely describe calling them. Every tool action produces a tool_use block, not prose.`,
+      `When you use workspace tools, you CALL them — you do not merely describe calling them. Every tool action produces a tool_use block, not prose.`,
       templateContext
     )
     parts.push(toolReinforcement)

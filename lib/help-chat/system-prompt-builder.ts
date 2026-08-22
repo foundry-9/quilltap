@@ -84,11 +84,12 @@ When helping:
     parts.push(`## Character Pronouns\nThis character's pronouns are: ${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}. Always use these pronouns when referring to this character.`)
   }
 
-  // 6. Character-voiced tool reinforcement
+  // 6. Tool reinforcement. Second person, mirroring the Salon builder — see the
+  // WHY note in lib/chat/context/system-prompt-builder.ts. The pronoun lookup it
+  // replaces defaulted to 'they', which rendered "they CALLS them".
   if (toolInstructions) {
-    const subject = character.pronouns?.subject || 'they'
     const toolReinforcement = processTemplate(
-      `When {{char}} uses workspace tools, ${subject} CALLS them — ${subject} does not merely describe calling them. Every tool action produces a tool_use block, not prose.`,
+      `When you use workspace tools, you CALL them — you do not merely describe calling them. Every tool action produces a tool_use block, not prose.`,
       templateContext
     )
     parts.push(toolReinforcement)

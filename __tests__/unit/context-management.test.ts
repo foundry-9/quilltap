@@ -487,8 +487,10 @@ describe('Context Manager', () => {
       expect(idx).toBeGreaterThanOrEqual(0)
       expect(rpIdx).toBeGreaterThan(idx)
       expect(toolIdx).toBeGreaterThan(rpIdx)
-      // Tool reinforcement uses character pronouns (defaults to 'they').
-      expect(prompt).toContain('they CALLS them')
+      // Tool reinforcement addresses the character directly — no pronoun lookup,
+      // so no "they CALLS them" disagreement on the no-pronouns default path.
+      expect(prompt).toContain('When you use workspace tools, you CALL them')
+      expect(prompt).not.toContain('CALLS them')
     })
   })
 

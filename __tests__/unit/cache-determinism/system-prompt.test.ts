@@ -108,10 +108,18 @@ describe('cache-determinism: system prompt', () => {
     expect(b).toBe(a)
   })
 
+  // Golden history — each entry is an intentional wording/structure change.
+  //   bd27b1ca407d9901 → 7517f7d9b496d20b  (2026-08-22) tool reinforcement moved
+  //     to second person: "When you use workspace tools, you CALL them — you do
+  //     not merely describe calling them." Previously third person via a pronoun
+  //     lookup whose `|| 'they'` default rendered the ungrammatical "they CALLS
+  //     them". Verified as the sole delta: the diff touches only comments and
+  //     that one template literal, and the prompt is otherwise byte-identical.
+  //     See docs/developer/features/prompt-person-consistency.md §3.1a.
   it('buildSystemPrompt fixture hash matches checked-in golden', () => {
     const golden = process.env.UPDATE_GOLDEN_PROMPT_HASH === '1'
       ? hash(buildSystemPrompt(FIXTURE_OPTIONS))
-      : 'bd27b1ca407d9901'
+      : '7517f7d9b496d20b'
     const actual = hash(buildSystemPrompt(FIXTURE_OPTIONS))
     if (actual !== golden) {
       // Surface the new hash so the engineer can update the golden
@@ -134,10 +142,12 @@ describe('cache-determinism: system prompt', () => {
     expect(b).toBe(a)
   })
 
+  // Golden history: 911204033cd41164 → 74c9b488b4a1517c (2026-08-22), the same
+  // second-person tool-reinforcement change as the base golden above.
   it('buildSystemPrompt with a Taboo list matches its own checked-in golden', () => {
     const golden = process.env.UPDATE_GOLDEN_PROMPT_HASH === '1'
       ? hash(buildSystemPrompt(FIXTURE_OPTIONS_WITH_TABOO))
-      : '911204033cd41164'
+      : '74c9b488b4a1517c'
     const actual = hash(buildSystemPrompt(FIXTURE_OPTIONS_WITH_TABOO))
     if (actual !== golden) {
       console.error(
@@ -150,6 +160,18 @@ describe('cache-determinism: system prompt', () => {
       )
     }
     expect(actual).toBe(golden)
+  })
+
+  it('the tool reinforcement addresses the character directly, with no pronoun lookup', () => {
+    // Pinned separately from the hash so a regression to third person fails with
+    // a readable message instead of an opaque digest. The fixture carries
+    // she/her/hers, so any reintroduced pronoun lookup would surface here as
+    // "she CALLS them"; the old no-pronoun default produced "they CALLS them",
+    // which did not agree with its own verb.
+    const prompt = buildSystemPrompt(FIXTURE_OPTIONS)
+    expect(prompt).toContain('When you use workspace tools, you CALL them')
+    expect(prompt).not.toContain('CALLS them')
+    expect(prompt).not.toContain(FIXTURE_CHARACTER.name + ' uses workspace tools')
   })
 
   it('an empty Taboo list leaves the prompt byte-identical to no Taboo option at all', () => {
