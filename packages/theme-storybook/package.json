@@ -1,6 +1,6 @@
 {
   "name": "@quilltap/theme-storybook",
-  "version": "1.0.60",
+  "version": "1.0.61",
   "description": "Storybook preset and stories for developing Quilltap theme plugins",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -65,7 +65,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/foundry-9/quilltap-server.git",
+    "url": "git+https://github.com/foundry-9/quilltap-server.git",
     "directory": "packages/theme-storybook"
   },
   "homepage": "https://github.com/foundry-9/quilltap-server/tree/main/packages/theme-storybook#readme",

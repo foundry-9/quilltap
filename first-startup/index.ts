@@ -279,7 +279,7 @@ export function getSeedAvatars(): SeedAvatarData[] {
  */
 export interface SeedEmbeddingProfileData {
   name: string;
-  provider: 'OPENAI' | 'OLLAMA' | 'OPENROUTER' | 'BUILTIN';
+  provider: 'OPENAI' | 'OLLAMA' | 'OPENROUTER' | 'NANOGPT' | 'BUILTIN';
   modelName: string;
   dimensions?: number | null;
   isDefault: boolean;

@@ -38,7 +38,7 @@ The API Keys list shows:
 1. Click the **Add API Key** button
 2. A form appears with the following fields:
 
-   - **Provider** — Select the AI service (OpenAI, Anthropic, Google, Grok, DeepSeek, Z.AI, OpenRouter, OpenAI-Compatible, etc.). Only providers that can actually carry a key are offered; Ollama, which asks for none, is not among them
+   - **Provider** — Select the AI service (OpenAI, Anthropic, Google, Grok, DeepSeek, Z.AI, NanoGPT, OpenRouter, OpenAI-Compatible, etc.). Only providers that can actually carry a key are offered; Ollama, which asks for none, is not among them
    - **Label** — Give this key a memorable name (e.g., "Production Account", "Testing Key")
    - **API Key** — Paste your actual API key from the provider's website
 
@@ -147,6 +147,7 @@ Quilltap supports API keys from:
 - **Grok** — Xai's Grok model
 - **DeepSeek** — DeepSeek models
 - **Z.AI** — GLM models
+- **NanoGPT** — one pay-as-you-go key admitting you to hundreds of chat, image, and embedding models
 - **OpenRouter** — Multi-model routing service
 - **OpenAI-Compatible** — any service speaking the OpenAI dialect: Together, Fireworks, Groq, DeepInfra, a hosted vLLM, a corporate gateway
 - **Other providers** — Custom or provider-specific keys

@@ -43,7 +43,7 @@ Sensible defaults are already in place: **avatars arrive in portrait**, **story 
 The profiles list shows:
 
 - **Profile Name** — Name you gave the profile
-- **Provider** — Which image service (OpenAI, Google, Grok, OpenRouter, Z.AI)
+- **Provider** — Which image service (OpenAI, Google, Grok, OpenRouter, Z.AI, NanoGPT)
 - **Default Badge** — If this is the default image generation profile
 - **Status** — Whether configuration is complete
 - **Actions** — Buttons to edit or delete the profile
@@ -80,6 +80,11 @@ First, obtain an API key from one of the image generation providers Quilltap act
 1. Visit z.ai and open the API platform
 2. Create an API key
 
+**NanoGPT (Flux / HiDream / Recraft and two hundred others):**
+
+1. Visit nano-gpt.com and open the API page
+2. Create an API key — pay-as-you-go, no subscription, and the same key serves chat and embeddings besides
+
 ### Step 2: Add the Key to Quilltap
 
 1. Go to the **AI Providers** tab in Settings (`/settings?tab=providers&section=api-keys`) and expand **API Keys**
@@ -107,6 +112,7 @@ First, obtain an API key from one of the image generation providers Quilltap act
      - Grok: grok-imagine-image, grok-imagine-image-pro, grok-2-image
      - OpenRouter: every image-output model they route
      - Z.AI: cogview-4-250304, glm-image
+     - NanoGPT: hidream, the flux-2 family, recraft-v3, gpt-image-1.5 — Fetch Models reveals the full two-hundred-strong gallery
    - **Fetch Models** — Once an API key is chosen, press this to ask the provider itself which image models your key can reach. A green tally confirms the list came straight from the establishment; otherwise you're looking at the plugin's built-in list, and the note beneath says so plainly — no pretence either way. Only models that genuinely produce images are shown; the chat, embedding, and video sorts are firmly shooed away.
 
    **Configuration:**
@@ -221,6 +227,12 @@ These are the establishments Quilltap can actually commission a picture from —
 - **Models:** cogview-4-250304, glm-image
 - **Strengths:** Discrete recommended sizes up to 1664x928 / 928x1664; economical
 - **Note:** Image URLs returned by Z.AI are valid for 30 days; Quilltap saves the picture locally on arrival, so this is Z.AI's concern rather than yours
+
+### NanoGPT (Flux / HiDream / Recraft)
+
+- **Models:** hidream by default, with the flux-2 family, recraft-v3, gpt-image-1.5, and some two hundred more behind Fetch Models
+- **Strengths:** One pay-as-you-go key admits you to every atelier in the arcade — and the same key serves chat and embeddings
+- **Note:** Each model keeps its own native canvas sizes; hand NanoGPT one of the common sizes from the profile and it seats your request at the nearest native resolution without complaint
 
 ## Configuration Tips
 

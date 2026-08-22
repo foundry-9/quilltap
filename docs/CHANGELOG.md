@@ -4,6 +4,15 @@
 
 ### 4.9-dev
 
+#### NanoGPT is a bundled provider (chat, images, embeddings)
+
+New bundled plugin `qtap-plugin-nanogpt` (1.0.0) adds NanoGPT (nano-gpt.com), a pay-as-you-go gateway fronting 600+ chat models, 200+ image models, and two dozen embedding models behind one OpenAI-compatible API and a single new `NANOGPT` API key type.
+
+- **Chat:** OpenAI-compatible Chat Completions at `nano-gpt.com/api/v1` with streaming, tool calling, JSON response formats, and reasoning display — routed thinking models' `reasoning_content` streams into the Salon's thinking fold. Model list merges the live `/models` endpoint with a small curated static catalog (NanoGPT's `auto-model*` routers plus current flagships).
+- **Images:** the OpenAI-compatible images route with `b64_json` pinned (plus a URL-download fallback), following the honest Fetch Models contract: without a key you get the curated list; with a key the dedicated `/image-models` listing is queried and filtered to models whose capability flags say they generate images (edit-only and upscale-only entries excluded), and transport failures throw so the route can label the fallback. Provider-level orientation constraints (832x1248 / 1248x832 / 1024x1024), a parameters panel with common sizes, and provider badge/icon/fallback entries in the image-profile UI.
+- **Embeddings:** OpenAI-compatible `/embeddings` with live model discovery via `/embedding-models`. `NANOGPT` joins the embedding profile provider enum (schema, export JSON schema, UI types/metadata/badges, first-startup seed type). New `.qt-badge-provider-nanogpt` badge class; the whole `qt-badge-provider-*` family was mirrored into theme-storybook (1.0.61), which previously lacked it.
+- Tests: NanoGPT joins the image-orientation contract's provider-level list; new `nanogpt-image-provider-models.test.ts` covers the model-listing contract, b64 passthrough, and URL-download fallback.
+
 #### Image profiles can fetch models from the provider, honestly
 
 The image-profile editor gains a "Fetch Models" button (parity with connection profiles). Before, four of the five image-capable plugins "implemented" model listing by returning their hardcoded list even when handed an API key — only OpenRouter actually asked its API — and the form auto-fetched silently with no indication of where the list came from.

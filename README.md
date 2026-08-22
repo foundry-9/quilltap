@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.9.0--dev.44-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.9.0--dev.45-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/6enCeQxY)
@@ -151,6 +151,7 @@ Connect to any major AI provider — or several at once. Quilltap uses a three-m
 | **xAI** | Grok families. Native image generation, web search. |
 | **DeepSeek** | DeepSeek chat and reasoning models. Tool use, chain-of-thought reasoning. |
 | **Z.AI** | GLM families (GLM-4.6, GLM-4.5, vision). Reasoning, web search, CogView image generation. |
+| **NanoGPT** | Pay-as-you-go gateway to 600+ chat models, 200+ image models (Flux, HiDream, Recraft), and embeddings — one API key for all three. |
 | **Ollama** | Local/offline models (Llama, Phi, Mistral, etc.). Fully local, no API key needed. |
 | **OpenRouter** | 200+ models through a unified API with automatic pricing. |
 | **OpenAI-Compatible** | LM Studio, vLLM, Together AI, Groq, and any compatible endpoint. |
@@ -296,8 +297,8 @@ Quilltap was built to be extended. The plugin system supports eight extension po
 | Plugin Type | What It Does |
 | ----------- | ------------ |
 | **LLM Provider** | Add new AI chat services with tool use, streaming, and multimodal support |
-| **Image Provider** | Image generation backends (bundled: OpenAI/DALL-E, Google Imagen, xAI/Grok, Z.AI/CogView) |
-| **Embedding Provider** | Semantic search and memory embedding (bundled: OpenAI, Ollama, built-in) |
+| **Image Provider** | Image generation backends (bundled: OpenAI/DALL-E, Google Imagen, xAI/Grok, Z.AI/CogView, NanoGPT) |
+| **Embedding Provider** | Semantic search and memory embedding (bundled: OpenAI, Ollama, NanoGPT, built-in) |
 | **Theme** | Custom visual styles via `.qtap-theme` bundles or legacy npm plugins |
 | **Template** | Roleplay formatting templates for different prompt styles |
 | **Tool** | Custom LLM capabilities (the AI can use your tool mid-conversation) |
@@ -312,7 +313,7 @@ Quilltap is a single Next.js 16 application (App Router) that serves both the UI
 - **Backend:** Next.js API routes, SQLite with SQLCipher encryption (better-sqlite3-multiple-ciphers) with WAL mode, Zod schema validation
 - **Build:** GitHub Actions CI/CD with automated releases — Docker multi-arch images and npm package built from a single tag push
 
-The entire provider system is plugin-based — every bundled provider (Anthropic, OpenAI, Google, xAI, DeepSeek, Z.AI, Ollama, OpenRouter, OpenAI-Compatible) is a plugin with the same API surface available to third-party authors.
+The entire provider system is plugin-based — every bundled provider (Anthropic, OpenAI, Google, xAI, DeepSeek, Z.AI, NanoGPT, Ollama, OpenRouter, OpenAI-Compatible) is a plugin with the same API surface available to third-party authors.
 
 > **Repository note:** Server source lives at [`foundry-9/quilltap-server`](https://github.com/foundry-9/quilltap-server). The original `foundry-9/quilltap` repository is reserved for the next-generation native Quilltap application currently under development. If your tooling references the old URL, update it.
 

@@ -1161,7 +1161,7 @@
         "userId": { "$ref": "#/$defs/UUID" },
         "name": { "type": "string" },
         "provider": {
-          "enum": ["OPENAI", "OLLAMA", "OPENROUTER", "BUILTIN"],
+          "enum": ["OPENAI", "OLLAMA", "OPENROUTER", "NANOGPT", "BUILTIN"],
           "description": "Embedding provider type"
         },
         "modelName": { "type": "string" },

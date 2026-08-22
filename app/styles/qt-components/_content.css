@@ -206,6 +206,7 @@
   .qt-badge-provider-openai,
   .qt-badge-provider-ollama,
   .qt-badge-provider-openrouter,
+  .qt-badge-provider-nanogpt,
   .qt-badge-provider-builtin,
   .qt-badge-silent,
   .qt-badge-absent,
@@ -1711,6 +1712,15 @@
     background: var(--qt-status-warning-bg);
     color: var(--qt-status-warning-fg);
     border: 1px solid var(--qt-status-warning-border);
+  }
+
+  /**
+   * NanoGPT provider badge (primary/accent semantic)
+   */
+  .qt-badge-provider-nanogpt {
+    background: var(--qt-badge-primary-bg);
+    color: var(--qt-badge-primary-fg);
+    border: 1px solid var(--qt-badge-primary-border);
   }
 
   /**

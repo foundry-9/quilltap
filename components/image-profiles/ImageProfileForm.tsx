@@ -44,6 +44,7 @@ const FALLBACK_PROVIDERS: ImageProviderInfo[] = [
   { value: 'GROK', label: 'Grok (xAI)', defaultModels: ['grok-2-image'], apiKeyProvider: 'GROK' },
   { value: 'GOOGLE', label: 'Google Gemini', defaultModels: ['imagen-4.0-generate-001', 'imagen-3.0-generate-002', 'imagen-3.0-fast-generate-001'], apiKeyProvider: 'GOOGLE', legacyNames: ['GOOGLE_IMAGEN'] },
   { value: 'Z_AI', label: 'Z.AI (CogView / GLM-Image)', defaultModels: ['cogview-4-250304', 'glm-image'], apiKeyProvider: 'Z_AI' },
+  { value: 'NANOGPT', label: 'NanoGPT (Flux / HiDream / Recraft)', defaultModels: ['hidream', 'flux-2-flash', 'flux-2-dev', 'flux-2-pro', 'recraft-v3', 'gpt-image-1.5'], apiKeyProvider: 'NANOGPT' },
 ]
 
 // Build a legacy name mapping from provider data

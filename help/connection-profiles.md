@@ -241,7 +241,11 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - **Thinking Mode** — the GLM hybrid-reasoning models deliberate by default, so their chain-of-thought streams into the Salon's thinking fold (display only — it is never fed back to any model) with no prompting at all. Set this to *Disabled* should you want a plain reply and no fold; *Enabled* keeps the working on; and *(model default)* defers to Z.AI, which at present means enabled. With thinking off, the fold simply never appears, however hard the model may be working behind the curtain.
 - **Reasoning Effort** *(glm-5.2 only)* — a dial for how hard glm-5.2 cogitates before it speaks, effective only while thinking is lit; older and lesser GLMs pay it no heed. *Minimal* all but silences the rumination; *High* and *Max* open the throttle — and mind that Z.AI's own scale is coarse, folding low/medium up to *High* and xhigh up to *Max*. Here is the kindness of it: glm-5.2 thinks by default, and left to its own devices the engine would labour at the API's spendthrift *Max*. So unless you set *Disabled* thinking or pick a level yourself, Quilltap quietly sends *High* on glm-5.2 — curbing runaway thinking-token spend without a word of fuss. (Effort is no hard cap on output: the rumination still counts against your token ceiling, and striking it yields a *length* finish. Pair a modest effort with a sensible token limit for the surest economy.)
 
-### Google (Gemini)
+### NanoGPT
+
+- A pay-as-you-go gateway seating six hundred models and more at one table — OpenAI's, Anthropic's, Google's, the open-weight houses', and NanoGPT's own `auto-model` maîtres d'hôtel, which choose a model for you — all behind a single key that also serves image generation and embeddings
+- Fetch Models asks the gateway for its current register, so the picker stays honest as the catalogue turns over
+- Routed thinking models stream their deliberations into the Salon's thinking fold (display only — never fed back), just as they would at the front door of their own establishments
 
 - Multiple model sizes (Flash, Pro)
 - Good for vision tasks

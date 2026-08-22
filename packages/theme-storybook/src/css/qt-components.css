@@ -160,6 +160,12 @@
   --qt-status-danger-fg: var(--color-destructive-foreground);
   --qt-status-danger-border: var(--color-destructive);
 
+  /* Badge palette tokens - referenced by the provider badges */
+  --qt-badge-primary-bg: var(--color-primary);
+  --qt-badge-primary-fg: var(--color-primary-foreground);
+  --qt-badge-secondary-bg: var(--color-secondary);
+  --qt-badge-secondary-fg: var(--color-secondary-foreground);
+
   /* Alert tokens - semi-transparent backgrounds with readable text */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
   --qt-alert-success-fg: hsl(142 76% 30%);
@@ -917,6 +923,80 @@
   background-color: transparent;
   color: var(--color-foreground);
   border: 1px solid var(--color-border);
+}
+
+/* ==========================================================================
+   PROVIDER BADGES
+   ========================================================================== */
+
+/**
+ * Shared geometry for the provider badges (embedding-profile provider chips).
+ * These do NOT build on .qt-badge in the app — they carry their own box, so
+ * the rule below is self-contained (and, mirroring the app, sets no
+ * line-height).
+ */
+.qt-badge-provider-openai,
+.qt-badge-provider-ollama,
+.qt-badge-provider-openrouter,
+.qt-badge-provider-nanogpt,
+.qt-badge-provider-builtin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
+  border-radius: var(--qt-badge-radius);
+  font-size: var(--qt-badge-font-size);
+  font-weight: var(--qt-badge-font-weight);
+}
+
+/**
+ * OpenAI provider badge (green/success semantic)
+ */
+.qt-badge-provider-openai {
+  background: var(--qt-status-success-bg);
+  color: var(--qt-status-success-fg);
+  border: 1px solid var(--qt-status-success-border);
+}
+
+/**
+ * Ollama provider badge (secondary/muted)
+ * Mirrors the app, quirk included: --qt-badge-secondary-border has no default
+ * definition, so the border only renders in themes that define it.
+ */
+.qt-badge-provider-ollama {
+  background: var(--qt-badge-secondary-bg);
+  color: var(--qt-badge-secondary-fg);
+  border: 1px solid var(--qt-badge-secondary-border);
+}
+
+/**
+ * OpenRouter provider badge (warning/orange semantic)
+ */
+.qt-badge-provider-openrouter {
+  background: var(--qt-status-warning-bg);
+  color: var(--qt-status-warning-fg);
+  border: 1px solid var(--qt-status-warning-border);
+}
+
+/**
+ * NanoGPT provider badge (primary/accent semantic)
+ * Same border quirk as the ollama badge: --qt-badge-primary-border has no
+ * default definition.
+ */
+.qt-badge-provider-nanogpt {
+  background: var(--qt-badge-primary-bg);
+  color: var(--qt-badge-primary-fg);
+  border: 1px solid var(--qt-badge-primary-border);
+}
+
+/**
+ * Built-in provider badge (info/blue semantic)
+ */
+.qt-badge-provider-builtin {
+  background: var(--qt-status-info-bg);
+  color: var(--qt-status-info-fg);
+  border: 1px solid var(--qt-status-info-border);
 }
 
 /* ==========================================================================

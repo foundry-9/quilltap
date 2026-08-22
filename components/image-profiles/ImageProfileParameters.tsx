@@ -152,6 +152,34 @@ export function ImageProfileParameters({
         </div>
       )
 
+    case 'NANOGPT':
+      return (
+        <div className="space-y-4 border-t qt-border-default pt-4">
+          <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
+
+          {/* Size */}
+          <div>
+            <label className="qt-label mb-1">
+              Default Size
+            </label>
+            <select
+              value={parameters.size || '1024x1024'}
+              onChange={e => handleChange('size', e.target.value)}
+              className="qt-select"
+            >
+              <option value="1024x1024">Square (1024x1024)</option>
+              <option value="1248x832">Landscape (1248x832)</option>
+              <option value="1360x768">Wide (1360x768)</option>
+              <option value="1536x1024">Landscape (1536x1024)</option>
+              <option value="832x1248">Portrait (832x1248)</option>
+              <option value="768x1360">Tall (768x1360)</option>
+              <option value="1024x1536">Portrait (1024x1536)</option>
+            </select>
+            <p className="qt-text-xs mt-1">Common sizes across NanoGPT&apos;s image models; each model maps to its nearest native resolution</p>
+          </div>
+        </div>
+      )
+
     case 'GROK':
       return (
         <div className="border-t qt-border-default pt-4">
