@@ -162,8 +162,20 @@ if (!skipBuild) {
   run('npm run build:plugins', 'Building plugins');
 
   // Step 3: Build Next.js standalone
+  //
+  // --webpack is load-bearing, not a leftover. Turbopack copies externalized
+  // natives into `.next/node_modules/<pkg>-<contenthash>/` and points requires
+  // at those copies; the strip in step 7 works by name against
+  // `<staging>/node_modules/<pkg>` and cannot see them, so a Turbopack-built
+  // tarball smuggles the BUILD host's native binaries to every target host.
+  // On macOS that surfaces as "slice is not valid mach-o file" at first DB
+  // access (bug 90). Local macOS builds hid it for months by coincidence —
+  // the smuggled binary happened to be the right platform.
+  //
+  // The loadWebpackHook error that made 7cba1eb4 reach for Turbopack is
+  // handled by scripts/standalone-server-bootstrap.js instead.
   console.log('==> Step 3/8: Building Next.js (standalone output)');
-  run('npx next build', 'Building Next.js');
+  run('npx next build --webpack', 'Building Next.js');
 } else {
   console.log('==> Step 2/8: Skipping plugin build (--skip-build)');
   console.log('==> Step 3/8: Skipping Next.js build (--skip-build)');
@@ -300,6 +312,16 @@ if (existsSync(standaloneNodeModules)) {
 
   cleanDir(standaloneNodeModules);
 }
+
+// The tarball is downloaded by macOS, Windows and Linux alike, so a native
+// compiled for THIS machine must not be inside it. Everything under
+// node_modules/ has already been stripped above; this catches anything the
+// bundler tucked away somewhere the strip does not look (bug 90).
+console.log('==> Verifying the staged tree is platform-portable');
+run(
+  `node "${join(PROJECT_ROOT, 'scripts', 'assert-standalone-portable.mjs')}" "${STAGING_DIR}"`,
+  'Asserting no build-host natives escaped the strip',
+);
 
 // Step 8: Create tarball
 console.log('==> Step 8/8: Creating tarball');

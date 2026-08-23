@@ -48,12 +48,13 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      # Bundler note: this must stay in step with the release pipeline's
-      # `next build` in release.yml :: build-app. Turbopack and webpack trace
-      # different subsets into .next/standalone, so validating one and shipping
-      # the other is how a module goes missing only in the published tarball.
+      # --webpack to match what release.yml actually ships. Turbopack and
+      # webpack lay out .next/standalone differently, and the tarball's
+      # native-stripping only understands webpack's layout (bug 90) — so the
+      # release path is webpack-only, and CI has to validate that path rather
+      # than a bundler nothing publishes.
       - name: Build Next.js application
-        run: npm run build
+        run: npm run build:plugins && npx next build --webpack
         env:
           # Runtime vars aren't needed to prove the app compiles.
           SKIP_ENV_VALIDATION: 'true'

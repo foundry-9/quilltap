@@ -4,6 +4,42 @@
 
 ### 4.9-dev
 
+#### Standalone tarball is webpack-built again (bug 90)
+
+**Critical, and self-inflicted by the previous commit.** 4.9.0-dev.52 could not start **anywhere** — the tarball, the
+Electron shell, `npx quilltap`, and both Docker images. On macOS every SQLite connection failed with `slice is not valid
+mach-o file`; in the arm64 Docker image the same file produced dlopen's misleading `cannot open shared object file: No
+such file or directory` (the binary was present, but x86-64 on an aarch64 host). Both ended at "Migrations failed -
+cannot start server."
+
+The previous commit switched `release.yml` from `--webpack` to Turbopack to converge it with the other two `next build`
+call sites. The two bundlers do not produce interchangeable standalone trees. Turbopack copies externalized packages
+into `.next/node_modules/<pkg>-<contenthash>/` and rewrites requires to point at those copies; webpack's NFT output
+uses `node_modules/<pkg>`. `build-standalone-tarball.mjs` strips platform binaries by name against
+`<staging>/node_modules/<pkg>`, so it never saw the hashed copies — and the tarball stopped being platform-agnostic,
+carrying whatever the build host compiled. `build-app` runs once on x86-64 ubuntu, so the published artifact carried a Linux x86-64
+`better_sqlite3.node` and `pty.node` that won resolution over the correct binaries. Docker is hit for its own reason
+worth stating: `Dockerfile.ci` copies that single artifact into **both** the amd64 and arm64 images, on the sound
+premise that it is pure JS and each image rebuilds its own natives in `deps-prod`. Turbopack broke the premise, so the
+arm64 image shipped an x86-64 binary shadowing the aarch64 one it had correctly built.
+
+`--webpack` is now pinned at all three call sites (`release.yml`, `ci.yml`, `scripts/build-standalone-tarball.mjs`),
+each with a comment saying it is load-bearing and pointing at bug 90 — "this flag looks stale" is the exact observation
+that caused the regression. The `loadWebpackHook` failure that originally motivated Turbopack in `7cba1eb4` is handled
+by `scripts/standalone-server-bootstrap.js` (added four days later), which is why every webpack-built release from 4.5
+through 4.9.0-dev.51 ran correctly.
+
+New guard: `scripts/assert-standalone-portable.mjs` enforces the actual invariant rather than trusting a flag — **no
+native binary anywhere under `<standalone>/.next/`**, a bundler-internal subtree no consumer strips or replaces.
+(`<standalone>/node_modules/` stays exempt; Docker replaces it wholesale and the tarball strips it by name.) It runs in
+`build-app` before the artifact is uploaded, so it protects Docker and the tarball equally, and again before the tarball
+is written. Verified against the real broken dev.52 artifact extracted from `foundry9/quilltap:dev`, which it rejects.
+
+The strip has never covered the Turbopack layout, going back to `7cba1eb4` — local macOS builds hid it by compiling for
+the platform they ran on. Using Turbopack here in future needs the strip extended to walk `.next/node_modules/` plus a
+real build-on-Linux/run-on-macOS test, which nothing automated does today. Note that CI cannot catch this class of
+failure at all: run 32614939380 went green in 11m45s and produced a tarball that could not start on any Mac.
+
 #### CI/release pipeline cleanup, and the PDF rasteriser's missing native (bug 89)
 
 **Bug 89 — PDF rendering was broken on the `npx quilltap` path.** `build-standalone-tarball.mjs` strips every

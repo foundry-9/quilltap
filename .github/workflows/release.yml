@@ -71,14 +71,38 @@ jobs:
       - name: Build plugins
         run: npm run build:plugins
 
-      # Turbopack, NOT --webpack. 7cba1eb4 moved the standalone build off
-      # webpack because its NFT tracer misses next/dist/compiled/webpack-lib,
-      # which broke the Electron shell's embedded server (CHANGELOG_V4.md).
-      # That fix lived only in scripts/build-standalone-tarball.mjs, which CI
-      # invokes with --skip-build — so until now every release still shipped a
-      # webpack-traced tree. Keep this in step with ci.yml :: build.
+      # --webpack is REQUIRED here, and reverting it will break every macOS and
+      # Windows install. See bug 90.
+      #
+      # Turbopack's standalone output copies externalized native packages into
+      # `.next/node_modules/<pkg>-<contenthash>/` and rewrites requires to point
+      # there. build-standalone-tarball.mjs strips natives by name from
+      # `<staging>/node_modules/<pkg>` and knows nothing about those hashed
+      # copies, so a Linux-built better_sqlite3.node / pty.node rides along
+      # inside a tarball that is supposed to be platform-agnostic — and wins
+      # resolution over the correct binary the launcher symlinks in.
+      #
+      # 4.9.0-dev.52 shipped exactly that and died on startup with
+      # "slice is not valid mach-o file". webpack's NFT output puts everything
+      # at `node_modules/<pkg>`, which the strip does catch.
+      #
+      # The loadWebpackHook failure that motivated the Turbopack move in
+      # 7cba1eb4 is handled by scripts/standalone-server-bootstrap.js (8183d6ec,
+      # four days later), which sets __NEXT_PRIVATE_STANDALONE_CONFIG so the
+      # hook is never reached. That is why webpack has shipped fine since.
+      # Keep this in step with ci.yml :: build and with
+      # scripts/build-standalone-tarball.mjs.
       - name: Build Next.js standalone
-        run: SKIP_ENV_VALIDATION=true npx next build
+        run: SKIP_ENV_VALIDATION=true npx next build --webpack
+
+      # Gate the artifact before ANY consumer touches it. build-app runs once,
+      # on one x86-64 Linux runner, and this output goes to every target:
+      # Dockerfile.ci copies it into both the amd64 and arm64 images, and the
+      # tarball ships it to macOS, Windows and Linux. A build-host native that
+      # sneaks into .next/ rides to all of them and shadows the correct binary.
+      # That is bug 90, and it went green through the entire release.
+      - name: Assert the standalone tree is platform-portable
+        run: node scripts/assert-standalone-portable.mjs .next/standalone
 
       # Compile our custom server.ts and out-of-band entry points into the
       # standalone tree, then drop the bootstrap shim over Next's auto-generated
