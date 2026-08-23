@@ -4,6 +4,33 @@
 
 ### 4.9-dev
 
+#### Chat titles and story backgrounds stopped working when the cheap model misspelled one key (bug 96)
+
+A group chat kept the title "Group Chat (6 characters)" for seven interchanges and never produced a story background.
+The cause was one JSON key. The title-consideration prompt asks for `suggestedTitle`; `deepseek-v4-flash` answered
+`needsNewTitle: true` and put a perfectly good title under `suggestTitle`. Reading the canonical key returned
+`undefined`, which was coerced to `null`, which the handler read as "no rename needed" — the same branch as a genuine
+decline. That branch advances the checkpoint cursor, so the retry moved from interchange 7 to 10, where an identical
+stumble would have burned that checkpoint too.
+
+The story backgrounds were the same bug. Background generation is queued only after a successful rename, using the new
+title as its scene context, so a rename that never lands takes the background with it. No
+`STORY_BACKGROUND_GENERATION` job was ever enqueued for the chat.
+
+Nothing about this was visible: the job reported COMPLETED, the LLM log held a well-formed response, the token spend
+appeared in the system events, and the cursor advanced exactly as a real decline would. It was also intermittent — the
+same model titled three other chats correctly the same afternoon.
+
+Both title parsers (regular and help-chat) carried the same 25 duplicated lines and now share one
+(`lib/memory/cheap-llm-tasks/title-verdict.ts`). It reads the canonical key first, then a short list of near-misses
+(`suggestTitle`, `newTitle`, `proposedTitle`, `title`) with a case- and separator-insensitive second pass, and the
+canonical key always wins when a model emits more than one. It logs a warning when it recovers a title from a
+non-canonical key, and both the parser and the job handler warn when a rename is requested with no readable title
+rather than burning the checkpoint silently. Unparseable output still resolves to "keep the current title".
+
+Known and unchanged: a chat whose title is already good still gets no story background, because generation hangs off a
+successful rename. That coupling is documented in the bug entry.
+
 #### Characters can now look at images, and images actually reach vision models (bugs 91-95)
 
 Five defects from one session, all downstream of an image a user shared that no character could see.

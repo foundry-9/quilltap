@@ -187,6 +187,20 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   }
 
   if (!result.result || !result.result.needsNewTitle || !result.result.suggestedTitle) {
+    // Distinguish a genuine "no" from a verdict we could not read. The cheap
+    // LLM asking for a rename and handing us nothing usable is a defect, not a
+    // decision (bug 96), and burning the checkpoint on it silently is how the
+    // chat kept its generic title — and never got a story background, since
+    // that queues off a successful rename below.
+    if (result.result?.needsNewTitle && !result.result.suggestedTitle) {
+      logger.warn('[Title Update] Rename requested with no usable title — checkpoint burned', {
+        context: 'background-jobs.title-update',
+        chatId: payload.chatId,
+        currentInterchange: payload.currentInterchange,
+        reason: result.result.reason,
+      });
+    }
+
     // No rename needed — but still advance the checkpoint so we don't
     // re-evaluate at the same interchange on every following turn.
     await repos.chats.update(payload.chatId, {

@@ -4,8 +4,8 @@
 
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { stripCodeFences } from '@/lib/services/ai-import.service'
 import { executeCheapLLMTask } from './core-execution'
+import { parseTitleVerdict, type TitleVerdict } from './title-verdict'
 import type { ChatMessage, CheapLLMTaskResult } from './types'
 
 /**
@@ -390,7 +390,7 @@ export async function considerHelpChatTitleUpdate(
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string
-): Promise<CheapLLMTaskResult<{ needsNewTitle: boolean; reason: string; suggestedTitle: string | null }>> {
+): Promise<CheapLLMTaskResult<TitleVerdict>> {
   const conversationText = recentMessages
     .map(m => `${m.role.toUpperCase()}: ${m.content.substring(0, 500)}`)
     .join('\n\n')
@@ -408,32 +408,7 @@ export async function considerHelpChatTitleUpdate(
     selection,
     llmMessages,
     userId,
-    (content: string): { needsNewTitle: boolean; reason: string; suggestedTitle: string | null } => {
-      try {
-        const cleanContent = stripCodeFences(content)
-        const parsed = JSON.parse(cleanContent)
-
-        let suggestedTitle = parsed.suggestedTitle
-        if (suggestedTitle && typeof suggestedTitle === 'string') {
-          suggestedTitle = suggestedTitle.trim().replace(/^["']/, '').replace(/["']$/, '')
-          if (suggestedTitle.length > 60) {
-            suggestedTitle = suggestedTitle.substring(0, 57) + '...'
-          }
-        }
-
-        return {
-          needsNewTitle: parsed.needsNewTitle === true,
-          reason: parsed.reason || 'No reason provided',
-          suggestedTitle: suggestedTitle || null,
-        }
-      } catch {
-        return {
-          needsNewTitle: false,
-          reason: 'Failed to parse response',
-          suggestedTitle: null,
-        }
-      }
-    },
+    (content: string): TitleVerdict => parseTitleVerdict(content, 'consider-help-chat-title-update', chatId),
     'consider-title-update',
     chatId
   )
@@ -533,7 +508,7 @@ export async function considerTitleUpdate(
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string
-): Promise<CheapLLMTaskResult<{ needsNewTitle: boolean; reason: string; suggestedTitle: string | null }>> {
+): Promise<CheapLLMTaskResult<TitleVerdict>> {
   // Format recent messages
   const conversationText = recentMessages
     .map(m => `${m.role.toUpperCase()}: ${m.content.substring(0, 500)}`) // Truncate long messages
@@ -558,35 +533,7 @@ export async function considerTitleUpdate(
     selection,
     llmMessages,
     userId,
-    (content: string): { needsNewTitle: boolean; reason: string; suggestedTitle: string | null } => {
-      try {
-        const cleanContent = stripCodeFences(content)
-        const parsed = JSON.parse(cleanContent)
-
-        let suggestedTitle = parsed.suggestedTitle
-        if (suggestedTitle && typeof suggestedTitle === 'string') {
-          // Clean up the title
-          suggestedTitle = suggestedTitle.trim().replace(/^["']/, '').replace(/["']$/, '')
-          // Truncate if too long
-          if (suggestedTitle.length > 60) {
-            suggestedTitle = suggestedTitle.substring(0, 57) + '...'
-          }
-        }
-
-        return {
-          needsNewTitle: parsed.needsNewTitle === true,
-          reason: parsed.reason || 'No reason provided',
-          suggestedTitle: suggestedTitle || null,
-        }
-      } catch {
-        // If JSON parsing fails, assume no update needed
-        return {
-          needsNewTitle: false,
-          reason: 'Failed to parse response',
-          suggestedTitle: null,
-        }
-      }
-    },
+    (content: string): TitleVerdict => parseTitleVerdict(content, 'consider-title-update', chatId),
     'consider-title-update',
     chatId
   )
