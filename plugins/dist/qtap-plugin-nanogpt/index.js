@@ -12796,8 +12796,28 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
     if (typeof params.cacheKey === "string" && params.cacheKey.length > 0) {
       body.user = params.cacheKey;
     }
+    if (params.profileParameters?.enablePromptCaching === true) {
+      const ttl = params.profileParameters.cacheTTL === "1h" ? "1h" : "5m";
+      body.promptCaching = { enabled: true, ttl };
+    }
     this.applyProfileParams(body, params);
     return body;
+  }
+  /**
+   * Normalize NanoGPT's cache counters into Quilltap's CacheUsage, reading
+   * both dialects the gateway emits: Anthropic-style explicit-caching
+   * counters and the OpenAI-style `cached_tokens` detail from implicit
+   * caching. Returns undefined when the request touched no cache.
+   */
+  extractCacheUsage(usage) {
+    if (!usage) return void 0;
+    const read = usage.cache_read_input_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0;
+    const written = usage.cache_creation_input_tokens ?? 0;
+    if (read <= 0 && written <= 0) return void 0;
+    return {
+      ...read > 0 ? { cacheReadInputTokens: read, cachedTokens: read } : {},
+      ...written > 0 ? { cacheCreationInputTokens: written } : {}
+    };
   }
   async sendMessage(params, apiKey) {
     this.validateApiKeyRequirement(apiKey);
@@ -12815,16 +12835,23 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
       const rawReasoning = msgWithReasoning.reasoning ?? msgWithReasoning.reasoning_content;
       const reasoningContent = rawReasoning === (msg.content ?? "") ? void 0 : rawReasoning;
       const toolCalls = this.normalizeToolCalls(msg.tool_calls);
+      const cacheUsage = this.extractCacheUsage(response.usage);
+      const cacheRead = cacheUsage?.cacheReadInputTokens ?? 0;
       return {
         content: msg.content ?? "",
         finishReason: choice.finish_reason,
         usage: {
-          promptTokens: response.usage?.prompt_tokens ?? 0,
+          // Exclude cache-read tokens from prompt/total so cached input is
+          // not charged against budgets or cost; cacheUsage still reports
+          // them for display. (NanoGPT folds cached tokens into
+          // prompt_tokens, OpenAI-style.)
+          promptTokens: Math.max(0, (response.usage?.prompt_tokens ?? 0) - cacheRead),
           completionTokens: response.usage?.completion_tokens ?? 0,
-          totalTokens: response.usage?.total_tokens ?? 0
+          totalTokens: Math.max(0, (response.usage?.total_tokens ?? 0) - cacheRead)
         },
         raw: response,
         attachmentResults,
+        ...cacheUsage ? { cacheUsage } : {},
         ...toolCalls.length > 0 ? { toolCalls } : {},
         ...reasoningContent ? { reasoningContent } : {}
       };
@@ -12912,17 +12939,22 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
         ],
         usage
       };
+      const cacheUsage = this.extractCacheUsage(usage);
+      const cacheRead = cacheUsage?.cacheReadInputTokens ?? 0;
       yield {
         content: "",
         done: true,
         usage: {
-          promptTokens: usage?.prompt_tokens ?? 0,
+          // Cache-read tokens excluded from prompt/total (see sendMessage).
+          promptTokens: Math.max(0, (usage?.prompt_tokens ?? 0) - cacheRead),
           completionTokens: usage?.completion_tokens ?? 0,
-          totalTokens: usage?.total_tokens ?? 0
+          totalTokens: Math.max(0, (usage?.total_tokens ?? 0) - cacheRead)
         },
         toolCalls: toolCalls.length > 0 ? toolCalls : void 0,
         attachmentResults,
         rawResponse,
+        rawProviderUsage: usage ?? null,
+        ...cacheUsage ? { cacheUsage } : {},
         ...reasoningContent ? { reasoningContent } : {}
       };
     } catch (error) {
@@ -13753,6 +13785,30 @@ var optionsSchema = {
             { value: "high", label: "High" },
             { value: "xhigh", label: "XHigh" }
           ]
+        }
+      ]
+    },
+    {
+      title: "Prompt Caching",
+      helpText: "NanoGPT's OpenAI- and Gemini-routed models cache repeated context on their own, gratis and automatic. Anthropic-routed (Claude) models want asking: switch this on and NanoGPT places the cache checkpoints itself, so a long-running conversation re-reads its history at a tenth the price. The ledger's honest caveat \u2014 writing the cache costs a premium over plain input (1.25x for the five-minute shelf, 2x for the hour), so the savings arrive from the second turn onward.",
+      fields: [
+        {
+          key: "enablePromptCaching",
+          label: "Enable Prompt Caching",
+          type: "boolean",
+          default: false,
+          helpText: "Applies to Anthropic-routed (Claude) models; other routes ignore it and carry on with their own implicit caching."
+        },
+        {
+          key: "cacheTTL",
+          label: "Cache Duration",
+          type: "enum",
+          default: "5m",
+          enumValues: [
+            { value: "5m", label: "5 minutes (1.25x write cost)" },
+            { value: "1h", label: "1 hour (2x write cost)" }
+          ],
+          showIf: { field: "enablePromptCaching", equals: true }
         }
       ]
     }

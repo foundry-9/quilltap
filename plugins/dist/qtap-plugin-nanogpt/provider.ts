@@ -20,6 +20,13 @@
  *     the reasoning channel (routing-dependent; would repeat the reply
  *     under a thinking fold)
  *   - Accumulate streamed tool-call fragments
+ *   - Opt into NanoGPT's explicit prompt caching (the body-level
+ *     `promptCaching` helper; Anthropic-routed models) when the profile
+ *     enables it, and normalize cache usage from both dialects NanoGPT
+ *     reports (Anthropic-style `cache_read_input_tokens` /
+ *     `cache_creation_input_tokens`, OpenAI-style
+ *     `prompt_tokens_details.cached_tokens` from implicit caching) —
+ *     cache reads are excluded from prompt/total per the house rule
  */
 
 import OpenAI from 'openai';
@@ -50,6 +57,17 @@ const NANOGPT_PROFILE_PARAM_ALLOWLIST = [
 ] as const;
 
 type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam;
+
+/**
+ * Usage as NanoGPT actually reports it. The gateway normalizes most routes
+ * to the OpenAI shape (`prompt_tokens_details.cached_tokens` on implicit
+ * cache hits), but Anthropic-routed explicit caching surfaces the
+ * Anthropic-style counters alongside the standard fields.
+ */
+interface NanoGPTUsage extends OpenAI.CompletionUsage {
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+}
 
 export class NanoGPTProvider extends OpenAICompatibleProvider {
   constructor(config?: Partial<OpenAICompatibleProviderConfig>) {
@@ -150,8 +168,35 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
       body.user = params.cacheKey;
     }
 
+    // Explicit prompt caching (profile opt-in). NanoGPT's body-level helper
+    // auto-places cache_control breakpoints for Anthropic-routed models;
+    // other routes ignore it (OpenAI/Gemini upstreams already cache
+    // implicitly, no flag needed). The two keys below are consumed here,
+    // not allowlisted, so they never leak into the request verbatim.
+    if (params.profileParameters?.enablePromptCaching === true) {
+      const ttl = params.profileParameters.cacheTTL === '1h' ? '1h' : '5m';
+      body.promptCaching = { enabled: true, ttl };
+    }
+
     this.applyProfileParams(body, params);
     return body;
+  }
+
+  /**
+   * Normalize NanoGPT's cache counters into Quilltap's CacheUsage, reading
+   * both dialects the gateway emits: Anthropic-style explicit-caching
+   * counters and the OpenAI-style `cached_tokens` detail from implicit
+   * caching. Returns undefined when the request touched no cache.
+   */
+  private extractCacheUsage(usage: NanoGPTUsage | null | undefined) {
+    if (!usage) return undefined;
+    const read = usage.cache_read_input_tokens ?? usage.prompt_tokens_details?.cached_tokens ?? 0;
+    const written = usage.cache_creation_input_tokens ?? 0;
+    if (read <= 0 && written <= 0) return undefined;
+    return {
+      ...(read > 0 ? { cacheReadInputTokens: read, cachedTokens: read } : {}),
+      ...(written > 0 ? { cacheCreationInputTokens: written } : {}),
+    };
   }
 
   override async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
@@ -177,17 +222,24 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
       const rawReasoning = msgWithReasoning.reasoning ?? msgWithReasoning.reasoning_content;
       const reasoningContent = rawReasoning === (msg.content ?? '') ? undefined : rawReasoning;
       const toolCalls = this.normalizeToolCalls(msg.tool_calls);
+      const cacheUsage = this.extractCacheUsage(response.usage as NanoGPTUsage | undefined);
+      const cacheRead = cacheUsage?.cacheReadInputTokens ?? 0;
 
       return {
         content: msg.content ?? '',
         finishReason: choice.finish_reason,
         usage: {
-          promptTokens: response.usage?.prompt_tokens ?? 0,
+          // Exclude cache-read tokens from prompt/total so cached input is
+          // not charged against budgets or cost; cacheUsage still reports
+          // them for display. (NanoGPT folds cached tokens into
+          // prompt_tokens, OpenAI-style.)
+          promptTokens: Math.max(0, (response.usage?.prompt_tokens ?? 0) - cacheRead),
           completionTokens: response.usage?.completion_tokens ?? 0,
-          totalTokens: response.usage?.total_tokens ?? 0,
+          totalTokens: Math.max(0, (response.usage?.total_tokens ?? 0) - cacheRead),
         },
         raw: response,
         attachmentResults,
+        ...(cacheUsage ? { cacheUsage } : {}),
         ...(toolCalls.length > 0 ? { toolCalls } : {}),
         ...(reasoningContent ? { reasoningContent } : {}),
       };
@@ -304,17 +356,23 @@ export class NanoGPTProvider extends OpenAICompatibleProvider {
         usage,
       };
 
+      const cacheUsage = this.extractCacheUsage(usage as NanoGPTUsage | null);
+      const cacheRead = cacheUsage?.cacheReadInputTokens ?? 0;
+
       yield {
         content: '',
         done: true,
         usage: {
-          promptTokens: usage?.prompt_tokens ?? 0,
+          // Cache-read tokens excluded from prompt/total (see sendMessage).
+          promptTokens: Math.max(0, (usage?.prompt_tokens ?? 0) - cacheRead),
           completionTokens: usage?.completion_tokens ?? 0,
-          totalTokens: usage?.total_tokens ?? 0,
+          totalTokens: Math.max(0, (usage?.total_tokens ?? 0) - cacheRead),
         },
         toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
         attachmentResults,
         rawResponse,
+        rawProviderUsage: (usage ?? null) as Record<string, unknown> | null,
+        ...(cacheUsage ? { cacheUsage } : {}),
         ...(reasoningContent ? { reasoningContent } : {}),
       };
     } catch (error) {

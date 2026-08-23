@@ -16,6 +16,11 @@
  *      suppressed — committing it repeats the whole reply under a thinking
  *      fold anchored at the end of the prose. Real reasoning, which
  *      diverges from the prose, must survive the guard.
+ *   5. Prompt caching: the profile opt-in must ride as NanoGPT's body-level
+ *      `promptCaching` helper (and its two option keys must never leak into
+ *      the body verbatim), and cache counters in both dialects the gateway
+ *      reports must be normalized into cacheUsage with cache reads excluded
+ *      from prompt/total — the house rule every provider plugin follows.
  */
 
 import { NanoGPTProvider } from '@/plugins/dist/qtap-plugin-nanogpt/provider';
@@ -217,5 +222,139 @@ describe('NanoGPT reasoning on the wire', () => {
 
     expect(response.content).toBe('Same text.');
     expect(response.reasoningContent).toBeUndefined();
+  });
+});
+
+describe('NanoGPT prompt caching', () => {
+  it('sends the promptCaching helper when the profile enables it, without leaking the option keys', async () => {
+    const create = jest.fn().mockResolvedValue({
+      choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    });
+    mockClient(create);
+
+    const provider = new NanoGPTProvider();
+    await provider.sendMessage(
+      {
+        model: 'anthropic/claude-sonnet-5',
+        messages: [{ role: 'user', content: 'hi' }],
+        profileParameters: { enablePromptCaching: true, cacheTTL: '1h' },
+      } as never,
+      'test-key'
+    );
+
+    const body = create.mock.calls[0][0];
+    expect(body.promptCaching).toEqual({ enabled: true, ttl: '1h' });
+    // Consumed, not forwarded verbatim.
+    expect(body.enablePromptCaching).toBeUndefined();
+    expect(body.cacheTTL).toBeUndefined();
+  });
+
+  it('defaults the TTL to 5m and omits the helper entirely when not enabled', async () => {
+    const create = jest.fn().mockResolvedValue({
+      choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+    });
+    mockClient(create);
+
+    const provider = new NanoGPTProvider();
+    await provider.sendMessage(
+      {
+        model: 'anthropic/claude-sonnet-5',
+        messages: [{ role: 'user', content: 'hi' }],
+        profileParameters: { enablePromptCaching: true },
+      } as never,
+      'test-key'
+    );
+    expect(create.mock.calls[0][0].promptCaching).toEqual({ enabled: true, ttl: '5m' });
+
+    await provider.sendMessage(
+      { model: 'anthropic/claude-sonnet-5', messages: [{ role: 'user', content: 'hi' }] } as never,
+      'test-key'
+    );
+    expect(create.mock.calls[1][0].promptCaching).toBeUndefined();
+  });
+
+  it('normalizes Anthropic-style cache counters and excludes reads from prompt/total', async () => {
+    const create = jest.fn().mockResolvedValue({
+      choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+      usage: {
+        prompt_tokens: 8500,
+        completion_tokens: 200,
+        total_tokens: 8700,
+        cache_creation_input_tokens: 100,
+        cache_read_input_tokens: 8000,
+      },
+    });
+    mockClient(create);
+
+    const provider = new NanoGPTProvider();
+    const response = await provider.sendMessage(
+      { model: 'anthropic/claude-sonnet-5', messages: [{ role: 'user', content: 'hi' }] } as never,
+      'test-key'
+    );
+
+    expect(response.cacheUsage).toEqual({
+      cacheReadInputTokens: 8000,
+      cachedTokens: 8000,
+      cacheCreationInputTokens: 100,
+    });
+    expect(response.usage.promptTokens).toBe(500);
+    expect(response.usage.totalTokens).toBe(700);
+  });
+
+  it('normalizes OpenAI-style cached_tokens on the streaming final chunk', async () => {
+    async function* chunks() {
+      yield { choices: [{ delta: { content: 'answer' }, finish_reason: 'stop' }] };
+      yield {
+        choices: [],
+        usage: {
+          prompt_tokens: 1000,
+          completion_tokens: 50,
+          total_tokens: 1050,
+          prompt_tokens_details: { cached_tokens: 900 },
+        },
+      };
+    }
+    const create = jest.fn().mockResolvedValue(chunks());
+    mockClient(create);
+
+    const provider = new NanoGPTProvider();
+    const received: {
+      done: boolean;
+      usage?: { promptTokens: number; totalTokens: number };
+      cacheUsage?: { cacheReadInputTokens?: number };
+      rawProviderUsage?: Record<string, unknown> | null;
+    }[] = [];
+    for await (const chunk of provider.streamMessage(
+      { model: 'openai/gpt-5.5', messages: [{ role: 'user', content: 'hi' }] } as never,
+      'test-key'
+    )) {
+      received.push(chunk as never);
+    }
+
+    const final = received[received.length - 1];
+    expect(final.done).toBe(true);
+    expect(final.cacheUsage?.cacheReadInputTokens).toBe(900);
+    expect(final.usage?.promptTokens).toBe(100);
+    expect(final.usage?.totalTokens).toBe(150);
+    expect(final.rawProviderUsage).toMatchObject({ prompt_tokens: 1000 });
+  });
+
+  it('reports no cacheUsage when the request touched no cache', async () => {
+    const create = jest.fn().mockResolvedValue({
+      choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    });
+    mockClient(create);
+
+    const provider = new NanoGPTProvider();
+    const response = await provider.sendMessage(
+      { model: 'openai/gpt-5.5', messages: [{ role: 'user', content: 'hi' }] } as never,
+      'test-key'
+    );
+
+    expect(response.cacheUsage).toBeUndefined();
+    expect(response.usage.promptTokens).toBe(10);
   });
 });

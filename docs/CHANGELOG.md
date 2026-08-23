@@ -4,6 +4,16 @@
 
 ### 4.9-dev
 
+#### NanoGPT prompt caching (plugin 1.0.3)
+
+The NanoGPT plugin now supports NanoGPT's prompt caching (https://docs.nano-gpt.com/api-reference/miscellaneous/prompt-caching).
+
+- New per-profile options under "Prompt Caching": **Enable Prompt Caching** (default off) and **Cache Duration** (5m default / 1h). When enabled, the request carries NanoGPT's body-level `promptCaching: { enabled, ttl }` helper, which auto-places `cache_control` breakpoints for Anthropic-routed (Claude) models. Other routes ignore the flag — OpenAI/Gemini upstreams already cache implicitly with no opt-in.
+- Cache usage is now extracted from responses in both dialects NanoGPT reports (Anthropic-style `cache_read_input_tokens`/`cache_creation_input_tokens`, OpenAI-style `prompt_tokens_details.cached_tokens`) and normalized into `cacheUsage`. Cache-read tokens are excluded from `promptTokens`/`totalTokens` per the house rule, so cached input is not charged against budgets; previously the plugin ignored cache counters entirely, so even implicit-cache hits were counted (and budgeted) as full-price input. The streaming final chunk also carries `rawProviderUsage` for cache-instrumentation diagnostics, matching the other provider plugins.
+- Audited the rest of NanoGPT's API-specifics docs against the plugin: extended thinking (`reasoning_effort` values, `delta.reasoning` with `reasoning_content` legacy fallback) and the streaming protocol (`stream_options.include_usage`, tool-call delta accumulation) already match the documented contract; no changes needed there.
+- Help: NanoGPT section of `help/connection-profiles.md` documents the new options.
+- Tests (`__tests__/unit/plugins/nanogpt-reasoning.test.ts`): the helper rides the body with the right TTL (and the option keys never leak verbatim), both cache-counter dialects normalize with reads excluded, and no-cache responses report no `cacheUsage`.
+
 #### The system prompt addresses the character consistently (person consistency)
 
 Implements `docs/developer/features/complete/prompt-person-consistency.md`. The assembled system prompt mixed grammatical person — the identity preamble says "You are {{char}}" while the aliases, pronouns, and physical-appearance blocks spoke *about* the character in the third person, and the pronouns block literally instructed the character to use its own pronouns "when referring to this character." All blocks whose referent is the speaking character are now second person, and author-carried fields get referent-fixing wrappers.

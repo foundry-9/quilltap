@@ -8,6 +8,8 @@
  *   auto-model routers)
  * - Function / tool calling in the standard OpenAI format
  * - Reasoning display for routed thinking models (`reasoning_content`)
+ * - Prompt caching: implicit on OpenAI/Gemini routes; explicit opt-in for
+ *   Anthropic-routed models via the per-profile Prompt Caching options
  * - Image generation via the OpenAI-compatible images route (Flux, HiDream,
  *   Recraft, and 200+ others)
  * - Text embeddings via the OpenAI-compatible embeddings route
@@ -140,6 +142,32 @@ const optionsSchema: ProviderOptionsSchema = {
             { value: 'high', label: 'High' },
             { value: 'xhigh', label: 'XHigh' },
           ],
+        },
+      ],
+    },
+    {
+      title: 'Prompt Caching',
+      helpText:
+        'NanoGPT\'s OpenAI- and Gemini-routed models cache repeated context on their own, gratis and automatic. Anthropic-routed (Claude) models want asking: switch this on and NanoGPT places the cache checkpoints itself, so a long-running conversation re-reads its history at a tenth the price. The ledger\'s honest caveat — writing the cache costs a premium over plain input (1.25x for the five-minute shelf, 2x for the hour), so the savings arrive from the second turn onward.',
+      fields: [
+        {
+          key: 'enablePromptCaching',
+          label: 'Enable Prompt Caching',
+          type: 'boolean',
+          default: false,
+          helpText:
+            'Applies to Anthropic-routed (Claude) models; other routes ignore it and carry on with their own implicit caching.',
+        },
+        {
+          key: 'cacheTTL',
+          label: 'Cache Duration',
+          type: 'enum',
+          default: '5m',
+          enumValues: [
+            { value: '5m', label: '5 minutes (1.25x write cost)' },
+            { value: '1h', label: '1 hour (2x write cost)' },
+          ],
+          showIf: { field: 'enablePromptCaching', equals: true },
         },
       ],
     },

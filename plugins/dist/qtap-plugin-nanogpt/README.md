@@ -7,7 +7,11 @@ hundreds of upstream models behind one OpenAI-compatible API and one API key.
 This plugin wires all three of its surfaces into Quilltap:
 
 - **Chat** — `POST /api/v1/chat/completions` with streaming, tool calling,
-  JSON response formats, and reasoning display for routed thinking models.
+  JSON response formats, reasoning display for routed thinking models, and
+  prompt caching (implicit on OpenAI/Gemini routes; explicit opt-in via the
+  profile's Prompt Caching options for Anthropic-routed models, sent as
+  NanoGPT's body-level `promptCaching` helper). Cache reads are normalized
+  into `cacheUsage` and excluded from billed prompt/total tokens.
 - **Image generation** — the OpenAI-compatible images route
   (`POST /api/v1/images/generations`), base64 responses, with live model
   discovery via `GET /api/v1/image-models`.

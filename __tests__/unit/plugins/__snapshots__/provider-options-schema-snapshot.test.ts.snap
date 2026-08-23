@@ -182,6 +182,39 @@ exports[`Provider options schemas NanoGPT exposes an options schema 1`] = `
       "helpText": "NanoGPT routes each request to the named model's own establishment, so reasoning behaviour is ultimately the model's: \`:thinking\`-suffixed ids reason by default, and Reasoning Effort below asks any reasoning-capable model to think harder or not at all. Deliberations stream into the Salon's thinking fold (display only; never re-fed to the model). Reasoning tokens bill as output tokens — a generous effort on a verbose model is a generous invoice.",
       "title": "NanoGPT Options",
     },
+    {
+      "fields": [
+        {
+          "default": false,
+          "helpText": "Applies to Anthropic-routed (Claude) models; other routes ignore it and carry on with their own implicit caching.",
+          "key": "enablePromptCaching",
+          "label": "Enable Prompt Caching",
+          "type": "boolean",
+        },
+        {
+          "default": "5m",
+          "enumValues": [
+            {
+              "label": "5 minutes (1.25x write cost)",
+              "value": "5m",
+            },
+            {
+              "label": "1 hour (2x write cost)",
+              "value": "1h",
+            },
+          ],
+          "key": "cacheTTL",
+          "label": "Cache Duration",
+          "showIf": {
+            "equals": true,
+            "field": "enablePromptCaching",
+          },
+          "type": "enum",
+        },
+      ],
+      "helpText": "NanoGPT's OpenAI- and Gemini-routed models cache repeated context on their own, gratis and automatic. Anthropic-routed (Claude) models want asking: switch this on and NanoGPT places the cache checkpoints itself, so a long-running conversation re-reads its history at a tenth the price. The ledger's honest caveat — writing the cache costs a premium over plain input (1.25x for the five-minute shelf, 2x for the hour), so the savings arrive from the second turn onward.",
+      "title": "Prompt Caching",
+    },
   ],
 }
 `;
