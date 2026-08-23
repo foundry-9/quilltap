@@ -103,6 +103,51 @@ describe('lib/chat/file-attachment-fallback', () => {
     expect(needsFallbackProcessing(baseProfile, 'image/png')).toBe(false)
   })
 
+  it('forces the describe-fallback when the model reads images but the plugin cannot send them', () => {
+    // Bug 91: a NanoGPT profile with supportsImageUpload ticked is a truthful
+    // statement about the routed model, not about the plugin. Before the
+    // transport check the pair answered "no fallback needed" and the plugin
+    // then discarded the bytes, so the model received nothing and nothing said
+    // so. Both halves have to agree.
+    mockProfileSupportsMimeType.mockReturnValue(true)
+    const visionOnNonTransportingPlugin: ConnectionProfile = {
+      ...baseProfile,
+      provider: 'OLLAMA',
+      modelName: 'llava',
+      supportsImageUpload: true,
+    }
+    expect(needsFallbackProcessing(visionOnNonTransportingPlugin, 'image/png')).toBe(true)
+    // Non-image types are unaffected — the transport check is image-specific.
+    expect(needsFallbackProcessing(visionOnNonTransportingPlugin, 'text/plain')).toBe(false)
+    // A provider whose plugin does serialise images still short-circuits.
+    expect(needsFallbackProcessing(baseProfile, 'image/png')).toBe(false)
+  })
+
+  it('refuses a describer whose plugin cannot transport images', async () => {
+    const ollamaDescriber: ConnectionProfile = {
+      ...baseProfile,
+      id: '66666666-6666-6666-6666-666666666666',
+      name: 'Local llava',
+      provider: 'OLLAMA',
+      modelName: 'llava',
+    }
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: ollamaDescriber.id,
+    })
+    mockRepos.connections.findById.mockResolvedValue(ollamaDescriber)
+    mockProfileSupportsMimeType.mockReturnValue(true)
+    const sendMessage = jest.fn()
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    // No call is made at all — describing from a prompt the model can't see
+    // would produce a confident fabrication.
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(result.type).toBe('unsupported')
+    expect(result.error).toContain('cannot send images')
+  })
+
   it('classifies text and image MIME types', () => {
     expect(isTextFile('text/plain')).toBe(true)
     expect(isTextFile('application/json')).toBe(true)
@@ -350,12 +395,17 @@ describe('lib/chat/file-attachment-fallback', () => {
   })
 
   it('falls back to the uncensored profile when the primary refuses', async () => {
+    // Deliberately NOT an Ollama profile: the Ollama plugin drops image
+    // attachments ("not yet implemented"), so an Ollama describer would answer
+    // from the prompt alone and invent a picture. `providerCanTransportImages`
+    // now excludes such profiles from describer selection (bug 91), which is
+    // asserted separately below.
     const uncensoredProfile: ConnectionProfile = {
       ...baseProfile,
       id: '55555555-5555-5555-5555-555555555555',
-      name: 'Local llava',
-      provider: 'OLLAMA',
-      modelName: 'llava-uncensored',
+      name: 'Uncensored vision',
+      provider: 'OPENROUTER',
+      modelName: 'uncensored-vision-model',
     }
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       imageDescriptionProfileId: baseProfile.id,

@@ -88,12 +88,36 @@ export const PROVIDER_ATTACHMENT_CAPABILITIES = {
     description: 'Images (JPEG, PNG, GIF, WebP)',
     notes: 'Images are forwarded inline to vision-capable models; support depends on the underlying model being proxied',
   },
-  // plugins/dist/qtap-plugin-openai-compatible
+  // plugins/dist/qtap-plugin-openai-compatible — the shared base class marks
+  // every attachment failed; no `image_url` part is ever emitted.
   OPENAI_COMPATIBLE: {
     supportsAttachments: false,
     types: [],
     description: 'No file attachments supported',
     notes: 'Varies by implementation (LM Studio, vLLM, etc.)',
+  },
+  // plugins/dist/qtap-plugin-nanogpt — serialises image_url as of plugin 1.1.0
+  // (bug 91; before that it inherited the OpenAI-compatible base's "not yet
+  // implemented" handling and dropped images silently).
+  NANOGPT: {
+    supportsAttachments: true,
+    types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+    description: 'Images (JPEG, PNG, GIF, WebP)',
+    notes: 'Requires a vision-capable routed model; NanoGPT forwards to whatever the profile names',
+  },
+  // plugins/dist/qtap-plugin-deepseek — same inherited base, same drop.
+  DEEPSEEK: {
+    supportsAttachments: false,
+    types: [],
+    description: 'No file attachments forwarded',
+    notes: 'DeepSeek\'s direct API is text-only in Quilltap',
+  },
+  // plugins/dist/qtap-plugin-z-ai — serialises image_url for vision models
+  Z_AI: {
+    supportsAttachments: true,
+    types: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+    description: 'Images (JPEG, PNG, GIF, WebP)',
+    notes: 'Requires a vision model (glm-4.6v, glm-5v-turbo); 5MB and 6000x6000 per image',
   },
 } as const
 
@@ -125,6 +149,23 @@ export function getSupportedMimeTypes(provider: Provider, baseUrl?: string): str
   }
 
   return []
+}
+
+/**
+ * Client-safe answer to "can this provider's plugin put image bytes on the
+ * wire?" — the static mirror behind `providerCanTransportImages`
+ * (`lib/llm/image-transport.ts`), which prefers the live plugin registry.
+ *
+ * A provider this map has never heard of returns `true`: a third-party vision
+ * plugin shouldn't be crippled because our table predates it. The providers
+ * that genuinely cannot transport images are listed explicitly above, which is
+ * the case bug 91 needed and the case this map now covers.
+ */
+export function staticProviderCanTransportImages(provider: string): boolean {
+  const key = provider.toUpperCase()
+  if (!isKnownProvider(key)) return true
+  const capabilities = PROVIDER_ATTACHMENT_CAPABILITIES[key]
+  return capabilities.types.some(t => t.startsWith('image/'))
 }
 
 /**

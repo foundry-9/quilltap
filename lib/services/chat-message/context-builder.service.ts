@@ -485,6 +485,51 @@ export function normalizeWhisperRoles<
 }
 
 /**
+ * Pick the message that image attachments (and the Lantern description
+ * prefix) should ride on.
+ *
+ * Bug 95: this used to be "the last message, if it happens to be role user".
+ * Staff whispers format as `role: user` and routinely accumulate after the
+ * human's turn — a Host timestamp, a Prospero context memorandum, a
+ * connection-profile-change bubble — so on any regenerate or swipe the picture
+ * was stapled to "Abigail's current response model is now …" while the
+ * Librarian's announcement was telling the model the bytes rode with the
+ * user's message. Worse, after a tool call the tail isn't role user at all,
+ * and the attachments were dropped on the floor without a word.
+ *
+ * Preference order:
+ *  1. the message flagged as *this* turn's user input (`metadata.isUserTurn`),
+ *     set by the context manager where `newUserMessage` is appended;
+ *  2. the last `role: user` message whose source row was a genuine human turn
+ *     — the regenerate/swipe case, where there is no new user message and the
+ *     human's words are already in history;
+ *  3. the last `role: user` message of any kind. This is the old behaviour,
+ *     kept as a floor: a context shape we haven't anticipated should still
+ *     deliver the bytes *somewhere* rather than silently discard them.
+ *
+ * Returns -1 when there is no user-role message at all, which the caller logs
+ * — the attachments genuinely cannot be delivered in that shape.
+ *
+ * Exported for unit testing.
+ */
+export function selectAttachmentAnchorIndex(
+  contextMessages: Array<{ role: string; metadata?: { messageId?: string; isUserTurn?: boolean } }>,
+  userTurnMessageIds: ReadonlySet<string>
+): number {
+  for (let i = contextMessages.length - 1; i >= 0; i--) {
+    if (contextMessages[i].metadata?.isUserTurn) return i
+  }
+  for (let i = contextMessages.length - 1; i >= 0; i--) {
+    const id = contextMessages[i].metadata?.messageId
+    if (contextMessages[i].role === 'user' && id && userTurnMessageIds.has(id)) return i
+  }
+  for (let i = contextMessages.length - 1; i >= 0; i--) {
+    if (contextMessages[i].role === 'user') return i
+  }
+  return -1
+}
+
+/**
  * Anti-chorus content rules for multi-character turns, appended to the system
  * message on BOTH anchor routes (the discipline is about what a turn contains,
  * not who speaks it).
@@ -697,6 +742,16 @@ export async function buildMessageContext(
   // `normalizeWhisperRoles` for the full rationale.
   const filteredExistingMessages = normalizeWhisperRoles(messagesAfterWhisperFilter, isOpaqueAnywhere)
 
+  // Row ids of the *human's* own turns, captured before normalization erases
+  // the distinction. Staff whispers are re-roled to USER above, so after this
+  // point "role === 'user'" no longer means "the user said it" — and the image
+  // attachment anchor needs it to (bug 95).
+  const userTurnMessageIds = new Set(
+    messagesAfterWhisperFilter
+      .filter(m => m.type === 'message' && m.role === 'USER' && !m.systemSender && m.id)
+      .map(m => m.id as string)
+  )
+
   // Build conversation messages
   const { conversationMessages, messagesWithParticipants } = buildConversationMessages(
     filteredExistingMessages,
@@ -883,13 +938,27 @@ export async function buildMessageContext(
     })
   }
 
+  // `formatMessagesForProvider` is a pure map, so indices stay parallel with
+  // `builtContext.messages` and an index chosen against one applies to the other.
+  const attachmentAnchorIndex = selectAttachmentAnchorIndex(
+    builtContext.messages,
+    userTurnMessageIds
+  )
+
+  if (mergedAttachmentsToSend.length > 0 && attachmentAnchorIndex === -1) {
+    logger.warn('Image attachments could not be anchored — no user-role message in context; images will not reach the model', {
+      attachmentCount: mergedAttachmentsToSend.length,
+      contextMessageCount: builtContext.messages.length,
+    })
+  }
+
   // Prepare final messages for LLM
   const formattedMessages = formattedContextMessages.map((msg, idx) => {
-    const isLastUserMessage = idx === formattedContextMessages.length - 1 && msg.role === 'user'
-    const content = isLastUserMessage && lanternImagePrefix
+    const isAnchor = idx === attachmentAnchorIndex
+    const content = isAnchor && lanternImagePrefix
       ? lanternImagePrefix + msg.content
       : msg.content
-    if (isLastUserMessage && mergedAttachmentsToSend.length > 0) {
+    if (isAnchor && mergedAttachmentsToSend.length > 0) {
       return {
         role: msg.role,
         content,

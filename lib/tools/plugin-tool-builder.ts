@@ -89,6 +89,7 @@ import { docFocusToolDefinition as docFocusTool } from '@/lib/tools/doc-focus-to
 import { keepImageToolDefinition as keepImageTool } from '@/lib/tools/keep-image-tool';
 import { listImagesToolDefinition as listImagesTool } from '@/lib/tools/list-images-tool';
 import { attachImageToolDefinition as attachImageTool } from '@/lib/tools/attach-image-tool';
+import { describeImageToolDefinition as describeImageTool } from '@/lib/tools/describe-image-tool';
 import {
   terminalReadToolDefinition,
 } from '@/lib/tools/terminal-read-tool';
@@ -525,6 +526,7 @@ export async function buildToolsForProvider(
     universalTools.push(keepImageTool as UniversalTool);
     universalTools.push(listImagesTool as UniversalTool);
     universalTools.push(attachImageTool as UniversalTool);
+    universalTools.push(describeImageTool as UniversalTool);
   }
 
   // Add plugin tools if enabled (defaults to true when not specified)

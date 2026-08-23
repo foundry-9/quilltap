@@ -79,6 +79,16 @@ interface SSEEvent {
   }
   provider?: string
   modelName?: string
+  /**
+   * What the provider plugin managed to put on the wire. `failed` entries are
+   * attachments the model never received — surfaced as a warning toast on the
+   * done event, because a silently dropped image is indistinguishable from a
+   * model that saw it and said nothing (bug 94).
+   */
+  attachmentResults?: {
+    sent?: string[]
+    failed?: Array<{ id: string; error: string }>
+  } | null
   // Turn/chain events are sent as flat JSON with boolean flags
   // e.g. { turnStart: true, participantId: "...", characterName: "...", chainDepth: 1 }
   turnStart?: boolean
@@ -588,6 +598,22 @@ export function useSSEStreaming({
         // Handle completion
         if (data.done) {
           setResponseStatus(null)
+
+          // Attachments the provider plugin could not put on the wire. This
+          // ledger has always been emitted and was never displayed (bug 94),
+          // so an image that silently failed to reach a vision model looked
+          // exactly like a model that had seen it and ignored it.
+          const failedAttachments = data.attachmentResults?.failed
+          if (Array.isArray(failedAttachments) && failedAttachments.length > 0) {
+            const first = failedAttachments[0]?.error ?? 'unknown reason'
+            const more = failedAttachments.length > 1
+              ? ` (and ${failedAttachments.length - 1} more)`
+              : ''
+            showWarningToast(
+              `${failedAttachments.length === 1 ? 'An attachment was' : `${failedAttachments.length} attachments were`} not sent to the model${more}: ${first}`
+            )
+          }
+
           if (inChain && opts.onIntermediateDone) {
             // Intermediate done during a chain — lighter cleanup, no state reset
             await opts.onIntermediateDone(fullContent, data)

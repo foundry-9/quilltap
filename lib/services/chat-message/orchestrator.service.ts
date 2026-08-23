@@ -123,6 +123,8 @@ import {
   attemptEmptyResponseRecovery,
   getEmptyResponseReason,
 } from './provider-failover.service'
+import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
+import { isModerationFinishReason } from '@/lib/llm/moderation-finish-reason'
 import type { DangerFlag } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
@@ -1691,15 +1693,25 @@ async function processMessage(
     }
   } else {
     // Empty response
+    // The provider may have said why it returned nothing. Z.AI reports
+    // `finish_reason: sensitive` on a moderation refusal, OpenAI
+    // `content_filter`, Google `SAFETY` — all of which make "try resending"
+    // actively wrong advice (bug 93).
+    const emptyFinishReason = extractFinishReason(streamingState.rawResponse)
     const emptyReason = getEmptyResponseReason({
       uncensoredRetryAttempted,
       sameProviderRetryAttempted,
       contentWasFlaggedDangerous,
+      finishReason: emptyFinishReason,
+      provider: streamingState.effectiveProfile.provider,
+      modelName: streamingState.effectiveProfile.modelName,
     })
     logger.warn(`Empty response for chat ${chatId}`, {
       uncensoredRetryAttempted,
       sameProviderRetryAttempted,
       contentWasFlaggedDangerous,
+      finishReason: emptyFinishReason,
+      moderationRefusal: isModerationFinishReason(emptyFinishReason),
       dangerMode: dangerSettings.mode,
       provider: streamingState.effectiveProfile.provider,
       model: streamingState.effectiveProfile.modelName,

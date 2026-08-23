@@ -12706,6 +12706,12 @@ var rewriteLogger = createPluginLogger("host-rewrite");
 
 // provider.ts
 var NANOGPT_BASE_URL = "https://nano-gpt.com/api/v1";
+var NANOGPT_SUPPORTED_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp"
+];
 var NANOGPT_PROFILE_PARAM_ALLOWLIST = [
   "frequency_penalty",
   "presence_penalty",
@@ -12719,17 +12725,67 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
       baseUrl: config2?.baseUrl ?? NANOGPT_BASE_URL,
       providerName: config2?.providerName ?? "NanoGPT",
       requireApiKey: config2?.requireApiKey ?? true,
-      attachmentErrorMessage: config2?.attachmentErrorMessage ?? "NanoGPT chat requests are text-only in Quilltap. Send text-only messages."
+      attachmentErrorMessage: config2?.attachmentErrorMessage ?? "NanoGPT forwards images only for image MIME types NanoGPT accepts."
     });
     this.profileParamAllowlist = NANOGPT_PROFILE_PARAM_ALLOWLIST;
+  }
+  attachmentToImageUrl(attachment) {
+    if (attachment.url) return attachment.url;
+    if (attachment.data) return `data:${attachment.mimeType};base64,${attachment.data}`;
+    return null;
+  }
+  /**
+   * Build a user message's content, as a plain string when there are no
+   * attachments and as an OpenAI content-part array when there are.
+   *
+   * NanoGPT is a router fronting hundreds of upstream models, so the plugin
+   * deliberately does NOT keep its own list of which ones read pictures — it
+   * would be stale within the week. The host has already made that call: a
+   * connection profile only carries image attachments this far when its
+   * `supportsImageUpload` flag is set, and when it isn't, the describe-fallback
+   * has replaced the bytes with text long before the request is built. So an
+   * attachment arriving here means the operator has asserted this model reads
+   * images, and the plugin's job is to send it.
+   *
+   * Before this existed the bytes were dropped silently (bug 91): the failure
+   * was reported in `attachmentResults`, which nothing displayed, so a genuinely
+   * vision-capable routed model answered from the prose alone and invented what
+   * it could not see.
+   */
+  buildUserContent(msg, sent, failed) {
+    const attachments = msg.attachments ?? [];
+    if (attachments.length === 0) return msg.content;
+    const parts = [];
+    if (msg.content) parts.push({ type: "text", text: msg.content });
+    for (const attachment of attachments) {
+      if (!NANOGPT_SUPPORTED_IMAGE_MIME_TYPES.includes(attachment.mimeType)) {
+        failed.push({
+          id: attachment.id,
+          error: `Unsupported file type: ${attachment.mimeType}. NanoGPT forwards images only (${NANOGPT_SUPPORTED_IMAGE_MIME_TYPES.join(", ")}).`
+        });
+        continue;
+      }
+      const url = this.attachmentToImageUrl(attachment);
+      if (!url) {
+        failed.push({ id: attachment.id, error: "Attachment missing data or URL" });
+        continue;
+      }
+      parts.push({ type: "image_url", image_url: { url } });
+      sent.push(attachment.id);
+    }
+    if (parts.length === 0) parts.push({ type: "text", text: "" });
+    return parts;
   }
   /**
    * Map LLMMessages to OpenAI chat-completion format, preserving assistant
    * tool_calls and tool-result messages so multi-turn tool loops survive a
-   * round-trip through NanoGPT. Reasoning content is never sent back —
+   * round-trip through NanoGPT, and serialising user-message image
+   * attachments as `image_url` parts. Reasoning content is never sent back —
    * thinking display is display-only in Quilltap.
    */
   formatMessages(messages) {
+    const sent = [];
+    const failed = [];
     const out = [];
     for (const msg of messages) {
       if (msg.role === "tool") {
@@ -12764,14 +12820,23 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
         out.push({ role: "assistant", content: msg.content });
         continue;
       }
-      out.push({ role: "user", content: msg.content });
+      out.push({
+        role: "user",
+        content: this.buildUserContent(msg, sent, failed)
+      });
     }
-    return out;
+    return { messages: out, attachmentResults: { sent, failed } };
   }
+  /**
+   * Build the request body and hand back the attachment ledger the mapping
+   * produced, so sendMessage / streamMessage report what actually went on the
+   * wire rather than the base class's blanket "all attachments failed".
+   */
   buildBody(params, stream) {
+    const formatted = this.formatMessages(params.messages);
     const body = {
       model: params.model,
-      messages: this.formatMessages(params.messages),
+      messages: formatted.messages,
       temperature: params.temperature ?? 0.7,
       max_tokens: params.maxTokens ?? 4096,
       top_p: params.topP ?? 1,
@@ -12801,7 +12866,7 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
       body.promptCaching = { enabled: true, ttl };
     }
     this.applyProfileParams(body, params);
-    return body;
+    return { body, attachmentResults: formatted.attachmentResults };
   }
   /**
    * Normalize NanoGPT's cache counters into Quilltap's CacheUsage, reading
@@ -12821,9 +12886,8 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
   }
   async sendMessage(params, apiKey) {
     this.validateApiKeyRequirement(apiKey);
-    const attachmentResults = this.collectAttachmentFailures(params);
     const client = this.createClient(apiKey);
-    const body = this.buildBody(params, false);
+    const { body, attachmentResults } = this.buildBody(params, false);
     try {
       const response = await client.chat.completions.create(
         body,
@@ -12866,9 +12930,8 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
   }
   async *streamMessage(params, apiKey) {
     this.validateApiKeyRequirement(apiKey);
-    const attachmentResults = this.collectAttachmentFailures(params);
     const client = this.createClient(apiKey);
-    const body = this.buildBody(params, true);
+    const { body, attachmentResults } = this.buildBody(params, true);
     try {
       const stream = await client.chat.completions.create(
         body,
@@ -13751,9 +13814,10 @@ var capabilities = {
   toolUse: true
 };
 var attachmentSupport = {
-  supportsAttachments: false,
-  supportedMimeTypes: [],
-  description: "NanoGPT chat requests are text-only in Quilltap; attachments are not forwarded"
+  supportsAttachments: true,
+  supportedMimeTypes: ["image/jpeg", "image/png", "image/gif", "image/webp"],
+  description: "Images (JPEG, PNG, GIF, WebP) \u2014 requires a vision-capable routed model",
+  notes: "NanoGPT routes to hundreds of upstream models, so the plugin forwards images for any model and lets the host decide: attachments only reach a profile whose supportsImageUpload flag is set, and the describe-fallback substitutes text otherwise."
 };
 var messageFormat = {
   supportsNameField: true,

@@ -398,7 +398,7 @@ The **Supports image attachments (vision input)** checkbox tells Quilltap that t
 
 - You're configuring a known vision model — GPT‑4o, Claude Sonnet or Opus, Gemini 1.5+, Grok 2 Vision, and their descendants.
 - You've pointed an **OpenRouter** profile at a vision‑capable model ID (`openai/gpt-4o`, `anthropic/claude-sonnet-4-5`, and so on).
-- You're running a local vision model through **Ollama** (LLaVA, MiniCPM‑V, Llama 3.2 Vision) or an **OpenAI Compatible** endpoint whose backing model handles images.
+- You're running a local vision model through **Ollama** (LLaVA, MiniCPM‑V, Llama 3.2 Vision) or an **OpenAI Compatible** endpoint whose backing model handles images. Tick it freely: the box now states an intention rather than issuing an instruction, and Quilltap will not act on it further than the plumbing permits (see *Two questions, not one*, below).
 
 **When to leave it unticked:**
 
@@ -406,6 +406,25 @@ The **Supports image attachments (vision input)** checkbox tells Quilltap that t
 - You're unsure. When unticked, Quilltap routes any image the user attaches through your configured *Image Description Profile* (set in Chat settings), which produces a written description using whichever other profile *is* ticked. The conversation continues as if the image had been typed out in words — imperfect, but serviceable, and it never sends image bytes to a model that will baulk.
 
 **What happens under the hood:** every bit of Quilltap that asks "can this profile see pictures?" — the Salon's attachment handler, the wardrobe image analyzer, the Aurora wizard's *Describe from image* step, the *Image Description Profile* dropdown in Chat settings — consults this checkbox. Existing installs were seeded automatically: profiles on OpenAI, Anthropic, Google, and Grok had the box pre‑ticked to match their prior behaviour; everything else starts unticked, so users who want vision on OpenRouter or Ollama must opt in explicitly.
+
+
+### Two questions, not one
+
+The checkbox answers *can this model read pictures?* There is a second question underneath it — *can Quilltap's connector for this provider actually put an image on the wire?* — and for a while nobody was asking it.
+
+They are not the same question, and for a handful of providers the answers differ. NanoGPT and Z.AI both serve genuinely vision-capable models; until recently only one of the two connectors knew how to send a picture. The DeepSeek and OpenAI‑Compatible connectors still cannot, and neither can Ollama's, however capable the model behind them may be.
+
+Formerly the checkbox was taken as the whole answer, with an unhappy result: ticking it on such a profile switched off the description fallback *and* handed the bytes to a connector that quietly discarded them. The model received no picture and no notice that there had been one, and — models being obliging creatures — wrote a confident paragraph about it regardless.
+
+Both questions are now asked, and the profile is served by whichever answer is the more pessimistic:
+
+- **Model sees, connector sends** → the image goes to the model whole. (OpenAI, Anthropic, Google, Grok, OpenRouter, Z.AI, and NanoGPT.)
+- **Model sees, connector cannot** → the description fallback is used, exactly as though the box were unticked. Nothing is silently lost. (DeepSeek, OpenAI‑Compatible, Ollama.)
+- **Model does not see** → the description fallback, as always.
+
+The same care is taken over the *Image Description Profile* itself: a profile whose connector cannot send images is no longer eligible to be your describer, since a describer that never receives the picture will describe one it has imagined.
+
+You need do nothing about any of this. Tick the box when the model can see; Quilltap will decline to be reckless with it.
 
 ## Connection Profile Limitations
 

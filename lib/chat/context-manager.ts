@@ -252,6 +252,13 @@ export interface ContextMessage {
     messageId?: string
     tokenCount?: number
     isInjected?: boolean
+    /**
+     * Set on the message carrying *this* turn's user input. Image attachments
+     * anchor here rather than at the tail of the array, because staff whispers
+     * (Host timestamps, Prospero context, connection-profile bubbles) format as
+     * `role: user` and routinely land after it — bug 95.
+     */
+    isUserTurn?: boolean
   }
   /** Google Gemini thought signature for thinking models (e.g., gemini-3-pro) */
   thoughtSignature?: string | null
@@ -2059,6 +2066,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       thoughtSignature: msg.thoughtSignature,
       name: msg.name,
       cacheControl: isSummaryHead ? { type: 'ephemeral' } : undefined,
+      // Carried so the attachment anchor can tell the user's own historical
+      // turn from a staff whisper wearing role=user (bug 95).
+      metadata: msg.id ? { messageId: msg.id } : undefined,
     })
     if (isSummaryHead) summaryBreakpointPlaced = true
   }
@@ -2567,6 +2577,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       role: 'user',
       content: composedUserContent,
       name: newUserMsgName,
+      metadata: { isUserTurn: true },
     })
   } else if (turnSkipInstruction) {
     // Chained / continue turns carry no new user message, so the note can't

@@ -4,6 +4,46 @@
 
 ### 4.9-dev
 
+#### Characters can now look at images, and images actually reach vision models (bugs 91-95)
+
+Five defects from one session, all downstream of an image a user shared that no character could see.
+
+**Images were silently dropped for four providers (bug 91).** A profile's "Supports image attachments" checkbox says the
+*model* can read pictures. It says nothing about whether the *plugin* can send them, and the NanoGPT, DeepSeek,
+OpenAI-Compatible and Ollama plugins all stripped every attachment before the wire. Only the first question was being
+asked, so ticking the box on a real vision model (`deepseek-v4-flash-vision-exp`, `zai-org/glm-4.6v`) turned off the
+description fallback *and* handed the bytes to a plugin that discarded them. The model got nothing and wrote a
+confident paragraph about the image anyway. Both questions are now asked, via a single predicate
+(`lib/llm/image-transport.ts`) reading the plugin registry: when the model sees but the plugin cannot send, the request
+routes to the description fallback instead of losing the image. The same check now guards describer selection — an
+Ollama describer would have described a picture it never received. NanoGPT plugin 1.1.0 learned to serialize
+`image_url`, so those profiles send images for real; DeepSeek, OpenAI-Compatible and Ollama route to the describer.
+
+**New `describe_image` tool (bug 92).** Characters had three image tools and all three were custodial: `keep_image`
+files a picture, `attach_image` shows it to the room, `list_images` reads the catalogue. None answers "what is in this
+picture?", so models reached for `attach_image` and got told to file the image first. `describe_image(uuid)` serves the
+description auto-describe already wrote at upload, or the generation prompt for a Quilltap-made image, or a fresh
+vision call — and does not require the image to be in the caller's album. `attach_image` is unchanged in function; its
+description and its not-found error now say plainly that it does not show the caller anything, and name
+`describe_image`. The Librarian's upload announcement was rewritten to say the same.
+
+**Provider refusals are reported as refusals (bug 93).** Z.AI returned `finish_reason: sensitive` with empty content —
+a moderation refusal — and the Salon said "this is a known issue with some providers, please try resending", which
+cannot work. Moderation finish reasons across Z.AI, OpenAI, Azure and Google are now recognized
+(`lib/llm/moderation-finish-reason.ts`, literal matching, no substring guessing) and the message names the provider,
+the model and the reason, and says resending will fail again.
+
+**Dropped attachments are visible (bug 94).** Plugins reported failed attachments in `attachmentResults`, which rode
+the SSE done event to a client that never read it. The Salon now raises a warning toast naming the plugin's own error.
+This is why bug 91 lasted as long as it did.
+
+**Attachments anchor to the user's message (bug 95).** Images were attached to the last `role: user` message, but staff
+whispers format as `role: user`, so on a regenerate the image landed on a "your response model is now X" bubble or a
+Prospero context memorandum — while the Librarian's announcement said the bytes rode with the user's message. After a
+tool call nothing matched and the attachments were dropped entirely, without a log line. A new
+`selectAttachmentAnchorIndex` prefers this turn's user input, then the last message whose source row was a genuine
+human turn, then the old rule as a floor.
+
 #### Standalone tarball is webpack-built again (bug 90)
 
 **Critical, and self-inflicted by the previous commit.** 4.9.0-dev.52 could not start **anywhere** — the tarball, the

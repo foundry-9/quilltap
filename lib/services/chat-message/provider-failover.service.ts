@@ -7,6 +7,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
+import { describeModerationRefusal } from '@/lib/llm/moderation-finish-reason'
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
 import type { ConnectionProfile, Character } from '@/lib/schemas/types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
@@ -217,11 +218,30 @@ export function getEmptyResponseReason({
   uncensoredRetryAttempted,
   sameProviderRetryAttempted,
   contentWasFlaggedDangerous,
+  finishReason,
+  provider,
+  modelName,
 }: {
   uncensoredRetryAttempted: boolean
   sameProviderRetryAttempted: boolean
   contentWasFlaggedDangerous: boolean
+  /** Provider-reported finish reason from the final chunk, when known. */
+  finishReason?: string | null
+  provider?: string
+  modelName?: string
 }): string {
+  // A provider that named its refusal outright gets to say so. Everything
+  // below this point is inference from an empty body; this is testimony, and
+  // it changes the advice — "try resending" is wrong for a moderation stop
+  // (bug 93).
+  const refusal = describeModerationRefusal(finishReason, provider ?? 'The provider', modelName ?? 'model')
+  if (refusal) {
+    if (uncensoredRetryAttempted) {
+      return `${refusal} An uncensored provider was tried as well and also returned empty.`
+    }
+    return refusal
+  }
+
   if (uncensoredRetryAttempted && sameProviderRetryAttempted) {
     return 'The AI model returned an empty response after retrying, and an uncensored provider also returned empty. This may indicate the content was filtered by both providers.'
   }

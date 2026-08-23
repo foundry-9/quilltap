@@ -589,6 +589,41 @@ export class MyAIProvider implements LLMProvider {
 }
 ```
 
+### The attachment contract (read this before declaring `supportsAttachments`)
+
+`attachmentSupport` in your manifest is a **promise the host relies on**, and
+breaking it fails silently in the worst possible way. Bug 91 was exactly this:
+a plugin declared one thing, did another, and models spent months writing
+confident descriptions of images they had never received.
+
+The host asks two separate questions before an image reaches you:
+
+1. **Can the model read pictures?** — the connection profile's
+   `supportsImageUpload` flag, set by the operator.
+2. **Can your plugin put one on the wire?** — your manifest's
+   `attachmentSupport`, read through `providerCanTransportImages`
+   (`lib/llm/image-transport.ts`).
+
+If **either** answer is no, the host substitutes a written description and your
+plugin never sees the bytes. So:
+
+- **If you serialise image attachments**, declare `supportsAttachments: true`
+  with the image MIME types you accept — and actually emit them in every code
+  path that builds a request, streaming and non-streaming alike.
+- **If you do not**, declare `supportsAttachments: false`. This is a perfectly
+  respectable answer: the host will describe images in text for you and your
+  users keep working. What you must not do is declare `true` and then drop
+  them.
+- **Report honestly in `attachmentResults`.** `sent` is what went on the wire;
+  `failed` carries an error string per attachment, which the Salon shows the
+  user as a warning toast. Do not report success for bytes you discarded.
+
+**Do not keep your own list of which models have vision** if your provider is a
+router fronting many upstreams. It goes stale, and the host has already made
+that decision — an attachment reaching you means the operator asserted the
+model reads images. `plugins/dist/qtap-plugin-nanogpt/provider.ts` is the
+worked example.
+
 ### Provider Icon (src/icon.tsx)
 
 ```tsx

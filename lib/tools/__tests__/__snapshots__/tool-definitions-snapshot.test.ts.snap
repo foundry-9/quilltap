@@ -64,6 +64,23 @@ exports[`tool definitions: derived OpenAI parameters deleteAnnotation: parameter
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters describeImage: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "uuid": {
+      "description": "UUID of the image to look at: the uuid from a Librarian upload announcement, an image-v2 file uuid, the id returned by generate_image, or an album link uuid from keep_image / list_images.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "uuid",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters docCloseDocument: parameters snapshot 1`] = `
 {
   "additionalProperties": false,

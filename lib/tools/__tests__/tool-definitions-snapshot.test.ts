@@ -14,6 +14,7 @@
 import { askCarinaToolDefinition } from '../ask-carina-tool'
 import { attachImageToolDefinition } from '../attach-image-tool'
 import { deleteAnnotationToolDefinition } from '../delete-annotation-tool'
+import { describeImageToolDefinition } from '../describe-image-tool'
 import { docCloseDocumentToolDefinition } from '../doc-close-document-tool'
 import { docCopyFileToolDefinition } from '../doc-copy-file-tool'
 import { docCreateFolderToolDefinition } from '../doc-create-folder-tool'
@@ -72,6 +73,7 @@ const ALL_TOOLS = {
   askCarina: askCarinaToolDefinition,
   attachImage: attachImageToolDefinition,
   deleteAnnotation: deleteAnnotationToolDefinition,
+  describeImage: describeImageToolDefinition,
   docCloseDocument: docCloseDocumentToolDefinition,
   docCopyFile: docCopyFileToolDefinition,
   docCreateFolder: docCreateFolderToolDefinition,

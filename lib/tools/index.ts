@@ -505,6 +505,7 @@ export { docDeleteBlobToolDefinition, validateDocDeleteBlobInput, type DocDelete
 export { keepImageToolDefinition as keepImageTool, keepImageToolDefinition, validateKeepImageInput, type KeepImageInput, type KeepImageOutput } from './keep-image-tool';
 export { listImagesToolDefinition as listImagesTool, listImagesToolDefinition, validateListImagesInput, type ListImagesInput, type ListImagesOutput, type ListedImage } from './list-images-tool';
 export { attachImageToolDefinition as attachImageTool, attachImageToolDefinition, validateAttachImageInput, type AttachImageInput, type AttachedImageDescriptor } from './attach-image-tool';
+export { describeImageToolDefinition as describeImageTool, describeImageToolDefinition, validateDescribeImageInput, type DescribeImageInput, type DescribeImageOutput } from './describe-image-tool';
 
 // Document UI Tools (Scriptorium Phase 3.5)
 export { docOpenDocumentToolDefinition as docOpenDocumentTool, validateDocOpenDocumentInput, type DocOpenDocumentInput, type DocOpenDocumentOutput } from './doc-open-document-tool';

@@ -92,9 +92,11 @@ const capabilities = {
 } as const;
 
 const attachmentSupport = {
-  supportsAttachments: false as const,
-  supportedMimeTypes: [] as string[],
-  description: 'NanoGPT chat requests are text-only in Quilltap; attachments are not forwarded',
+  supportsAttachments: true as const,
+  supportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as string[],
+  description: 'Images (JPEG, PNG, GIF, WebP) — requires a vision-capable routed model',
+  notes:
+    'NanoGPT routes to hundreds of upstream models, so the plugin forwards images for any model and lets the host decide: attachments only reach a profile whose supportsImageUpload flag is set, and the describe-fallback substitutes text otherwise.',
 };
 
 const messageFormat = {

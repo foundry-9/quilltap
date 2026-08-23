@@ -7,6 +7,7 @@
  */
 
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
+import { providerCanTransportImages } from '@/lib/llm/image-transport'
 import { createLLMProvider } from '@/lib/llm'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { resizeImageForProvider, canResizeImage } from '@/lib/files/image-processing'
@@ -53,9 +54,13 @@ async function getImageDescriptionProfile(
   // Priority: profiles marked as cheap with vision support
   const availableProfiles = await repos.connections.findByUserId(userId)
 
-  // Filter to vision-capable profiles only
+  // Filter to profiles that can *actually* describe an image: the model must
+  // read pictures AND its plugin must be able to send them. A NanoGPT vision
+  // profile passes the first test and fails the second, and picking one as
+  // the describer would produce a confident description of an image the model
+  // never received (bug 91).
   const visionProfiles = availableProfiles.filter((p: ConnectionProfile) =>
-    profileSupportsMimeType(p, 'image/jpeg')
+    profileSupportsMimeType(p, 'image/jpeg') && providerCanTransportImages(p.provider)
   )
 
   if (visionProfiles.length === 0) {
@@ -90,13 +95,37 @@ async function getUncensoredImageDescriptionProfile(
 }
 
 /**
- * Check if a file attachment needs fallback processing
+ * Check if a file attachment needs fallback processing.
+ *
+ * Two questions have to answer yes before raw bytes are worth sending, and
+ * bug 91 was asking only the first:
+ *
+ *  1. **Does the model read this?** — `profileSupportsMimeType`, which for
+ *     images is the operator's per-profile `supportsImageUpload` tick.
+ *  2. **Can the plugin put it on the wire?** — `providerCanTransportImages`.
+ *     NanoGPT, DeepSeek and OpenAI-Compatible all inherit a base that marks
+ *     every attachment failed, so the answer is no however vision-capable the
+ *     routed model happens to be.
+ *
+ * When (1) says yes and (2) says no, the old predicate returned `false`, which
+ * suppressed the describer *and* left the bytes for a plugin that discarded
+ * them: the model got nothing, and nothing said so. Now that combination
+ * routes to the describe-fallback, which is exactly what it's for.
  */
 export function needsFallbackProcessing(
   profile: ConnectionProfile,
   mimeType: string
 ): boolean {
-  return !profileSupportsMimeType(profile, mimeType)
+  if (!profileSupportsMimeType(profile, mimeType)) return true
+  if (mimeType.startsWith('image/') && !providerCanTransportImages(profile.provider)) {
+    logger.info('[Attachment] Profile claims image support but its plugin cannot transport images; routing to describe-fallback', {
+      profileId: profile.id,
+      provider: profile.provider,
+      modelName: profile.modelName,
+    })
+    return true
+  }
+  return false
 }
 
 /**
@@ -204,11 +233,27 @@ async function describeImageWithProfile(
 ): Promise<FallbackResult> {
   const describeStart = Date.now()
   try {
-    // Check if profile supports images
+    // Check if profile supports images. Both halves matter — see
+    // needsFallbackProcessing. A describer whose plugin drops the bytes would
+    // answer from the prompt alone and invent a picture.
     if (!profileSupportsMimeType(imageDescProfile, file.mimeType)) {
       return {
         type: 'unsupported',
         error: `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) does not support image files`,
+        processingMetadata: {
+          originalFilename: file.filename,
+          originalMimeType: file.mimeType,
+          descriptionProfileId: imageDescProfile.id,
+          descriptionProvider: imageDescProfile.provider,
+          descriptionModel: imageDescProfile.modelName,
+        },
+      }
+    }
+
+    if (!providerCanTransportImages(imageDescProfile.provider)) {
+      return {
+        type: 'unsupported',
+        error: `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) cannot send images — the ${imageDescProfile.provider} plugin does not forward image attachments. Pick a describer on a provider that does (OpenAI, Anthropic, Google, Grok, OpenRouter, Z.AI).`,
         processingMetadata: {
           originalFilename: file.filename,
           originalMimeType: file.mimeType,

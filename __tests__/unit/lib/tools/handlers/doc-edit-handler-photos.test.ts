@@ -1,5 +1,5 @@
 /**
- * Unit tests for keep_image / list_images / attach_image handlers.
+ * Unit tests for keep_image / list_images / attach_image / describe_image handlers.
  *
  * The pure-function builders (buildKeptImageMarkdown, parseKeptImageFrontmatter,
  * buildSlugAndFilename) are exercised under __tests__/unit/lib/photos/.
@@ -115,6 +115,10 @@ jest.mock('@/lib/file-storage/character-vault-bridge', () => ({
   getCharacterVaultStore: jest.fn(),
 }));
 
+jest.mock('@/lib/photos/auto-describe-attachment', () => ({
+  autoDescribeChatImageAttachment: jest.fn(),
+}));
+
 jest.mock('@/lib/images-v2', () => ({
   getImageById: jest.fn(),
   readImageBuffer: jest.fn(),
@@ -182,6 +186,7 @@ jest.mock('@/lib/repositories/factory', () => ({
 import { executeDocEditTool, DOC_EDIT_TOOL_NAMES } from '@/lib/tools/handlers/doc-edit-handler';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
 import { getImageById, readImageBuffer } from '@/lib/images-v2';
+import { autoDescribeChatImageAttachment } from '@/lib/photos/auto-describe-attachment';
 import { chunkAndInsertExtractedText } from '@/lib/photos/chunk-extracted-text';
 import { enqueueEmbeddingJobsForMountPoint } from '@/lib/mount-index/embedding-scheduler';
 import { searchDocumentChunks } from '@/lib/mount-index/document-search';
@@ -195,6 +200,7 @@ const IMAGE_BYTES_SHA = sha256OfBuffer(IMAGE_BYTES);
 
 const mockGetCharacterVaultStore = getCharacterVaultStore as jest.MockedFunction<typeof getCharacterVaultStore>;
 const mockGetImageById = getImageById as jest.MockedFunction<typeof getImageById>;
+const mockAutoDescribe = autoDescribeChatImageAttachment as jest.MockedFunction<typeof autoDescribeChatImageAttachment>;
 const mockReadImageBuffer = readImageBuffer as jest.MockedFunction<typeof readImageBuffer>;
 const mockChunkAndInsert = chunkAndInsertExtractedText as jest.MockedFunction<typeof chunkAndInsertExtractedText>;
 const mockEnqueueEmbedding = enqueueEmbeddingJobsForMountPoint as jest.MockedFunction<typeof enqueueEmbeddingJobsForMountPoint>;
@@ -487,7 +493,10 @@ describe('photo album handlers', () => {
 
       const result = await executeDocEditTool('attach_image', { uuid: 'img-uuid-1' }, baseContext);
       expect(result.success).toBe(false);
-      expect(result.error).toMatch(/Call keep_image first/);
+      // Bug 92: the error must redirect a model that wanted to LOOK at the
+      // image, not just repeat the filing instruction it already misread.
+      expect(result.error).toMatch(/keep_image/);
+      expect(result.error).toMatch(/describe_image/);
     });
 
     it('refuses cross-vault link ids', async () => {
@@ -506,6 +515,103 @@ describe('photo album handlers', () => {
       const result = await executeDocEditTool('attach_image', { uuid: 'link-1' }, baseContext);
       expect(result.success).toBe(false);
       expect(result.error).toMatch(/not a kept image/);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // describe_image — the looking verb (bug 92)
+  // -------------------------------------------------------------------------
+  describe('describe_image', () => {
+    const imageEntry = {
+      id: 'file-1',
+      category: 'IMAGE',
+      mimeType: 'image/webp',
+      originalFilename: 'generated_1787445517192.webp',
+      width: 1024,
+      height: 1024,
+      description: null as string | null,
+      generationPrompt: null as string | null,
+      generationRevisedPrompt: null as string | null,
+    };
+
+    it('serves the description auto-describe stored at upload, with no vision call', async () => {
+      mockGetImageById.mockResolvedValue({
+        ...imageEntry,
+        description: 'Two women beside a pool; one has emerald hair, one has dragonfly wings.',
+      } as never);
+
+      const result = await executeDocEditTool('describe_image', { uuid: 'file-1' }, baseContext);
+
+      expect(result.success).toBe(true);
+      expect((result.result as { source: string }).source).toBe('stored-description');
+      expect(result.formattedText).toContain('emerald hair');
+      // The whole point: this costs nothing. The description was already there.
+      expect(mockAutoDescribe).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the prompt that generated the image', async () => {
+      mockGetImageById.mockResolvedValue({
+        ...imageEntry,
+        generationRevisedPrompt: 'A dim, amber-lit bedroom in an Art Deco lodge.',
+      } as never);
+
+      const result = await executeDocEditTool('describe_image', { uuid: 'file-1' }, baseContext);
+
+      expect(result.success).toBe(true);
+      expect((result.result as { source: string }).source).toBe('generation-prompt');
+      expect(mockAutoDescribe).not.toHaveBeenCalled();
+    });
+
+    it('spends a vision call only when nothing is on file', async () => {
+      mockGetImageById.mockResolvedValue({ ...imageEntry } as never);
+      mockAutoDescribe.mockResolvedValue({
+        describedFileEntry: true,
+        linksUpdated: 1,
+        description: 'A freshly described picture.',
+      } as never);
+
+      const result = await executeDocEditTool('describe_image', { uuid: 'file-1' }, baseContext);
+
+      expect(mockAutoDescribe).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect((result.result as { source: string }).source).toBe('vision-call');
+    });
+
+    it('does NOT require the image to be in the caller`s album', async () => {
+      // The album requirement is exactly what made attach_image a dead end for
+      // a model that only wanted to look. Reproducing it here would rebuild
+      // the trap.
+      mockGetImageById.mockResolvedValue({ ...imageEntry, description: 'A picture.' } as never);
+      mockRepos.docMountFileLinks.findByIdWithContent.mockResolvedValue(null);
+
+      const result = await executeDocEditTool('describe_image', { uuid: 'file-1' }, baseContext);
+
+      expect(result.success).toBe(true);
+    });
+
+    it('resolves an album link uuid via its sha256', async () => {
+      mockGetImageById.mockResolvedValue(null as never);
+      mockRepos.docMountFileLinks.findByIdWithContent.mockResolvedValue(
+        buildLink({ sha256: 'abc123' })
+      );
+      mockRepos.files.findBySha256.mockResolvedValue([
+        { ...imageEntry, description: 'From the album.' },
+      ] as never);
+
+      const result = await executeDocEditTool('describe_image', { uuid: 'link-1' }, baseContext);
+
+      expect(result.success).toBe(true);
+      expect(result.formattedText).toContain('From the album.');
+    });
+
+    it('reports an unresolvable uuid without pretending', async () => {
+      mockGetImageById.mockResolvedValue(null as never);
+      mockRepos.docMountFileLinks.findByIdWithContent.mockResolvedValue(null);
+
+      const result = await executeDocEditTool('describe_image', { uuid: 'nope' }, baseContext);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/No image found/);
     });
   });
 });

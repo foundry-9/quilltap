@@ -58,6 +58,7 @@ import {
   handleKeepImage,
   handleListImages,
   handleAttachImage,
+  handleDescribeImage,
 } from './doc-edit/photo-handlers';
 
 import { validateDocReadFileInput, type DocReadFileInput } from '../doc-read-file-tool';
@@ -86,6 +87,7 @@ import { validateDocDeleteBlobInput, type DocDeleteBlobInput } from '../doc-dele
 import { validateKeepImageInput, type KeepImageInput } from '../keep-image-tool';
 import { validateListImagesInput, type ListImagesInput } from '../list-images-tool';
 import { validateAttachImageInput, type AttachImageInput } from '../attach-image-tool';
+import { validateDescribeImageInput, type DescribeImageInput } from '../describe-image-tool';
 
 export type { DocEditToolContext } from './doc-edit/shared';
 
@@ -120,6 +122,7 @@ export const DOC_EDIT_TOOL_NAMES = new Set([
   'keep_image',
   'list_images',
   'attach_image',
+  'describe_image',
 ]);
 
 /**
@@ -198,6 +201,8 @@ export async function executeDocEditTool(
         return await handleListImages(validateListImagesInput(input) ?? (input as unknown as ListImagesInput), context);
       case 'attach_image':
         return await handleAttachImage(validateAttachImageInput(input) ?? (input as unknown as AttachImageInput), context);
+      case 'describe_image':
+        return await handleDescribeImage(validateDescribeImageInput(input) ?? (input as unknown as DescribeImageInput), context);
       default:
         return { success: false, error: `Unknown doc-edit tool: ${toolName}` };
     }

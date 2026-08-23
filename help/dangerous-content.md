@@ -179,6 +179,21 @@ When a chat has been permanently classified as dangerous, Quilltap applies sever
 
 If a chat was incorrectly classified as dangerous, you can reset its classification. This can be done via the API (`POST /api/v1/chats/[id]?action=reclassify-danger`), which clears the classification and re-queues it for evaluation.
 
+## When a Provider Refuses Outright
+
+There is a distinction worth drawing between a model that *declines* and a model that *falters*, because the remedies are entirely different and one of them used to be offered for both.
+
+A provider with a moderation layer of its own — Z.AI, OpenAI, Azure, Google — may simply refuse a turn. When it does, it says so: it returns nothing at all and stamps the reply with a reason of its own choosing (`sensitive`, `content_filter`, `refusal`, `SAFETY`, and so on). This is testimony, not a hiccup, and Quilltap now reads it and repeats it to you plainly, naming the provider, the model, and the word it used.
+
+Formerly every empty reply was met with the same suggestion — *this is a known issue with some providers, please try resending your message* — which for a refusal is advice that cannot possibly work. The same content sent to the same moderation layer will be refused again, and again, as many times as you care to ask.
+
+What does work:
+
+- **Reroute the chat to an uncensored provider.** This is precisely what the Concierge's Auto-Route mode exists for; see *Modes* above.
+- **Change what is being asked for.** Occasionally the refusal is about a single phrase or a single image rather than the whole scene.
+
+Note that a refusal may concern an *image* you have attached quite as readily as anything written. If a vision model has been declining a picture, its reason will now say so rather than leaving you to guess at a blank reply.
+
 ## The Per-Chat Concierge Switch
 
 Every chat keeps a small brass switch in the sidebar — found under the **Chat** section of the Chat Sidebar — bearing three positions: **Safe**, **Flagged**, and **Off-duty**. It is the only place a chat's relationship with the Concierge may be set, adjusted, or — should the operator so insist — dispensed with entirely.
