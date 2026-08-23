@@ -109,7 +109,7 @@ function getChildEntryPath(): string {
   // `lib/background-jobs/child/child-entry.{js,ts}` is always there.
   //
   // Prefer the precompiled `.js` when present: the standalone tarball
-  // build (`scripts/build-standalone-tarball.ts`) bundles the child entry
+  // build (`scripts/build-standalone-tarball.mjs`) bundles the child entry
   // with esbuild so the forked process — which has no tsx loader and no
   // tsconfig-paths resolver — can `require` it directly. The `.ts`
   // fallback covers `npm run dev`, where tsx is on `process.execArgv`.

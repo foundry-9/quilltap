@@ -1,4 +1,4 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env node
 /**
  * Build Rootfs Tarball
  *
@@ -7,61 +7,77 @@
  *
  * Replaces the former build-rootfs.sh script.
  *
+ * Plain .mjs on purpose: the release workflow runs this in jobs that never
+ * `npm ci` (they only consume pre-built artifacts), so anything needing tsx
+ * would have to be fetched from the registry mid-release at an unpinned
+ * version. Same reasoning as scripts/build-standalone-overlay.mjs.
+ *
  * Usage:
- *   npm run build:electron:rootfs
- *   tsx scripts/build-rootfs.ts                         # build for host arch
- *   tsx scripts/build-rootfs.ts --platform linux/amd64  # build amd64 rootfs
- *   tsx scripts/build-rootfs.ts --no-rebuild            # skip build if image exists
- *   tsx scripts/build-rootfs.ts --image TAG             # export from existing image
+ *   node scripts/build-rootfs.mjs                         # build for host arch
+ *   node scripts/build-rootfs.mjs --platform linux/amd64  # build amd64 rootfs
+ *   node scripts/build-rootfs.mjs --no-rebuild            # skip build if image exists
+ *   node scripts/build-rootfs.mjs --image TAG             # export from existing image
+ *   node scripts/build-rootfs.mjs --print-target          # print Dockerfile target, exit
  */
 
-import { execSync } from 'child_process';
+import { execSync } from 'node:child_process';
 import {
+  closeSync,
   copyFileSync,
   createReadStream,
   createWriteStream,
-  existsSync,
   mkdirSync,
-  mkdtempSync,
+  openSync,
   readFileSync,
-  rmSync,
+  readSync,
   statSync,
   unlinkSync,
   writeFileSync,
-} from 'fs';
-import { join } from 'path';
-import { homedir, tmpdir } from 'os';
-import { createGzip, createGunzip } from 'zlib';
-import { pipeline } from 'stream/promises';
+} from 'node:fs';
+import { dirname, join } from 'node:path';
+import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
+import { createGzip } from 'node:zlib';
+import { pipeline } from 'node:stream/promises';
 
-const PROJECT_ROOT = join(__dirname, '..');
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = join(SCRIPT_DIR, '..');
 
-// Read version from package.json
-const packageJson = require(join(PROJECT_ROOT, 'package.json'));
-const version: string = packageJson.version;
+const version = JSON.parse(readFileSync(join(PROJECT_ROOT, 'package.json'), 'utf-8')).version;
+
+/**
+ * The platform → Dockerfile-target mapping. This is the ONE place it lives:
+ * the release workflow reads it back out with --print-target rather than
+ * restating it in its build matrix, because it used to be in both and nothing
+ * kept the two honest.
+ *
+ * amd64 builds the `wsl2` target (Windows/WSL2 needs the baked-in init script);
+ * arm64 builds plain `production` for Lima on Apple silicon.
+ */
+const PLATFORM_TARGETS = {
+  'linux/amd64': { archLabel: 'amd64', dockerTarget: 'wsl2' },
+  'linux/arm64': { archLabel: 'arm64', dockerTarget: 'production' },
+};
 
 // --- Argument parsing ---
 
-function printHelp(): void {
-  console.log(`Usage: tsx scripts/build-rootfs.ts [options]
+function printHelp() {
+  console.log(`Usage: node scripts/build-rootfs.mjs [options]
 
 Options:
   --no-rebuild            Skip Docker build if image already exists
   --platform PLAT         Target platform (default: auto-detected from host)
   --image TAG             Export from an existing Docker image instead of building
+  --print-target          Print the Dockerfile target for --platform and exit
   -h, --help              Show this help message`);
 }
 
 let skipRebuild = false;
 let customImage = '';
+let printTarget = false;
 
 // Detect default platform from host
-let platform: string;
-if (process.arch === 'arm64') {
-  platform = 'linux/arm64';
-} else {
-  platform = 'linux/amd64';
-}
+let platform = process.arch === 'arm64' ? 'linux/arm64' : 'linux/amd64';
 
 const args = process.argv.slice(2);
 let i = 0;
@@ -76,6 +92,9 @@ while (i < args.length) {
     case '--image':
       customImage = args[++i];
       break;
+    case '--print-target':
+      printTarget = true;
+      break;
     case '-h':
     case '--help':
       printHelp();
@@ -88,22 +107,19 @@ while (i < args.length) {
   i++;
 }
 
-// Derive arch label and Docker target from platform
-let archLabel: string;
-let dockerTarget: string;
+const targetInfo = PLATFORM_TARGETS[platform];
+if (!targetInfo) {
+  console.error(`Unsupported platform: ${platform}`);
+  console.error(`Supported: ${Object.keys(PLATFORM_TARGETS).join(', ')}`);
+  process.exit(1);
+}
+const { archLabel, dockerTarget } = targetInfo;
 
-switch (platform) {
-  case 'linux/arm64':
-    archLabel = 'arm64';
-    dockerTarget = 'production';
-    break;
-  case 'linux/amd64':
-    archLabel = 'amd64';
-    dockerTarget = 'wsl2';
-    break;
-  default:
-    console.error(`Unsupported platform: ${platform}`);
-    process.exit(1);
+// Machine-readable query — must print the bare target and nothing else, so the
+// workflow can capture it straight into a step output.
+if (printTarget) {
+  process.stdout.write(dockerTarget + '\n');
+  process.exit(0);
 }
 
 const imageTag = customImage || `quilltap-rootfs-${archLabel}:${version}`;
@@ -112,7 +128,7 @@ const outputFilename = `quilltap-linux-${archLabel}.tar.gz`;
 const outputFile = join(PROJECT_ROOT, outputFilename);
 
 // Determine cache directory based on OS
-let imagesDir: string;
+let imagesDir;
 if (process.platform === 'darwin') {
   imagesDir = join(homedir(), 'Library', 'Caches', 'Quilltap', 'lima-images');
 } else if (process.platform === 'win32') {
@@ -132,7 +148,7 @@ console.log(`    Image:    ${imageTag}`);
 console.log(`    Output:   ${outputFile}`);
 console.log('');
 
-function run(cmd: string, description: string): void {
+function run(cmd, description) {
   console.log(`> ${description}`);
   try {
     execSync(cmd, { stdio: 'inherit' });
@@ -142,11 +158,11 @@ function run(cmd: string, description: string): void {
   }
 }
 
-function runCapture(cmd: string): string {
+function runCapture(cmd) {
   return execSync(cmd, { encoding: 'utf-8' }).trim();
 }
 
-function imageExists(tag: string): boolean {
+function imageExists(tag) {
   try {
     execSync(`docker image inspect "${tag}"`, { stdio: 'ignore' });
     return true;
@@ -159,7 +175,7 @@ function imageExists(tag: string): boolean {
  * Create a tar entry (header + data + padding) for a single file.
  * Uses the basic POSIX ustar format.
  */
-function createTarEntry(filepath: string, content: Buffer): Buffer {
+function createTarEntry(filepath, content) {
   const header = Buffer.alloc(512, 0);
 
   // Name (0, 100)
@@ -202,7 +218,7 @@ function createTarEntry(filepath: string, content: Buffer): Buffer {
 /**
  * Format bytes into human-readable size string.
  */
-function formatSize(bytes: number): string {
+function formatSize(bytes) {
   const units = ['B', 'KB', 'MB', 'GB'];
   let size = bytes;
   let unitIndex = 0;
@@ -213,7 +229,7 @@ function formatSize(bytes: number): string {
   return `${size.toFixed(1)}${units[unitIndex]}`;
 }
 
-async function main(): Promise<void> {
+async function main() {
   // Step 1: Build the Docker image (if needed)
   if (!customImage) {
     if (imageExists(imageTag) && skipRebuild) {
@@ -254,16 +270,15 @@ async function main(): Promise<void> {
 
     // Combine: original tar (minus end-of-archive marker) + VERSION entry + end-of-archive
     // Tar files end with two 512-byte blocks of zeros. We strip those before appending.
-    const rawTarStat = statSync(rawTarFile);
-    const rawTarSize = rawTarStat.size;
+    const rawTarSize = statSync(rawTarFile).size;
 
     // Find how many trailing zero blocks to strip (at least 2 × 512 = 1024 bytes)
     // We'll read the last few KB and find where the zero padding starts
-    const fd = require('fs').openSync(rawTarFile, 'r');
+    const fd = openSync(rawTarFile, 'r');
     const trailSize = Math.min(rawTarSize, 10240); // read last 10KB
     const trailBuf = Buffer.alloc(trailSize);
-    require('fs').readSync(fd, trailBuf, 0, trailSize, rawTarSize - trailSize);
-    require('fs').closeSync(fd);
+    readSync(fd, trailBuf, 0, trailSize, rawTarSize - trailSize);
+    closeSync(fd);
 
     // Count trailing zero bytes (must be multiple of 512)
     let zeroBytes = 0;
@@ -284,7 +299,7 @@ async function main(): Promise<void> {
     const ws = createWriteStream(finalTarFile);
     const rs = createReadStream(rawTarFile, { start: 0, end: contentSize - 1 });
 
-    await new Promise<void>((resolve, reject) => {
+    await new Promise((resolve, reject) => {
       rs.pipe(ws, { end: false });
       rs.on('end', () => {
         ws.write(versionEntry, (err) => {

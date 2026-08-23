@@ -1,4 +1,4 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env node
 /**
  * Build Quilltap Standalone Tarball
  *
@@ -10,17 +10,24 @@
  * (better-sqlite3, sharp) are stripped — they're installed as npm
  * dependencies on the user's machine.
  *
+ * Plain .mjs on purpose: the release workflow runs this in a job that never
+ * `npm ci`s (it only consumes pre-built artifacts), so anything needing tsx
+ * would have to be fetched from the registry mid-release at an unpinned
+ * version. Same reasoning as scripts/build-standalone-overlay.mjs.
+ *
  * Usage:
- *   npx tsx scripts/build-standalone-tarball.ts
- *   npx tsx scripts/build-standalone-tarball.ts --skip-build
+ *   node scripts/build-standalone-tarball.mjs
+ *   node scripts/build-standalone-tarball.mjs --skip-build
  */
 
-import { execSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, readdirSync, statSync } from 'fs';
-import { builtinModules } from 'module';
-import { join } from 'path';
+import { execSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, rmSync, readdirSync, statSync } from 'node:fs';
+import { builtinModules } from 'node:module';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const PROJECT_ROOT = join(__dirname, '..');
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const PROJECT_ROOT = join(SCRIPT_DIR, '..');
 const STAGING_DIR = join(PROJECT_ROOT, '.standalone-staging');
 const NEXT_STANDALONE = join(PROJECT_ROOT, '.next', 'standalone');
 const NEXT_STATIC = join(PROJECT_ROOT, '.next', 'static');
@@ -29,7 +36,7 @@ const PLUGINS_DIST = join(PROJECT_ROOT, 'plugins', 'dist');
 
 const skipBuild = process.argv.includes('--skip-build');
 
-function run(cmd: string, description: string): void {
+function run(cmd, description) {
   console.log(`> ${description}`);
   try {
     execSync(cmd, { stdio: 'inherit', cwd: PROJECT_ROOT });
@@ -39,11 +46,11 @@ function run(cmd: string, description: string): void {
   }
 }
 
-function copyDir(src: string, dest: string): void {
+function copyDir(src, dest) {
   execSync(`cp -R "${src}" "${dest}"`, { stdio: 'ignore' });
 }
 
-function dirSize(dir: string): string {
+function dirSize(dir) {
   try {
     return execSync(`du -sh "${dir}" | cut -f1`, { encoding: 'utf-8' }).trim();
   } catch {
@@ -55,7 +62,7 @@ function dirSize(dir: string): string {
  * Reduce a require specifier to its package name: "ajv/dist/runtime/uri" ->
  * "ajv", "@quilltap/plugin-types/foo" -> "@quilltap/plugin-types".
  */
-function packageNameOf(specifier: string): string {
+function packageNameOf(specifier) {
   const parts = specifier.split('/');
   return specifier.startsWith('@') ? parts.slice(0, 2).join('/') : parts[0];
 }
@@ -87,7 +94,7 @@ function packageNameOf(specifier: string): string {
  * Computed per build rather than hardcoded, so it stays correct as plugin
  * dependencies change instead of silently going stale.
  */
-function pruneRedundantPluginModules(pluginsDest: string): void {
+function pruneRedundantPluginModules(pluginsDest) {
   const rootModules = join(STAGING_DIR, 'node_modules');
   const builtins = new Set(builtinModules);
   let dropped = 0;
@@ -107,7 +114,7 @@ function pruneRedundantPluginModules(pluginsDest: string): void {
     }
 
     const source = readFileSync(bundle, 'utf-8');
-    const specifiers = new Set<string>();
+    const specifiers = new Set();
     for (const m of source.matchAll(/require\(\s*["']([^"'.][^"']*)["']\s*\)/g)) {
       specifiers.add(packageNameOf(m[1]));
     }
@@ -133,7 +140,7 @@ function pruneRedundantPluginModules(pluginsDest: string): void {
 
 // Read root version
 const rootPackage = JSON.parse(readFileSync(join(PROJECT_ROOT, 'package.json'), 'utf-8'));
-const version: string = rootPackage.version;
+const version = rootPackage.version;
 const tarballName = `quilltap-standalone-${version}.tar.gz`;
 const tarballPath = join(PROJECT_ROOT, tarballName);
 
@@ -272,7 +279,7 @@ if (existsSync(standaloneNodeModules)) {
   }
 
   // Clean up unnecessary files to reduce size
-  const cleanDir = (dir: string): void => {
+  const cleanDir = (dir) => {
     if (!existsSync(dir)) return;
     const entries = readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {

@@ -91,7 +91,7 @@ knip flagged **3 unused files**, **1 unlisted dependency**, and **3 unlisted bin
 ### knip.json — silenced legitimate false positives
 
 - **`@anthropic-ai/sdk`** added to `ignoreDependencies`. It's a transitive dependency (pulled in by the bundled Anthropic plugin) imported only by `__tests__/unit/plugins/anthropic-model-family-params.test.ts`; there is no direct root-`package.json` entry to flag. Same rationale as the existing `better-sqlite3-multiple-ciphers` entry.
-- **`ps`, `tasklist`, `du`** added to `ignoreBinaries`. These are legitimate OS binaries invoked at runtime: `ps`/`tasklist` for cross-platform liveness checks in `lib/database/backends/sqlite/instance-lock.ts`, `du` for size reporting in `scripts/build-standalone-tarball.ts`.
+- **`ps`, `tasklist`, `du`** added to `ignoreBinaries`. These are legitimate OS binaries invoked at runtime: `ps`/`tasklist` for cross-platform liveness checks in `lib/database/backends/sqlite/instance-lock.ts`, `du` for size reporting in `scripts/build-standalone-tarball.mjs`.
 
 ### Investigated but KEPT — in-progress SVAR file-manager surface
 

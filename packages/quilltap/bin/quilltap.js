@@ -264,23 +264,47 @@ function linkNativeModules(standaloneDir) {
   const sharpDir = resolveModuleDir('sharp');
   linkModule('sharp', sharpDir);
 
-  // Link sharp's @img platform packages — they live near sharp's location
-  if (sharpDir) {
-    const sharpParent = path.dirname(sharpDir);
-
-    // If sharp is in a scoped dir or regular node_modules, look for @img there
-    const imgDir = path.join(sharpParent, '@img');
-    if (fs.existsSync(imgDir)) {
-      try {
-        const imgPackages = fs.readdirSync(imgDir).filter(name => name.startsWith('sharp-'));
-        for (const pkg of imgPackages) {
-          linkModule(`@img/${pkg}`, path.join(imgDir, pkg));
-        }
-      } catch {
-        // Non-fatal — sharp may work without explicit @img links
+  // Link a scoped native's platform-specific siblings (@img/sharp-*,
+  // @napi-rs/canvas-*). Both wrappers require their binary as a SCOPE-SIBLING
+  // — `@img/sharp-darwin-arm64` from inside `@img/sharp` — so the binary has to
+  // sit in the same node_modules the wrapper was resolved from. It cannot be
+  // inherited: the standalone tree lives in the download cache
+  // (~/Library/Caches/Quilltap/standalone and friends), far outside this
+  // package's node_modules, so Node's upward walk never reaches the copy npm
+  // installed for us. Linking the wrapper without its siblings therefore
+  // produces a wrapper that resolves and then throws at first use.
+  function linkScopedPlatformSiblings(scope, prefix, wrapperName, wrapperDir) {
+    if (!wrapperDir) return;
+    // Walk back exactly as many segments as the wrapper's own name has, so this
+    // works whether the wrapper is unscoped ('sharp' -> one) or scoped
+    // ('@napi-rs/canvas' -> two). Counting fixed levels would silently resolve
+    // one directory too high for sharp and miss @img entirely.
+    let nodeModulesDir = wrapperDir;
+    for (let i = 0; i < wrapperName.split('/').length; i++) {
+      nodeModulesDir = path.dirname(nodeModulesDir);
+    }
+    const scopeDir = path.join(nodeModulesDir, scope);
+    if (!fs.existsSync(scopeDir)) return;
+    try {
+      for (const name of fs.readdirSync(scopeDir)) {
+        if (!name.startsWith(prefix)) continue;
+        linkModule(`${scope}/${name}`, path.join(scopeDir, name));
       }
+    } catch {
+      // Non-fatal — the wrapper may still find a binary by another route.
     }
   }
+
+  linkScopedPlatformSiblings('@img', 'sharp-', 'sharp', sharpDir);
+
+  // Link @napi-rs/canvas (pdfjs-dist's PDF rasteriser) the same way sharp is
+  // handled: build-standalone-tarball.mjs strips every @napi-rs/canvas-* binary
+  // from the tarball, so without this the standalone tree keeps only the JS
+  // wrapper and PDF rendering dies on a missing native. The wrapper is scoped,
+  // so it needs its siblings linked alongside it.
+  const canvasDir = resolveModuleDir('@napi-rs/canvas');
+  linkModule('@napi-rs/canvas', canvasDir);
+  linkScopedPlatformSiblings('@napi-rs', 'canvas-', '@napi-rs/canvas', canvasDir);
 }
 
 // Main

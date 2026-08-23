@@ -9,7 +9,7 @@
 // Used by:
 //   - Dockerfile                                    (local docker build)
 //   - .github/workflows/release.yml :: build-app    (published images)
-//   - scripts/build-standalone-tarball.ts           (npx quilltap / shell+direct)
+//   - scripts/build-standalone-tarball.mjs           (npx quilltap / shell+direct)
 //
 // Usage: node scripts/build-standalone-overlay.mjs [targetDir]
 //   targetDir defaults to <projectRoot>/.next/standalone

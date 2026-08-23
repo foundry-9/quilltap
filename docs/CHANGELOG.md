@@ -4,6 +4,49 @@
 
 ### 4.9-dev
 
+#### CI/release pipeline cleanup, and the PDF rasteriser's missing native (bug 89)
+
+**Bug 89 — PDF rendering was broken on the `npx quilltap` path.** `build-standalone-tarball.mjs` strips every
+`@napi-rs/canvas-*` platform binary from the tarball, and `packages/quilltap` declares `@napi-rs/canvas` as a runtime
+dependency so npm installs a correct one — but `linkNativeModules` never linked it into the standalone tree. That tree
+lives in the download cache, far outside the npm package's `node_modules`, so Node's upward walk never reached the
+installed copy. `linkNativeModules` now has one shared `linkScopedPlatformSiblings` helper serving both
+`sharp`→`@img/sharp-*` and `@napi-rs/canvas`→`@napi-rs/canvas-*`; it walks back as many path segments as the wrapper's
+own name has, so scoped and unscoped wrappers both resolve. Docker was never affected — it ships the full production
+`node_modules`.
+
+**Releases were built with the wrong bundler.** `7cba1eb4` moved the standalone build off `--webpack` because its
+tracer misses `next/dist/compiled/webpack-lib`, which broke the Electron shell's embedded server. That fix lived only
+in the tarball script, which CI invokes with `--skip-build` — so every release since still shipped a webpack-traced
+tree while local builds and CI validated a Turbopack-traced one. `release.yml` now builds with Turbopack, matching
+`ci.yml` and the script.
+
+**A tag that disagrees with `package.json` is now a build failure.** The standalone tarball is named from
+`package.json`'s version, but the published CLI builds its download URL from the git tag. Diverge them and the release
+still goes green (the asset upload uses a glob) while every `npx quilltap` first run 404s. `build-app` now checks both,
+having absorbed the old `validate-tag` job — which was a whole runner spin-up for one regex.
+
+**Other pipeline changes:**
+
+- `lint`, `build`, and `test` no longer chain. Gating build and test behind lint bought nothing but latency; they now
+  run in parallel and return the complete picture in one round trip.
+- Both workflows get a `concurrency` group. Superseded PR runs cancel; branch pushes and releases never do.
+- `create-release` downloaded *every* artifact — including `app-build`, the whole traced standalone tree — to use four
+  files. It now pulls only the release assets.
+- `build-standalone-tarball.ts` and `build-rootfs.ts` are now plain `.mjs`. The release jobs that run them never
+  `npm ci`, so they were fetching an unpinned `tsx` from the registry mid-release.
+- The platform→Dockerfile-target mapping was stated in both `build-rootfs.ts` and the release matrix, with nothing
+  keeping them honest. It now lives only in `build-rootfs.mjs`, which the workflow queries with `--print-target`.
+- New composite actions `.github/actions/setup` (Node + `npm ci`, the one place the CI Node version is pinned) and
+  `.github/actions/discord-notify` (the ~45-line curl/jq block that was duplicated across both workflows).
+- Docker builds now use the GitHub Actions layer cache, scoped per arch, so `npm ci --omit=dev && npm rebuild` — which
+  compiles every native module from source — is not repeated from scratch each release.
+- Both workflows declare `permissions: contents: read`, with `create-release` escalating for itself. `release.yml`
+  previously granted `contents: write` workflow-wide.
+- Removed the dead "check if tests exist" guard and its four dependent conditional steps (the repo has 613 unit test
+  files). A green suite that produces no coverage summary is now a failure rather than a warning, since it means the
+  jest config is broken.
+
 #### NanoGPT prompt caching (plugin 1.0.3)
 
 The NanoGPT plugin now supports NanoGPT's prompt caching (https://docs.nano-gpt.com/api-reference/miscellaneous/prompt-caching).

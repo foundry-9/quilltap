@@ -1,0 +1,64 @@
+name: Discord webhook notification
+description: >-
+  POST a pre-built embed payload to a Discord webhook. Replaces the JavaScript
+  actions this project used to depend on (tristanbudd/discord-commit-github-action
+  and tsickert/discord-webhook), both of which are pinned to the node20 runtime
+  with no newer release to move to — a deprecation warning with no fix short of
+  dropping the action. A webhook post is one HTTP call, so there is no runtime
+  here left to go stale.
+
+inputs:
+  webhook-url:
+    description: >-
+      Discord webhook URL. An empty value is treated as "notifications are not
+      configured" and skips the post — a repo fork or a secret that was never
+      set must not fail the build.
+    required: true
+  payload:
+    description: >-
+      The complete JSON body to POST. Build it with `jq -n --arg` in the calling
+      workflow so that untrusted values (commit messages, author names) are
+      escaped by jq and never interpolated into a shell command.
+    required: true
+  description:
+    description: What is being announced. Used only in log lines.
+    required: false
+    default: Discord notification
+
+runs:
+  using: composite
+  steps:
+    - name: Post to Discord
+      shell: bash
+      env:
+        WEBHOOK_URL: ${{ inputs.webhook-url }}
+        PAYLOAD: ${{ inputs.payload }}
+        WHAT: ${{ inputs.description }}
+      run: |
+        set -euo pipefail
+
+        if [ -z "$WEBHOOK_URL" ]; then
+          echo "::warning::Webhook URL is not set — skipping the ${WHAT}."
+          exit 0
+        fi
+
+        if [ -z "$PAYLOAD" ]; then
+          echo "::notice::No payload to send — skipping the ${WHAT}."
+          exit 0
+        fi
+
+        response=$(mktemp)
+        status=$(printf '%s' "$PAYLOAD" | curl -sS -X POST \
+          -H 'Content-Type: application/json' \
+          --data-binary @- \
+          -o "$response" \
+          -w '%{http_code}' \
+          "$WEBHOOK_URL")
+
+        if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
+          echo "✅ ${WHAT} sent (HTTP $status)"
+        else
+          echo "❌ Discord rejected the ${WHAT} (HTTP $status)"
+          cat "$response"
+          exit 1
+        fi
