@@ -4,6 +4,25 @@
 
 ### 4.9-dev
 
+#### OpenRouter vision profiles send images again (bug 97)
+
+OpenRouter's plugin declared `supportsAttachments: false` with no MIME types, a truthful statement when it was
+written and stale since bug 45 taught `provider.ts` to serialise `image_url` content-parts for JPEG, PNG, GIF and
+WebP. Bug 91 made that declaration load-bearing: `providerCanTransportImages` asks the plugin registry first, so in
+production every OpenRouter vision profile routed its images to the describe-fallback, and the describer guard
+refused an OpenRouter profile in the same sentence that recommended OpenRouter. Jest never saw it — with the
+registry uninitialised the predicate reads the static map, which was correct.
+
+`qtap-plugin-openrouter` 1.0.59 declares `supportsAttachments: true` and imports its MIME list from `provider.ts`'s
+now-exported `SUPPORTED_IMAGE_MIME_TYPES`, so the declaration the registry reads and the bytes the provider sends
+cannot drift apart again. The model-dependent caveat is unchanged and still the host's call: images only reach a
+profile whose "Supports image attachments" flag is ticked.
+
+New test `__tests__/unit/lib/llm/image-transport.test.ts` covers the registry-initialised branch that had no
+coverage, and loads every bundled plugin's **built** `index.js` to assert its declaration gives the same answer as
+the static map in `lib/llm/attachment-support.ts` — the drift that produced this bug now fails the suite. The
+describer guard's provider list also gained NanoGPT, which has transported images since plugin 1.1.0.
+
 #### Bug 97 filed: the OpenRouter registry entry denies the vision path its own provider implements
 
 Docs only, plus a two-character comment correction. Bug 91's transport predicate correctly asks the plugin registry

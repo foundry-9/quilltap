@@ -3,7 +3,7 @@
   "name": "qtap-plugin-openrouter",
   "title": "OpenRouter Provider",
   "description": "Provides access to 100+ models including GPT-4, Claude, Gemini, Llama and more via OpenRouter API",
-  "version": "1.0.58",
+  "version": "1.0.59",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",

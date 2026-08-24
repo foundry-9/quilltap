@@ -617,6 +617,29 @@ plugin never sees the bytes. So:
 - **Report honestly in `attachmentResults`.** `sent` is what went on the wire;
   `failed` carries an error string per attachment, which the Salon shows the
   user as a warning toast. Do not report success for bytes you discarded.
+- **`false` is only respectable while it is true.** The opposite failure is
+  just as silent and harder to notice, because nothing errors and the user
+  merely gets a worse answer: bug 97 was OpenRouter declaring `false` for two
+  releases after its provider learned to serialise `image_url` parts, so every
+  OpenRouter vision profile was routed to the describe-fallback and the
+  describer guard refused OpenRouter in the same sentence that recommended it.
+  When you teach a provider to send images, the declaration is part of that
+  change, not a follow-up.
+- **The declaration the host reads is the one in your plugin module**
+  (`index.ts`'s exported `attachmentSupport`), not the `providerConfig`
+  block in `manifest.json`. `provider-registry` hands the module's object
+  straight to `providerCanTransportImages`; OpenRouter's manifest was correct
+  throughout bug 97 and it changed nothing. If both exist, keep both honest,
+  but fix the module first.
+- **Keep the MIME list in one place.** Export it from the file that does the
+  serialising and import it into the declaration —
+  `plugins/dist/qtap-plugin-openrouter` does this — so "what we send" and "what
+  we claim to send" cannot drift. A comment tying the two together (NanoGPT's
+  `NANOGPT_SUPPORTED_IMAGE_MIME_TYPES`) is the weaker second-best.
+  `__tests__/unit/lib/llm/image-transport.test.ts` holds every bundled
+  plugin's built declaration against the client-safe mirror in
+  `lib/llm/attachment-support.ts`; add your provider to that mirror and the
+  test covers you too.
 
 **Do not keep your own list of which models have vision** if your provider is a
 router fronting many upstreams. It goes stale, and the host has already made

@@ -43848,7 +43848,12 @@ function resolveProviderPrefs(profileParams) {
   }
   return Object.keys(merged).length > 0 ? merged : void 0;
 }
-var SUPPORTED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+var SUPPORTED_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp"
+];
 var OpenRouterProvider = class {
   constructor() {
     this.supportsFileAttachments = true;
@@ -45278,10 +45283,10 @@ var capabilities = {
   toolUse: false
 };
 var attachmentSupport = {
-  supportsAttachments: false,
-  supportedMimeTypes: [],
-  description: "File attachment support depends on the underlying model",
-  notes: "OpenRouter proxies to 100+ models with varying capabilities. Some models may support image/file attachments."
+  supportsAttachments: true,
+  supportedMimeTypes: SUPPORTED_IMAGE_MIME_TYPES,
+  description: "Images (JPEG, PNG, GIF, WebP) \u2014 requires a vision-capable routed model",
+  notes: 'OpenRouter proxies to 100+ models with varying capabilities. The plugin forwards images for any model and lets the host decide: attachments only reach a profile whose "Supports image attachments" flag is set, and the describe-fallback substitutes text otherwise.'
 };
 var messageFormat = {
   supportsNameField: false,

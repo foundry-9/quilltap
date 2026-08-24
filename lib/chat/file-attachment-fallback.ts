@@ -250,10 +250,17 @@ async function describeImageWithProfile(
       }
     }
 
+    // The provider list in the message below names every entry in
+    // PROVIDER_ATTACHMENT_CAPABILITIES (lib/llm/attachment-support.ts) that
+    // carries an image/* MIME type — keep it in step with that map. Bug 97 was
+    // this sentence recommending OpenRouter in the same breath as refusing an
+    // OpenRouter profile, because the plugin's own declaration disagreed with
+    // the map; __tests__/unit/lib/llm/image-transport.test.ts now holds the two
+    // sources together.
     if (!providerCanTransportImages(imageDescProfile.provider)) {
       return {
         type: 'unsupported',
-        error: `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) cannot send images — the ${imageDescProfile.provider} plugin does not forward image attachments. Pick a describer on a provider that does (OpenAI, Anthropic, Google, Grok, OpenRouter, Z.AI).`,
+        error: `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) cannot send images — the ${imageDescProfile.provider} plugin does not forward image attachments. Pick a describer on a provider that does (OpenAI, Anthropic, Google, Grok, OpenRouter, NanoGPT, Z.AI).`,
         processingMetadata: {
           originalFilename: file.filename,
           originalMimeType: file.mimeType,

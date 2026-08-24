@@ -2,15 +2,43 @@
 
 | | |
 |---|---|
-| **Status** | Open |
+| **Status** | **Fixed in v4** |
 | **Found** | 2026-08-23 (the quilltap-v5 P4.D106 differential's registry-vs-static comparison, while porting bug 91's predicate) |
-| **Fixed** | — |
+| **Fixed** | 2026-08-23 (`qtap-plugin-openrouter` 1.0.59) |
 | **Severity** | **Medium** (no data loss, no error; every OpenRouter vision profile silently degrades to the describe-fallback, and the describer guard refuses OpenRouter by name while its own sentence recommends it) |
 | **Who it bites** | anyone whose vision profile — or configured image-description profile — sits on OpenRouter, which proxies most of the strongest vision models |
 | **Provenance** | Structural, since `a14a1811`. The contradiction itself is older (bug 45 gave the provider real `image_url` serialisation and nobody moved the manifest), but bug 91's fix is what made the declaration load-bearing |
-| **Defect site** | `plugins/dist/qtap-plugin-openrouter/index.ts:74-80` (`attachmentSupport`) |
+| **Defect site** | `plugins/dist/qtap-plugin-openrouter/index.ts` (`attachmentSupport`) |
 | **v5 status** | **Reproduced faithfully** — v5's baked `openrouter.json` manifest carries the same `false`, so v5 production behaves identically; its `image_transport_equivalence` full_init rows pin the shared wrong answer and will converge on the manifest regen at the drift round after this is fixed |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
+
+---
+
+**FIXED in v4 (2026-08-23), `qtap-plugin-openrouter` 1.0.59.** `attachmentSupport`
+now declares `supportsAttachments: true` and takes its MIME list from
+`provider.ts`'s newly-exported `SUPPORTED_IMAGE_MIME_TYPES` — an import rather
+than NanoGPT's comment discipline, so the declaration the registry reads and the
+bytes the provider serialises are one source, not two that must be remembered
+together. The model-dependent caveat survives in the `description`/`notes` pair
+and is still the host's call: attachments reach a profile only when its
+**Supports image attachments** flag is ticked, and the describe-fallback
+substitutes text otherwise.
+
+The missing coverage is the more important half.
+`__tests__/unit/lib/llm/image-transport.test.ts` exercises the
+registry-**initialised** branch that production takes and jest never did, then
+loads every bundled plugin's *built* `index.js` — the very object the registry
+hands the predicate, not the source and not `manifest.json`, whose OpenRouter
+entry was already correct and therefore proved nothing — and asserts each
+declaration answers the same as the static mirror in
+`lib/llm/attachment-support.ts`, MIME types included. Regressing the built
+declaration to the old `false` fails two of those cases, which is how the guard
+was verified rather than assumed.
+
+Corrected in passing: the describer guard's recommendation list
+(`lib/chat/file-attachment-fallback.ts`) omitted NanoGPT, which has transported
+images since plugin 1.1.0, and now carries a comment tying the list to
+`PROVIDER_ATTACHMENT_CAPABILITIES`.
 
 ---
 
