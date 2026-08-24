@@ -4,6 +4,22 @@
 
 ### 4.9-dev
 
+#### Bug 97 filed: the OpenRouter registry entry denies the vision path its own provider implements
+
+Docs only, plus a two-character comment correction. Bug 91's transport predicate correctly asks the plugin registry
+first — and the registry's OpenRouter answer is stale: `qtap-plugin-openrouter/index.ts` still declares the
+pre-vision conservative `supportsAttachments: false` while `provider.ts` has serialised `image_url` content-parts
+for four MIME types since bug 45, and the client-safe static map agrees with the provider. In production (registry
+initialised) the stale `false` wins: every OpenRouter vision profile silently routes to the describe-fallback, and
+the bug-91 describer guard refuses OpenRouter profiles with a sentence that itself names OpenRouter as a provider
+that forwards images. In jest the registry is uninitialised, the static map wins, and the suite is green over a
+branch production never takes. Found by the quilltap-v5 port's differential, which runs the predicate in both
+configurations. The bug file (`docs/developer/bugs/bug-97-openrouter-registry-denies-vision.md`) documents the fix
+as a spec: flip the plugin's `attachmentSupport` to what `provider.ts` implements (comment-tied to
+`SUPPORTED_IMAGE_MIME_TYPES`, the NanoGPT 1.1.0 keep-in-step precedent), keep the model-dependent caveat in prose,
+and add a registry-initialised test so jest finally reads the production branch. Also corrected in passing: the
+`lib/llm/moderation-finish-reason.ts` docblock mis-numbered itself "(bug 94)" — it is bug 93.
+
 #### Chat titles and story backgrounds stopped working when the cheap model misspelled one key (bug 96)
 
 A group chat kept the title "Group Chat (6 characters)" for seven interchanges and never produced a story background.

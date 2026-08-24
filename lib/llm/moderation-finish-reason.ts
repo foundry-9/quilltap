@@ -3,7 +3,7 @@
  *
  * Providers report a moderation refusal in the finish-reason field and then
  * return empty content. Quilltap had no branch for any of these strings (bug
- * 94), so a hard refusal reached the Salon as a blank message under the
+ * 93), so a hard refusal reached the Salon as a blank message under the
  * generic "the model returned an empty response, this is a known issue with
  * some providers, try resending" copy — advice that cannot work, for a cause
  * the provider had stated plainly.
