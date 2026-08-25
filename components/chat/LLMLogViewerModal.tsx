@@ -45,7 +45,7 @@ export default function LLMLogViewerModal({
     <div className="space-y-4">
       <div>
         <h4 className="qt-label qt-text mb-2">Provider & Model</h4>
-        <div className="qt-surface-alt p-3 rounded space-y-1">
+        <div className="qt-bg-surface-alt p-3 rounded space-y-1">
           <div className="flex justify-between">
             <span className="qt-text-secondary">Provider:</span>
             <span className="qt-text font-mono text-sm">{currentLog.provider}</span>
@@ -63,7 +63,7 @@ export default function LLMLogViewerModal({
 
       <div>
         <h4 className="qt-label qt-text mb-2">Request Configuration</h4>
-        <div className="qt-surface-alt p-3 rounded space-y-1">
+        <div className="qt-bg-surface-alt p-3 rounded space-y-1">
           <div className="flex justify-between">
             <span className="qt-text-secondary">Messages:</span>
             <span className="qt-text font-mono text-sm">{currentLog.request.messageCount}</span>
@@ -95,7 +95,7 @@ export default function LLMLogViewerModal({
         <h4 className="qt-label qt-text mb-2">Message Summary</h4>
         <div className="space-y-2">
           {currentLog.request.messages.map((msg, idx) => (
-            <div key={idx} className="qt-surface-alt p-2 rounded text-sm">
+            <div key={idx} className="qt-bg-surface-alt p-2 rounded text-sm">
               <div className="flex justify-between mb-1">
                 <span className="qt-text-secondary font-mono">{msg.role}</span>
                 <span className="qt-text-secondary text-xs">
@@ -115,7 +115,7 @@ export default function LLMLogViewerModal({
       {currentLog.request.fullMessages && (
         <div>
           <h4 className="qt-label qt-text mb-2">Full Messages (Verbose)</h4>
-          <pre className="font-mono text-xs whitespace-pre-wrap overflow-auto max-h-96 p-3 qt-surface-alt rounded">
+          <pre className="font-mono text-xs whitespace-pre-wrap overflow-auto max-h-96 p-3 qt-bg-surface-alt rounded">
             {formatJSON(currentLog.request.fullMessages)}
           </pre>
         </div>
@@ -143,7 +143,7 @@ export default function LLMLogViewerModal({
         <h4 className="qt-label qt-text mb-2">
           Content Preview ({currentLog.response.contentLength} chars)
         </h4>
-        <pre className="font-mono text-xs whitespace-pre-wrap overflow-auto max-h-64 p-3 qt-surface-alt rounded">
+        <pre className="font-mono text-xs whitespace-pre-wrap overflow-auto max-h-64 p-3 qt-bg-surface-alt rounded">
           {currentLog.response.contentPreview}
           {currentLog.response.contentLength > 500 && '\n\n[... truncated ...]'}
         </pre>
@@ -152,7 +152,7 @@ export default function LLMLogViewerModal({
       {currentLog.response.fullContent && (
         <div>
           <h4 className="qt-label qt-text mb-2">Full Content (Verbose)</h4>
-          <pre className="font-mono text-xs whitespace-pre-wrap overflow-auto max-h-96 p-3 qt-surface-alt rounded">
+          <pre className="font-mono text-xs whitespace-pre-wrap overflow-auto max-h-96 p-3 qt-bg-surface-alt rounded">
             {currentLog.response.fullContent}
           </pre>
         </div>
@@ -166,7 +166,7 @@ export default function LLMLogViewerModal({
       {currentLog.usage && (
         <div>
           <h4 className="qt-label qt-text mb-2">Token Usage</h4>
-          <div className="qt-surface-alt p-4 rounded grid grid-cols-3 gap-4">
+          <div className="qt-bg-surface-alt p-4 rounded grid grid-cols-3 gap-4">
             <div className="text-center">
               <p className="qt-heading-2 qt-text">
                 {currentLog.usage.promptTokens.toLocaleString()}
@@ -192,7 +192,7 @@ export default function LLMLogViewerModal({
       {currentLog.cacheUsage && (
         <div>
           <h4 className="qt-label qt-text mb-2">Cache Usage</h4>
-          <div className="qt-surface-alt p-3 rounded space-y-2">
+          <div className="qt-bg-surface-alt p-3 rounded space-y-2">
             {currentLog.cacheUsage.cacheCreationInputTokens !== undefined && (
               <div className="flex justify-between">
                 <span className="qt-text-secondary">Cache Creation:</span>
@@ -216,7 +216,7 @@ export default function LLMLogViewerModal({
       {currentLog.durationMs !== null && currentLog.durationMs !== undefined && (
         <div>
           <h4 className="qt-label qt-text mb-2">Timing</h4>
-          <div className="qt-surface-alt p-3 rounded">
+          <div className="qt-bg-surface-alt p-3 rounded">
             <div className="flex justify-between">
               <span className="qt-text-secondary">Duration:</span>
               <span className="qt-text font-mono text-sm">
@@ -228,7 +228,7 @@ export default function LLMLogViewerModal({
       )}
 
       {!currentLog.usage && !currentLog.cacheUsage && !currentLog.durationMs && (
-        <p className="qt-text-secondary text-sm p-3 qt-surface-alt rounded text-center">
+        <p className="qt-text-secondary text-sm p-3 qt-bg-surface-alt rounded text-center">
           No usage data available for this log
         </p>
       )}

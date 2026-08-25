@@ -402,7 +402,7 @@ export function ProfileModal({
                   autoFocus
                 />
                 {nameTaken && (
-                  <p className="qt-text-error qt-text-xs mt-1">
+                  <p className="qt-text-destructive qt-text-xs mt-1">
                     Another connection profile already bears this name. Names must be unique.
                   </p>
                 )}

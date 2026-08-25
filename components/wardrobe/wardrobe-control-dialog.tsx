@@ -1062,7 +1062,7 @@ function WardrobeControlDialogInner({
             entry: characters, Quilltap General, projects, and groups. */}
         <div className="flex flex-col gap-3 mb-3">
           <div className="flex items-center gap-2">
-            <label htmlFor="wardrobe-container-select" className="qt-text-sm qt-text-secondary">
+            <label htmlFor="wardrobe-container-select" className="text-sm qt-text-secondary">
               Wardrobe:
             </label>
             {selectedCharacter?.avatarUrl && (
@@ -1185,13 +1185,13 @@ function WardrobeControlDialogInner({
 
             <div className="flex-1 overflow-y-auto space-y-1 max-h-[55vh] pb-12">
               {!selectedContainer ? (
-                <div className="qt-text-sm qt-text-secondary px-3 py-4">
+                <div className="text-sm qt-text-secondary px-3 py-4">
                   Select a wardrobe to browse.
                 </div>
               ) : listLoading ? (
-                <div className="qt-text-sm qt-text-secondary px-3 py-4">Loading…</div>
+                <div className="text-sm qt-text-secondary px-3 py-4">Loading…</div>
               ) : filteredItems.length === 0 ? (
-                <div className="qt-text-sm qt-text-secondary px-3 py-4">
+                <div className="text-sm qt-text-secondary px-3 py-4">
                   No items match this filter.
                 </div>
               ) : (
@@ -1557,7 +1557,7 @@ function AvatarGenerationPane({
       <div className="flex flex-wrap items-center gap-2">
         <label
           htmlFor="wardrobe-image-profile"
-          className="qt-text-sm qt-text-secondary"
+          className="text-sm qt-text-secondary"
         >
           Image model
         </label>

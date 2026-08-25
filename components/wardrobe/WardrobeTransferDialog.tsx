@@ -217,15 +217,15 @@ export function WardrobeTransferDialog({
       )}
     >
       <div className="space-y-3">
-        <p className="qt-text-sm">
+        <p className="text-sm">
           {mode === 'move' ? 'Move' : 'Copy'} <span className="font-medium">&quot;{item.title}&quot;</span> to:
         </p>
 
         {loadingDestinations ? (
-          <p className="qt-text-sm qt-text-secondary">Loading destinations…</p>
+          <p className="text-sm qt-text-secondary">Loading destinations…</p>
         ) : (
           <div>
-            <label htmlFor="wardrobe-transfer-destination" className="qt-text-sm qt-text-secondary">
+            <label htmlFor="wardrobe-transfer-destination" className="text-sm qt-text-secondary">
               Destination
             </label>
             <select
@@ -289,7 +289,7 @@ export function WardrobeTransferDialog({
 
         {isComposite && (
           <fieldset>
-            <legend className="qt-text-sm qt-text-secondary mb-1">
+            <legend className="text-sm qt-text-secondary mb-1">
               This outfit bundles {item.componentItemIds.length}{' '}
               {item.componentItemIds.length === 1 ? 'component' : 'components'}
             </legend>
@@ -305,7 +305,7 @@ export function WardrobeTransferDialog({
                     { value: 'none', label: 'Copy the outfit alone' },
                   ] as const)
               ).map(({ value, label }) => (
-                <label key={value} className="flex items-center gap-2 cursor-pointer qt-text-sm">
+                <label key={value} className="flex items-center gap-2 cursor-pointer text-sm">
                   <input
                     type="radio"
                     name="wardrobe-transfer-components"

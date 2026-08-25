@@ -179,7 +179,7 @@ export function WardrobeItemRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span
-              className="qt-text-sm text-foreground"
+              className="text-sm text-foreground"
               style={{
                 display: '-webkit-box',
                 WebkitLineClamp: 2,

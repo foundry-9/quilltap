@@ -84,7 +84,7 @@ export function MemoryBackfillCard() {
         Some older memories may not carry an embedding &mdash; usually because the pre-write gate fell back to a keyword check when the embedding provider was briefly unavailable, or because the memory was imported before the gate became embedding-aware. Such memories can&rsquo;t be found by semantic search and are invisible to the deduplication gate, which lets phrase-variants accumulate. Running the backfill enqueues an embedding job for each of them so they rejoin the fold.
       </p>
 
-      <div className="qt-text-body">
+      <div className="qt-body">
         <div className="flex items-center gap-4">
           <div>
             <span className="qt-text-muted">Memories missing an embedding: </span>
@@ -111,7 +111,7 @@ export function MemoryBackfillCard() {
         </span>
       </div>
 
-      {error && <p className="qt-text-small qt-text-error">{error}</p>}
+      {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
     </div>
   )
 }

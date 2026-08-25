@@ -164,7 +164,7 @@ export default function LLMInspectorEntry({ log, isHighlighted }: Readonly<LLMIn
 function RequestTab({ log }: { log: LLMLog }) {
   return (
     <div className="space-y-3">
-      <div className="qt-surface-alt p-2 rounded space-y-1">
+      <div className="qt-bg-surface-alt p-2 rounded space-y-1">
         <div className="flex justify-between">
           <span className="qt-text-secondary">Provider:</span>
           <span className="qt-text font-mono">{log.provider}</span>
@@ -179,7 +179,7 @@ function RequestTab({ log }: { log: LLMLog }) {
         </div>
       </div>
 
-      <div className="qt-surface-alt p-2 rounded space-y-1">
+      <div className="qt-bg-surface-alt p-2 rounded space-y-1">
         <div className="flex justify-between">
           <span className="qt-text-secondary">Messages:</span>
           <span className="qt-text font-mono">{log.request.messageCount}</span>
@@ -250,7 +250,7 @@ function ExpandableContent({ content }: { content: string }) {
 
   return (
     <div>
-      <pre className="font-mono whitespace-pre-wrap overflow-auto max-h-60 p-2 qt-surface-alt rounded">
+      <pre className="font-mono whitespace-pre-wrap overflow-auto max-h-60 p-2 qt-bg-surface-alt rounded">
         {expanded || !needsTruncation ? content : content.slice(0, UI_TRUNCATE_LENGTH) + '...'}
       </pre>
       {needsTruncation && (
@@ -276,7 +276,7 @@ function MessageContentBlock({ role, contentLength, hasAttachments, children }: 
   const needsTruncation = children.length > UI_TRUNCATE_LENGTH
 
   return (
-    <div className="qt-surface-alt p-2 rounded">
+    <div className="qt-bg-surface-alt p-2 rounded">
       <div className="flex justify-between mb-1">
         <span className="qt-text-secondary font-mono">{role}</span>
         <span className="qt-text-secondary">
@@ -304,7 +304,7 @@ function UsageTab({ log }: { log: LLMLog }) {
   return (
     <div className="space-y-3">
       {log.usage && (
-        <div className="qt-surface-alt p-3 rounded grid grid-cols-3 gap-3">
+        <div className="qt-bg-surface-alt p-3 rounded grid grid-cols-3 gap-3">
           <div className="text-center">
             <p className="qt-heading-4 qt-text">{log.usage.promptTokens.toLocaleString()}</p>
             <p className="qt-text-secondary mt-0.5">Prompt</p>
@@ -321,7 +321,7 @@ function UsageTab({ log }: { log: LLMLog }) {
       )}
 
       {log.cacheUsage && (
-        <div className="qt-surface-alt p-2 rounded space-y-1">
+        <div className="qt-bg-surface-alt p-2 rounded space-y-1">
           {log.cacheUsage.cacheCreationInputTokens !== undefined && (
             <div className="flex justify-between">
               <span className="qt-text-secondary">Cache Creation:</span>
@@ -338,7 +338,7 @@ function UsageTab({ log }: { log: LLMLog }) {
       )}
 
       {log.durationMs != null && (
-        <div className="qt-surface-alt p-2 rounded">
+        <div className="qt-bg-surface-alt p-2 rounded">
           <div className="flex justify-between">
             <span className="qt-text-secondary">Duration:</span>
             <span className="qt-text font-mono">{(log.durationMs / 1000).toFixed(2)}s</span>
@@ -347,7 +347,7 @@ function UsageTab({ log }: { log: LLMLog }) {
       )}
 
       {!log.usage && !log.cacheUsage && log.durationMs == null && (
-        <p className="qt-text-secondary p-2 qt-surface-alt rounded text-center">
+        <p className="qt-text-secondary p-2 qt-bg-surface-alt rounded text-center">
           No usage data available for this log
         </p>
       )}

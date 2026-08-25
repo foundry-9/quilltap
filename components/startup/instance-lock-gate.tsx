@@ -33,7 +33,7 @@ export function InstanceLockGate() {
           Running two instances against the same data can cause corruption.
         </p>
 
-        <div className="qt-surface-secondary rounded-lg p-4 text-left text-sm mb-6 space-y-1">
+        <div className="qt-bg-surface-alt rounded-lg p-4 text-left text-sm mb-6 space-y-1">
           <div><span className="qt-text-secondary">Held by:</span> {envLabel}</div>
           <div><span className="qt-text-secondary">PID:</span> {conflict.pid}</div>
           <div><span className="qt-text-secondary">Host:</span> {conflict.hostname}</div>

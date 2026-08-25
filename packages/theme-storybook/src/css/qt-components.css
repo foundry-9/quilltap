@@ -2354,8 +2354,214 @@
   background-color: var(--color-muted-foreground);
 }
 
+/* Foregrounds intended for use ON a filled surface — the paired counterparts of
+   the accent/primary/success/destructive fills. Each maps to the token a theme
+   defines for text sitting on that fill, so a badge or a solid button keeps its
+   contrast on every theme instead of inheriting whatever colour the surrounding
+   page happens to be using.
+
+     <span class="qt-bg-accent qt-text-on-accent">…</span>
+     <button class="qt-bg-destructive qt-text-on-destructive">…</button>
+
+   Mind the naming: these are `-on-<fill>`, never `-<fill>-foreground`. */
 .qt-text-on-accent {
   color: var(--color-accent-foreground);
+}
+
+.qt-text-on-primary {
+  color: var(--color-primary-foreground);
+}
+
+.qt-text-on-success {
+  color: var(--color-success-foreground);
+}
+
+.qt-text-on-destructive {
+  color: var(--color-destructive-foreground);
+}
+
+/* The remaining opacity steps and surface colours of the utility families. A
+   theme that overrides --color-muted or --color-border gets all of these for
+   free; they exist so that the app never has to reach for a raw Tailwind
+   colour on a themed surface. */
+.qt-bg-card\/50 {
+  background-color: color-mix(in srgb, var(--color-card) 50%, transparent);
+}
+
+.qt-bg-card\/60 {
+  background-color: color-mix(in srgb, var(--color-card) 60%, transparent);
+}
+
+.qt-bg-card\/80 {
+  background-color: color-mix(in srgb, var(--color-card) 80%, transparent);
+}
+
+.qt-bg-card\/90 {
+  background-color: color-mix(in srgb, var(--color-card) 90%, transparent);
+}
+
+.qt-bg-default {
+  background-color: var(--color-background);
+}
+
+.qt-bg-destructive\/15 {
+  background-color: color-mix(in srgb, var(--color-destructive) 15%, transparent);
+}
+
+.qt-bg-destructive\/80 {
+  background-color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
+}
+
+.qt-bg-info\/15 {
+  background-color: color-mix(in srgb, var(--color-info) 15%, transparent);
+}
+
+.qt-bg-input {
+  background-color: var(--color-input);
+}
+
+.qt-bg-muted-foreground\/20 {
+  background-color: color-mix(in srgb, var(--color-muted-foreground) 20%, transparent);
+}
+
+.qt-bg-muted\/20 {
+  background-color: color-mix(in srgb, var(--color-muted) 20%, transparent);
+}
+
+.qt-bg-muted\/30 {
+  background-color: color-mix(in srgb, var(--color-muted) 30%, transparent);
+}
+
+.qt-bg-muted\/40 {
+  background-color: color-mix(in srgb, var(--color-muted) 40%, transparent);
+}
+
+.qt-bg-muted\/50 {
+  background-color: color-mix(in srgb, var(--color-muted) 50%, transparent);
+}
+
+.qt-bg-muted\/60 {
+  background-color: color-mix(in srgb, var(--color-muted) 60%, transparent);
+}
+
+.qt-bg-muted\/70 {
+  background-color: color-mix(in srgb, var(--color-muted) 70%, transparent);
+}
+
+.qt-bg-muted\/80 {
+  background-color: color-mix(in srgb, var(--color-muted) 80%, transparent);
+}
+
+.qt-bg-primary\/15 {
+  background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.qt-bg-primary\/30 {
+  background-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.qt-bg-secondary\/50 {
+  background-color: color-mix(in srgb, var(--color-secondary) 50%, transparent);
+}
+
+.qt-bg-success\/15 {
+  background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
+}
+
+.qt-bg-warning\/15 {
+  background-color: color-mix(in srgb, var(--color-warning) 15%, transparent);
+}
+
+.qt-border-accent {
+  border-color: var(--color-accent);
+}
+
+.qt-border-default\/50 {
+  border-color: color-mix(in srgb, var(--color-border) 50%, transparent);
+}
+
+.qt-border-default\/60 {
+  border-color: color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+
+.qt-border-default\/70 {
+  border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.qt-border-destructive\/20 {
+  border-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+}
+
+.qt-border-destructive\/40 {
+  border-color: color-mix(in srgb, var(--color-destructive) 40%, transparent);
+}
+
+.qt-border-destructive\/50 {
+  border-color: color-mix(in srgb, var(--color-destructive) 50%, transparent);
+}
+
+.qt-border-primary-foreground {
+  border-color: var(--color-primary-foreground);
+}
+
+.qt-border-primary\/20 {
+  border-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.qt-border-primary\/30 {
+  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.qt-border-primary\/40 {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+}
+
+.qt-border-primary\/50 {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+
+.qt-border-primary\/60 {
+  border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+}
+
+.qt-border-success\/50 {
+  border-color: color-mix(in srgb, var(--color-success) 50%, transparent);
+}
+
+.qt-border-warning\/50 {
+  border-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
+}
+
+.qt-text-destructive\/80 {
+  color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
+}
+
+.qt-text-info\/80 {
+  color: color-mix(in srgb, var(--color-info) 80%, transparent);
+}
+
+.qt-text-secondary\/50 {
+  color: color-mix(in srgb, var(--color-muted-foreground) 50%, transparent);
+}
+
+.qt-text-secondary\/60 {
+  color: color-mix(in srgb, var(--color-muted-foreground) 60%, transparent);
+}
+
+.qt-text-secondary\/70 {
+  color: color-mix(in srgb, var(--color-muted-foreground) 70%, transparent);
+}
+
+.qt-text-secondary\/80 {
+  color: color-mix(in srgb, var(--color-muted-foreground) 80%, transparent);
+}
+
+.qt-text-success\/80 {
+  color: color-mix(in srgb, var(--color-success) 80%, transparent);
+}
+
+.qt-text-warning\/80 {
+  color: color-mix(in srgb, var(--color-warning) 80%, transparent);
 }
 
 /* Hoverable accent surface — list rows, menu items, and option cards that
@@ -2547,6 +2753,167 @@
 
 .hover\:qt-bg-primary\/10:hover {
   background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+/* Hover foregrounds for filled surfaces — the hover partners of the
+   qt-text-on-* family, for controls that sit quiet at rest and take a filled
+   background on hover (`qt-text-secondary hover:qt-bg-success
+   hover:qt-text-on-success`). */
+.hover\:qt-text-on-accent:hover {
+  color: var(--color-accent-foreground);
+}
+
+.hover\:qt-text-on-primary:hover {
+  color: var(--color-primary-foreground);
+}
+
+.hover\:qt-text-on-success:hover {
+  color: var(--color-success-foreground);
+}
+
+.hover\:qt-text-on-destructive:hover {
+  color: var(--color-destructive-foreground);
+}
+
+/* State forms of the utilities above. Tailwind generates variants only for
+   utilities it knows about, and a class declared in @layer utilities is
+   invisible to it — so in the app every one of these is hand-written, escaped,
+   with its own pseudo-selector, and an unwritten one is inert. Mirrored here so
+   a theme author previewing hover states sees what the app actually ships. */
+.hover\:qt-bg-surface-hover:hover {
+  background-color: var(--color-muted);
+}
+
+.hover\:qt-bg-muted:hover {
+  background-color: var(--color-muted);
+}
+
+.hover\:qt-bg-muted\/30:hover {
+  background-color: color-mix(in srgb, var(--color-muted) 30%, transparent);
+}
+
+.hover\:qt-bg-muted\/40:hover {
+  background-color: color-mix(in srgb, var(--color-muted) 40%, transparent);
+}
+
+.hover\:qt-bg-muted\/50:hover {
+  background-color: color-mix(in srgb, var(--color-muted) 50%, transparent);
+}
+
+.hover\:qt-bg-muted\/80:hover {
+  background-color: color-mix(in srgb, var(--color-muted) 80%, transparent);
+}
+
+.hover\:qt-bg-primary\/5:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
+}
+
+.hover\:qt-bg-primary\/15:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.hover\:qt-bg-primary\/20:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.hover\:qt-bg-primary\/90:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 90%, transparent);
+}
+
+.hover\:qt-bg-destructive:hover {
+  background-color: var(--color-destructive);
+}
+
+.hover\:qt-bg-destructive\/20:hover {
+  background-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+}
+
+.hover\:qt-bg-destructive\/90:hover {
+  background-color: color-mix(in srgb, var(--color-destructive) 90%, transparent);
+}
+
+.hover\:qt-bg-success\/20:hover {
+  background-color: color-mix(in srgb, var(--color-success) 20%, transparent);
+}
+
+.hover\:qt-bg-success\/90:hover {
+  background-color: color-mix(in srgb, var(--color-success) 90%, transparent);
+}
+
+.hover\:qt-bg-warning\/20:hover {
+  background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+}
+
+.hover\:qt-bg-info\/20:hover {
+  background-color: color-mix(in srgb, var(--color-info) 20%, transparent);
+}
+
+.hover\:qt-text-destructive:hover {
+  color: var(--color-destructive);
+}
+
+.hover\:qt-text-destructive\/80:hover {
+  color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
+}
+
+.hover\:qt-text-warning\/80:hover {
+  color: color-mix(in srgb, var(--color-warning) 80%, transparent);
+}
+
+.hover\:qt-text-info\/80:hover {
+  color: color-mix(in srgb, var(--color-info) 80%, transparent);
+}
+
+.hover\:qt-text-primary:hover {
+  color: var(--qt-text-primary-fg, var(--color-foreground));
+}
+
+.hover\:qt-border-primary:hover {
+  border-color: var(--color-primary);
+}
+
+.hover\:qt-border-primary\/50:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+
+.hover\:qt-border-primary\/60:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+}
+
+.hover\:qt-border-accent:hover {
+  border-color: var(--color-accent);
+}
+
+.focus\:qt-border-primary:focus {
+  border-color: var(--color-primary);
+}
+
+.disabled\:qt-bg-muted:disabled {
+  background-color: var(--color-muted);
+}
+
+.disabled\:qt-text-secondary:disabled {
+  color: var(--color-muted-foreground);
+}
+
+.placeholder\:qt-text-secondary::placeholder {
+  color: var(--color-muted-foreground);
+}
+
+.file\:qt-bg-primary\/20::file-selector-button {
+  background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.hover\:file\:qt-bg-primary\/30:hover::file-selector-button {
+  background-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.hover\:qt-shadow-md:hover {
+  box-shadow: var(--qt-card-shadow-hover, 0 4px 12px hsl(225 18% 10% / 0.1), 0 2px 4px hsl(225 18% 10% / 0.05));
+}
+
+.group\/thumb:hover .group-hover\/thumb\:qt-bg-overlay-light {
+  background-color: var(--qt-overlay-light-bg, rgb(0 0 0 / 0.2));
 }
 
 /* ==========================================================================

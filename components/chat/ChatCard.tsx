@@ -349,7 +349,7 @@ export function ChatCard({
               onClick={handleAction}
               className={
                 actionType === 'delete'
-                  ? 'chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg bg-destructive qt-text-destructive-foreground shadow transition hover:qt-bg-destructive/90'
+                  ? 'chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg bg-destructive qt-text-on-destructive shadow transition hover:qt-bg-destructive/90'
                   : 'inline-flex h-10 w-10 items-center justify-center rounded-lg qt-bg-muted qt-text-secondary shadow transition hover:qt-text-destructive hover:qt-bg-destructive/10'
               }
               title={actionType === 'delete' ? 'Delete chat' : 'Remove from project'}

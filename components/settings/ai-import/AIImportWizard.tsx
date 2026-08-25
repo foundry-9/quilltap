@@ -240,7 +240,7 @@ function ConfigurationStep({
             className="qt-checkbox"
           />
           <div>
-            <span className="qt-text-default font-medium">Generate Memories</span>
+            <span className="qt-text font-medium">Generate Memories</span>
             <p className="qt-text-small qt-text-muted">
               Extract key facts and experiences as Commonplace Book memories
             </p>
@@ -255,7 +255,7 @@ function ConfigurationStep({
             className="qt-checkbox"
           />
           <div>
-            <span className="qt-text-default font-medium">Generate Example Chat</span>
+            <span className="qt-text font-medium">Generate Example Chat</span>
             <p className="qt-text-small qt-text-muted">
               Create a sample conversation demonstrating the character&apos;s voice
             </p>
@@ -334,7 +334,7 @@ function GenerationProgressStep({
                 {getStatusIcon(step.status)}
               </span>
               <div className="flex-1 min-w-0">
-                <span className={`qt-text-default ${step.status === 'pending' ? 'qt-text-muted' : ''}`}>
+                <span className={step.status === 'pending' ? 'qt-text-muted' : 'qt-text'}>
                   {STEP_DISPLAY_NAMES[stepName]}
                 </span>
                 {step.snippet && (
@@ -475,7 +475,7 @@ function ReviewStep({
       <div className="space-y-4">
         <div className="qt-bg-success/10 border qt-border-success/30 rounded-lg p-4">
           <h3 className="qt-heading-3 qt-text-success mb-2">Import Successful!</h3>
-          <p className="qt-text-default">
+          <p className="qt-text">
             <strong>{basics?.name}</strong> has been imported successfully.
             {importResult.importedCount > 1 && ` (${importResult.importedCount} entities imported)`}
           </p>
@@ -510,21 +510,21 @@ function ReviewStep({
       <div>
         <h3 className="qt-heading-3 mb-2">Character Summary</h3>
         <div className="qt-bg-muted rounded-lg p-4 space-y-2">
-          <p className="qt-text-default">
+          <p className="qt-text">
             <strong>Name:</strong> {basics?.name || 'Unknown'}
           </p>
           {basics?.title && (
-            <p className="qt-text-default">
+            <p className="qt-text">
               <strong>Title:</strong> {basics.title}
             </p>
           )}
           {pronouns && (
-            <p className="qt-text-default">
+            <p className="qt-text">
               <strong>Pronouns:</strong> {pronouns.subject}/{pronouns.object}/{pronouns.possessive}
             </p>
           )}
           {aliases && aliases.length > 0 && (
-            <p className="qt-text-default">
+            <p className="qt-text">
               <strong>Aliases:</strong> {aliases.join(', ')}
             </p>
           )}

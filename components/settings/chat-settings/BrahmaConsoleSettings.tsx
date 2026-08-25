@@ -135,7 +135,7 @@ export function BrahmaConsoleSettings() {
         </p>
       </div>
 
-      {error && <p className="qt-text-small qt-text-error">{error}</p>}
+      {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
     </div>
   )
 }

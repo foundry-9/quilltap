@@ -96,7 +96,7 @@ export function ConversationSummaryRegenerateCard() {
         <span className="qt-text-small qt-text-muted">Re-mirrors every summarised chat across all characters.</span>
       </div>
 
-      {error && <p className="qt-text-small qt-text-error">{error}</p>}
+      {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
     </div>
   )
 }

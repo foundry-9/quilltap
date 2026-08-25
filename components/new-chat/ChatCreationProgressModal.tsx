@@ -89,7 +89,7 @@ export function ChatCreationProgressModal({ state, onClose }: ChatCreationProgre
                     <span className="border-t-transparent inline-block h-3 w-3 animate-spin rounded-full border-2 border-current opacity-70" />
                   )}
                   <span className="qt-text-primary text-sm font-semibold">{panel.characterName}</span>
-                  <span className="qt-text-tertiary text-xs">
+                  <span className="qt-text-secondary text-xs">
                     {panel.slots === null ? 'consulting the wardrobe…' : 'is wearing'}
                   </span>
                 </div>
@@ -102,12 +102,12 @@ export function ChatCreationProgressModal({ state, onClose }: ChatCreationProgre
         {/* Scrolling activity log */}
         {state.logs.length > 0 && (
           <div className="qt-divider mt-1 border-t pt-3">
-            <div className="qt-text-tertiary mb-2 text-xs uppercase tracking-wide">Activity</div>
+            <div className="qt-text-secondary mb-2 text-xs uppercase tracking-wide">Activity</div>
             <div ref={logRef} className="max-h-40 overflow-y-auto pr-1">
               <ul className="flex flex-col gap-1 text-sm">
                 {state.logs.map((entry, i) => (
                   <li key={`${entry.ts}-${i}`} className={logColor(entry.level)}>
-                    <span className="qt-text-tertiary mr-2 tabular-nums">
+                    <span className="qt-text-secondary mr-2 tabular-nums">
                       {new Date(entry.ts).toLocaleTimeString()}
                     </span>
                     {entry.message}

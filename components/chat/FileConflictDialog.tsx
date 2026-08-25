@@ -138,7 +138,7 @@ export default function FileConflictDialog({
             <span className="text-lg">📄</span>
             <span className="font-medium">Existing File</span>
           </div>
-          <div className="qt-text-sm space-y-1 ml-7">
+          <div className="text-sm space-y-1 ml-7">
             <div className="font-medium">{conflict.existingFile.filename}</div>
             <div className="qt-text-xs qt-text-secondary">
               {formatBytes(conflict.existingFile.size)} • Uploaded {formatDateTime(conflict.existingFile.createdAt)}
@@ -152,7 +152,7 @@ export default function FileConflictDialog({
             <span className="text-lg">📎</span>
             <span className="font-medium">New File</span>
           </div>
-          <div className="qt-text-sm space-y-1 ml-7">
+          <div className="text-sm space-y-1 ml-7">
             <div className="font-medium">{conflict.newFile.filename}</div>
             <div className="qt-text-xs qt-text-secondary">
               {formatBytes(conflict.newFile.size)}

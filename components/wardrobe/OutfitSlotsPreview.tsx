@@ -27,7 +27,7 @@ export function OutfitSlotsPreview({ slots }: { slots: OutfitPreviewSlots }) {
         const entries = slots[key] ?? []
         return (
           <div key={key} className="qt-card p-2">
-            <div className="qt-text-tertiary mb-1 text-xs uppercase tracking-wide">{label}</div>
+            <div className="qt-text-secondary mb-1 text-xs uppercase tracking-wide">{label}</div>
             {entries.length === 0 ? (
               <div className="qt-text-muted text-xs italic">nothing</div>
             ) : (

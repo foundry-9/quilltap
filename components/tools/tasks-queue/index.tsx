@@ -76,7 +76,7 @@ export function TasksQueueCard() {
 
       {/* Simultaneous Labours — global background-job concurrency cap */}
       <div className="qt-card p-4 mb-6">
-        <label htmlFor="maxConcurrentJobs" className="qt-text-body text-foreground font-medium">
+        <label htmlFor="maxConcurrentJobs" className="qt-body text-foreground font-medium">
           Simultaneous Labours — {displayConcurrency}
         </label>
         <input

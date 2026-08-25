@@ -141,7 +141,7 @@ export function MemoryRegenerateCard() {
         </div>
       ) : (
         <div className="flex items-center gap-3">
-          <span className="qt-text-body">
+          <span className="qt-body">
             This will delete and rebuild every chat-linked memory. Continue?
           </span>
           <button
@@ -163,7 +163,7 @@ export function MemoryRegenerateCard() {
         </div>
       )}
 
-      {error && <p className="qt-text-small qt-text-error">{error}</p>}
+      {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
     </div>
   )
 }

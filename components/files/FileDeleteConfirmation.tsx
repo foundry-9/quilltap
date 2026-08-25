@@ -47,7 +47,7 @@ export default function FileDeleteConfirmation({
       <button
         onClick={onConfirm}
         disabled={isDeleting}
-        className="qt-button bg-destructive qt-text-destructive-foreground hover:qt-bg-destructive/90 disabled:opacity-50"
+        className="qt-button bg-destructive qt-text-on-destructive hover:qt-bg-destructive/90 disabled:opacity-50"
       >
         {isDeleting ? 'Deleting...' : 'Delete Anyway'}
       </button>
@@ -64,7 +64,7 @@ export default function FileDeleteConfirmation({
       closeOnEscape={!isDeleting}
     >
       <div className="space-y-4">
-        <p className="qt-text-base font-semibold">
+        <p className="text-base font-semibold">
           &quot;{filename}&quot; is associated with characters and messages
         </p>
 

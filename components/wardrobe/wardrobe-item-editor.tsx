@@ -489,7 +489,7 @@ export function WardrobeItemEditor({
             {!isEditing && sharedContainer && (
               <div>
                 <span className="qt-label mb-1 block">Add to</span>
-                <p className="qt-text-sm text-foreground">
+                <p className="text-sm text-foreground">
                   {containerLabel ??
                     (sharedContainer.scope === 'general'
                       ? 'Quilltap General'

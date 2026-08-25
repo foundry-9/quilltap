@@ -636,7 +636,7 @@ export default function InsertAnnouncementDialog({
                         setStage('compose')
                         setProposedMarkdown('')
                       }}
-                      className="qt-text-link underline"
+                      className="qt-action underline"
                       disabled={isPosting || stage === 'generating'}
                     >
                       Make it public
@@ -661,7 +661,7 @@ export default function InsertAnnouncementDialog({
                 <button
                   type="button"
                   onClick={editSeed}
-                  className="text-xs qt-text-link underline"
+                  className="text-xs qt-action underline"
                   disabled={isPosting}
                 >
                   Edit seed

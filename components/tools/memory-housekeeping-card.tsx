@@ -181,7 +181,7 @@ export function MemoryHousekeepingCard() {
         Automatic housekeeping prunes low-importance, stale memories once a character approaches its cap. High-importance, manually added, recently accessed, and well-reinforced memories are never touched. Off by default — toggle on once you&rsquo;ve reviewed the limits below.
       </p>
 
-      <label className="flex items-center gap-3 qt-text-body">
+      <label className="flex items-center gap-3 qt-body">
         <input
           type="checkbox"
           checked={config.enabled}
@@ -243,9 +243,9 @@ export function MemoryHousekeepingCard() {
 
                   return (
                     <div key={character.id} className="flex items-center gap-3">
-                      <div className="flex-1 qt-text-body">
+                      <div className="flex-1 qt-body">
                         <span>{character.name}</span>{' '}
-                        <span className={overCap ? 'qt-text-error qt-text-small' : 'qt-text-muted qt-text-small'}>
+                        <span className={overCap ? 'qt-text-destructive qt-text-small' : 'qt-text-muted qt-text-small'}>
                           ({character.memoryCount.toLocaleString()} memories)
                         </span>
                       </div>
@@ -273,7 +273,7 @@ export function MemoryHousekeepingCard() {
         </div>
       )}
 
-      <label className="flex items-center gap-3 qt-text-body">
+      <label className="flex items-center gap-3 qt-body">
         <input
           type="checkbox"
           checked={config.mergeSimilar}
@@ -298,7 +298,7 @@ export function MemoryHousekeepingCard() {
         </span>
       </div>
 
-      {error && <p className="qt-text-small qt-text-error">{error}</p>}
+      {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
     </div>
   )
 }

@@ -190,7 +190,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
                   e.stopPropagation()
                   handleDeleteImage(image.id)
                 }}
-                className="absolute bottom-2 right-2 bg-destructive qt-text-destructive-foreground p-2 rounded-full hover:qt-bg-destructive/90 transition-colors"
+                className="absolute bottom-2 right-2 bg-destructive qt-text-on-destructive p-2 rounded-full hover:qt-bg-destructive/90 transition-colors"
                 title="Delete image"
                 aria-label="Delete image"
               >
