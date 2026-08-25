@@ -15,6 +15,7 @@ export function GalleryImage({
   onImageClick,
   onImageError,
   onSetAvatar,
+  onDownloadImage,
   onDeleteImage,
   entityName: _entityName,
 }: GalleryImageProps) {
@@ -78,6 +79,20 @@ export function GalleryImage({
             ) : (
               <Icon name="user" className="w-4 h-4" />
             )}
+          </button>
+        )}
+
+        {/* Download button */}
+        {!isMissingImage && (
+          <button
+            onClick={(e) => {
+              onDownloadImage(e)
+            }}
+            className="p-1.5 rounded-full qt-shadow-md qt-bg-card qt-text-secondary hover:bg-primary hover:text-primary-foreground transition-colors"
+            title="Download image"
+            aria-label="Download image"
+          >
+            <Icon name="download" className="w-4 h-4" />
           </button>
         )}
 

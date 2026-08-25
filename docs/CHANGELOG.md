@@ -4,6 +4,21 @@
 
 ### 4.9-dev
 
+#### Fixed: a character's Photo Gallery had no reachable way to download a picture
+
+The image detail view's top-right controls — Download, Copy, Save to my gallery, Close — were painted
+behind the sticky page toolbar and could not be clicked. `.qt-workspace` sets `isolation: isolate`, so
+everything a pane renders lives in that stacking context and the modal's `z-[60]` was no longer comparable
+with the toolbar's `z-30` in an ancestor context. Nothing was clipped or mispositioned; the buttons were
+laid out exactly where they belonged and `elementFromPoint()` at their centre returned the toolbar.
+`ImageDetailModal` now renders through `createPortal(..., document.body)`, the same fix bug 40 applied to
+the search dialog.
+
+The character gallery's thumbnails also gained the hover **Download** button every other image grid
+received in 4.9-dev; this grid was the one that was missed. It fetches the picture and hands it to
+`lib/download-utils.ts`, so the desktop shell gets its native save dialog, and it stops propagation so
+downloading doesn't also open the detail view. Filed as bug 99.
+
 #### A chat's scenario can be changed mid-conversation
 
 The Salon sidebar's Chat drawer gains a **Scenario** control. It offers the same four tiers the new-chat

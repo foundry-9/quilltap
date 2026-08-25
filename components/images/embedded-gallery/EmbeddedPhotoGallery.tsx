@@ -37,6 +37,7 @@ export function EmbeddedPhotoGallery({
     handleSetAvatar,
     handleClearAvatar,
     handleDeleteImage,
+    handleDownloadImage,
     handleUpload,
   } = useGalleryData(entityId, entityType)
 
@@ -79,6 +80,11 @@ export function EmbeddedPhotoGallery({
         error: error instanceof Error ? error.message : String(error),
       })
     }
+  }
+
+  const handleDownloadImageClick = async (e: React.MouseEvent, image: GalleryImage) => {
+    e.stopPropagation()
+    await handleDownloadImage(image)
   }
 
   const handleDeleteImageClick = async (e: React.MouseEvent, image: GalleryImage) => {
@@ -162,6 +168,7 @@ export function EmbeddedPhotoGallery({
           onImageClick={(index) => setSelectedIndex(index)}
           onImageError={handleImageError}
           onSetAvatar={handleSetAvatarClick}
+          onDownloadImage={handleDownloadImageClick}
           onDeleteImage={handleDeleteImageClick}
           entityName={entityName}
         />

@@ -56,6 +56,7 @@ export interface GalleryImageProps {
   onImageClick: (index: number) => void
   onImageError: () => void
   onSetAvatar: (e: React.MouseEvent) => void
+  onDownloadImage: (e: React.MouseEvent) => void
   onDeleteImage: (e: React.MouseEvent) => void
   entityName: string
 }

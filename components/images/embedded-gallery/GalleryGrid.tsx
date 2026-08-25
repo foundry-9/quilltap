@@ -14,6 +14,7 @@ interface GalleryGridProps {
   onImageClick: (index: number) => void
   onImageError: (imageId: string) => void
   onSetAvatar: (e: React.MouseEvent, image: GalleryImageType) => void
+  onDownloadImage: (e: React.MouseEvent, image: GalleryImageType) => void
   onDeleteImage: (e: React.MouseEvent, image: GalleryImageType) => void
   entityName: string
 }
@@ -29,6 +30,7 @@ export function GalleryGrid({
   onImageClick,
   onImageError,
   onSetAvatar,
+  onDownloadImage,
   onDeleteImage,
   entityName,
 }: GalleryGridProps) {
@@ -57,6 +59,7 @@ export function GalleryGrid({
             onImageClick={() => onImageClick(index)}
             onImageError={() => onImageError(image.id)}
             onSetAvatar={(e) => onSetAvatar(e, image)}
+            onDownloadImage={(e) => onDownloadImage(e, image)}
             onDeleteImage={(e) => onDeleteImage(e, image)}
             entityName={entityName}
           />
