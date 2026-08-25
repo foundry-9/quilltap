@@ -13,7 +13,10 @@
  *    targets the item's only slot directly; for multi-slot items it opens
  *    a small popover that lets the user pick.
  *  - `⋮` kebab menu with secondary actions: Edit, toggle the default-outfit
- *    flag, Duplicate, Move, Copy, and Delete.
+ *    flag, Duplicate, Move, Copy, and Delete. Which of these appear is
+ *    governed by the `canManage` predicate: items living in the container
+ *    being browsed get the full set, items merged in from another shared
+ *    tier keep only Move and Copy.
  *
  * Composite items keep a `▶/▼` expander on the left so the user can peek at
  * the components without entering the editor.
@@ -29,6 +32,14 @@ interface WardrobeItemRowProps {
   allItems: WardrobeItem[]
   /** When set, equip controls are visible. */
   inChat: boolean
+  /**
+   * Whether an item can be managed (edited / starred / duplicated / deleted)
+   * from the current view — true when the item lives in the container being
+   * browsed, false when it was merged in from a shared tier elsewhere. Items
+   * failing this check keep only Move and Copy, and are badged `· shared`.
+   * Defaults to the character-view rule: manageable iff character-owned.
+   */
+  canManage?: (item: WardrobeItem) => boolean
   /** Label for the equip-replace button. Defaults to "Wear". */
   equipLabel?: string
   /**
@@ -53,6 +64,7 @@ export function WardrobeItemRow({
   item,
   allItems,
   inChat,
+  canManage,
   equipLabel = 'Wear',
   addAction = 'layer',
   isUpdatingDefault,
@@ -68,7 +80,9 @@ export function WardrobeItemRow({
 }: WardrobeItemRowProps) {
   const isComposite = item.componentItemIds.length > 0
   const [expanded, setExpanded] = useState(false)
-  const isShared = !item.characterId
+  // Without an explicit predicate, fall back to the character-view rule:
+  // personal items are manageable, shared-tier items are Move/Copy only.
+  const manageable = canManage ? canManage(item) : Boolean(item.characterId)
 
   const [slotPickerOpen, setSlotPickerOpen] = useState(false)
   const [kebabOpen, setKebabOpen] = useState(false)
@@ -182,7 +196,7 @@ export function WardrobeItemRow({
             {isComposite && (
               <span className="qt-text-xs qt-text-secondary">· bundle</span>
             )}
-            {isShared && <span className="qt-text-xs qt-text-secondary">· shared</span>}
+            {!manageable && <span className="qt-text-xs qt-text-secondary">· shared</span>}
             {item.isDefault && (
               <span className="qt-text-xs qt-text-secondary">· default</span>
             )}
@@ -274,7 +288,7 @@ export function WardrobeItemRow({
                   className="absolute right-0 top-full mt-1 z-30 min-w-[14rem] rounded border qt-border-default qt-bg-default shadow-md"
                 >
                   <ul className="divide-y qt-border-default">
-                    {!isShared && (
+                    {manageable && (
                       <>
                         <li>
                           <button
@@ -346,7 +360,7 @@ export function WardrobeItemRow({
                         Copy
                       </button>
                     </li>
-                    {!isShared && (
+                    {manageable && (
                       <li>
                         <button
                           type="button"
@@ -382,6 +396,7 @@ export function WardrobeItemRow({
                 item={c}
                 allItems={allItems}
                 inChat={false}
+                canManage={canManage}
                 onToggleDefault={onToggleDefault}
                 onEdit={onEdit}
                 onDuplicate={onDuplicate}

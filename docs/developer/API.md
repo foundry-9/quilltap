@@ -1633,7 +1633,7 @@ Return the destination options for moving or copying a wardrobe item between tie
 
 #### `POST /api/v1/wardrobe/transfers`
 
-Move or copy one wardrobe item between wardrobe tiers. The source item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General. Destinations are named explicitly by `{scope, id}`.
+Move or copy one wardrobe item between wardrobe tiers. The source is given one of two ways: `sourceCharacterId` (character-view probing — the item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General), or an explicit `source: { scope: 'character'|'project'|'group'|'general', id? }` naming the container directly (used when the wardrobe dialog is browsing a shared container). Destinations are named explicitly by `{scope, id}`.
 
 ---
 
@@ -5444,7 +5444,7 @@ Unlink a mount point from the project. Body: `{ mountPointId }`.
 
 #### `GET /api/v1/projects/[id]/wardrobe`
 
-List the project's wardrobe items (the project tier of the tri-tier wardrobe model: character vault + project stores + Quilltap General), read from the project's `Wardrobe/` folder.
+List the project's wardrobe items (the project tier of the four-tier wardrobe model: character vault > group stores > project stores > Quilltap General), read from the project's `Wardrobe/` folder.
 
 #### `POST /api/v1/projects/[id]/wardrobe`
 
@@ -5523,6 +5523,26 @@ Link a mount point to the group. Body: `{ mountPointId }`.
 #### `DELETE /api/v1/groups/[id]/mount-points`
 
 Unlink a mount point from the group. Body: `{ mountPointId }`.
+
+#### `GET /api/v1/groups/[id]/wardrobe`
+
+List the group's wardrobe items (the group tier of the four-tier wardrobe model: character vault > group stores > project stores > Quilltap General), read from the group's official store `Wardrobe/` folder. Ensures the store and folder first.
+
+#### `POST /api/v1/groups/[id]/wardrobe`
+
+Create a group wardrobe item. Body: `{ title, description?, imagePrompt?, types, appropriateness?, isDefault?, componentItemIds?, replace? }` (same schema as project wardrobe).
+
+#### `GET /api/v1/groups/[id]/wardrobe/[itemId]`
+
+Fetch one group wardrobe item.
+
+#### `PUT /api/v1/groups/[id]/wardrobe/[itemId]`
+
+Update one group wardrobe item.
+
+#### `DELETE /api/v1/groups/[id]/wardrobe/[itemId]`
+
+Delete one group wardrobe item. Cleans up equipped references across chats first.
 
 ---
 

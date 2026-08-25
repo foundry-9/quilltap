@@ -12,6 +12,11 @@ import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { unionTypes } from '@/lib/wardrobe/composite-types'
 import { charCountClass } from '@/lib/utils/char-count'
+import {
+  wardrobeCollectionUrl,
+  wardrobeItemUrl,
+  type WardrobeContainer,
+} from '@/lib/wardrobe/wardrobe-container'
 import { WardrobeComponentPicker } from './wardrobe-item-editor/WardrobeComponentPicker'
 import { WardrobeModeChangePrompt } from './wardrobe-item-editor/WardrobeModeChangePrompt'
 import type { CandidateItem, CandidateGroup } from './wardrobe-item-editor/types'
@@ -23,7 +28,8 @@ type EditorMode = 'single' | 'bundle'
 export type WardrobeCreateScope = 'character' | 'global' | 'project'
 
 interface WardrobeItemEditorProps {
-  characterId: string
+  /** Owning character — null when the editor is opened on a shared container. */
+  characterId: string | null
   item?: WardrobeItem | null
   /** Whether this item is being created/edited as a shared item */
   isShared?: boolean
@@ -32,6 +38,16 @@ interface WardrobeItemEditorProps {
    * selector offers a "this project" destination for new shared items.
    */
   projectId?: string | null
+  /**
+   * The container the wardrobe dialog is browsing. When it is a shared
+   * container (General / a project / a group), the editor is pinned to it:
+   * creates POST into it, edits PUT back to it, and the character-view
+   * "Add to" selector is replaced by a destination note. Character scope (or
+   * absent) keeps the classic character-view behaviour.
+   */
+  container?: WardrobeContainer | null
+  /** Display name for `container`, e.g. the project or group name. */
+  containerLabel?: string
   /** Pre-populated component IDs (used by Save-as-outfit from the Outfit Builder). */
   initialComponentItemIds?: string[]
   /** Force a starting mode (used by Save-as-outfit to open in bundle mode). */
@@ -47,6 +63,8 @@ export function WardrobeItemEditor({
   item,
   isShared: isSharedProp = false,
   projectId = null,
+  container = null,
+  containerLabel,
   initialComponentItemIds,
   initialMode,
   autoFocusTitle = false,
@@ -54,6 +72,8 @@ export function WardrobeItemEditor({
   onSave,
 }: WardrobeItemEditorProps) {
   const isEditing = !!item
+  // A non-character container pins the editor to that container's endpoints.
+  const sharedContainer = container && container.scope !== 'character' ? container : null
   // Whether the item lives in a shared tier (Quilltap General or a project
   // store) rather than a character vault. On edit this is fixed by the item's
   // own tier; on create the "Add to" selector (`createScope`) governs routing,
@@ -75,11 +95,17 @@ export function WardrobeItemEditor({
     ? isShared
       ? 'Worn by default by every character who can reach this item'
       : "Part of this character's default outfit"
-    : createScope === 'global'
-      ? 'Worn by default by every character'
-      : createScope === 'project'
-        ? 'Worn by default by every character in this project'
-        : "Part of this character's default outfit"
+    : sharedContainer
+      ? sharedContainer.scope === 'general'
+        ? 'Worn by default by every character'
+        : sharedContainer.scope === 'project'
+          ? 'Worn by default by every character in this project'
+          : 'Worn by default by every character in this group'
+      : createScope === 'global'
+        ? 'Worn by default by every character'
+        : createScope === 'project'
+          ? 'Worn by default by every character in this project'
+          : "Part of this character's default outfit"
 
   const { formData, handleChange } = useFormState({
     title: item?.title || '',
@@ -147,17 +173,28 @@ export function WardrobeItemEditor({
     if (autoFocusTitle) titleInputRef.current?.focus()
   }, [autoFocusTitle])
 
-  // Load candidate items (this character's wardrobe + project + shared
-  // archetypes) so the user can pick components for a composite. We do this once
-  // on mount; adding fresh items mid-edit is rare and a re-open will refresh.
+  // Load candidate items so the user can pick components for a composite. In
+  // the character view: this character's wardrobe + project + shared
+  // archetypes. Pinned to a shared container: that container's items + the
+  // General archetypes (General alone when it *is* the container). We do this
+  // once on mount; adding fresh items mid-edit is rare and a re-open will
+  // refresh.
   useEffect(() => {
     let cancelled = false
     const load = async (): Promise<void> => {
       setCandidatesLoading(true)
       try {
         const [personalRes, projectRes, archetypeRes] = await Promise.all([
-          fetch(`/api/v1/characters/${characterId}/wardrobe`),
-          projectId ? fetch(`/api/v1/projects/${projectId}/wardrobe`) : Promise.resolve(null),
+          sharedContainer
+            ? sharedContainer.scope === 'general'
+              ? Promise.resolve(null)
+              : fetch(wardrobeCollectionUrl(sharedContainer))
+            : characterId
+              ? fetch(`/api/v1/characters/${characterId}/wardrobe`)
+              : Promise.resolve(null),
+          !sharedContainer && projectId
+            ? fetch(`/api/v1/projects/${projectId}/wardrobe`)
+            : Promise.resolve(null),
           fetch('/api/v1/wardrobe'),
         ])
 
@@ -174,8 +211,10 @@ export function WardrobeItemEditor({
             })
           }
         }
-        if (personalRes.ok) {
+        if (personalRes && personalRes.ok) {
           const data = (await personalRes.json()) as { wardrobeItems?: WardrobeItem[] }
+          // In a shared container this first fetch IS the container's list;
+          // its items are the local (manageable) set, not shared imports.
           pushCandidates(data.wardrobeItems, false)
         }
         if (projectRes && projectRes.ok) {
@@ -200,7 +239,8 @@ export function WardrobeItemEditor({
     return () => {
       cancelled = true
     }
-  }, [characterId, projectId])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sharedContainer is derived from container; key on its parts
+  }, [characterId, projectId, container?.scope, container?.id])
 
   /**
    * Items the user can pick as components, excluding:
@@ -365,11 +405,17 @@ export function WardrobeItemEditor({
         replace: isBundle ? replace : false,
       }
 
-      // Route to the correct API endpoint. Editing keeps the item in its
-      // existing tier (shared → Quilltap General, else the character vault);
+      // Route to the correct API endpoint. Pinned to a shared container, both
+      // edits and creates target that container's own routes — an edit must
+      // never leak a project or group item into Quilltap General. Otherwise
+      // (character view): editing keeps the item in its existing tier and
       // creating honours the chosen destination scope.
       let url: string
-      if (isEditing) {
+      if (sharedContainer) {
+        url = isEditing
+          ? wardrobeItemUrl(sharedContainer, item.id)
+          : wardrobeCollectionUrl(sharedContainer)
+      } else if (isEditing) {
         url = isShared
           ? `/api/v1/wardrobe/${item.id}`
           : `/api/v1/characters/${characterId}/wardrobe/${item.id}`
@@ -438,9 +484,32 @@ export function WardrobeItemEditor({
           </div>
 
           <div className="qt-dialog-body space-y-4 flex-1">
+            {/* Pinned destination — creating inside a shared container always
+                saves into that container; no scope to choose. */}
+            {!isEditing && sharedContainer && (
+              <div>
+                <span className="qt-label mb-1 block">Add to</span>
+                <p className="qt-text-sm text-foreground">
+                  {containerLabel ??
+                    (sharedContainer.scope === 'general'
+                      ? 'Quilltap General'
+                      : sharedContainer.scope === 'project'
+                        ? 'This project'
+                        : 'This group')}
+                </p>
+                <p className="qt-text-xs qt-text-secondary mt-1">
+                  {sharedContainer.scope === 'general'
+                    ? 'Every character, in every chat, can wear it.'
+                    : sharedContainer.scope === 'project'
+                      ? "Every character in this project's chats can wear it."
+                      : 'Every character in this group can wear it.'}
+                </p>
+              </div>
+            )}
+
             {/* Destination scope — only when creating. Editing keeps an item in
                 its existing tier. */}
-            {!isEditing && (
+            {!isEditing && !sharedContainer && (
               <div>
                 <span className="qt-label mb-2 block">Add to</span>
                 <div

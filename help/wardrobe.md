@@ -44,9 +44,9 @@ A character may have many items in each slot, and equip multiple of them at once
 
 To furnish a character's wardrobe, open the **Wardrobe** dialog — the clothes-hanger icon on the left sidebar, reachable from any page that bears the sidebar (Salon, Aurora, Prospero, and so on). Opening it from a character's Aurora page conveniently preselects that character.
 
-1. Pick the character from the dropdown at the top of the dialog (if one isn't already selected)
+1. Pick a wardrobe from the dropdown at the top of the dialog — a character, Quilltap General, a project, or a group (if one isn't already selected)
 2. Click **+ New Item**
-3. Use the **"Add to"** selector to choose where the garment lives — **This character** (a personal item, the default), **Shared — everywhere** (a household archetype), or **Shared — this project** (offered when you've opened the dialog inside a project's chat). See [Where Wardrobe Items Come From](#where-wardrobe-items-come-from-four-tiers) for what each tier means.
+3. Use the **"Add to"** selector to choose where the garment lives — **This character** (a personal item, the default), **Shared — everywhere** (a household archetype), or **Shared — this project** (offered when you've opened the dialog inside a project's chat). See [Where Wardrobe Items Come From](#where-wardrobe-items-come-from-four-tiers) for what each tier means. (When you are browsing a shared wardrobe rather than a character's, there is nothing to choose: the new garment is stitched straight into the container on display.)
 4. Choose the **slot(s)** the garment covers (top, bottom, footwear, accessories, or hair)
 5. Give the item a **title** (e.g., "Burgundy velvet smoking jacket") and a **description** --- as lavish or as terse as you please --- that the AI will use when referencing the garment
 6. Optionally supply a **Portrait Cue** --- a short, literal phrase whispered to the portraitist and the Lantern when a likeness is drawn (see [Portrait Cues](#portrait-cues-dressing-for-the-camera) below)
@@ -59,7 +59,8 @@ For day-to-day fussing-about with what a character is wearing, there is a more d
 
 What the dialog allows you to do, with the directness of a valet pulling out the morning's tweeds:
 
-- **Pick any character** from a single dropdown at the top — the dialog needn't be tied to whoever is presently speaking in a chat.
+- **Pick any wardrobe** from a single dropdown at the top — and not merely a character's. The menu lists every place a garment can hang: your **characters**, the household's **Quilltap General** library, each **project**, and each **group** — the very same rollcall the Move/Copy destination picker offers. Choose a character and you see their full wearable pool, tiers merged, exactly as before; choose a shared container and you see precisely what hangs in *it*, ready for honest housekeeping.
+- **Curate a shared wardrobe in place.** When browsing General, a project, or a group, every item and outfit there submits to the full `⋮` menu — Edit, star-as-default, Duplicate, Move, Copy, Delete — with no detour through a character or the project's own page. (There is nobody to dress in this view, so the Wear buttons and the right-hand column politely absent themselves, and **+ New Item** stitches its creations straight into the container on display.)
 - **Browse the wardrobe** in full: filter by slot, mark items as **default** (a star toggle), edit them in place, **duplicate** them (the item's `⋮` menu mints an identical copy with "(copy)" appended to its name — handy for spinning a near-twin garment off an existing one; duplicating a composite outfit keeps the very same component pieces rather than cloning them anew), **move** them, **copy** them, delete them, or compose new ones.
 - **Build composite items** — a "Rain Outfit" that bundles a raincoat, jeans, and boots; a "Nice Jewellery" set comprising earrings, locket, and ring. The editor's *Composes* panel lets you pick existing items as components; the system computes the slot coverage automatically and refuses to allow circular bundles.
 - When opened **inside a chat**, a second column appears with two tabs:
@@ -116,7 +117,7 @@ When you add a new garment from the Wardrobe dialog, an **"Add to"** selector at
 - **Shared — everywhere** — a household archetype in Quilltap General, wearable by every character in every chat.
 - **Shared — this project** — a [Project Wardrobe](project-wardrobe.md) item (offered only when you're in a chat that belongs to a project), wearable by every character in that project's chats.
 
-Shared items appear in the dialog's list tagged "· shared" and are wear-only there; manage household archetypes from any character's wardrobe and project items from the project's [Wardrobe card](project-wardrobe.md). (Editing an existing item keeps it in whichever tier it already lives.)
+When you are viewing a *character's* wardrobe, items borrowed from a shared tier appear tagged "· shared" and offer only **Move** and **Copy** — one does not rummage in the communal cupboard from a guest's bedroom. To edit, duplicate, star, or delete a shared item, select its home container (Quilltap General, the project, or the group) from the **Wardrobe** dropdown at the top of the dialog and manage it there in place; a project's items remain equally reachable from the project's [Wardrobe card](project-wardrobe.md). (Editing an existing item keeps it in whichever tier it already lives — edits never wander between containers.)
 
 A shared item marked as a **default** garment is worn by *every* character — a household archetype dresses the whole cast in every chat, a project item dresses everyone in that project's chats. Use the honour sparingly, and only when the garment truly is a uniform: a mourning band for a season of grief, the livery of a great house, the regimental coat that no member of the regiment would be seen without. Any character who would rather not may keep a personal copy of the item with its default flag turned off, and the house will say nothing further about it.
 

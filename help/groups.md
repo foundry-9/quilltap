@@ -44,7 +44,9 @@ will find:
   the household livery, the regimental kit, the club's dinner jackets. Every member
   may *wear* them — in any chat, whether or not the club is mentioned — without any
   one of them owning the coat. Move or copy a garment onto the shelf from the item's
-  `⋮` menu in the Wardrobe dialog, choosing the Group under **Groups**. A group
+  `⋮` menu in the Wardrobe dialog, choosing the Group under **Groups** — or select
+  the Group itself from the dialog's **Wardrobe** dropdown to stock, tailor, and
+  prune the shelf directly. A group
   garment marked **default** dresses every member at the opening of the curtain. It
   sits between a character's own armoire and the project's wardrobe in the tiers, so
   a member's personal copy of an item shadows the Group's; see

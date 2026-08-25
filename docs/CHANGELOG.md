@@ -4,6 +4,28 @@
 
 ### 4.9-dev
 
+#### The Wardrobe dialog browses and edits every wardrobe container
+
+The dialog's top dropdown now lists every place a wardrobe item or outfit can live — each character, Quilltap
+General, each project, and each group (the same roster the Move/Copy destination picker offers) — instead of
+characters only. Selecting a shared container shows exactly its contents with the full `⋮` menu (Edit, star as
+default, Duplicate, Move, Copy, Delete) and a `+ New Item` that creates directly in that container; the
+character-only fitting room, Wear buttons, and Import-from-image hide in that mode. In a character's view the
+old rule stands: items merged in from a shared tier elsewhere stay Move/Copy-only.
+
+Supporting changes:
+
+- New group wardrobe API (`/api/v1/groups/[id]/wardrobe` and `.../[itemId]`, GET/POST/PUT/DELETE), mirroring
+  the project routes — previously the group tier had no CRUD endpoints at all, so group items could only be
+  created by transfer.
+- The transfers API accepts an explicit `source: { scope, id }` alongside the legacy `sourceCharacterId`
+  probing, so moves/copies work when browsing a shared container; the transfer dialog also hides the item's
+  known current home from the destination list.
+- The item editor routes edits to the item's actual container. Previously any "shared" edit was sent to the
+  Quilltap General endpoint, which would have misfiled a project or group item (unreachable in the UI before,
+  latent bug regardless).
+- Duplicating an item now also copies its Portrait Cue (`imagePrompt`), which was silently dropped before.
+
 #### Creating a project with a blank description works again (bug 98)
 
 The create dialogs send `description: null` when the field is left empty, but the create schema's bare

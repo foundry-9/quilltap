@@ -35,6 +35,11 @@ jest.mock('@/lib/mount-index/project-wardrobe', () => ({
   readProjectWardrobe: jest.fn(),
 }))
 
+jest.mock('@/lib/mount-index/group-wardrobe', () => ({
+  ensureGroupWardrobeFolder: jest.fn(),
+  readGroupWardrobe: jest.fn(),
+}))
+
 jest.mock('@/lib/mount-index/general-wardrobe', () => ({
   readGeneralWardrobe: jest.fn(),
 }))
@@ -52,6 +57,7 @@ import { GET, POST } from '@/app/api/v1/wardrobe/transfers/route'
 import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store'
 import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store'
 import { ensureProjectWardrobeFolder, readProjectWardrobe } from '@/lib/mount-index/project-wardrobe'
+import { ensureGroupWardrobeFolder, readGroupWardrobe } from '@/lib/mount-index/group-wardrobe'
 import { readGeneralWardrobe } from '@/lib/mount-index/general-wardrobe'
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths'
 import { createProjectWardrobeItem, deleteProjectWardrobeItem } from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
@@ -87,6 +93,8 @@ describe('wardrobe transfer route', () => {
     ;(ensureGroupOfficialStore as jest.Mock).mockResolvedValue({ mountPointId: 'group-mount-1' })
     ;(ensureProjectWardrobeFolder as jest.Mock).mockResolvedValue({ folderId: 'folder-1' })
     ;(readProjectWardrobe as jest.Mock).mockResolvedValue([])
+    ;(ensureGroupWardrobeFolder as jest.Mock).mockResolvedValue({ folderId: 'folder-1' })
+    ;(readGroupWardrobe as jest.Mock).mockResolvedValue([])
     ;(readGeneralWardrobe as jest.Mock).mockResolvedValue([])
     ;(ensureFolderPath as jest.Mock).mockResolvedValue('folder-1')
     ;(createProjectWardrobeItem as jest.Mock).mockImplementation(async (_mount: string, item: any) => item)
@@ -264,5 +272,99 @@ describe('wardrobe transfer route', () => {
       'project-mount-1',
       expect.objectContaining({ id: 'copy-uuid-1' }),
     )
+  })
+
+  it('POST resolves an explicit group source without any character probing', async () => {
+    const groupItem = {
+      id: 'item-g1',
+      characterId: null,
+      title: 'Regimental sash',
+      description: null,
+      imagePrompt: null,
+      types: ['accessories'],
+      componentItemIds: [],
+      appropriateness: null,
+      isDefault: false,
+      replace: false,
+      migratedFromClothingRecordId: null,
+      archivedAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    mockCtx.repos.groups.findById.mockResolvedValue({ id: 'group-1', name: 'Main Cast' })
+    mockCtx.repos.characters.findById.mockResolvedValue({ id: 'char-dst', userId: 'user-1' })
+    ;(readGroupWardrobe as jest.Mock).mockResolvedValue([groupItem])
+    mockCtx.repos.wardrobe.create.mockImplementation(async (data: any, options: any) => ({
+      ...groupItem,
+      ...data,
+      id: options.id,
+      characterId: data.characterId,
+    }))
+
+    const res = await POST(req({
+      action: 'move',
+      itemId: 'item-g1',
+      source: { scope: 'group', id: 'group-1' },
+      destination: { scope: 'character', id: 'char-dst' },
+    }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.action).toBe('move')
+    expect(body.wardrobeItem.characterId).toBe('char-dst')
+    // The item was resolved straight from the named group's mount.
+    expect(readGroupWardrobe).toHaveBeenCalledWith('group-mount-1', true)
+    // The move deletes from the group's mount folder.
+    expect(deleteProjectWardrobeItem).toHaveBeenCalledWith('group-mount-1', 'item-g1')
+  })
+
+  it('POST resolves an explicit general source and copies into a project', async () => {
+    const generalItem = {
+      id: 'item-gen',
+      characterId: null,
+      title: 'House cloak',
+      description: null,
+      imagePrompt: null,
+      types: ['top'],
+      componentItemIds: [],
+      appropriateness: null,
+      isDefault: false,
+      replace: false,
+      migratedFromClothingRecordId: null,
+      archivedAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+
+    ;(readGeneralWardrobe as jest.Mock).mockResolvedValue([generalItem])
+    mockCtx.repos.projects.findById.mockResolvedValue({ id: 'project-1', name: 'Campaign' })
+
+    const res = await POST(req({
+      action: 'copy',
+      itemId: 'item-gen',
+      source: { scope: 'general' },
+      destination: { scope: 'project', id: 'project-1' },
+    }))
+    const body = await res.json()
+
+    expect(res.status).toBe(200)
+    expect(body.action).toBe('copy')
+    expect(createProjectWardrobeItem).toHaveBeenCalledWith(
+      'project-mount-1',
+      expect.objectContaining({ id: 'copy-uuid-1', characterId: null }),
+    )
+    // Copy leaves the general original in place.
+    expect(mockCtx.repos.wardrobe.delete).not.toHaveBeenCalled()
+  })
+
+  it('POST rejects a body naming neither sourceCharacterId nor source', async () => {
+    const res = await POST(req({
+      action: 'copy',
+      itemId: 'item-1',
+      destination: { scope: 'general' },
+    }))
+
+    expect(res.status).toBe(400)
   })
 })

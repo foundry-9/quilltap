@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import {
+  sameWardrobeContainer,
+  type WardrobeContainer,
+} from '@/lib/wardrobe/wardrobe-container'
 
 type TransferMode = 'move' | 'copy'
 type DestinationScope = 'general' | 'project' | 'group' | 'character'
@@ -24,8 +28,23 @@ interface WardrobeTransferDialogProps {
   isOpen: boolean
   mode: TransferMode
   item: WardrobeItem
-  sourceCharacterId: string
+  /**
+   * Character-view source: the server probes the character's reachable tiers
+   * (vault → project → groups → General) for the item. Null when the dialog
+   * is browsing a shared container — pass `source` instead.
+   */
+  sourceCharacterId: string | null
   sourceProjectId: string | null
+  /**
+   * Explicit source container (shared-container views): the server resolves
+   * the item straight from this container, no character probing.
+   */
+  source?: WardrobeContainer | null
+  /**
+   * The container the item is known to live in — hidden from the destination
+   * list, since moving or copying an item onto itself is refused anyway.
+   */
+  excludeDestination?: WardrobeContainer | null
   onClose: () => void
   onTransferred: () => Promise<void> | void
 }
@@ -55,6 +74,8 @@ export function WardrobeTransferDialog({
   item,
   sourceCharacterId,
   sourceProjectId,
+  source = null,
+  excludeDestination = null,
   onClose,
   onTransferred,
 }: WardrobeTransferDialogProps) {
@@ -77,7 +98,11 @@ export function WardrobeTransferDialog({
       })
       .then((body) => {
         setDestinations(body.destinations)
-        if (body.destinations.general.available) {
+        const generalExcluded = sameWardrobeContainer(excludeDestination, {
+          scope: 'general',
+          id: null,
+        })
+        if (body.destinations.general.available && !generalExcluded) {
           setSelectedDestination(encodeDestination('general', null))
         }
       })
@@ -87,12 +112,30 @@ export function WardrobeTransferDialog({
       .finally(() => {
         setLoadingDestinations(false)
       })
-  }, [isOpen])
+  }, [isOpen, excludeDestination])
 
   const selection = useMemo(
     () => decodeDestination(selectedDestination),
     [selectedDestination],
   )
+
+  // The item's known home container is dropped from the list — the server
+  // refuses same-place transfers, so offering it would only invite a scolding.
+  const visibleDestinations = useMemo<DestinationsPayload | null>(() => {
+    if (!destinations) return null
+    if (!excludeDestination) return destinations
+    const excluded = (scope: DestinationScope, id: string | null): boolean =>
+      sameWardrobeContainer(excludeDestination, { scope, id })
+    return {
+      general: {
+        ...destinations.general,
+        available: destinations.general.available && !excluded('general', null),
+      },
+      projects: destinations.projects.filter((p) => !excluded('project', p.id)),
+      groups: destinations.groups.filter((g) => !excluded('group', g.id)),
+      users: destinations.users.filter((u) => !excluded('character', u.id)),
+    }
+  }, [destinations, excludeDestination])
 
   const submitLabel = mode === 'move' ? 'Move item' : 'Copy item'
   const title = mode === 'move' ? 'Move wardrobe item' : 'Copy wardrobe item'
@@ -107,8 +150,11 @@ export function WardrobeTransferDialog({
         body: JSON.stringify({
           action: mode,
           itemId: item.id,
-          sourceCharacterId,
+          ...(sourceCharacterId ? { sourceCharacterId } : {}),
           sourceProjectId,
+          ...(source
+            ? { source: { scope: source.scope, ...(source.id ? { id: source.id } : {}) } }
+            : {}),
           destination: {
             scope: selection.scope,
             ...(selection.id ? { id: selection.id } : {}),
@@ -178,22 +224,22 @@ export function WardrobeTransferDialog({
               onChange={(e) => setSelectedDestination(e.target.value)}
               disabled={working}
             >
-              {!destinations?.general.available &&
-                destinations?.projects.length === 0 &&
-                destinations?.groups.length === 0 &&
-                destinations?.users.length === 0 && (
+              {!visibleDestinations?.general.available &&
+                visibleDestinations?.projects.length === 0 &&
+                visibleDestinations?.groups.length === 0 &&
+                visibleDestinations?.users.length === 0 && (
                   <option value="">No destinations available</option>
                 )}
 
-              {destinations?.general.available && (
+              {visibleDestinations?.general.available && (
                 <optgroup label="General">
-                  <option value={encodeDestination('general', null)}>{destinations.general.label}</option>
+                  <option value={encodeDestination('general', null)}>{visibleDestinations.general.label}</option>
                 </optgroup>
               )}
 
-              {destinations && destinations.projects.length > 0 && (
+              {visibleDestinations && visibleDestinations.projects.length > 0 && (
                 <optgroup label="Projects">
-                  {destinations.projects.map((project) => (
+                  {visibleDestinations.projects.map((project) => (
                     <option
                       key={`project-${project.id}`}
                       value={encodeDestination('project', project.id)}
@@ -204,9 +250,9 @@ export function WardrobeTransferDialog({
                 </optgroup>
               )}
 
-              {destinations && destinations.groups.length > 0 && (
+              {visibleDestinations && visibleDestinations.groups.length > 0 && (
                 <optgroup label="Groups">
-                  {destinations.groups.map((group) => (
+                  {visibleDestinations.groups.map((group) => (
                     <option key={`group-${group.id}`} value={encodeDestination('group', group.id)}>
                       {group.name}
                     </option>
@@ -214,9 +260,9 @@ export function WardrobeTransferDialog({
                 </optgroup>
               )}
 
-              {destinations && destinations.users.length > 0 && (
+              {visibleDestinations && visibleDestinations.users.length > 0 && (
                 <optgroup label="Users">
-                  {destinations.users.map((user) => (
+                  {visibleDestinations.users.map((user) => (
                     <option
                       key={`character-${user.id}`}
                       value={encodeDestination('character', user.id)}
