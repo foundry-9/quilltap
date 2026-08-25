@@ -79,6 +79,13 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      # The CLI's completion suite hands the zsh template to `zsh -n`, and the
+      # ubuntu runner image ships without zsh. Absent it the test skips itself
+      # rather than failing, so install it here to keep the check honest —
+      # this is the only place that check ever runs unattended.
+      - name: Install zsh (for the completion-template parse check)
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
       - name: Run tests with coverage
         run: npm run test:coverage
 

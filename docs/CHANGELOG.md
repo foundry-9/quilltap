@@ -52,6 +52,10 @@ than the default instance's. Names containing spaces or colons ("Project Files: 
 correctly instead of being chopped into separate candidates. fish, whose completions already survived
 flags, gains store names on `--mount` only.
 
+The new completion test handed the zsh template to `zsh -n` unconditionally, which broke CI: GitHub's
+ubuntu runner image has no zsh, so the check failed with `spawnSync zsh ENOENT`. The test now skips that
+one assertion where zsh is not installed, and CI's test job installs zsh so the check still runs there.
+
 #### Fixed: solid green and red buttons never set their own text color
 
 `qt-text-success-foreground` and `qt-text-destructive-foreground` appeared on fifteen elements and were

@@ -11,6 +11,11 @@
  * COMPREPLY back). Zsh's completion system can only be driven from inside a
  * completion widget, so its template is checked structurally instead.
  *
+ * The one zsh assertion that needs a real `zsh` — the parse check — skips
+ * where the shell isn't installed. Bash is on every machine that runs this
+ * suite; zsh is not (GitHub's ubuntu runners ship without it, which is why
+ * CI's test job installs it before calling jest).
+ *
  * @jest-environment node
  */
 
@@ -45,6 +50,16 @@ function makeStubBin() {
 
 const STUB_BIN = makeStubBin();
 afterAll(() => fs.rmSync(STUB_BIN, { recursive: true, force: true }));
+
+/** Whether a real `zsh` exists to hand a script to. */
+const HAS_ZSH = (() => {
+  try {
+    execFileSync('zsh', ['-c', ':'], { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 /**
  * Complete `line` with the bash template and return the candidate list.
@@ -138,7 +153,8 @@ describe('zsh completion parses positions instead of counting words', () => {
     expect(dispatchers.length).toBeGreaterThanOrEqual(6);
   });
 
-  it('is syntactically valid', () => {
+  // Needs the shell itself; skipped rather than failed where it is absent.
+  (HAS_ZSH ? it : it.skip)('is syntactically valid', () => {
     const file = path.join(STUB_BIN, '_quilltap');
     fs.writeFileSync(file, tpl);
     expect(() => execFileSync('zsh', ['-n', file], { stdio: 'pipe' })).not.toThrow();
