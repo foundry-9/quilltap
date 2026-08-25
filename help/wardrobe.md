@@ -130,6 +130,8 @@ When you use **Move** or **Copy** from an item's `⋮` menu, Quilltap opens a de
 
 **Copy** always generates a fresh wardrobe item ID at the destination. **Move** keeps the item's existing ID and removes it from the source after a successful write.
 
+When the item in question is an **outfit** — a composite bundling other garments — the picker asks one further question: what of the components? The answer is all or nothing, nested pieces included. Moving an outfit offers to *move* the components along, *copy* them (leaving the originals behind), or leave them where they hang; copying an outfit offers simply to copy the components too, or not. Only components that live in the same wardrobe as the outfit make the journey — pieces borrowed from a shared tier are already reachable and stay put. However the components travel, the outfit arrives properly rewired: its component list points at the very pieces that came with it, so nothing turns up at the destination clutching a list of garments that stayed home.
+
 ### Composite Items (Bundled Outfits)
 
 Rather than selecting each garment individually every time a character must dress for an occasion, you may compose a single wardrobe item out of *other* wardrobe items. A "Garden Party Attire" composite might bundle a linen blazer, white slacks, and oxfords; a "Nice Jewellery" composite might bundle a pair of earrings, a locket, and a ring. The composite itself is a wardrobe item like any other — it covers whichever slots its components do, and one gesture dresses the character in the whole of it.

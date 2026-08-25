@@ -240,20 +240,31 @@ export function slugifyWardrobeTitle(title: string): string {
 }
 
 /**
- * Build a `{ itemId → slug }` map from a list of wardrobe items, taking the
- * first item that slugifies to each slug (skipping later collisions). Mirrors
- * the read-time slug map and lets `buildWardrobeItemFile` translate
- * `componentItemIds` UUIDs to slugs without a separate pass.
+ * Build a `{ itemId → slug }` map from a list of wardrobe items, and let
+ * `buildWardrobeItemFile` translate `componentItemIds` UUIDs to slugs without
+ * a separate pass.
+ *
+ * A slug borne by MORE THAN ONE item in the list is assigned to nobody — every
+ * reference to any of the colliders is written as a UUID instead. A slug is
+ * only an alias for "the one item with this title"; when two items share the
+ * title, writer array order and the reader's filename-sorted order can crown
+ * different winners, silently rewiring a composite's components on the next
+ * read (a moved outfit pointing at a same-titled stranger instead of the piece
+ * that travelled with it). The UUID fallback is exact in both directions.
  */
 export function buildSlugByItemIdMap(
   items: readonly WardrobeItem[],
 ): Map<string, string> {
-  const slugByItemId = new Map<string, string>();
-  const claimedSlugs = new Set<string>();
+  const slugCounts = new Map<string, number>();
   for (const item of items) {
     const slug = slugifyWardrobeTitle(item.title);
-    if (slug.length === 0 || claimedSlugs.has(slug)) continue;
-    claimedSlugs.add(slug);
+    if (slug.length === 0) continue;
+    slugCounts.set(slug, (slugCounts.get(slug) ?? 0) + 1);
+  }
+  const slugByItemId = new Map<string, string>();
+  for (const item of items) {
+    const slug = slugifyWardrobeTitle(item.title);
+    if (slug.length === 0 || slugCounts.get(slug) !== 1) continue;
     slugByItemId.set(item.id, slug);
   }
   return slugByItemId;

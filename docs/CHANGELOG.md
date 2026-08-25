@@ -4,6 +4,27 @@
 
 ### 4.9-dev
 
+#### Moving or copying an outfit can bring its components along
+
+Transferring a composite outfit used to move just the outfit, leaving its component references pointing at
+items that stayed behind — often unresolvable at the destination. The transfer dialog now prompts when the
+item is an outfit: moving offers to move the components, copy them (originals stay), or leave them; copying
+offers to copy them or not. The choice is all-or-nothing and covers nested composites transitively. Only
+components living in the same source container travel (shared-tier pieces are already reachable and stay
+put). When copies mint new IDs, the transferred outfit's `componentItemIds` (and those of any nested
+composites that travelled) are rewritten to the new IDs, and a post-write verification confirms every
+travelled reference resolves at the destination. Copying an outfit while moving its components is refused
+(it would strand the original), and any destination ID collision rejects the whole transfer before anything
+is written.
+
+Verifying the ID contract surfaced a latent vault bug, also fixed: composite references are stored as title
+slugs, and `buildSlugByItemIdMap` handed a colliding slug to whichever item came first in write order while
+the reader resolved it in filename order — so two same-titled items in one container could silently rewire an
+outfit's components on the next read. Ambiguous slugs are now assigned to nobody; every reference to a
+colliding item is written as an exact UUID. The transfer endpoint's post-write verification reads the outfit
+back from the destination and compares its component references against the plan, logging and reporting
+`unresolvedComponentIds` on any mismatch.
+
 #### The Wardrobe dialog browses and edits every wardrobe container
 
 The dialog's top dropdown now lists every place a wardrobe item or outfit can live — each character, Quilltap

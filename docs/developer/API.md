@@ -1635,6 +1635,8 @@ Return the destination options for moving or copying a wardrobe item between tie
 
 Move or copy one wardrobe item between wardrobe tiers. The source is given one of two ways: `sourceCharacterId` (character-view probing — the item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General), or an explicit `source: { scope: 'character'|'project'|'group'|'general', id? }` naming the container directly (used when the wardrobe dialog is browsing a shared container). Destinations are named explicitly by `{scope, id}`.
 
+For a composite (outfit), the optional `components: 'move'|'copy'|'none'` field brings the transitive closure of its **same-container** components along — all or nothing (components living in other tiers stay put). `move` keeps component ids; `copy` mints fresh ids and rewrites `componentItemIds` on the transferred outfit (and on any nested composites that travelled) to the new ids, so references stay resolvable at the destination. `action: 'copy'` with `components: 'move'` is refused (it would strand the original outfit). Every planned id is checked against the destination before anything is written; a post-write verification confirms the stored outfit's travelled component references resolve, reporting `componentsTransferred` (and `unresolvedComponentIds` if verification ever fails).
+
 ---
 
 ### Character Wardrobe
