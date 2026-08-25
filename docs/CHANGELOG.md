@@ -4,6 +4,15 @@
 
 ### 4.9-dev
 
+#### Creating a project with a blank description works again (bug 98)
+
+The create dialogs send `description: null` when the field is left empty, but the create schema's bare
+`.optional()` rejects null — so every name-only project create failed with a silent 400 (generic toast in
+Prospero, nothing at all from the homepage quick action, no server log line). The schema (moved to
+`app/api/v1/projects/schemas.ts`) now marks `description`/`instructions`/`color`/`icon` as
+`.nullable().optional()`, matching the update schema, with a regression test pinning the null/absent/string
+matrix. The homepage `QuickActionsRow` also gained the success/error toasts its Prospero twin already had.
+
 #### Every image gallery can download the picture on display
 
 An audit of the app's image viewers found several places where a full-size picture had no download affordance —

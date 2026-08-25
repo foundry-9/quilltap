@@ -10,6 +10,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { Icon } from '@/components/ui/icon'
 import { CreateProjectDialog } from '@/app/prospero/components'
+import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import type { QuickActionsRowProps } from './types'
 
 export function QuickActionsRow({ lastChatId }: QuickActionsRowProps) {
@@ -24,10 +25,13 @@ export function QuickActionsRow({ lastChatId }: QuickActionsRowProps) {
       })
       if (res.ok) {
         setProjectDialogOpen(false)
-        // Optionally refresh or navigate
+        showSuccessToast('Project created successfully!')
+      } else {
+        showErrorToast('Failed to create project')
       }
     } catch (err) {
       console.error('Failed to create project:', err)
+      showErrorToast('Failed to create project')
     }
   }
 
