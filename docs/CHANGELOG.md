@@ -4,6 +4,75 @@
 
 ### 4.9-dev
 
+#### Fixed: hover states across the app did nothing, and a lint guard so it can't happen again
+
+Hovering a character card, a table row in the Scriptorium, a dropdown item, or a solid Delete button did
+not change anything. `hover:qt-bg-muted` — the most-used state class in the app, on 73 elements — matched
+no CSS rule, and neither did 33 other `hover:`/`focus:`/`disabled:` forms. Tailwind v4 generates variants
+only for utilities it owns, and a class declared inside `@layer utilities` is not one of those, so
+`hover:qt-bg-muted` is not "`qt-bg-muted`, on hover" — it is a class name nobody defined. The same applies
+to opacity: `qt-bg-muted/50` (34 elements) is not `qt-bg-muted` at half strength. Every form the app uses
+has to be written out by hand, and most of them never were: 82 class names over 493 call sites in 170
+files.
+
+`app/styles/qt-components/_utilities.css` now carries the missing opacity steps for the muted, card,
+primary, destructive, success, warning, info and secondary backgrounds, the border and text opacity steps
+to match, the two surface colors the markup asked for (`qt-bg-input`, `qt-bg-secondary`), and a rewritten
+**STATE VARIANTS** section with all 34 state forms. Twenty-four places had invented a class name that was
+never part of the vocabulary — `qt-text-error`, `qt-text-sm`, `qt-surface-alt` and friends — and those were
+changed to the class that already existed rather than given a definition of their own.
+
+The part that matters longer than this release is `scripts/check-qt-classes.mjs`, now run by
+`npm run lint`. It holds every `qt-bg-*`/`qt-text-*`/`qt-border-*`/`qt-shadow-*` reference, and every
+variant-prefixed `qt-*` reference, against the rules the stylesheets actually define, and fails the build
+on one that resolves to nothing. Bugs 39, 100 and this one are the same defect found three times by three
+accidents; the guard is what makes it a build error instead of a fourth. Filed as bug 102.
+
+`@quilltap/theme-storybook` 1.0.63 mirrors all 79 new rules.
+
+#### Fixed: shell completion stopped working once a flag was on the line
+
+In zsh, `quilltap docs --instance Friday <TAB>` offered nothing at all — not the `docs` verbs, not even
+the flags. Each subcommand looked its verb up with a hard-coded `(( CURRENT == 2 ))`, which only holds
+when the verb sits immediately after the subcommand, so any flag typed first hid it. The top-level
+`_arguments` made it worse by claiming `--instance Friday` as a global option even when it appeared
+after `docs`, leaving the subcommand dispatch with an empty argument list.
+
+Every zsh function now hands its options and its positionals to a single `_arguments -C` call and
+branches on the parsed state, and the top-level positionals carry `(-)` so a flag typed after the
+subcommand stays with that subcommand. Bash had a milder version of the same bug: its scanner only knew
+that the *global* flags take a value, so `quilltap docs --limit 5 <TAB>` read `5` as the verb. It now
+tracks value-taking flags per subcommand, which also fixes `-o` (the valueless global `--open`, but
+themes' valued `--output`) and `memories -i` (`--ignore-case` there, not `--instance`).
+
+Store names now complete wherever a verb takes one — `docs ls`, `docs read`, both ends of
+`docs move`/`copy`/`link`, and `--mount` — in bash and zsh, and the lookup re-uses the `-i`/`-d`/
+`--passphrase` already on the line, so `docs --instance V4test ls <TAB>` lists V4test's stores rather
+than the default instance's. Names containing spaces or colons ("Project Files: The Estate") are quoted
+correctly instead of being chopped into separate candidates. fish, whose completions already survived
+flags, gains store names on `--mount` only.
+
+#### Fixed: solid green and red buttons never set their own text color
+
+`qt-text-success-foreground` and `qt-text-destructive-foreground` appeared on fifteen elements and were
+defined in no stylesheet anywhere. They are the Tailwind utility names with a `qt-` prefix bolted on, so
+they matched no rule and each element painted its fill and then left the text whatever color it had
+inherited. The Set-as-avatar and Delete buttons on gallery thumbnails changed their background on hover
+but not their glyph; the green **Avatar** badge, the solid Chat and Delete buttons in Aurora and Prospero,
+and the file-delete confirmations all put a colored fill under unchanged text.
+
+`app/styles/qt-components/_utilities.css` now carries the rest of the family `qt-text-on-accent` started —
+`qt-text-on-primary`, `qt-text-on-success`, `qt-text-on-destructive` — plus the hover partners
+`hover:qt-text-on-accent`, `-on-primary`, `-on-success` and `-on-destructive`. Tailwind v4 generates no
+variants for classes declared inside `@layer utilities`, so each hover form has to be written out by hand;
+one that was never written is simply inert. All fifteen call sites now use the real classes, and the
+character gallery's new Download button moved from the raw `hover:text-primary-foreground` to
+`hover:qt-text-on-primary`. Filed as bug 100.
+
+`@quilltap/theme-storybook` 1.0.62 mirrors the eight new selectors and adds a "Foregrounds on filled
+surfaces" section to the `Surfaces` story, showing all four fills with their foregrounds and spelling out
+the naming trap: the classes are `-on-<fill>`, never `-<fill>-foreground`.
+
 #### Fixed: a character's Photo Gallery had no reachable way to download a picture
 
 The image detail view's top-right controls — Download, Copy, Save to my gallery, Close — were painted

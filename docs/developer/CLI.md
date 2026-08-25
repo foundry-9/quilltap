@@ -168,6 +168,9 @@ The `db` command opens the database **read-only** unless you pass `--write`. So 
 
 - All subcommands accept `--json` for piping and `--limit N` (default 50). Names are case-insensitive; ambiguous matches print all candidates and exit non-zero.
 - `npx quilltap completion bash|zsh|fish` emits a completion script. Dynamic completions for `--instance` shell out to `quilltap instances list --names-only`; mount/character completions similarly use hidden `--names-only` flags. See `packages/quilltap/README.md` for per-shell install instructions.
+- **Completions parse the line, they never count words.** A flag may sit anywhere the CLI itself accepts one, so `quilltap docs --instance Friday <TAB>` still offers the `docs` verbs. zsh gets this from `_arguments` positional specs — `(-)` on the top-level `'(-): :->subcommand'` / `'(-)*::arg:->args'` pair is what stops the outer `_arguments` swallowing a flag typed *after* the subcommand — and bash from a scanner that knows which flags take a value. Two traps to respect when editing the templates: `-o` is the valueless global `--open` but themes' valued `--output`, and `memories` reserves `-i` for `--ignore-case` rather than `--instance`.
+- **Store names complete from the addressed instance.** Wherever a verb takes a `<mount>` (`docs ls`, `docs read`, both ends of `docs move`/`copy`/`link`, and `--mount`), bash and zsh offer live store names, re-using the `-i`/`-d`/`--passphrase` already on the line so the lookup reads the instance being addressed rather than the default one. fish completes `--mount` but not the positionals, and always reads the default instance.
+- `packages/quilltap/lib/__tests__/completion-behavior.test.js` drives the bash script for real (sourcing it and reading `COMPREPLY` back) and checks the zsh template structurally; `completion-coverage.test.js` guards the subcommand surface.
 
 ## See also
 

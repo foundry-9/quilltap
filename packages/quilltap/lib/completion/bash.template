@@ -3,6 +3,52 @@
 # Bash completion for quilltap
 # Source this file or place it in /etc/bash_completion.d/ or ~/.bash_completion.d/
 
+# Fill COMPREPLY from newline-separated candidates on stdin. Store and
+# instance names routinely contain spaces ("Project Files: The Estate"), which
+# `compgen -W` would chop into separate candidates.
+_quilltap_lines_compreply() {
+  local cur="$1" line
+  local oldifs="$IFS"
+  COMPREPLY=()
+  IFS=$'\n'
+  while read -r line; do
+    [[ -n "$line" ]] || continue
+    [[ "$line" == "$cur"* ]] && COMPREPLY+=("$(printf '%q' "$line")")
+  done
+  IFS="$oldifs"
+}
+
+# Which docs positionals name a document store, and which name a local path.
+# move/copy/link take <srcMount> <srcPath> <dstMount> <dstPath>, so a store is
+# wanted at both 2 and 4; every other store-taking verb takes it first.
+_quilltap_docs_positional() {
+  local verb="$1" argpos="$2" cur="$3"
+  local store_verbs=" show files ls dir tree read export scan reindex embed write delete mkdir rmdir mvdir move copy link "
+
+  if [[ "$argpos" == "2" ]] && [[ "$store_verbs" == *" $verb "* ]]; then
+    _quilltap_lines_compreply "$cur" \
+      <<< "$(command quilltap docs list --names-only "${ctx_flags[@]}" 2>/dev/null)"
+    return
+  fi
+
+  case "$verb" in
+    move|copy|link)
+      if [[ "$argpos" == "4" ]]; then
+        _quilltap_lines_compreply "$cur" \
+          <<< "$(command quilltap docs list --names-only "${ctx_flags[@]}" 2>/dev/null)"
+      fi
+      ;;
+    export)
+      # `docs export <mount> <outputDir>` — the second one is a local directory.
+      [[ "$argpos" == "3" ]] && COMPREPLY=($(compgen -d -- "$cur"))
+      ;;
+    write)
+      # `docs write <mount> <path> [file]` — the optional source is local.
+      [[ "$argpos" == "4" ]] && COMPREPLY=($(compgen -f -- "$cur"))
+      ;;
+  esac
+}
+
 _quilltap_complete() {
   local cur prev words cword
   COMPREPLY=()
@@ -17,23 +63,62 @@ _quilltap_complete() {
   # Top-level subcommands
   local top_cmds="db docs themes instances memories memory-diff recall-replay logs migrations maintenance file-verify completion"
 
+  # Flags that swallow the word after them. A flat list will not do: -o is the
+  # valueless global --open but themes' valued --output, and `memories`
+  # reserves -i for --ignore-case rather than --instance. Counting those wrong
+  # makes a flag's value look like the subcommand's verb, which is how
+  # `quilltap docs --limit 5 <TAB>` used to lose the verb list.
+  local vf_global=" -d --data-dir -i --instance -p --port --passphrase "
+  local vf_db=" --limit --grep --character --project --about --source --chat --message --field --tail --last --from --type --out --id --count "
+  local vf_docs=" --mount --folder --type --ext --limit --max --context --top --threshold --sort --depth --max-nodes "
+  local vf_themes=" -o --output -k --key -n --name "
+  local vf_memories=" -d --data-dir --instance --passphrase --port --character --about --source --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
+  local vf_logs=" --stream --tail --grep "
+  local vf_memory_diff=" --concurrency --out "
+  local vf_recall_replay=" --turn --char --limit --port "
+  local vf_file_verify=" --stall-ms "
+
   # Get the subcommand (first non-option word after quilltap)
   local subcommand=""
   local subverb=""
+  local -a ctx_flags=()
+  local positional_count=0
   local i=1
   while [[ $i -lt $cword ]]; do
     local word="${words[$i]}"
+
+    # Which flags take a value depends on the subcommand seen so far; before
+    # one is seen, only the global flags are in play.
+    local valued="$vf_global"
+    case "$subcommand" in
+      db)            valued="$vf_global$vf_db" ;;
+      docs)          valued="$vf_global$vf_docs" ;;
+      themes)        valued="$vf_global$vf_themes" ;;
+      memories)      valued="$vf_memories" ;;
+      logs)          valued="$vf_global$vf_logs" ;;
+      memory-diff)   valued="$vf_global$vf_memory_diff" ;;
+      recall-replay) valued="$vf_global$vf_recall_replay" ;;
+      file-verify)   valued="$vf_global$vf_file_verify" ;;
+    esac
+
+    if [[ "$valued" == *" $word "* ]]; then
+      # Remember how the user is addressing an instance so the live lookups
+      # below query that database rather than the default one.
+      case "$word" in
+        -d|--data-dir|-i|--instance|--passphrase)
+          if (( i + 1 < cword )); then
+            ctx_flags+=("$word" "${words[$((i + 1))]}")
+          fi
+          ;;
+      esac
+      # Takes a value, skip the next word
+      ((i += 2))
+      continue
+    fi
+
     case "$word" in
-      -d|--data-dir|-i|--instance|-p|--port|--passphrase)
-        # These take a value, skip the next word
-        ((i += 2))
-        ;;
-      -o|--open|-v|--version|-h|--help|--update)
-        # Flags without values
-        ((i += 1))
-        ;;
       -*)
-        # Unknown flag, skip
+        # Valueless (or unknown) flag
         ((i += 1))
         ;;
       *)
@@ -42,6 +127,10 @@ _quilltap_complete() {
         elif [[ -z "$subverb" ]]; then
           subverb="$word"
         fi
+        # Counts the subcommand itself, so the word under the cursor sits at
+        # positional_count within the subcommand: 1 is its verb, 2 the verb's
+        # first argument, and so on.
+        ((positional_count += 1))
         ((i += 1))
         ;;
     esac
@@ -56,9 +145,9 @@ _quilltap_complete() {
   if [[ "$prev" == "-p" ]] || [[ "$prev" == "--port" ]] || [[ "$prev" == "--passphrase" ]]; then
     return
   fi
-  if [[ "$prev" == "-i" ]] || [[ "$prev" == "--instance" ]]; then
-    local instances=$(command quilltap instances list --names-only 2>/dev/null)
-    COMPREPLY=($(compgen -W "$instances" -- "$cur"))
+  if [[ "$prev" == "--instance" ]] || { [[ "$prev" == "-i" ]] && [[ "$subcommand" != "memories" ]]; }; then
+    _quilltap_lines_compreply "$cur" \
+      <<< "$(command quilltap instances list --names-only 2>/dev/null)"
     return
   fi
 
@@ -75,8 +164,8 @@ _quilltap_complete() {
   # Shared flag-value completions for any subcommand
   case "$prev" in
     --mount)
-      local mounts=$(command quilltap docs list --names-only 2>/dev/null)
-      COMPREPLY=($(compgen -W "$mounts" -- "$cur"))
+      _quilltap_lines_compreply "$cur" \
+        <<< "$(command quilltap docs list --names-only "${ctx_flags[@]}" 2>/dev/null)"
       return
       ;;
     --character|--about)
@@ -137,16 +226,14 @@ _quilltap_complete() {
     docs)
       local docs_verbs="list show files ls dir tree read export scan write delete mkdir move copy link rmdir mvdir status docker-mounts find grep reindex embed"
       local docs_flags="--mount --instance --data-dir --passphrase --port --json --help \
-        --force --rendered --links --folder --type --ext --limit --max --context --top --threshold \
+        --uri --base64 --force --rendered --links --folder --type --ext --limit --max --context --top --threshold \
         --ignore-case -l --wait -R --recursive --sort -r --reverse --depth --max-nodes --long --semantic"
-      if [[ -z "$subverb" ]]; then
-        if [[ "$cur" == -* ]]; then
-          COMPREPLY=($(compgen -W "$docs_flags" -- "$cur"))
-        else
-          COMPREPLY=($(compgen -W "$docs_verbs" -- "$cur"))
-        fi
-      else
+      if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "$docs_flags" -- "$cur"))
+      elif [[ -z "$subverb" ]]; then
+        COMPREPLY=($(compgen -W "$docs_verbs" -- "$cur"))
+      else
+        _quilltap_docs_positional "$subverb" "$positional_count" "$cur"
       fi
       ;;
     themes)

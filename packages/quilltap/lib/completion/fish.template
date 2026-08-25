@@ -8,6 +8,10 @@ function __quilltap_instance_names
   command quilltap instances list --names-only 2>/dev/null
 end
 
+function __quilltap_mount_names
+  command quilltap docs list --names-only 2>/dev/null
+end
+
 function __quilltap_no_subcommand
   set -l cmd (commandline -opc)
   if test (count $cmd) -lt 2
@@ -157,7 +161,7 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'rmdir' -d 'Rem
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'mvdir' -d 'Rename or move a folder'
 
 # docs flags
-complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'mount' -d 'Mount name or id' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'mount' -d 'Mount name or id' -x -a '(__quilltap_mount_names)'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'port' -s 'p' -d 'Server port' -x
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'folder' -d 'Folder filter' -x
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'force' -d 'Force operation'
