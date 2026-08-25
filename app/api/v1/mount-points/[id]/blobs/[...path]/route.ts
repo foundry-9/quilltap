@@ -20,6 +20,7 @@ import { createContextParamsHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
+import { buildContentDisposition } from '@/lib/api/content-disposition';
 import { deleteDatabaseDocument } from '@/lib/mount-index/database-store';
 import type { DocMountDocument } from '@/lib/schemas/mount-index.types';
 
@@ -59,6 +60,13 @@ export const GET = createContextParamsHandler<Params>(
           headers: {
             'Content-Type': meta.storedMimeType,
             'Content-Length': String(meta.sizeBytes),
+            // The stored basename, not originalFileName — images are transcoded
+            // to WebP on upload, so the original name's extension can mismatch
+            // the bytes actually served here.
+            'Content-Disposition': buildContentDisposition(
+              relativePath.split('/').pop() || meta.originalFileName || 'file',
+              'inline'
+            ),
             'Cache-Control': 'private, max-age=3600',
             'X-Blob-Sha256': meta.sha256,
           },
@@ -77,6 +85,10 @@ export const GET = createContextParamsHandler<Params>(
         headers: {
           'Content-Type': mimeForDocument(doc),
           'Content-Length': String(bytes.length),
+          'Content-Disposition': buildContentDisposition(
+            relativePath.split('/').pop() || 'document',
+            'inline'
+          ),
           'Cache-Control': 'private, max-age=3600',
           'X-Blob-Sha256': doc.contentSha256,
         },

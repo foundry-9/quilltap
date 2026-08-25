@@ -20,6 +20,8 @@ The gallery presents your photographs as a tidy grid of thumbnails. Each thumbna
 
 A click on a thumbnail unfolds a detail card with the picture, the original generation prompt (when known), the caption you assigned (if any), the tags, the time you saved it, and a list of every other place that's holding a link to those bytes — by mount name and relative path. So if your character Friday saved a portrait of a copper kettle six chats ago and you save the same picture today, both of you will appear in each other's link lists.
 
+Along the bottom of the card sit a **Download** button and a **Copy** button. Download hands you the picture as a proper file — a native save dialog in the desktop application, your browser's usual arrangements otherwise — and Copy places it on the clipboard, ready to be pasted wherever pictures are welcome. No right-clicking or other conjuring required.
+
 There's a search bar at the top. Set it to *"sunroom"* and the gallery rummages, semantically, through every saved photograph's prompt, scene snapshot, caption, and tags, returning the ones whose stored description best matches your phrase.
 
 ## Removing a photograph

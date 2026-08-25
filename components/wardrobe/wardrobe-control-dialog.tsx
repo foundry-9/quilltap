@@ -26,6 +26,7 @@ import { useWardrobeDialog } from '@/components/providers/wardrobe-dialog-provid
 import { BaseModal } from '@/components/ui/BaseModal'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { triggerDownload } from '@/lib/download-utils'
 import { showConfirmation } from '@/lib/alert'
 import {
   WARDROBE_SLOT_TYPES,
@@ -1336,11 +1337,18 @@ function AvatarGenerationPane({
   previewFilename,
   onDiscardPreview,
 }: AvatarGenerationPaneProps) {
-  const downloadRef = useRef<HTMLAnchorElement>(null)
-
-  const handleDownload = useCallback(() => {
-    downloadRef.current?.click()
-  }, [])
+  const handleDownload = useCallback(async () => {
+    if (!previewUrl) return
+    try {
+      const res = await fetch(previewUrl)
+      if (!res.ok) throw new Error(`Failed to fetch preview (${res.status})`)
+      const blob = await res.blob()
+      await triggerDownload(blob, previewFilename ?? 'avatar-preview.webp')
+    } catch (error) {
+      console.error('Failed to download avatar preview:', { error: error instanceof Error ? error.message : String(error) })
+      showErrorToast('Failed to download avatar preview')
+    }
+  }, [previewUrl, previewFilename])
 
   return (
     <div className="qt-card py-3 px-3 qt-bg-muted/30">
@@ -1404,14 +1412,6 @@ function AvatarGenerationPane({
             </button>
           </div>
           <div className="flex flex-col gap-2">
-            <a
-              ref={downloadRef}
-              href={previewUrl}
-              download={previewFilename ?? 'avatar-preview.webp'}
-              className="hidden"
-            >
-              download
-            </a>
             <button
               type="button"
               onClick={handleDownload}

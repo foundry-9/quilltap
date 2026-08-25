@@ -4,6 +4,26 @@
 
 ### 4.9-dev
 
+#### Every image gallery can download the picture on display
+
+An audit of the app's image viewers found several places where a full-size picture had no download affordance —
+a real problem in the Electron shell, where right-click → Save Image isn't available. Fixed:
+
+- The **My Photos** detail modal gained **Download** and **Copy** (copy-image-to-clipboard) buttons in its footer.
+- The **avatar selector / character-wizard image grid** (`components/images/image-gallery.tsx`) gained a hover
+  download button next to the existing delete button.
+- The **Scriptorium file table's** expanded detail row gained a **Download** button beside "Open bytes",
+  saving the file under its original name.
+- The **Generate Image** page and the **wardrobe avatar preview** already had downloads, but both hand-rolled the
+  anchor-click approach, bypassing `lib/download-utils.ts` — so in Electron they missed the native save dialog.
+  Both now go through `triggerDownload`.
+- The mount-point blob endpoint (`/api/v1/mount-points/[id]/blobs/[...path]`) now sends an inline
+  `Content-Disposition` with the original filename, so browser saves from an "Open bytes" tab get a proper
+  name instead of the path hash.
+
+All other full-size viewers (chat `ImageModal`, chat gallery, character gallery `ImageDetailModal`, file preview
+modal) already had download buttons wired through the shared Electron-aware helper; they're unchanged.
+
 #### OpenRouter vision profiles send images again (bug 97)
 
 OpenRouter's plugin declared `supportsAttachments: false` with no MIME types, a truthful statement when it was

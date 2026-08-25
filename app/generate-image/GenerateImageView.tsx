@@ -15,6 +15,7 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { ImageProfilePicker } from '@/components/image-profiles/ImageProfilePicker'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { triggerDownload } from '@/lib/download-utils'
 import { useClickOutside } from '@/hooks/useClickOutside'
 import ImageModal from '@/components/chat/ImageModal'
 
@@ -151,16 +152,11 @@ export function GenerateImageView() {
   const handleDownload = useCallback(async (image: GeneratedImage) => {
     try {
       const res = await fetch(image.filepath)
+      if (!res.ok) throw new Error(`Failed to fetch image (${res.status})`)
       const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = image.filename || 'generated-image.png'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
+      await triggerDownload(blob, image.filename || 'generated-image.png')
     } catch (error) {
+      console.error('Failed to download generated image:', { error: error instanceof Error ? error.message : String(error) })
       showErrorToast('Failed to download image')
     }
   }, [])

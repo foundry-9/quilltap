@@ -14,6 +14,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { showConfirmation } from '@/lib/alert';
+import { showErrorToast, showSuccessToast } from '@/lib/toast';
+import { triggerDownload } from '@/lib/download-utils';
+import { copyImageToClipboard } from '@/lib/clipboard-utils';
+import { Icon } from '@/components/ui/icon';
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider';
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context';
 
@@ -403,6 +407,8 @@ function PhotoDetailModal({
   onClose: () => void;
   onDelete: () => void;
 }) {
+  const [downloading, setDownloading] = useState(false);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -410,6 +416,31 @@ function PhotoDetailModal({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  const handleDownload = useCallback(async () => {
+    setDownloading(true);
+    try {
+      const res = await fetch(entry.blobUrl);
+      if (!res.ok) throw new Error(`Failed to fetch image (${res.status})`);
+      const blob = await res.blob();
+      await triggerDownload(blob, entry.fileName);
+    } catch (err) {
+      console.error('Failed to download photo:', { error: err instanceof Error ? err.message : String(err) });
+      showErrorToast('Failed to download photo');
+    } finally {
+      setDownloading(false);
+    }
+  }, [entry.blobUrl, entry.fileName]);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await copyImageToClipboard(entry.blobUrl);
+      showSuccessToast('Image copied to clipboard');
+    } catch (err) {
+      console.error('Failed to copy photo to clipboard:', { error: err instanceof Error ? err.message : String(err) });
+      showErrorToast('Failed to copy image to clipboard');
+    }
+  }, [entry.blobUrl]);
 
   const primaryCaption = entry.caption || entry.fileName;
 
@@ -513,9 +544,29 @@ function PhotoDetailModal({
           >
             {deleting ? 'Removing…' : 'Remove from this album'}
           </button>
-          <button type="button" className="qt-button-secondary" onClick={onClose}>
-            Close
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="qt-button-secondary inline-flex items-center gap-2"
+              onClick={handleDownload}
+              disabled={downloading}
+            >
+              <Icon name="download" className="h-4 w-4" aria-hidden="true" />
+              {downloading ? 'Downloading…' : 'Download'}
+            </button>
+            <button
+              type="button"
+              className="qt-button-secondary inline-flex items-center gap-2"
+              onClick={handleCopy}
+              title="Copy image to clipboard"
+            >
+              <Icon name="copy" className="h-4 w-4" aria-hidden="true" />
+              Copy
+            </button>
+            <button type="button" className="qt-button-secondary" onClick={onClose}>
+              Close
+            </button>
+          </div>
         </footer>
       </div>
     </div>

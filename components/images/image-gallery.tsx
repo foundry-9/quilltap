@@ -12,6 +12,7 @@ import { apiFetch } from '@/lib/query/fetcher';
 import { queryKeys } from '@/lib/query/keys';
 import { showConfirmation } from '@/lib/alert';
 import { showErrorToast } from '@/lib/toast';
+import { triggerDownload } from '@/lib/download-utils';
 import DeletedImagePlaceholder from './DeletedImagePlaceholder';
 
 export interface ImageData {
@@ -113,6 +114,19 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
     setMissingImages((prev) => new Set(prev).add(imageId))
   }
 
+  const handleDownloadImage = async (image: ImageData) => {
+    const src = image.url || (image.filepath.startsWith('/') ? image.filepath : `/${image.filepath}`)
+    try {
+      const response = await fetch(src)
+      if (!response.ok) throw new Error(`Failed to fetch image (${response.status})`)
+      const blob = await response.blob()
+      await triggerDownload(blob, image.filename)
+    } catch (err) {
+      console.error('Failed to download gallery image:', { error: err instanceof Error ? err.message : String(err) })
+      showErrorToast('Failed to download image')
+    }
+  }
+
   const handleCleanupMissing = () => {
     loadImages()
   }
@@ -160,6 +174,17 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
           {/* Overlay with actions */}
           {!missingImages.has(image.id) && (
             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all opacity-0 group-hover:opacity-100">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDownloadImage(image)
+                }}
+                className="absolute bottom-2 left-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn qt-text-overlay p-2 rounded-full transition-colors"
+                title="Download image"
+                aria-label="Download image"
+              >
+                <Icon name="download" className="w-5 h-5" />
+              </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation()
