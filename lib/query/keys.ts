@@ -45,6 +45,19 @@ export const queryKeys = {
     groupStores: (id: string) => ['chats', id, 'group-stores'] as const,
     background: (id: string) => ['chats', id, 'background'] as const,
   },
+  /**
+   * Scenario option lists, per tier. Read by the New Chat dialog and the
+   * Salon sidebar's in-chat picker; the files behind them live in document
+   * stores, so these are cached per scope rather than per chat.
+   */
+  scenarios: {
+    all: ['scenarios'] as const,
+    general: ['scenarios', 'general'] as const,
+    project: (projectId: string) => ['scenarios', 'project', projectId] as const,
+    /** Keyed by the comma-joined, sorted character IDs the groups derive from. */
+    group: (characterIdsKey: string) => ['scenarios', 'group', characterIdsKey] as const,
+    character: (characterId: string) => ['scenarios', 'character', characterId] as const,
+  },
   groups: {
     all: ['groups'] as const,
     state: (id: string) => ['groups', id, 'state'] as const,

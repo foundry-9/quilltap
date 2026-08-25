@@ -1847,6 +1847,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           roleplayTemplateId={chat?.roleplayTemplateId}
           onChatUpdated={fetchChat}
           projectName={chat?.projectName}
+          projectId={chat?.projectId}
+          scenarioText={chat?.scenarioText}
           onProjectClick={modals.openChatProject}
           imageProfileId={chat?.imageProfileId}
           alertCharactersOfLanternImages={chat?.alertCharactersOfLanternImages}

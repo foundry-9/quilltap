@@ -2009,6 +2009,34 @@ Fold another conversation's characters and summary into **this** chat (the inver
 - Posts a Host recap (`systemKind: "merge-from"`) at the tail of the target carrying the source's summary and a link back, plus a back-link (`systemKind: "merge-to"`) in the source chat. Existing turns are **not** replayed and the target's turn state is untouched.
 - Returns `400` when `sourceChatId` equals `[id]` or when every source character is already present (no side effects in the latter case).
 
+#### `POST /api/v1/chats/[id]?action=scenario`
+
+Change (or clear) the chat's scenario mid-conversation. Fields mirror the create payload one-for-one and resolve through the same precedence chain (`lib/chat/scenario-selection.ts`): character `scenarioId` > `projectScenarioPath` > `groupScenarioPath` > `generalScenarioPath`, with free-text `scenario` layered beneath whatever resolves.
+
+**Request Body** (every field optional; an empty body clears the scenario):
+
+```json
+{
+  "scenario": "free-text notes",
+  "scenarioId": "character-scenario-uuid",
+  "projectScenarioPath": "Scenarios/bridge.md",
+  "groupScenarioPath": "Scenarios/parlour.md",
+  "groupScenarioGroupId": "group-uuid",
+  "generalScenarioPath": "Scenarios/Good Morning.md"
+}
+```
+
+**Response**: `{ "scenarioText": string | null, "changed": boolean, "message": string }`
+
+**Notes**:
+
+- `projectScenarioPath` resolves against the chat's own `projectId` (not a client-supplied one). A `scenarioId` is resolved against whichever active participant character owns it; a character whose vault is unavailable is skipped rather than failing the request.
+- Every tier fails soft — an unresolvable pointer logs a warning and falls through to the next tier.
+- On an actual change: rewrites `chat.scenarioText`, calls `compileAllIdentityStacks` (the scene is baked into `{{scenario}}` in each precompiled stack), and posts a Host announcement with `systemKind: "scenario-change"`, worded as a revision. A blank result retires the scene with a matching notice. A stack-recompile failure is logged and non-fatal — the read-through fallback covers it.
+- Resolving to the text already stored is a no-op: no write, no recompile, no announcement, and `changed: false`.
+- The chat-start `systemKind: "scenario"` message is **not** removed or rewritten.
+- `updateChatSchema` (`PUT /api/v1/chats/[id]`) deliberately does **not** expose `scenarioText`; a bare field update would skip the recompile and the announcement.
+
 #### `POST /api/v1/chats/[id]?action=bulk-reattribute`
 
 Re-attribute multiple messages from one participant to another in a single operation. All memories associated with the affected messages are permanently deleted.

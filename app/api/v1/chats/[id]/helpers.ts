@@ -512,10 +512,11 @@ export async function processChatUpdates(
     if (result) updatedChat = result;
 
     // Phase H note: `chat.scenarioText` feeds the {{scenario}} template
-    // variable in the identity stack, so a change to it would normally
-    // require recompiling all stacks. The current updateChatSchema does not
-    // expose `scenarioText`, so there is no path to mutate it after
-    // creation; if one is added, also call `compileAllIdentityStacks` here.
+    // variable in the identity stack, so a change to it requires recompiling
+    // all stacks. `updateChatSchema` deliberately does not expose the field —
+    // scenario changes go through `?action=scenario`
+    // (`actions/scenario.ts`), which recompiles and announces the revision.
+    // Keep it that way: a bare field update here would skip both.
   }
 
   if (validatedData.updateParticipant) {

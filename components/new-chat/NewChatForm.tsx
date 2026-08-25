@@ -25,12 +25,8 @@ import type {
   UserControlledCharacter,
 } from './types'
 import type { ProjectListEntry } from './hooks/useNewChat'
-import {
-  CUSTOM_SCENARIO_VALUE,
-  GENERAL_SCENARIO_PREFIX,
-  GROUP_SCENARIO_PREFIX,
-  PROJECT_SCENARIO_PREFIX,
-} from './types'
+import { ScenarioSelect, hasAnyScenarioOptions } from '@/components/scenario/ScenarioSelect'
+import type { ScenarioSelection } from '@/components/scenario/types'
 
 interface NewChatFormProps {
   profiles: ConnectionProfile[]
@@ -146,23 +142,12 @@ export function NewChatForm({
     return s && s.length > 0 ? s : null
   }, [singleLlm])
 
-  const hasProjectScenarios = projectScenarios.length > 0
-  const hasGeneralScenarios = generalScenarios.length > 0
-  const hasGroupScenarios = groupScenarios.length > 0
-  const hasCharacterScenarios = singleCharacterScenarios && singleCharacterScenarios.length > 0
-  const showScenarioDropdown = hasProjectScenarios || hasGeneralScenarios || hasGroupScenarios || hasCharacterScenarios
-
-  // Group scenarios by groupId for rendering as optgroups
-  const groupScenariosByGroup = useMemo(() => {
-    const groups = new Map<string, { groupName: string; scenarios: GroupScenarioOption[] }>()
-    for (const scenario of groupScenarios) {
-      if (!groups.has(scenario.groupId)) {
-        groups.set(scenario.groupId, { groupName: scenario.groupName, scenarios: [] })
-      }
-      groups.get(scenario.groupId)!.scenarios.push(scenario)
-    }
-    return groups
-  }, [groupScenarios])
+  const showScenarioDropdown = hasAnyScenarioOptions({
+    projectScenarios,
+    generalScenarios,
+    groupScenarios,
+    characterScenarios: singleCharacterScenarios,
+  })
 
   const selectedProjectScenario = state.projectScenarioPath
     ? projectScenarios.find((s) => s.path === state.projectScenarioPath)
@@ -203,77 +188,24 @@ export function NewChatForm({
     Boolean(selectedProjectScenario) &&
     Boolean(characterDefaultScenario)
 
-  const dropdownValue = selectedProjectScenario
-    ? `${PROJECT_SCENARIO_PREFIX}${selectedProjectScenario.path}`
+  const scenarioSelection: ScenarioSelection = selectedProjectScenario
+    ? { kind: 'project', path: selectedProjectScenario.path }
     : selectedGeneralScenario
-      ? `${GENERAL_SCENARIO_PREFIX}${selectedGeneralScenario.path}`
+      ? { kind: 'general', path: selectedGeneralScenario.path }
       : selectedGroupScenario
-        ? `${GROUP_SCENARIO_PREFIX}${selectedGroupScenario.groupId}:${selectedGroupScenario.path}`
+        ? { kind: 'group', groupId: selectedGroupScenario.groupId, path: selectedGroupScenario.path }
         : selectedCharacterScenario
-          ? selectedCharacterScenario.id
-          : CUSTOM_SCENARIO_VALUE
+          ? { kind: 'character', scenarioId: selectedCharacterScenario.id }
+          : { kind: 'custom' }
 
-  const handleScenarioSelectChange = (value: string) => {
-    if (value === CUSTOM_SCENARIO_VALUE || value === '') {
-      setState((prev) => ({
-        ...prev,
-        scenarioId: null,
-        projectScenarioPath: null,
-        generalScenarioPath: null,
-        groupScenarioPath: null,
-        groupScenarioGroupId: null,
-      }))
-      return
-    }
-    if (value.startsWith(PROJECT_SCENARIO_PREFIX)) {
-      const path = value.slice(PROJECT_SCENARIO_PREFIX.length)
-      setState((prev) => ({
-        ...prev,
-        projectScenarioPath: path,
-        generalScenarioPath: null,
-        groupScenarioPath: null,
-        groupScenarioGroupId: null,
-        scenarioId: null,
-      }))
-      return
-    }
-    if (value.startsWith(GENERAL_SCENARIO_PREFIX)) {
-      const path = value.slice(GENERAL_SCENARIO_PREFIX.length)
-      setState((prev) => ({
-        ...prev,
-        generalScenarioPath: path,
-        projectScenarioPath: null,
-        groupScenarioPath: null,
-        groupScenarioGroupId: null,
-        scenarioId: null,
-      }))
-      return
-    }
-    if (value.startsWith(GROUP_SCENARIO_PREFIX)) {
-      const rest = value.slice(GROUP_SCENARIO_PREFIX.length)
-      const colonIdx = rest.indexOf(':')
-      if (colonIdx > -1) {
-        const groupId = rest.slice(0, colonIdx)
-        const path = rest.slice(colonIdx + 1)
-        setState((prev) => ({
-          ...prev,
-          groupScenarioPath: path,
-          groupScenarioGroupId: groupId,
-          projectScenarioPath: null,
-          generalScenarioPath: null,
-          scenarioId: null,
-        }))
-        return
-      }
-    }
-    // Character scenario UUID
+  const handleScenarioSelectionChange = (selection: ScenarioSelection) => {
     setState((prev) => ({
       ...prev,
-      scenarioId: value,
-      projectScenarioPath: null,
-      generalScenarioPath: null,
-      groupScenarioPath: null,
-      groupScenarioGroupId: null,
+      scenarioId: selection.kind === 'character' ? selection.scenarioId : null,
+      projectScenarioPath: selection.kind === 'project' ? selection.path : null,
+      generalScenarioPath: selection.kind === 'general' ? selection.path : null,
+      groupScenarioPath: selection.kind === 'group' ? selection.path : null,
+      groupScenarioGroupId: selection.kind === 'group' ? selection.groupId : null,
     }))
   }
 
@@ -594,59 +526,17 @@ export function NewChatForm({
             Starting Scenario (Optional)
           </label>
           {showScenarioDropdown && (
-            <select
+            <ScenarioSelect
               id="new-chat-scenario-select"
-              value={dropdownValue}
-              onChange={(e) => handleScenarioSelectChange(e.target.value)}
+              selection={scenarioSelection}
+              onChange={handleScenarioSelectionChange}
+              projectScenarios={projectScenarios}
+              generalScenarios={generalScenarios}
+              groupScenarios={groupScenarios}
+              characterScenarios={singleCharacterScenarios}
+              characterDefaultScenarioId={singleLlm?.character.defaultScenarioId ?? null}
               disabled={creating}
-              className="qt-select mb-2"
-            >
-              <option value={CUSTOM_SCENARIO_VALUE}>Custom...</option>
-              {hasProjectScenarios && (
-                <optgroup label="Project Scenarios">
-                  {projectScenarios.map((s) => (
-                    <option key={`project:${s.path}`} value={`${PROJECT_SCENARIO_PREFIX}${s.path}`}>
-                      {s.name}
-                      {s.isDefault ? ' (project default)' : ''}
-                      {s.description ? ` — ${s.description}` : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {hasGeneralScenarios && (
-                <optgroup label="General Scenarios">
-                  {generalScenarios.map((s) => (
-                    <option key={`general:${s.path}`} value={`${GENERAL_SCENARIO_PREFIX}${s.path}`}>
-                      {s.name}
-                      {s.isDefault ? ' (general default)' : ''}
-                      {s.description ? ` — ${s.description}` : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-              {hasGroupScenarios && Array.from(groupScenariosByGroup.entries()).map(([groupId, { groupName, scenarios }]) => (
-                <optgroup key={`group:${groupId}`} label={`Group Scenarios: ${groupName}`}>
-                  {scenarios.map((s) => (
-                    <option key={`group:${groupId}:${s.path}`} value={`${GROUP_SCENARIO_PREFIX}${groupId}:${s.path}`}>
-                      {s.name}
-                      {s.isDefault ? ' (group default)' : ''}
-                      {s.description ? ` — ${s.description}` : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-              {hasCharacterScenarios && (
-                <optgroup label="Character Scenarios">
-                  {singleCharacterScenarios!.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.title}
-                      {singleLlm?.character.defaultScenarioId === s.id ? ' (character default)' : ''}
-                      {s.description ? ` — ${s.description}` : ''}
-                    </option>
-                  ))}
-                </optgroup>
-              )}
-            </select>
+            />
           )}
           {showOverrideNote && characterDefaultScenario && (
             <p className="mb-2 text-xs qt-text-muted">

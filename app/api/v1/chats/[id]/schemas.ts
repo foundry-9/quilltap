@@ -32,6 +32,23 @@ export const updateChatSchema = z.object({
   rightPaneVerticalSplit: z.number().min(20).max(80).optional(),
 });
 
+/**
+ * `POST ?action=scenario` — change the scene mid-conversation.
+ *
+ * Field names mirror the New Chat dialog's create payload one-for-one so both
+ * surfaces feed the same resolver: at most one preset pointer plus optional
+ * free text, resolved by the precedence chain in `lib/chat/scenario-selection`.
+ * An entirely empty payload clears the scenario.
+ */
+export const setScenarioSchema = z.object({
+  scenario: z.string().nullish(),
+  scenarioId: z.uuid().nullish(),
+  projectScenarioPath: z.string().max(500).nullish(),
+  groupScenarioPath: z.string().max(500).nullish(),
+  groupScenarioGroupId: z.uuid().nullish(),
+  generalScenarioPath: z.string().max(500).nullish(),
+});
+
 export const updateParticipantSchema = z.object({
   participantId: z.uuid(),
   connectionProfileId: z.uuid().optional(),

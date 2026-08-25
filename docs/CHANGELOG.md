@@ -4,6 +4,37 @@
 
 ### 4.9-dev
 
+#### A chat's scenario can be changed mid-conversation
+
+The Salon sidebar's Chat drawer gains a **Scenario** control. It offers the same four tiers the new-chat
+dialog does — project, general, group, and (when a single LLM character is present) character scenarios —
+plus a **Custom...** option that reveals a free-text box. Saving posts to the new
+`POST /api/v1/chats/[id]?action=scenario`, which rewrites `chat.scenarioText`, recompiles every
+participant's identity stack (the scene is baked into `{{scenario}}` there), and posts a Host announcement
+worded as a revision so the chat-start scene-setting further up the transcript reads as superseded rather
+than contradicted. Saving an empty custom scenario clears the scene; re-picking the scene already in force
+is a no-op with no announcement. The original scene-setting message is left in place.
+
+The control seeds itself from the chat's current scene: text matching a preset exactly preselects that
+preset, and anything else opens on **Custom...** with the text loaded for editing.
+
+Supporting changes:
+
+- The scenario precedence chain (character ID > project path > group path > general path, with free text
+  layered beneath whatever resolves) moved out of the chat-creation route into
+  `lib/chat/scenario-selection.ts`, so both surfaces resolve a selection identically.
+- The scenario dropdown itself moved into a shared `components/scenario/ScenarioSelect.tsx`; the option
+  types and `<option value>` tokens now live in `components/scenario/types.ts` and are re-exported from
+  `components/new-chat/types.ts`.
+- `GET /api/v1/chats/[id]` now projects `scenarioText` (it previously didn't), so the picker can open on the
+  chat's actual scene instead of always on **Custom...**.
+- The Markdown transcript export includes `scenario-change` notices in the body. The header prints whatever
+  scene is in force at export time, so without them a reader would see the story relocate unremarked.
+
+Note on scenario defaults: the frontmatter key is `isDefault: true`. A scenario file marked `default: true`
+is not recognized as a default, so no scenario pre-selects in the new-chat dialog and it opens on
+**Custom...** — worth checking if a default you expected isn't taking effect.
+
 #### Moving or copying an outfit can bring its components along
 
 Transferring a composite outfit used to move just the outfit, leaving its component references pointing at

@@ -70,6 +70,10 @@ The free-text desk beneath the drop-down stays open even once a scenario is chos
 
 Should you, in some moment of housekeeping zeal, delete the `Scenarios/` folder or even the entire `Project Files:` document store, fear not — both are reconstructed at the next server start (and at the next visit to the project page, whichever comes first). The structure reappears empty, ready for fresh scenarios; previously-deleted files do not return.
 
+## Changing a Chat's Scenario Later
+
+A scenario chosen at the outset is not binding for the evening. In an open chat, the **Chat Sidebar**'s **Chat** drawer holds a **Scenario** control offering these same tiers; picking a new one rewrites the chat's scene, recompiles every character's standing instructions, and has the Host announce the revision to the room. The particulars are set out in [Chats Overview](chats.md). Note that the frontmatter key the default is read from is `isDefault` — a file marked `default: true` instead is simply a scenario with no claim to the title, and the drop-down will open on **Custom...** with no pre-selection at all.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

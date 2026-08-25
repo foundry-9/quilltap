@@ -81,6 +81,10 @@ The Quilltap General store isn't only a pantry for scenarios. Every character in
 
 Alongside `Scenarios/`, a `Knowledge/` folder in the Quilltap General store is read on every turn by every character, and is searchable through the unified `search` tool as the **general** tier of the knowledge source. Drop one's house style guide, master glossary, or the rules by which all one's worlds abide here, and they'll be available to every chat without further ceremony. Character vaults and project-linked stores keep their own `Knowledge/` folders too; in the rankings, the closer voice wins on a literal-substring hit — character first, project next, general last — so the general shelf is best reserved for material that should genuinely span everything.
 
+## Changing a Chat's Scenario Later
+
+A scenario chosen at the outset is not binding for the evening. In an open chat, the **Chat Sidebar**'s **Chat** drawer holds a **Scenario** control offering these same tiers; picking a new one rewrites the chat's scene, recompiles every character's standing instructions, and has the Host announce the revision to the room. The particulars are set out in [Chats Overview](chats.md). Note that the frontmatter key the default is read from is `isDefault` — a file marked `default: true` instead is simply a scenario with no claim to the title, and the drop-down will open on **Custom...** with no pre-selection at all.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
-import { combineScenarioText } from '@/lib/chat/scenario-text';
+import { resolveScenarioSelection } from '@/lib/chat/scenario-selection';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { profileParams } from '@/lib/llm/cheap-llm';
@@ -976,100 +976,26 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   // Fetch the primary character for defaults resolution
   const primaryCharacter = await repos.characters.findById(buildResult.firstCharacter.characterId);
 
-  // Resolve the chosen preset scenario body (if any), by precedence:
-  // character scenarioId > project scenario path > group scenario path > general
-  // scenario path > nothing. The free-text `scenario` is NOT part of this chain —
-  // it is appended to whatever the chain resolves (see combineScenarioText below).
-  let resolvedScenario: string | undefined;
-  if (!resolvedScenario && validatedData.scenarioId) {
-    const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
-    if (matchingScenario) {
-      resolvedScenario = matchingScenario.content;
-    } else {
-      logger.warn('[Chats v1] scenarioId not found on character', {
-        characterId: buildResult.firstCharacter.characterId,
-        scenarioId: validatedData.scenarioId,
-      });
-    }
-  }
-  if (!resolvedScenario && validatedData.projectScenarioPath) {
-    if (!validatedData.projectId) {
-      logger.warn('[Chats v1] projectScenarioPath provided without projectId; ignoring', {
-        projectScenarioPath: validatedData.projectScenarioPath,
-      });
-    } else {
-      // Only the store pointer is needed here, which lives on the raw row — use
-      // findByIdRaw so scenario resolution doesn't throw on a degraded store.
-      const project = await repos.projects.findByIdRaw(validatedData.projectId);
-      if (!project?.officialMountPointId) {
-        logger.warn('[Chats v1] projectScenarioPath provided but project has no officialMountPointId', {
-          projectId: validatedData.projectId,
-          projectScenarioPath: validatedData.projectScenarioPath,
-        });
-      } else {
-        const { resolveProjectScenarioBody } = await import('@/lib/mount-index/project-scenarios');
-        const body = await resolveProjectScenarioBody(
-          project.officialMountPointId,
-          validatedData.projectScenarioPath,
-        );
-        if (body) {
-          resolvedScenario = body;
-        } else {
-          logger.warn('[Chats v1] projectScenarioPath did not resolve to a body', {
-            projectId: validatedData.projectId,
-            projectScenarioPath: validatedData.projectScenarioPath,
-          });
-        }
-      }
-    }
-  }
-  if (!resolvedScenario && validatedData.groupScenarioPath) {
-    if (!validatedData.groupScenarioGroupId) {
-      logger.warn('[Chats v1] groupScenarioPath provided without groupScenarioGroupId; ignoring', {
-        groupScenarioPath: validatedData.groupScenarioPath,
-      });
-    } else {
-      // Only the store pointer is needed — read the slim row so resolution
-      // doesn't throw on a degraded store.
-      const group = await repos.groups.findByIdRaw(validatedData.groupScenarioGroupId);
-      if (!group?.officialMountPointId) {
-        logger.warn('[Chats v1] groupScenarioPath provided but group has no officialMountPointId', {
-          groupScenarioGroupId: validatedData.groupScenarioGroupId,
-          groupScenarioPath: validatedData.groupScenarioPath,
-        });
-      } else {
-        const { resolveGroupScenarioBody } = await import('@/lib/mount-index/group-scenarios');
-        const body = await resolveGroupScenarioBody(
-          group.officialMountPointId,
-          validatedData.groupScenarioPath,
-        );
-        if (body) {
-          resolvedScenario = body;
-        } else {
-          logger.warn('[Chats v1] groupScenarioPath did not resolve to a body', {
-            groupScenarioGroupId: validatedData.groupScenarioGroupId,
-            groupScenarioPath: validatedData.groupScenarioPath,
-          });
-        }
-      }
-    }
-  }
-  if (!resolvedScenario && validatedData.generalScenarioPath) {
-    const { resolveGeneralScenarioBody } = await import('@/lib/mount-index/general-scenarios');
-    const body = await resolveGeneralScenarioBody(validatedData.generalScenarioPath);
-    if (body) {
-      resolvedScenario = body;
-    } else {
-      logger.warn('[Chats v1] generalScenarioPath did not resolve to a body', {
-        generalScenarioPath: validatedData.generalScenarioPath,
-      });
-    }
-  }
-
-  // Append the user's free-text scenario notes. When a preset resolved above, the
-  // notes are layered beneath it; when none did, the notes ARE the scenario.
-  const presetBody = resolvedScenario;
-  resolvedScenario = combineScenarioText(presetBody, validatedData.scenario);
+  // Resolve the chosen preset scenario body (if any) and layer the free-text
+  // notes beneath it. The precedence chain lives in `resolveScenarioSelection`
+  // so the in-chat scenario picker resolves a selection exactly the way the New
+  // Chat dialog does.
+  const resolvedScenario = await resolveScenarioSelection(
+    {
+      scenario: validatedData.scenario,
+      scenarioId: validatedData.scenarioId,
+      projectScenarioPath: validatedData.projectScenarioPath,
+      groupScenarioPath: validatedData.groupScenarioPath,
+      groupScenarioGroupId: validatedData.groupScenarioGroupId,
+      generalScenarioPath: validatedData.generalScenarioPath,
+    },
+    {
+      repos,
+      projectId: validatedData.projectId,
+      character: primaryCharacter,
+      logTag: '[Chats v1]',
+    },
+  );
   const chatContext = await buildChatContext(
     buildResult.firstCharacter.characterId,
     buildResult.firstCharacter.userCharacterId,

@@ -261,7 +261,7 @@ There comes an evening — there always does — when one wishes to carry the co
 
 Open the **Chat Sidebar** on the right, expand the **Organize** drawer, and press **Export Markdown**. The file arrives named after the chat, and contains:
 
-- The chat's title and its opening scenario, set at the head of the document.
+- The chat's title and the scene in force, set at the head of the document. Where the scene was revised mid-conversation, the Host's revision notices appear in the body at the moment they were made.
 - Every message anyone actually said, each under a heading of the form `## Speaker — timestamp`. Where a message has been regenerated into several variants, only the one showing in the Salon makes the page.
 - Pascal's roll announcements, Carina's answers (Brahma's included, under his own name), and any announcements you inserted yourself — voiced by a Staff member, a character, or a name of your own invention.
 - The Host's notices recording that the conversation continues from another chat, has moved elsewhere, or absorbed a neighbouring thread — so the paper trail survives the change of address.
@@ -270,6 +270,22 @@ Open the **Chat Sidebar** on the right, expand the **Organize** drawer, and pres
 The timestamps are the chat's *own* clock. A chat running on fictional time is transcribed in fictional time; a chat with a configured timezone keeps it; a chat with neither simply reads the household clock. The Staff's housekeeping chatter — memory whispers, image announcements, the marking of hours — is left out of the record, as are the prompts sent to the models; the transcript is what a reader would want, not what the machinery required.
 
 The same transcript twice is the same file twice, to the letter — nothing in it depends on the moment of export.
+
+### Changing the Scene Mid-Conversation
+
+A scene chosen at the outset is not a sentence passed. The party that began in the conservatory may, by degrees, find itself wanting the shipyard at dawn — and there is no reason on earth to abandon a perfectly good conversation merely to change the furniture.
+
+Open the **Chat Sidebar** on the right, expand the **Chat** drawer, and find **Scenario**. The dropdown offers precisely what the new-chat dialog offered: your project's scenarios, the general ones kept in the Quilltap General shelf, any belonging to groups the present company keeps, and — when a single character holds the floor — that character's own. Choose one and its text is displayed beneath for your inspection. Choose **Custom...** instead and a writing-box appears, in which you may set whatever scene you please, in your own words. Press **Change scenario** to make it so.
+
+Three things then happen, and they happen together:
+
+- The chat's scene is rewritten — this is the `{{scenario}}` your characters read in their standing instructions.
+- Every character's instructions are recompiled on the spot, so nobody is left performing yesterday's play.
+- **The Host announces the revision** to the assembled company, phrased as a revision rather than a fresh proclamation, so the earlier scene-setting further up the transcript is understood to have been superseded rather than contradicted.
+
+Leaving the box empty and pressing the button retires the scene altogether; the Host notes, with admirable composure, that the company carries on without one. Re-choosing the scene you already have does nothing at all, and says nothing at all — the Host is not in the business of announcing that matters stand precisely as they stood.
+
+The earlier scene-setting notice is left where it is. The transcript is a record, not a fair copy, and the household does not go back with an eraser.
 
 ### Continuing a Conversation Elsewhere
 

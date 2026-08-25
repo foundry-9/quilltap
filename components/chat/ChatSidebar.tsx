@@ -19,6 +19,7 @@ import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { CopyChatIdButton } from './CopyChatIdButton'
+import { ChatScenarioControl } from './ChatScenarioControl'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
@@ -170,6 +171,10 @@ export interface ChatSidebarProps {
   /** Fired after any chat-record field is mutated from the sidebar (typically fetchChat). */
   onChatUpdated?: () => void
   projectName?: string | null
+  /** The chat's project id — gates the project tier of the scenario picker. */
+  projectId?: string | null
+  /** The scene currently set on the chat, shown and edited by the scenario picker. */
+  scenarioText?: string | null
   onProjectClick?: () => void
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
@@ -238,6 +243,17 @@ export function ChatSidebar(props: ChatSidebarProps) {
     onTogglePause,
     className = '',
   } = props
+
+  // The LLM-controlled cast, for the scenario picker's group and character
+  // tiers. Characters that have left the room can't lend it a scenario.
+  const llmCharacterIds = useMemo(
+    () =>
+      participants
+        .filter((p) => p.controlledBy !== 'user' && p.status !== 'removed' && p.character?.id)
+        .map((p) => p.character!.id),
+    [participants]
+  )
+  const singleLlmCharacterId = llmCharacterIds.length === 1 ? llmCharacterIds[0] : null
 
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState)
   const [openSection, setOpenSection] = useState<SectionId>('participants')
@@ -492,6 +508,10 @@ export function ChatSidebar(props: ChatSidebarProps) {
             roleplayTemplateId={props.roleplayTemplateId}
             onChatUpdated={props.onChatUpdated}
             projectName={props.projectName}
+            projectId={props.projectId}
+            scenarioText={props.scenarioText}
+            llmCharacterIds={llmCharacterIds}
+            singleLlmCharacterId={singleLlmCharacterId}
             onProjectClick={props.onProjectClick}
             imageProfileId={props.imageProfileId}
             alertCharactersOfLanternImages={props.alertCharactersOfLanternImages}
@@ -856,6 +876,12 @@ interface ChatSectionProps {
   roleplayTemplateId?: string | null
   onChatUpdated?: () => void
   projectName?: string | null
+  projectId?: string | null
+  scenarioText?: string | null
+  /** Character IDs of the LLM-controlled cast, for the picker's group tier. */
+  llmCharacterIds: string[]
+  /** The lone LLM character's ID, or null when several share the room. */
+  singleLlmCharacterId: string | null
   onProjectClick?: () => void
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
@@ -877,6 +903,10 @@ function ChatSection({
   roleplayTemplateId,
   onChatUpdated,
   projectName,
+  projectId,
+  scenarioText,
+  llmCharacterIds,
+  singleLlmCharacterId,
   onProjectClick,
   imageProfileId,
   alertCharactersOfLanternImages,
@@ -1144,6 +1174,17 @@ function ChatSection({
           ))}
         </select>
       </label>
+
+      {/* Scenario — the scene this chat runs on */}
+      <ChatScenarioControl
+        chatId={chatId}
+        projectId={projectId}
+        scenarioText={scenarioText}
+        llmCharacterIds={llmCharacterIds}
+        singleLlmCharacterId={singleLlmCharacterId}
+        enabled={hasEverOpened}
+        onChatUpdated={onChatUpdated}
+      />
 
       {/* The Story's Clock — episodic-memory timeline mode */}
       <label className="qt-label">

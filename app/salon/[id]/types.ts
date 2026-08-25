@@ -249,6 +249,8 @@ export interface Chat {
   agentModeSource?: string
   /** Project ID this chat belongs to (if any) */
   projectId?: string | null
+  /** The scene this chat runs on — `{{scenario}}` in every identity stack. */
+  scenarioText?: string | null
   /** Project name for display purposes */
   projectName?: string | null
   /** List of tool IDs that are disabled for this chat */

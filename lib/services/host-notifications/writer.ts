@@ -431,6 +431,30 @@ export function buildScenarioOpaqueContent(scenarioText: string): string {
   ].join('\n');
 }
 
+const HOST_KIND_SCENARIO_CHANGE = 'scenario-change';
+
+export function buildScenarioRevisionContent(scenarioText: string): string {
+  return [
+    'The Host revises the scene for the proceedings:',
+    '',
+    scenarioText.trim(),
+  ].join('\n');
+}
+
+export function buildScenarioRevisionOpaqueContent(scenarioText: string): string {
+  return [
+    'Scene (revised — this replaces the scene described earlier):',
+    '',
+    scenarioText.trim(),
+  ].join('\n');
+}
+
+const SCENARIO_CLEARED_CONTENT =
+  'The Host draws the previous scene aside; the company carries on without a set scene.';
+
+const SCENARIO_CLEARED_OPAQUE_CONTENT =
+  'Scene: none. The scene described earlier no longer applies.';
+
 export function buildUserCharacterContent(
   userCharacterName: string,
   userCharacterDescription: string | null | undefined,
@@ -629,6 +653,37 @@ export async function postHostScenarioAnnouncement(
     buildScenarioContent(params.scenarioText),
     buildScenarioOpaqueContent(params.scenarioText),
     'scenario',
+    null,
+  );
+}
+
+export interface HostScenarioRevisionAnnouncement {
+  chatId: string;
+  /** The scene as it now stands. Empty/blank means the scene was cleared. */
+  scenarioText: string | null;
+}
+
+/**
+ * Announce a scene changed mid-conversation. Deliberately distinct from the
+ * chat-start `scenario` announcement: the opening one still stands earlier in
+ * the transcript, so this one has to read as a revision rather than as a second,
+ * contradictory scene-setting. A blank `scenarioText` retires the scene instead.
+ */
+export async function postHostScenarioRevisionAnnouncement(
+  params: HostScenarioRevisionAnnouncement,
+): Promise<MessageEvent | null> {
+  const text = (params.scenarioText ?? '').trim();
+  const content = text.length > 0
+    ? buildScenarioRevisionContent(text)
+    : SCENARIO_CLEARED_CONTENT;
+  const opaqueContent = text.length > 0
+    ? buildScenarioRevisionOpaqueContent(text)
+    : SCENARIO_CLEARED_OPAQUE_CONTENT;
+  return postHostMessageWithTargets(
+    params.chatId,
+    content,
+    opaqueContent,
+    HOST_KIND_SCENARIO_CHANGE,
     null,
   );
 }
