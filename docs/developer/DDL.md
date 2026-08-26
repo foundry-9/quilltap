@@ -301,7 +301,7 @@ keyed by `(mountPointId, relativePath)` where `mountPointId` matches
 | physicalDescription.fullDescription | `physical-description.md` |
 | physicalDescription.{headAndShoulders,short,medium,long,complete}Prompt | `physical-prompts.json` |
 | systemPrompts[] | `Prompts/<sanitized-name>.md` (one file per record) |
-| scenarios[] | `Scenarios/<sanitized-title>.md` (one file per record) |
+| scenarios[] | `Scenarios/<sanitized-title>.md` (one file per record). Frontmatter carries `description` and, since 4.9, `archived: true` — omitted entirely while the scenario is active. The same `archived` key marks a scenario archived in the other three scopes (general, project, group `Scenarios/` folders). |
 
 Reads go through `applyDocumentStoreOverlay()` in
 `lib/database/repositories/character-properties-overlay.ts`; writes through
@@ -333,6 +333,17 @@ document store:
   shared archetypes there before the table was dropped.
 - **Project stores** may shadow shared archetypes under their own `Wardrobe/`
   folders (project tier wins over Quilltap General on id collision).
+
+A `Wardrobe/` folder in any tier may also hold one **non-garment** file,
+`instructions.md` (4.9+): optional second-person dressing guidance read when a
+character dresses themselves at chat start or on joining a chat. Resolution is
+nearest-tier-first — character vault, group store, project store, Quilltap
+General — and the first non-blank file wins (`lib/wardrobe/wardrobe-instructions.ts`).
+It is never parsed as an item: the shared wardrobe reader skips it by name
+(`vault-readers.ts`), the projection sweep preserves it (`vault-projection.ts`),
+and a garment titled "Instructions" projects to `instructions-1.md` rather than
+overwriting it. It is an ordinary document-store document, so it rides in
+`doc_mount_documents` for backup and `.qtap` export like any other vault file.
 
 Reads flow through the vault overlay (`getOverlaidWardrobeItems` /
 `WardrobeRepository`); writes go through the vault-first writers

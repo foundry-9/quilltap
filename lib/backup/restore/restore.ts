@@ -22,6 +22,7 @@ import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { TextReplacementRuleConflictError } from '@/lib/database/repositories';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
+import { seedLegacyConnectionProfileFields } from '@/lib/llm/connection-profile-legacy-fields';
 import { reconcileEmbeddingDimensions } from '@/lib/startup/reconcile-embedding-dimensions';
 import { enqueueEmbeddingReindexAll } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
@@ -94,8 +95,22 @@ export async function restore(
     const takenConnectionNames = new Set(existingConnectionProfiles.map((p) => normalizeProfileName(p.name)));
     for (const profile of data.connectionProfiles) {
       try {
-        const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+        const { userId, createdAt, updatedAt, apiKeyId, ...rawProfileData } = profile;
         // Note: apiKeyId is not restored as API keys are encrypted and can't be restored
+        // Columns the archive predates would otherwise be decided by the table
+        // DEFAULT rather than by the profile's owner — see the module docs.
+        const profileData = seedLegacyConnectionProfileFields(rawProfileData);
+        if (
+          rawProfileData.multiCharacterPrefill === undefined ||
+          rawProfileData.supportsImageUpload === undefined
+        ) {
+          moduleLogger.debug('Seeded connection-profile columns the archive predates', {
+            profileId: profile.id,
+            provider: profileData.provider,
+            seededMultiCharacterPrefill: rawProfileData.multiCharacterPrefill === undefined,
+            seededSupportsImageUpload: rawProfileData.supportsImageUpload === undefined,
+          });
+        }
         const uniqueName = makeUniqueProfileName(profileData.name, takenConnectionNames);
         if (uniqueName !== profileData.name) {
           moduleLogger.debug('Renamed connection profile on restore to avoid name collision', {

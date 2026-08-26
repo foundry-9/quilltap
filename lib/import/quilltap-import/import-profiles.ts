@@ -15,11 +15,10 @@ import type {
   EmbeddingProfile,
 } from '@/lib/schemas/types';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
+import { seedLegacyConnectionProfileFields } from '@/lib/llm/connection-profile-legacy-fields';
 import type { ImportOptions, IdMappingState, ImportCounts } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
-
-const LEGACY_IMAGE_CAPABLE_PROVIDERS = new Set(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK']);
 
 export async function importConnectionProfiles(
   userId: string,
@@ -39,12 +38,21 @@ export async function importConnectionProfiles(
   const takenNames = new Set(existingProfiles.map((p) => normalizeProfileName(p.name)));
 
   for (const rawProfile of profiles) {
-    // Older exports predate the per-profile supportsImageUpload flag; seed it
-    // from the historic provider capability map so image support round-trips.
-    const profile: ConnectionProfile =
-      (rawProfile as Partial<ConnectionProfile>).supportsImageUpload === undefined
-        ? { ...rawProfile, supportsImageUpload: LEGACY_IMAGE_CAPABLE_PROVIDERS.has(rawProfile.provider) }
-        : rawProfile;
+    // Older exports predate some of the columns; seed them so the bundle's
+    // age, not the table DEFAULT, decides what the profile comes back as.
+    // Shared with backup restore so the two paths can't drift.
+    const profile: ConnectionProfile = seedLegacyConnectionProfileFields(rawProfile);
+    if (
+      rawProfile.multiCharacterPrefill === undefined ||
+      rawProfile.supportsImageUpload === undefined
+    ) {
+      moduleLogger.debug('Seeded connection-profile columns the bundle predates', {
+        profileId: profile.id,
+        provider: profile.provider,
+        seededMultiCharacterPrefill: rawProfile.multiCharacterPrefill === undefined,
+        seededSupportsImageUpload: rawProfile.supportsImageUpload === undefined,
+      });
+    }
 
     try {
       const existing = await repos.connections.findById(profile.id);

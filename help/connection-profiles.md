@@ -388,6 +388,8 @@ When several characters share a room, each reply must be pinned to exactly one o
 
 **Profiles made before all this** were given the prefill by an older rule that only knew about Anthropic. Quilltap corrects them once, on the upgrade, and only where the profile is genuinely running a thinking turn — a DeepSeek profile that has been failing every turn since you made it should simply start working. Nothing else is touched, and a box you tick yourself is never touched again.
 
+**Profiles arriving from an older archive** are settled by the same courtesy. A backup or a `.qtap` bundle made before the checkbox existed carries no opinion about it, and rather than reading that silence as a *yes*, Quilltap leaves the matter open and lets the provider's own good sense decide — which is to say the box stays unticked on an Anthropic profile, where a ticked one would refuse every turn in a crowded room. A box the archive does carry is honoured exactly as it was set.
+
 Either way, Quilltap keeps a structural backstop: a reply that wanders off into another participant's turn is truncated at the first foreign name tag, whichever route pinned it. And single-character chats use neither route — there is only one person who could possibly be speaking.
 
 ## Supports Image Attachments
