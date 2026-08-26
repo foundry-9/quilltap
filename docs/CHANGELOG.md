@@ -4,6 +4,29 @@
 
 ### 4.9-dev
 
+#### Fixed: OpenAI-Compatible plugin declares the plugin-types it requires (checklist item 8)
+
+`qtap-plugin-openai-compatible` shipped a bundle that emits a runtime
+`require("@quilltap/plugin-types")`. The plugin's own source imports that package for types only, but
+`@quilltap/plugin-utils` imports it for real, and esbuild marks it external — so the require survives
+into the bundle. The plugin's `package.json` never listed it. It resolved anyway, but only because npm
+pulls it in transitively through `@quilltap/plugin-utils` and hoists it somewhere Node's upward walk
+reaches: the same luck-based resolution that broke Mistral installs. A strict (pnpm-style)
+`node_modules` layout would have failed the load with MODULE_NOT_FOUND.
+`qtap-plugin-default-system-prompts` externalizes the same package and declares it properly; this one
+is now consistent with it. Dependency metadata only — no change to the bundle. Plugin 1.0.42.
+
+Audited the other fourteen distributed plugins in the same pass. No reach-ins anywhere: no `@/lib`, no
+`@/` alias, no relative path escaping a plugin directory, in sources, bundles or build configs. Every
+`./types` barrel is a thin re-export of `@quilltap/plugin-types`. `@quilltap/plugin-utils` is bundled
+by all fifteen (externalized by none). Cache-read tokens are excluded from `promptTokens`/`totalTokens`
+in every provider that folds them into the prompt count, and correctly *not* excluded in Anthropic,
+which reports `input_tokens` separately from `cache_read_input_tokens`. The Anthropic new-generation
+model-ID prefix branch is intact. The remaining undeclared bare requires in other bundles
+(`ajv`/`ajv-formats` under MCP, `google-auth-library` under Google, `zod` under OpenRouter) are
+transitive dependencies of declared packages or app-provided externals, and are already accounted for
+by the standalone tarball's `pruneRedundantPluginModules`.
+
 #### Removed: dead code sweep (checklist item 5)
 
 Ran knip over the repo and removed 11 unused exports across 9 files. knip's raw output is mostly
