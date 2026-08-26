@@ -4,6 +4,44 @@
 
 ### 4.9-dev
 
+#### Changed: qt-* theme utility sweep (checklist item 7)
+
+Reviewed the 118 `.tsx` files changed since 4.8.4 for hard-coded Tailwind that themes cannot reach,
+and converted 20 sites across 15 files.
+
+Sixteen were solid semantic fills — `bg-destructive`, `bg-success`, `hover:bg-primary` — swapped to
+their `qt-bg-*` equivalents. These read the same token either way, so nothing moved on screen; the
+point is consistency, since `qt-` already carried the overwhelming majority of these call sites
+(`bg-destructive` was 8 Tailwind against 62 qt). `ChatCard.tsx:268` and `TaskFilters.tsx:140` were
+each the odd branch of a ternary whose siblings were already `qt-`.
+
+Two were genuinely unthemeable and do shift slightly:
+
+- `CharacterHeader.tsx:139` — the avatar placeholder was `bg-gray-300 dark:bg-slate-700`, a new
+  inline copy of the pattern in `lib/avatar-styles.ts`. Now `qt-bg-muted`, matching
+  `--qt-avatar-bg`, which is what every other avatar in the app already resolves to.
+- `image-gallery.tsx:176` — `bg-black bg-opacity-0 group-hover:bg-opacity-50` became
+  `qt-bg-overlay-medium`, matching `GenerateImageView.tsx:315`. The `bg-opacity` pair was redundant
+  with the `opacity-0`/`group-hover:opacity-100` fade on the same element, hover alpha goes 0.5 to
+  0.6, and the value is now theme-controllable via `--qt-overlay-medium-bg`.
+
+Both checkboxes in `memory-recall-card.tsx` moved from raw `border-input text-primary
+focus:ring-primary` to `qt-checkbox`, joining 40 existing adopters at the same rendered size.
+
+Added `.hover\:qt-bg-primary` and `.hover\:qt-bg-success`, the missing solid-fill siblings of the
+existing `.hover\:qt-bg-destructive`. Tailwind generates no variants for classes declared inside
+`@layer utilities`, so each hover form has to be written by hand or it is inert. Mirrored into
+`packages/theme-storybook` (1.0.65). The bundled themes need no edits — all six already define the
+`primary` and `success` tokens these rules read.
+
+`text-foreground` was left alone. It maps to the same token as `qt-text`, but Tailwind is the house
+convention there by 376 uses to 73, so converting the seven in scope would only make them the
+inconsistent ones.
+
+Two pre-existing gaps are recorded but out of this item's scope, both unchanged since 4.8.4:
+`lib/avatar-styles.ts` hard-codes the avatar chrome app-wide, and eleven more raw checkboxes remain
+under `components/settings/chat-settings/`.
+
 #### Removed: dead code sweep (checklist item 5)
 
 Ran knip over the repo and removed 11 unused exports across 9 files. knip's raw output is mostly

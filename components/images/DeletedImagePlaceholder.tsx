@@ -67,7 +67,7 @@ export default function DeletedImagePlaceholder({
       )}
       <button
         onClick={handleCleanup}
-        className={`bg-destructive hover:qt-bg-destructive/90 qt-text-on-destructive rounded transition-colors ${isCompact ? 'px-1.5 py-0.5 text-[9px]' : 'px-3 py-1 text-xs'}`}
+        className={`qt-bg-destructive hover:qt-bg-destructive/90 qt-text-on-destructive rounded transition-colors ${isCompact ? 'px-1.5 py-0.5 text-[9px]' : 'px-3 py-1 text-xs'}`}
       >
         Remove
       </button>

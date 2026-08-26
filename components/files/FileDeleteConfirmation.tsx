@@ -47,7 +47,7 @@ export default function FileDeleteConfirmation({
       <button
         onClick={onConfirm}
         disabled={isDeleting}
-        className="qt-button bg-destructive qt-text-on-destructive hover:qt-bg-destructive/90 disabled:opacity-50"
+        className="qt-button qt-bg-destructive qt-text-on-destructive hover:qt-bg-destructive/90 disabled:opacity-50"
       >
         {isDeleting ? 'Deleting...' : 'Delete Anyway'}
       </button>

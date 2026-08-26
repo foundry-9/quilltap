@@ -150,7 +150,7 @@ export function MemoryRecallCard() {
           checked={config.expandRelated}
           onChange={e => handleExpandRelatedChange(e.target.checked)}
           disabled={saving}
-          className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+          className="mt-1 qt-checkbox"
         />
         <div className="flex-1">
           <div className="font-medium text-foreground">Follow the threads between memories</div>
@@ -169,7 +169,7 @@ export function MemoryRecallCard() {
           checked={config.perTurnConversationSummaries}
           onChange={e => handlePerTurnConversationsChange(e.target.checked)}
           disabled={saving}
-          className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+          className="mt-1 qt-checkbox"
         />
         <div className="flex-1">
           <div className="font-medium text-foreground">Consult past conversations every turn</div>

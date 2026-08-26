@@ -173,7 +173,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
 
           {/* Overlay with actions */}
           {!missingImages.has(image.id) && (
-            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all opacity-0 group-hover:opacity-100">
+            <div className="absolute inset-0 qt-bg-overlay-medium transition-all opacity-0 group-hover:opacity-100">
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -190,7 +190,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
                   e.stopPropagation()
                   handleDeleteImage(image.id)
                 }}
-                className="absolute bottom-2 right-2 bg-destructive qt-text-on-destructive p-2 rounded-full hover:qt-bg-destructive/90 transition-colors"
+                className="absolute bottom-2 right-2 qt-bg-destructive qt-text-on-destructive p-2 rounded-full hover:qt-bg-destructive/90 transition-colors"
                 title="Delete image"
                 aria-label="Delete image"
               >

@@ -578,7 +578,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
                         setOpenChatForSelected(true)
                         setSelectedCharacterId(character.id)
                       } : undefined}
-                      className="character-card__action character-card__action--chat inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-on-success qt-shadow-sm transition hover:qt-bg-success/90"
+                      className="character-card__action character-card__action--chat inline-flex flex-1 items-center justify-center gap-2 rounded-lg qt-bg-success px-4 py-2 text-sm font-semibold qt-text-on-success qt-shadow-sm transition hover:qt-bg-success/90"
                       title="Start a chat with this character"
                     >
                       <Icon name="chat" className="w-5 h-5" />

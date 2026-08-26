@@ -137,7 +137,7 @@ export function TaskFilters({
           <span
             className={`w-2 h-2 rounded-full ${
               data.processorStatus?.running
-                ? 'bg-success animate-pulse'
+                ? 'qt-bg-success animate-pulse'
                 : 'qt-bg-muted-foreground'
             }`}
           />
