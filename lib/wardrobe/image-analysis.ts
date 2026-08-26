@@ -10,6 +10,7 @@
  */
 
 import { createLLMProvider } from '@/lib/llm'
+import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { profileParams } from '@/lib/llm/cheap-llm'
@@ -230,8 +231,19 @@ function parseAnalysisResponse(content: string): ProposedWardrobeItem[] {
  * @param repos - Repository container for data access
  * @param userId - The user's ID for profile/key resolution
  * @returns Proposed wardrobe items or throws an error
+ *
+ * Reading an image with a vision model is image work the user waits on, so the
+ * whole analysis registers with the activity registry and lights "Img".
  */
 export async function analyzeImageForWardrobeItems(
+  params: ImageAnalysisParams,
+  repos: RepositoryContainer,
+  userId: string
+): Promise<ImageAnalysisResult> {
+  return trackActivity('image', () => runAnalyzeImageForWardrobeItems(params, repos, userId))
+}
+
+async function runAnalyzeImageForWardrobeItems(
   params: ImageAnalysisParams,
   repos: RepositoryContainer,
   userId: string

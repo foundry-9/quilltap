@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
-import { getQueueStats, getActiveCountsByType, enqueueJob, ensureProcessorRunning, getProcessorStatus } from '@/lib/background-jobs';
+import { getQueueStats, getActiveCountsByType, getActivitySnapshot, enqueueJob, ensureProcessorRunning, getProcessorStatus } from '@/lib/background-jobs';
 import { BackgroundJobTypeEnum } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -18,25 +18,38 @@ import { badRequest, serverError } from '@/lib/api/responses';
  *
  * Query params:
  * - includeJobs: 'true' to include recent jobs
+ * - includeByType: 'true' to include the per-job-type active breakdown
  * - chatId: Filter pending jobs for a specific chat
+ *
+ * `activeByKind` is always present and is what the toolbar chips poll: it
+ * merges active job rows with the non-job work registered in the activity
+ * registry, grouped by activity kind. The per-type breakdown costs a full
+ * read of every active row, so it is opt-in via `includeByType`.
  */
 export const GET = createContextHandler(async (req: NextRequest, { user, repos }: RequestContext) => {
   try {
     const { searchParams } = req.nextUrl;
     const includeJobs = searchParams.get('includeJobs') === 'true';
+    const includeByType = searchParams.get('includeByType') === 'true' || includeJobs;
     const chatId = searchParams.get('chatId');// Ensure processor is running
     ensureProcessorRunning();
 
     // Get stats
     const stats = await getQueueStats(user.id);
-    const activeByType = await getActiveCountsByType(user.id);
+    const { active: activeByKind, started: startedByKind } = await getActivitySnapshot(user.id);
     const processorStatus = getProcessorStatus();
 
     const response: Record<string, unknown> = {
       stats,
-      activeByType,
+      activeByKind,
+      startedByKind,
       processor: processorStatus,
     };
+
+    // Per-type breakdown reads every active row, so it stays opt-in.
+    if (includeByType) {
+      response.activeByType = await getActiveCountsByType(user.id);
+    }
 
     // Optionally include recent jobs
     if (includeJobs) {

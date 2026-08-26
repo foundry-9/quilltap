@@ -12,6 +12,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { providerRegistry } from '@/lib/plugins/provider-registry'
 import { isLocalEmbeddingProvider } from '@quilltap/plugin-types'
 import type { EmbeddingProfile, EmbeddingProfileProvider } from '@/lib/schemas/types'
+import { trackActivity } from '@/lib/background-jobs/activity-registry'
 
 /**
  * Result of an embedding operation.
@@ -279,6 +280,19 @@ export async function generateEmbedding(
  * work in flight. See `EmbeddingPriority` for the why.
  */
 export async function generateEmbeddingForUser(
+  text: string,
+  userId: string,
+  profileId?: string,
+  opts: { priority?: EmbeddingPriority } = {}
+): Promise<EmbeddingResult> {
+  // Lights the "Emb" chip for the whole call, including the wait for
+  // interactive quiet — an embedding minted to answer a search counts as much
+  // as one minted by an indexing job. Re-entrant by kind, so an embedding job
+  // is not counted twice.
+  return trackActivity('embedding', () => runEmbeddingForUser(text, userId, profileId, opts))
+}
+
+async function runEmbeddingForUser(
   text: string,
   userId: string,
   profileId?: string,

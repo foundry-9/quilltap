@@ -12,6 +12,7 @@ import {
 
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
+import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import { getImageProviderConstraints } from '@/lib/plugins/provider-registry';
 import { resolveOrientation } from '@/lib/image-gen/orientation';
 import type { ImageOrientation } from '@quilltap/plugin-types';
@@ -1200,8 +1201,20 @@ async function loadSettingsAndBuildCheapLLM(
 
 /**
  * Execute the image generation tool
+ *
+ * Runs inline in the turn rather than as a queued job, so it registers itself
+ * with the activity registry: the "Img" chip is lit from the first token of
+ * prompt crafting, through the Concierge check and the provider wait, until
+ * the image has landed (or failed).
  */
 export async function executeImageGenerationTool(
+  input: unknown,
+  context: ImageToolExecutionContext
+): Promise<ImageGenerationToolOutput> {
+  return trackActivity('image', () => runImageGenerationTool(input, context));
+}
+
+async function runImageGenerationTool(
   input: unknown,
   context: ImageToolExecutionContext
 ): Promise<ImageGenerationToolOutput> {

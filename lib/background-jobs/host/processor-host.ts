@@ -33,6 +33,7 @@ import {
 } from '../ipc-types';
 import { startDispatcher, stopDispatcher, dispatcherWake, getDispatcherSnapshot, handleChildJobResult } from './job-dispatcher';
 import { dispatchHostRpc } from './host-rpc-dispatcher';
+import { applyChildActivityDelta, resetChildActivity } from '../activity-registry';
 
 const log = logger.child({ module: 'jobs:processor-host' });
 
@@ -162,6 +163,9 @@ function spawnChild(): ChildProcess {
 
   child.on('exit', (code, signal) => {
     log.warn('Child process exited', { code, signal });
+    // Any activity spans the child had open die with it. Zero the mirror or a
+    // crash mid-generation pins a chip above zero until the server restarts.
+    resetChildActivity();
     const wasShuttingDown = state.shuttingDown;
     state.child = null;
     if (wasShuttingDown) return;
@@ -215,6 +219,12 @@ function handleChildMessage(raw: unknown): void {
       break;
     case 'shutdown-ack':
       log.info('Child acknowledged shutdown');
+      break;
+    case 'activity':
+      // Inline work inside a job handler (Concierge classification, an
+      // embedding, an image the handler generates itself) mirrored up so the
+      // toolbar chips cover it too.
+      applyChildActivityDelta(msg);
       break;
     case 'host-rpc':
       dispatchHostRpc(msg)

@@ -11,6 +11,7 @@ import { profileParams } from '@/lib/llm/cheap-llm';
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils';
+import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
@@ -456,8 +457,23 @@ const MAX_VISION_IMAGE_SIZE = 5 * 1024 * 1024;
 
 /**
  * Generate a description of an image using a vision-capable model
+ *
+ * Reading an image counts as image work: "Img" stays lit for the whole vision
+ * call, the same as it would for generating one.
  */
 export async function generateImageDescription(
+  imageFile: FileEntry,
+  visionProfile: ConnectionProfile,
+  apiKey: string,
+  userId?: string,
+  characterId?: string
+): Promise<string> {
+  return trackActivity('image', () =>
+    runGenerateImageDescription(imageFile, visionProfile, apiKey, userId, characterId)
+  );
+}
+
+async function runGenerateImageDescription(
   imageFile: FileEntry,
   visionProfile: ConnectionProfile,
   apiKey: string,

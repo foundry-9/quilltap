@@ -21,6 +21,7 @@ import { Memory } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { generateEmbeddingForUser, EmbeddingError } from '@/lib/embedding/embedding-service'
+import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { rawQuery } from '@/lib/database/manager'
 import { logger } from '@/lib/logger'
 import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
@@ -130,6 +131,32 @@ export function calculateReinforcedImportance(baseImportance: number, reinforcem
  * 7. If embedding fails after one retry → SKIP_EMBEDDING_FAILED (no write).
  */
 export async function runMemoryGate(
+  characterId: string,
+  candidateContent: string,
+  candidateSummary: string,
+  _candidateKeywords: string[],
+  userId: string,
+  embeddingProfileId?: string,
+  candidateAnchors?: EpisodicAnchorView
+): Promise<GateResult> {
+  // Memories formed from a tool call rather than the extraction job have no
+  // job row to count them, so the gate registers itself. Re-entrant by kind,
+  // so the extraction job's own row is not double-counted; the embedding it
+  // mints inside still counts separately under "Emb".
+  return trackActivity('memory', () =>
+    runMemoryGateInner(
+      characterId,
+      candidateContent,
+      candidateSummary,
+      _candidateKeywords,
+      userId,
+      embeddingProfileId,
+      candidateAnchors
+    )
+  )
+}
+
+async function runMemoryGateInner(
   characterId: string,
   candidateContent: string,
   candidateSummary: string,

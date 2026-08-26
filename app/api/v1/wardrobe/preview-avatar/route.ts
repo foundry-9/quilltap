@@ -14,14 +14,15 @@
  * Response: { fileId, url, mimeType, prompt }
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createContextHandler } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
 import { resolveAesthetic } from '@/lib/image-gen/aesthetic';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
+import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import {
   getCharacterVaultStore,
   writeCharacterAvatarToVault,
@@ -37,7 +38,7 @@ const previewAvatarSchema = z.object({
   imageProfileId: z.string().min(1).optional(),
 });
 
-export const POST = createContextHandler(async (req, { user, repos }) => {
+const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestContext) => {
   let parsed: z.infer<typeof previewAvatarSchema>;
   try {
     parsed = previewAvatarSchema.parse(await req.json());
@@ -212,4 +213,13 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
     );
     return serverError('Failed to save avatar preview');
   }
-});
+};
+
+/**
+ * Avatar previews generate synchronously rather than through the job queue, so
+ * the route registers with the activity registry — the toolbar's "Img" chip
+ * stays lit for the whole preview, prompt build and provider wait included.
+ */
+export const POST = createContextHandler((req, ctx) =>
+  trackActivity('image', () => handlePreviewAvatar(req, ctx))
+);

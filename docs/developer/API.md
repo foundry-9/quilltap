@@ -5010,6 +5010,26 @@ Returns preview counts of matches found.
 
 Get queue status and jobs.
 
+**Query params:**
+
+| Param | Effect |
+|---|---|
+| `includeJobs=true` | include the 50 most recent job rows (implies `includeByType`) |
+| `includeByType=true` | include the per-job-type active breakdown |
+| `chatId=<id>` | include pending jobs for that chat |
+
+`activeByKind` is always present and is what the toolbar chips poll. It groups
+work by *activity kind* (`memory`, `embedding`, `summary`, `danger`, `image` —
+see `lib/background-jobs/activity-kinds.ts`) and merges two sources: active
+`background_jobs` rows, and non-job work registered with the in-process activity
+registry (`lib/background-jobs/activity-registry.ts`), which is how inline work
+like the `generate_image` tool or a live Concierge classification gets counted.
+`startedByKind` is a monotonic per-kind count of completed spans, so a client can
+tell that work passed through between two polls.
+
+`activeByType` costs a full read of every active row, so it is opt-in via
+`includeByType`.
+
 **Response**: `200 OK`
 
 ```json
@@ -5020,6 +5040,20 @@ Get queue status and jobs.
     "completed": 100,
     "failed": 2,
     "activeTotal": 6
+  },
+  "activeByKind": {
+    "memory": 2,
+    "embedding": 0,
+    "summary": 1,
+    "danger": 0,
+    "image": 1
+  },
+  "startedByKind": {
+    "memory": 41,
+    "embedding": 903,
+    "summary": 88,
+    "danger": 152,
+    "image": 12
   },
   "jobs": [
     {

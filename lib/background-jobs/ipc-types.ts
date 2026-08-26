@@ -11,6 +11,7 @@
  */
 
 import type { BackgroundJob } from '@/lib/schemas/types';
+import type { ActivityKind } from './activity-kinds';
 
 // ============================================================================
 // Parent → child
@@ -162,12 +163,29 @@ export interface ChildHostRpcRequestMessage {
   args: unknown[];
 }
 
+/**
+ * A span of chip-visible work started or ended inside the child. The parent
+ * mirrors these into the activity registry so the toolbar chips cover inline
+ * work done *within* a job handler — a Concierge classification during scene
+ * tracking, an embedding minted mid-handler — and not just the job row.
+ *
+ * Fire-and-forget: the parent zeroes the whole child mirror when the child
+ * exits, so a dropped or unpaired delta self-heals on the next respawn.
+ */
+export interface ChildActivityMessage {
+  type: 'activity';
+  kind: ActivityKind;
+  /** `1`/`-1` move the in-flight count; `'blip'` records a completed span. */
+  delta: 1 | -1 | 'blip';
+}
+
 export type ChildToParentMessage =
   | ChildJobResultMessage
   | ChildLogMessage
   | ChildStatusMessage
   | ChildShutdownAckMessage
-  | ChildHostRpcRequestMessage;
+  | ChildHostRpcRequestMessage
+  | ChildActivityMessage;
 
 // ============================================================================
 // Type guards
@@ -176,7 +194,7 @@ export type ChildToParentMessage =
 export function isChildToParentMessage(value: unknown): value is ChildToParentMessage {
   if (!value || typeof value !== 'object') return false;
   const t = (value as { type?: unknown }).type;
-  return t === 'job-result' || t === 'log' || t === 'status' || t === 'shutdown-ack' || t === 'host-rpc';
+  return t === 'job-result' || t === 'log' || t === 'status' || t === 'shutdown-ack' || t === 'host-rpc' || t === 'activity';
 }
 
 export function isParentToChildMessage(value: unknown): value is ParentToChildMessage {

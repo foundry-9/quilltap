@@ -365,6 +365,19 @@
   }
 
   /**
+   * Queue badge blip — work that started and finished between two polls never
+   * shows up as a count, so the badge pulses once to mark that it happened.
+   */
+  .qt-queue-badge-pulse {
+    animation: qt-queue-badge-blip 600ms ease-in-out 2;
+  }
+
+  @keyframes qt-queue-badge-blip {
+    0%, 100% { opacity: var(--qt-queue-badge-idle-opacity); }
+    50% { opacity: 1; }
+  }
+
+  /**
    * Memory queue badge (blue)
    */
   .qt-queue-badge-memory {

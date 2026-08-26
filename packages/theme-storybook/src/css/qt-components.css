@@ -328,6 +328,8 @@
   --qt-queue-badge-group-radius: var(--radius-md);
   --qt-queue-badge-memory-bg: hsl(225 55% 48%);
   --qt-queue-badge-memory-fg: hsl(0 0% 100%);
+  --qt-queue-badge-embedding-bg: hsl(270 50% 48%);
+  --qt-queue-badge-embedding-fg: hsl(0 0% 100%);
   --qt-queue-badge-summary-bg: hsl(152 55% 38%);
   --qt-queue-badge-summary-fg: hsl(0 0% 100%);
   --qt-queue-badge-danger-bg: hsl(0 60% 48%);
@@ -3528,6 +3530,13 @@
    Adjusted colors for dark backgrounds with better contrast
    ========================================================================== */
 .dark {
+  /* Queue status badges — dark mode */
+  --qt-queue-badge-memory-bg: hsl(225 55% 55%);
+  --qt-queue-badge-embedding-bg: hsl(270 50% 55%);
+  --qt-queue-badge-summary-bg: hsl(152 50% 42%);
+  --qt-queue-badge-danger-bg: hsl(0 60% 52%);
+  --qt-queue-badge-story-bg: hsl(225 12% 44%);
+
   /* Chat: Whisper messages — dark mode */
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #6b5b95 40%);
   --qt-chat-whisper-border: #6b5b95;
@@ -3935,6 +3944,80 @@
   border-radius: 0.25rem;
   background-color: var(--qt-terminal-closed-badge-bg);
   color: var(--qt-terminal-closed-badge-fg);
+}
+
+/* ==========================================================================
+   QUEUE STATUS BADGE GROUP
+   The compact chip group in the page toolbar reporting in-flight background
+   activity per kind (memory, embedding, summarization, the Concierge, images).
+   ========================================================================== */
+.qt-queue-badge-group {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  gap: var(--qt-queue-badge-group-gap);
+  border-radius: var(--qt-queue-badge-group-radius);
+}
+
+.qt-queue-badge,
+.qt-queue-badge-memory,
+.qt-queue-badge-embedding,
+.qt-queue-badge-summary,
+.qt-queue-badge-danger,
+.qt-queue-badge-story {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+  white-space: nowrap;
+  padding: var(--qt-queue-badge-padding-y) var(--qt-queue-badge-padding-x);
+  font-size: var(--qt-queue-badge-font-size);
+  font-weight: var(--qt-queue-badge-font-weight);
+  transition: opacity 200ms ease;
+}
+
+/* Idle state (count is 0). */
+.qt-queue-badge-idle {
+  opacity: var(--qt-queue-badge-idle-opacity);
+}
+
+/* Blip — work that started and finished between two polls of the activity
+   snapshot never shows up as a count, so the badge pulses to mark that it
+   happened. */
+.qt-queue-badge-pulse {
+  animation: qt-queue-badge-blip 600ms ease-in-out 2;
+}
+
+@keyframes qt-queue-badge-blip {
+  0%, 100% { opacity: var(--qt-queue-badge-idle-opacity); }
+  50% { opacity: 1; }
+}
+
+.qt-queue-badge-memory {
+  background: var(--qt-queue-badge-memory-bg);
+  color: var(--qt-queue-badge-memory-fg);
+}
+
+.qt-queue-badge-embedding {
+  background: var(--qt-queue-badge-embedding-bg);
+  color: var(--qt-queue-badge-embedding-fg);
+}
+
+.qt-queue-badge-summary {
+  background: var(--qt-queue-badge-summary-bg);
+  color: var(--qt-queue-badge-summary-fg);
+}
+
+.qt-queue-badge-danger {
+  background: var(--qt-queue-badge-danger-bg);
+  color: var(--qt-queue-badge-danger-fg);
+}
+
+.qt-queue-badge-story {
+  background: var(--qt-queue-badge-story-bg);
+  color: var(--qt-queue-badge-story-fg);
 }
 
 /* ==========================================================================

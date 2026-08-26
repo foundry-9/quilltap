@@ -8,6 +8,7 @@
 
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { providerCanTransportImages } from '@/lib/llm/image-transport'
+import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { createLLMProvider } from '@/lib/llm'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { resizeImageForProvider, canResizeImage } from '@/lib/files/image-processing'
@@ -536,6 +537,17 @@ async function describeImageWithProfile(
  * layer.
  */
 export async function generateImageDescription(
+  file: FileAttachment,
+  repos: any,
+  userId: string
+): Promise<FallbackResult> {
+  // Reading an image with a vision model is image work — it lights "Img" for
+  // as long as the call takes, the same as generating one. The persisted-
+  // description shortcut below returns fast enough not to register as a blip.
+  return trackActivity('image', () => runGenerateImageDescription(file, repos, userId))
+}
+
+async function runGenerateImageDescription(
   file: FileAttachment,
   repos: any,
   userId: string

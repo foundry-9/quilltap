@@ -24,6 +24,7 @@ import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 import { createHash } from 'node:crypto'
 import { moderationProviderRegistry } from '@/lib/plugins/moderation-provider-registry'
 import type { ModerationResult } from '@/lib/plugins/interfaces/moderation-provider-plugin'
+import { trackActivity } from '@/lib/background-jobs/activity-registry'
 
 const logger = createServiceLogger('DangerousContentGatekeeper')
 
@@ -327,6 +328,22 @@ async function classifyWithModerationProvider(
  * @returns Classification result (fail-safe: returns not dangerous on any error)
  */
 export async function classifyContent(
+  content: string,
+  cheapLLMSelection: CheapLLMSelection,
+  userId: string,
+  settings: DangerousContentSettings,
+  chatId?: string
+): Promise<DangerClassificationResult> {
+  // Every Concierge classification — the per-message one in the send path, the
+  // chat-level job, the ones the image pipelines run — lights the "Dgr" chip
+  // for as long as it takes. Re-entrant by kind, so the classification job's
+  // own row is not double-counted.
+  return trackActivity('danger', () =>
+    runClassification(content, cheapLLMSelection, userId, settings, chatId)
+  )
+}
+
+async function runClassification(
   content: string,
   cheapLLMSelection: CheapLLMSelection,
   userId: string,

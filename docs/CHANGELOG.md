@@ -4,6 +4,55 @@
 
 ### 4.9-dev
 
+#### Fixed: the toolbar activity chips now count the whole job
+
+The **Mem / Emb / Sum / Dgr / Img** chips in the page toolbar only ever counted rows in the
+`background_jobs` table, and only the job types someone had remembered to list. Everything else was
+invisible. Three of the four image-generation paths are not jobs at all — the Lantern's
+`generate_image` tool, the wardrobe avatar preview, and `POST /api/v1/images?action=generate` — so
+those ran start to finish without **Img** moving. Nine job types belonged to no chip
+(`MEMORY_HOUSEKEEPING`, `CARINA_MEMORY_EXTRACTION`, `EMBEDDING_REAPPLY_PROFILE`,
+`CHARACTER_HEADSHOULDERS_BACKFILL`, `WARDROBE_OUTFIT_ANNOUNCEMENT`, and others). Per-message Concierge
+classification and every inline embedding call showed up nowhere.
+
+What changed:
+
+- **Chip membership is now exhaustive by type.** `JOB_TYPE_ACTIVITY` in
+  `lib/background-jobs/activity-kinds.ts` is a total `Record<BackgroundJobType, ActivityKind | null>`,
+  so adding a job type without assigning it a chip is a compile error. Deliberate omissions are spelled
+  `null`. The nine unassigned types now have chips.
+- **Non-job work registers with an activity registry** (`lib/background-jobs/activity-registry.ts`).
+  The three inline image paths, the Concierge classifier, the embedding service, the memory gate, and
+  every cheap-LLM task now count for their full duration. A chip is lit from the first token of prompt
+  crafting until the result lands or fails.
+- **Reading an image counts as image work.** Vision calls — the wardrobe image analyzer, the character
+  wizard's image description, the chat attachment describe-fallback, and the `describe-attachment`
+  cheap-LLM task — light **Img**, the same as generating one.
+- **Counting is re-entrant by kind.** A job handler is attributed to its own kind without adding a
+  count, so inline work of the same kind collapses into the job row instead of doubling it. Work of a
+  *different* kind still nests and counts: a Concierge check inside an image generation ticks **Dgr**
+  up and back down inside the **Img** span.
+- **Inline work inside job handlers counts too.** The forked job child mirrors its activity spans to
+  the parent over a new `activity` IPC message. The mirror is zeroed when the child exits, so a crash
+  mid-span cannot pin a chip above zero.
+- **Polling is now a heartbeat.** The chips previously polled only after a client called
+  `notifyQueueChange()` and stopped the moment counts hit zero, so server-initiated work (autonomous
+  rooms, scheduled housekeeping, a wardrobe change enqueuing an avatar) never appeared. They now poll
+  on their own — 1.5s while busy, 8s while idle. `notifyQueueChange()` remains as an instant kick but
+  nothing depends on it.
+- **Work that starts and finishes between two polls now blips.** The API returns a monotonic
+  `startedByKind` counter and the chip pulses when it advances. Spans under 250ms (a cached
+  classification) do not register, so the chips do not flicker.
+
+Two hot-path queries were rewritten as indexed `COUNT(*)`s to make heartbeat polling affordable:
+`getStats` read and Zod-validated *every* row in `background_jobs` (completed jobs inside the retention
+window included), and the active-count query hauled every active row with its payload JSON. The new
+`getActiveCountsByKind` runs one count per chip.
+
+`GET /api/v1/system/jobs` now always returns `activeByKind` and `startedByKind`; the per-type
+breakdown (`activeByType`) is opt-in via `?includeByType=true` since it costs a full read.
+
+
 #### Added: the search bar searches every document store
 
 The global search bar (⌘K) gained a **Documents** type, with its own filter chip alongside Chats,

@@ -13,6 +13,8 @@ import { withTimeout } from '@/lib/promise-timeout'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
 import type { CheapLLMTaskResult, UncensoredFallbackOptions } from './types'
+import { trackActivity } from '@/lib/background-jobs/activity-registry'
+import type { ActivityKind } from '@/lib/background-jobs/activity-kinds'
 
 /**
  * Internal type for provider response
@@ -300,9 +302,85 @@ function shouldAttemptUncensoredFallback(
 }
 
 /**
+ * Which toolbar chip each cheap-LLM task lights.
+ *
+ * Every cheap-LLM task funnels through {@link executeCheapLLMTask}, so this is
+ * the one place that has to know. A task type absent from the map falls back to
+ * "summary" rather than going uncounted — a chip that is slightly generous is
+ * better than a chip that quietly lies.
+ */
+const TASK_TYPE_ACTIVITY: Record<string, ActivityKind> = {
+  // Image pipelines — prompt crafting and appearance work is part of the image
+  // the user is waiting on, so it belongs inside the same span.
+  'craft-image-prompt': 'image',
+  'craft-story-background-prompt': 'image',
+  'derive-scene-context': 'image',
+  'resolve-character-appearances': 'image',
+  'sanitize-appearance': 'image',
+  'describe-attachment': 'image',
+  'outfit-selection': 'image',
+
+  // the Commonplace Book
+  'memory-extraction-self': 'memory',
+  'memory-extraction-other': 'memory',
+  'batch-memory-extraction': 'memory',
+  'fold-episode-extraction': 'memory',
+  'memory-keyword-extraction': 'memory',
+  'memory-recap-summarization': 'memory',
+
+  // Summarization and post-turn processing
+  'fold-chat-summary': 'summary',
+  'summarize-chat': 'summary',
+  'update-context-summary': 'summary',
+  'consider-title-update': 'summary',
+  'consider-help-chat-title-update': 'summary',
+  'scene-state-tracking': 'summary',
+  'compress-conversation-history': 'summary',
+  'compress-memories': 'summary',
+  'compress-system-prompt': 'summary',
+}
+
+function activityKindForTask(taskType?: string): ActivityKind {
+  return (taskType && TASK_TYPE_ACTIVITY[taskType]) || 'summary'
+}
+
+/**
  * Executes a cheap LLM task with the given messages
+ *
+ * Registers the call with the activity registry for its whole duration, so a
+ * cheap-LLM task lights its chip whether it was queued as a job or run inline
+ * in a request. Re-entrant by kind: a task running inside a job of the same
+ * kind collapses into that job's count instead of doubling it.
  */
 export async function executeCheapLLMTask<T>(
+  selection: CheapLLMSelection,
+  messages: LLMMessage[],
+  userId: string,
+  parseResponse: (content: string) => T,
+  taskType?: string,
+  chatId?: string,
+  messageId?: string,
+  uncensoredFallback?: UncensoredFallbackOptions,
+  maxTokens?: number,
+  characterId?: string
+): Promise<CheapLLMTaskResult<T>> {
+  return trackActivity(activityKindForTask(taskType), () =>
+    runCheapLLMTask(
+      selection,
+      messages,
+      userId,
+      parseResponse,
+      taskType,
+      chatId,
+      messageId,
+      uncensoredFallback,
+      maxTokens,
+      characterId
+    )
+  )
+}
+
+async function runCheapLLMTask<T>(
   selection: CheapLLMSelection,
   messages: LLMMessage[],
   userId: string,

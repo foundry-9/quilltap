@@ -27,6 +27,8 @@ import {
   isParentToChildMessage,
 } from '../ipc-types';
 import { handleHostRpcResponse } from './host-rpc-client';
+import { runAttributedToJob } from '../activity-registry';
+import { activityKindForJobType } from '../activity-kinds';
 import type { BackgroundJob } from '@/lib/schemas/types';
 
 // Bootstrap: replace the singleton logger's transports so every record
@@ -163,7 +165,12 @@ async function runJob(job: BackgroundJob): Promise<void> {
   try {
     await runWithJobScope(job.id, async () => {
       const handler = getHandler(job.type);
-      await handler(job);
+      // Attribute the handler to its own chip kind without adding a count —
+      // the job row already is the count. Inline work of the *same* kind
+      // inside the handler collapses into it; inline work of another kind
+      // (a Concierge classification during scene tracking, say) still counts
+      // and mirrors up to the parent.
+      await runAttributedToJob(activityKindForJobType(job.type), () => handler(job));
       const writes = flushPendingWrites();
       sendJobResult(job.id, true, writes);
     });

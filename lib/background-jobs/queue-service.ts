@@ -11,6 +11,8 @@ import { logger } from '@/lib/logger';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
+import { ACTIVITY_KINDS, emptyActivityCounts, type ActivityKind } from './activity-kinds';
+import { getActivityCounts, getActivityStartTotals } from './activity-registry';
 import {
   COMPLETED_JOB_RETENTION_DAYS,
   DEAD_JOB_RETENTION_DAYS,
@@ -1112,6 +1114,30 @@ export async function getQueueStats(userId?: string): Promise<QueueStats> {
 export async function getActiveCountsByType(userId?: string): Promise<Record<string, number>> {
   const repos = getRepositories();
   return repos.backgroundJobs.getActiveCountsByType(userId);
+}
+
+/**
+ * Get active (PENDING + PROCESSING) job counts grouped by activity kind,
+ * merged with non-job work currently registered in the activity registry.
+ *
+ * This is what the toolbar chips read: a chip stays lit for the whole span of
+ * the work it names, whether that work is a queued job or something running
+ * inline in a request.
+ */
+export async function getActivitySnapshot(userId?: string): Promise<{
+  active: Record<ActivityKind, number>;
+  started: Record<ActivityKind, number>;
+}> {
+  const repos = getRepositories();
+  const jobCounts = await repos.backgroundJobs.getActiveCountsByKind(userId);
+  const inline = getActivityCounts();
+
+  const active = emptyActivityCounts();
+  for (const kind of ACTIVITY_KINDS) {
+    active[kind] = jobCounts[kind] + inline[kind];
+  }
+
+  return { active, started: getActivityStartTotals() };
 }
 
 /**

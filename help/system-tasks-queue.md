@@ -310,6 +310,35 @@ Click on a task to see more information:
 - Try restarting
 - Contact support if queue remains stuck
 
+## The chips on the mantelpiece
+
+You need not open Settings to know whether the household is busy. A small row of
+chips sits in the page toolbar, wherever you happen to be — **Mem**, **Emb**,
+**Sum**, **Dgr**, **Img** — each bearing a count of the work of that kind
+presently in hand.
+
+| Chip | What it watches |
+|---|---|
+| **Mem** | the Commonplace Book — memories being formed, regenerated, or tidied away |
+| **Emb** | embeddings being minted, whether for the index or to answer a search you just typed |
+| **Sum** | summaries, titles, scene-state, conversation rendering — the quiet work after a turn |
+| **Dgr** | the Concierge, weighing content for danger |
+| **Img** | images, end to end: reading one with a vision model, deciding what a picture should contain, crafting the prompt, waiting on the provider, and landing the result |
+
+A chip counts the *whole errand*, not merely its queued portion. An image
+requested by a character lights **Img** from the first moment its prompt is
+being considered until the picture has landed (or failed) — and if the Concierge
+is consulted along the way, **Dgr** ticks up inside that span and back down
+again, quite as it should. Two things of the same kind at once read as `2`.
+
+Work that begins and ends between two glances would otherwise pass unnoticed, so
+a chip gives a brief double-blink to mark that something went through. A chip at
+rest is dimmed; it is never merely stale.
+
+Not everything appears here. Pure housekeeping the Estate performs on its own
+account is left off, and autonomous rooms keep their own [row of
+badges](autonomous-rooms.md) rather than crowding these.
+
 ## Best Practices
 
 **Monitor Important Tasks:**
