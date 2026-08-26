@@ -7,11 +7,12 @@
 #### Fixed: OpenAI-Compatible plugin declares the plugin-types it requires (checklist item 8)
 
 `qtap-plugin-openai-compatible` shipped a bundle that emits a runtime
-`require("@quilltap/plugin-types")` — esbuild marks that package external, and the import
-`@quilltap/plugin-utils` makes of it survives into the bundle — while its `package.json` never listed
-it. It resolved anyway, but only because npm hoists it in transitively through
-`@quilltap/plugin-utils`: the same luck-based resolution that broke Mistral installs. A strict
-(pnpm-style) `node_modules` layout would have failed the load with MODULE_NOT_FOUND.
+`require("@quilltap/plugin-types")`. The plugin's own source imports that package for types only, but
+`@quilltap/plugin-utils` imports it for real, and esbuild marks it external — so the require survives
+into the bundle. The plugin's `package.json` never listed it. It resolved anyway, but only because npm
+pulls it in transitively through `@quilltap/plugin-utils` and hoists it somewhere Node's upward walk
+reaches: the same luck-based resolution that broke Mistral installs. A strict (pnpm-style)
+`node_modules` layout would have failed the load with MODULE_NOT_FOUND.
 `qtap-plugin-default-system-prompts` externalizes the same package and declares it properly; this one
 is now consistent with it. Dependency metadata only — no change to the bundle. Plugin 1.0.42.
 
