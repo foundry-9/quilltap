@@ -4,6 +4,14 @@
 
 ### 4.9-dev
 
+#### Added: feature plan for a Documents chip in the global search
+
+New spec at `docs/developer/features/global-search-documents.md`: extend the global search bar to
+keyword-search all enabled document stores (file names, paths, and extracted text), add a "Documents"
+filter chip, and open results in Document Mode — in the active Salon chat when one is focused (with the
+usual Librarian announcement), otherwise in the standalone, chat-free document view. Docs only; no code
+changes yet.
+
 #### Added: per-wardrobe dressing instructions for "Let Character Choose"
 
 Every wardrobe — a character's vault, a group's store, a project's store, and Quilltap General — can now
