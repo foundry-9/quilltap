@@ -125,6 +125,11 @@ Docs: the package README gained the `docs docker-mounts` verb (shipped in 4.8.4 
 and a rewritten "What gets completed" section covering the flag-anywhere parsing and positional
 store-name completion added in the bug 101 fix.
 
+Both guards originally compared flags by substring, which passes for a flag that is not there when
+another flag has it as a prefix — `--max` reads as present when only `--max-nodes` is listed. They now
+match whole tokens, and the help-function pattern tolerates reformatting rather than asserting on
+whitespace.
+
 #### Removed: dead code sweep (checklist item 5)
 
 Ran knip over the repo and removed 11 unused exports across 9 files. knip's raw output is mostly

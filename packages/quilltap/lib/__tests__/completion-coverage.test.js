@@ -122,12 +122,26 @@ const HELP_SOURCES = {
 
 const PKG_ROOT = path.join(__dirname, '..', '..');
 
-/** Long flags named anywhere in one subcommand's help text. */
+/**
+ * Long flags named anywhere in one subcommand's help text. The declaration
+ * pattern tolerates arbitrary whitespace and an `async`/parameter list, so
+ * reformatting a help function does not fail a test about its content.
+ */
 function flagsInHelp(relPath, fnName) {
   const src = fs.readFileSync(path.join(PKG_ROOT, relPath), 'utf8');
-  const body = src.match(new RegExp(`function ${fnName}\\(\\) \\{([\\s\\S]*?)\\n\\}`));
+  const decl = String.raw`(?:async\s+)?function\s+${fnName}\s*\([^)]*\)\s*\{`;
+  const body = src.match(new RegExp(`${decl}([\\s\\S]*?)\\n\\}`));
   if (!body) throw new Error(`Could not locate ${fnName}() in ${relPath}`);
   return [...new Set(body[1].match(/--[a-z0-9][a-z0-9-]+/g) || [])].sort();
+}
+
+/**
+ * `--max` is a prefix of `--max-nodes`, so a plain substring test passes for a
+ * flag that is not actually there. Require the match to end at a non-flag
+ * character.
+ */
+function mentionsFlag(haystack, flag) {
+  return new RegExp(`${flag}(?![a-z0-9-])`).test(haystack);
 }
 
 describe('completions offer every flag the help text advertises', () => {
@@ -142,8 +156,9 @@ describe('completions offer every flag the help text advertises', () => {
 
   it.each(cases)('%s: %s template offers every documented flag', (sub, shell, file, fn) => {
     const tpl = fs.readFileSync(path.join(COMPLETION_DIR, `${shell}.template`), 'utf8');
-    // fish spells a long flag `-l 'name'`; bash and zsh both write it literally.
-    const present = (flag) => (shell === 'fish' ? tpl.includes(`-l '${flag.slice(2)}'`) : tpl.includes(flag));
+    // fish spells the flag `-l 'name'`, already an exact quoted token.
+    const present = (flag) =>
+      shell === 'fish' ? tpl.includes(`-l '${flag.slice(2)}'`) : mentionsFlag(tpl, flag);
     const missing = flagsInHelp(file, fn).filter((flag) => !present(flag));
     expect(missing).toEqual([]);
   });
@@ -163,14 +178,14 @@ describe('bash knows which docs flags take a value', () => {
     const vfDocs = tpl.match(/local vf_docs="([^"]*)"/);
     expect(vfGlobal).toBeTruthy();
     expect(vfDocs).toBeTruthy();
-    const scanned = vfGlobal[1] + vfDocs[1];
+    const scanned = new Set(`${vfGlobal[1]} ${vfDocs[1]}`.trim().split(/\s+/));
     // A docs flag zsh declares with a `:value:` spec is by definition valued.
     const zsh = fs.readFileSync(path.join(COMPLETION_DIR, 'zsh.template'), 'utf8');
     const docsOpts = zsh.match(/docs_opts=\(([\s\S]*?)\n  \)/);
     expect(docsOpts).toBeTruthy();
     const valued = [...docsOpts[1].matchAll(/'(--[a-z0-9-]+)\[[^\]]*\]:[^']*'/g)].map((m) => m[1]);
     expect(valued.length).toBeGreaterThan(5);
-    const missing = valued.filter((flag) => !scanned.includes(flag));
+    const missing = valued.filter((flag) => !scanned.has(flag));
     expect(missing).toEqual([]);
   });
 });
