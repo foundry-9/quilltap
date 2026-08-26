@@ -4,6 +4,23 @@
 
 ### 4.9-dev
 
+#### Removed: leftover debug logging (checklist item 6)
+
+Swept every `.ts`/`.tsx` change since 4.8.4 for logging added during development and removed one
+line: the per-publish `Realtime publish coalesced` debug print in `lib/realtime/bus.ts`.
+
+It fired on every `publishRealtime` call that landed inside the 250 ms debounce window. Job status
+transitions pump that path from `job-dispatcher.ts` and `activity-registry.ts`, so an
+`EMBEDDING_REINDEX_ALL` sweep of 1000 jobs emitted one `publish queued`, 999 `publish coalesced` and
+one `publish flushed`. The surviving `publish flushed` line already reports the same total once per
+window, and with logs rolling every 2-3 MB the per-absorb copy only evicted real diagnostics. The
+`coalesced` counter itself stays, since `flushed` reads it.
+
+Nothing else was pruned. The remaining new debug logs are structured, guarded and bounded (once per
+flush or per connection, not per publish), which is what the logging convention asks for. Every
+`console.*` added since the release is in client paths at `error`/`warn` level, matching the
+existing convention in 145 other files, so there was no backend `console.*` to convert.
+
 #### Fixed: OpenAI-Compatible plugin declares the plugin-types it requires (checklist item 8)
 
 `qtap-plugin-openai-compatible` shipped a bundle that emits a runtime
