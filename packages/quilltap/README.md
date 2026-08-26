@@ -182,6 +182,7 @@ quilltap docs export <mount> <outputDir>        # Mount → directory
 quilltap docs find <pattern>                    # Substring match on file names (--mount, --ext, --type, --limit)
 quilltap docs grep <pattern>                    # Substring match on extracted text (--mount, --ignore-case, -l, --max, --context)
 quilltap docs status                            # Per-mount extraction + embedding rollup (--mount, --top)
+quilltap docs docker-mounts                     # Bind mounts filesystem stores need under Docker (--format args|json)
 
 # Server-required
 quilltap docs scan <mount>                                    # Trigger a rescan
@@ -391,8 +392,11 @@ Fish picks new completion files up automatically — no shell restart needed.
 
 - **Subcommands**: `quilltap d<TAB>` → `db docs`
 - **Sub-verbs per namespace**: `quilltap db s<TAB>` → `schema show`
+- **Flags per verb**: `quilltap docs docker-mounts --<TAB>` → the flags that verb accepts
 - **Instance names**: `quilltap --instance Fr<TAB>` → registered instances
-- **Mount names**: `quilltap docs ls --mount Qu<TAB>` → mount points in the active instance
+- **Mount names**: both `--mount` and the positional a verb takes — `quilltap docs ls Qu<TAB>`, and either end of `docs move`/`copy`/`link`
+
+Completions **parse the line rather than counting words**, so a flag typed anywhere the CLI itself accepts one does not derail them: `quilltap docs --instance Friday <TAB>` still offers the `docs` verbs. bash and zsh also reuse the `-i` / `-d` / `--passphrase` already on the line when looking store names up, so the names offered come from the instance you are addressing rather than the default one. fish completes `--mount` but not the positionals, and always reads the default instance.
 
 Dynamic completions shell out to `quilltap`'s own subcommands. If the active instance is encrypted and no passphrase is reachable, the completion silently returns nothing rather than prompting in the middle of a tab.
 

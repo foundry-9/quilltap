@@ -184,6 +184,9 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'depth' -d 'Maximu
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'max-nodes' -d 'Maximum graph nodes' -x
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'long' -d 'Long-form output'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'semantic' -d 'Semantic search'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'uri' -d 'Show canonical qtap:// URIs'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'base64' -d 'Base64 transfer for binary files'
+complete -c quilltap -n '__quilltap_using_subverb docs docker-mounts' -l 'format' -d 'Output shape' -x -a 'args json'
 
 # ---------- themes verbs ----------
 complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'list' -d 'List themes'

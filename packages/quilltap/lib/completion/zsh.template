@@ -293,6 +293,7 @@ _quilltap_docs() {
     '--max-nodes[Maximum nodes in graph]:n:'
     '--long[Long-form output]'
     '--semantic[Use semantic search]'
+    '--format[For docker-mounts: output shape]:format:(args json)'
     '(-h --help)'{-h,--help}'[Show help]'
   )
 
