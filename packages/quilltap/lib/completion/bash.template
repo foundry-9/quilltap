@@ -70,7 +70,7 @@ _quilltap_complete() {
   # `quilltap docs --limit 5 <TAB>` used to lose the verb list.
   local vf_global=" -d --data-dir -i --instance -p --port --passphrase "
   local vf_db=" --limit --grep --character --project --about --source --chat --message --field --tail --last --from --type --out --id --count "
-  local vf_docs=" --mount --folder --type --ext --limit --max --context --top --threshold --sort --depth --max-nodes "
+  local vf_docs=" --mount --folder --type --ext --limit --max --context --top --threshold --sort --depth --max-nodes --format "
   local vf_themes=" -o --output -k --key -n --name "
   local vf_memories=" -d --data-dir --instance --passphrase --port --character --about --source --chat --project --since --until --min-importance --min-reinforced --sort --limit --in --max --context --depth --max-nodes --top --threshold "
   local vf_logs=" --stream --tail --grep "
@@ -193,6 +193,10 @@ _quilltap_complete() {
       COMPREPLY=($(compgen -W "combined error stdout stderr startup" -- "$cur"))
       return
       ;;
+    --format)
+      COMPREPLY=($(compgen -W "args json" -- "$cur"))
+      return
+      ;;
   esac
 
   # Subcommand-specific completion
@@ -227,7 +231,8 @@ _quilltap_complete() {
       local docs_verbs="list show files ls dir tree read export scan write delete mkdir move copy link rmdir mvdir status docker-mounts find grep reindex embed"
       local docs_flags="--mount --instance --data-dir --passphrase --port --json --help \
         --uri --base64 --force --rendered --links --folder --type --ext --limit --max --context --top --threshold \
-        --ignore-case -l --wait -R --recursive --sort -r --reverse --depth --max-nodes --long --semantic"
+        --ignore-case -l --wait -R --recursive --sort -r --reverse --depth --max-nodes --long --semantic \
+        --format"
       if [[ "$cur" == -* ]]; then
         COMPREPLY=($(compgen -W "$docs_flags" -- "$cur"))
       elif [[ -z "$subverb" ]]; then

@@ -105,6 +105,26 @@ Two pre-existing gaps are recorded but out of this item's scope, both unchanged 
 `lib/avatar-styles.ts` hard-codes the avatar chrome app-wide, and eleven more raw checkboxes remain
 under `components/settings/chat-settings/`.
 
+#### Fixed: CLI shell completions missed four documented flags (checklist item 12)
+
+Audited the CLI's command surface against `--help`, [CLI.md](developer/CLI.md), the package README,
+and the three completion templates. The command modules themselves are unchanged since 4.8.4 — only
+`bin/quilltap.js` (native-module linking) and the completion templates moved this cycle — but four
+flags that `--help` documents were reachable by typing and invisible to tab-completion:
+
+- `docs docker-mounts --format args|json` — missing from bash, zsh, and fish. bash also needed it in
+  `vf_docs`, its value-flag list, or `--format json <TAB>` would have read `json` as the verb.
+- `docs --uri` and `docs --base64` — missing from fish.
+
+`completion-coverage.test.js` guarded only the top-level subcommand surface, so none of this failed a
+build. It now also asserts that every long flag named in a subcommand's own `--help` is offered by all
+three templates, and cross-checks bash's `vf_*` value-flag lists against zsh's `:value:` specs. Removing
+any one of the four flags again fails the suite.
+
+Docs: the package README gained the `docs docker-mounts` verb (shipped in 4.8.4 with no README entry)
+and a rewritten "What gets completed" section covering the flag-anywhere parsing and positional
+store-name completion added in the bug 101 fix.
+
 #### Removed: dead code sweep (checklist item 5)
 
 Ran knip over the repo and removed 11 unused exports across 9 files. knip's raw output is mostly
