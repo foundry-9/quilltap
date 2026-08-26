@@ -94,6 +94,7 @@ quilltap/
 │   ├── post-office/          # Suparṇā: inter-character mail
 │   ├── prompts/              # Built-in system-prompt templates
 │   ├── query/                # TanStack Query keys, fetcher, provider
+│   ├── realtime/             # Invalidation bus, WebSocket handler, topic map (hints only, never data)
 │   ├── repositories/         # DB repositories (single source of truth for tables)
 │   ├── schemas/              # Zod schemas and TS types
 │   ├── scriptorium/          # Document-store helpers
@@ -134,6 +135,7 @@ quilltap/
 ├── logs/                     # Application log files (when LOG_OUTPUT includes file)
 ├── Dockerfile                # Production Docker build
 ├── Dockerfile.ci             # CI Docker build
+├── server.ts                 # Custom Node server (`npm run dev`): serves Next.js and hosts the WebSocket upgrades
 ├── proxy.ts                  # Local HTTPS proxy helper for dev (Next.js 16+: middleware lives here, not middleware.ts)
 ├── instrumentation.ts        # Next.js instrumentation hook
 ├── jest.config.ts            # Jest unit test configuration
@@ -254,6 +256,17 @@ repo-wide sweep for the "Quilltap" misspelling. ESLint only sees files it parses
 the ESLint rule reports nothing at all. It scans tracked and new-but-not-ignored
 files; deliberate occurrences go in `ALLOWED_PATHS` in that script, or carry a
 `quilltap-spelling-exception` marker on the line.
+
+`npm run lint` runs a third gate, `scripts/check-qt-classes.mjs`, which fails the
+build on any `qt-*` class that resolves to no rule at all. It covers the four
+utility families (`qt-bg-`, `qt-text-`, `qt-border-`, `qt-shadow-`) plus any
+`qt-*` token carrying a variant prefix — `hover:qt-bg-muted` is not "`qt-bg-muted`
+on hover" but an undefined class name, since Tailwind generates variants only for
+utilities it knows about and anything declared inside `@layer utilities` is
+invisible to it. Every state form has to be written out by hand in
+`app/styles/qt-components/_utilities.css`. Bare component classes (`qt-card` and friends) are
+deliberately out of scope: plenty of those exist purely as hooks for themes to
+target. `lint:fix` does not run this check — use `npm run lint` before committing.
 
 ### Building Plugins
 
