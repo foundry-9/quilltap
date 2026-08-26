@@ -78,7 +78,7 @@ export function ProjectDetailHeader({
       <div className="flex gap-2">
         <Link
           href={`/salon/new?projectId=${project.id}`}
-          className="inline-flex items-center gap-2 rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-on-success shadow hover:qt-bg-success/90"
+          className="inline-flex items-center gap-2 rounded-lg qt-bg-success px-4 py-2 text-sm font-semibold qt-text-on-success shadow hover:qt-bg-success/90"
         >
           <Icon name="plus" className="w-4 h-4" />
           New Chat

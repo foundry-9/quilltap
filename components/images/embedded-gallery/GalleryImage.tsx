@@ -53,7 +53,7 @@ export function GalleryImage({
 
         {/* Avatar Badge */}
         {isAvatar && (
-          <div className="absolute top-1 left-1 bg-success qt-text-on-success text-xs px-1.5 py-0.5 rounded font-medium">
+          <div className="absolute top-1 left-1 qt-bg-success qt-text-on-success text-xs px-1.5 py-0.5 rounded font-medium">
             Avatar
           </div>
         )}
@@ -68,7 +68,7 @@ export function GalleryImage({
               onSetAvatar(e)
             }}
             disabled={isUpdating}
-            className={`p-1.5 rounded-full qt-shadow-md qt-bg-card qt-text-secondary hover:bg-success hover:qt-text-on-success transition-colors ${isUpdating ? 'opacity-50' : ''}`}
+            className={`p-1.5 rounded-full qt-shadow-md qt-bg-card qt-text-secondary hover:qt-bg-success hover:qt-text-on-success transition-colors ${isUpdating ? 'opacity-50' : ''}`}
             title="Set as avatar"
           >
             {isUpdating ? (
@@ -88,7 +88,7 @@ export function GalleryImage({
             onClick={(e) => {
               onDownloadImage(e)
             }}
-            className="p-1.5 rounded-full qt-shadow-md qt-bg-card qt-text-secondary hover:bg-primary hover:qt-text-on-primary transition-colors"
+            className="p-1.5 rounded-full qt-shadow-md qt-bg-card qt-text-secondary hover:qt-bg-primary hover:qt-text-on-primary transition-colors"
             title="Download image"
             aria-label="Download image"
           >
@@ -105,8 +105,8 @@ export function GalleryImage({
             disabled={isDeletingImage}
             className={`p-1.5 rounded-full qt-shadow-md transition-colors ${
               isConfirmingDelete
-                ? 'bg-destructive qt-text-on-destructive'
-                : 'qt-bg-card qt-text-secondary hover:bg-destructive hover:qt-text-on-destructive'
+                ? 'qt-bg-destructive qt-text-on-destructive'
+                : 'qt-bg-card qt-text-secondary hover:qt-bg-destructive hover:qt-text-on-destructive'
             } ${isDeletingImage ? 'opacity-50' : ''}`}
             title={isConfirmingDelete ? 'Click again to confirm delete' : 'Delete image'}
           >

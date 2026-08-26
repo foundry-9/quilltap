@@ -136,7 +136,7 @@ export function CharacterHeader({
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gray-300 dark:bg-slate-700">
+          <div className="absolute inset-0 flex items-center justify-center qt-bg-muted">
             <span className={getAvatarClasses(style, 'lg').fallbackClass}>
               {character?.name?.charAt(0)?.toUpperCase() || '?'}
             </span>
@@ -276,7 +276,7 @@ export function CharacterHeader({
       <div className="flex flex-shrink-0 flex-col gap-2">
         <button
           onClick={onStartChat}
-          className="inline-flex items-center justify-center rounded-lg bg-success px-4 py-2 text-sm font-semibold qt-text-on-success shadow hover:qt-bg-success/90"
+          className="inline-flex items-center justify-center rounded-lg qt-bg-success px-4 py-2 text-sm font-semibold qt-text-on-success shadow hover:qt-bg-success/90"
         >
           Start Chat
         </button>

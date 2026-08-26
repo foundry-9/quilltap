@@ -830,6 +830,10 @@
    * Hover backgrounds — primary. /90 is the filled-button darken; the faint
    * steps are option cards and selectable rows.
    */
+  .hover\:qt-bg-primary:hover {
+    background-color: var(--color-primary);
+  }
+
   .hover\:qt-bg-primary\/5:hover {
     background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
   }
@@ -864,6 +868,10 @@
   /**
    * Hover backgrounds — success
    */
+  .hover\:qt-bg-success:hover {
+    background-color: var(--color-success);
+  }
+
   .hover\:qt-bg-success\/20:hover {
     background-color: color-mix(in srgb, var(--color-success) 20%, transparent);
   }

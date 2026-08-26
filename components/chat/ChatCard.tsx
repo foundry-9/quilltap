@@ -265,7 +265,7 @@ export function ChatCard({
                       ? 'qt-bg-success/10 qt-text-success hover:qt-bg-success/20'
                       : chat.scriptoriumStatus === 'rendered'
                       ? 'qt-bg-warning/10 qt-text-warning hover:qt-bg-warning/20'
-                      : 'bg-destructive/10 qt-text-destructive hover:bg-destructive/20'
+                      : 'qt-bg-destructive/10 qt-text-destructive hover:qt-bg-destructive/20'
                   }`}
                   title={
                     chat.scriptoriumStatus === 'embedded'
@@ -359,7 +359,7 @@ export function ChatCard({
               onClick={handleAction}
               className={
                 actionType === 'delete'
-                  ? 'chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg bg-destructive qt-text-on-destructive shadow transition hover:qt-bg-destructive/90'
+                  ? 'chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg qt-bg-destructive qt-text-on-destructive shadow transition hover:qt-bg-destructive/90'
                   : 'inline-flex h-10 w-10 items-center justify-center rounded-lg qt-bg-muted qt-text-secondary shadow transition hover:qt-text-destructive hover:qt-bg-destructive/10'
               }
               title={actionType === 'delete' ? 'Delete chat' : 'Remove from project'}

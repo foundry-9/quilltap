@@ -32,7 +32,7 @@ export function DeleteProjectDialog({ open, onClose, onConfirm }: DeleteProjectD
           </button>
           <button
             onClick={onConfirm}
-            className="inline-flex items-center rounded-lg bg-destructive px-4 py-2 text-sm font-semibold qt-text-on-destructive shadow hover:qt-bg-destructive/90"
+            className="inline-flex items-center rounded-lg qt-bg-destructive px-4 py-2 text-sm font-semibold qt-text-on-destructive shadow hover:qt-bg-destructive/90"
           >
             Delete
           </button>

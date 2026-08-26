@@ -2806,6 +2806,10 @@
   background-color: color-mix(in srgb, var(--color-muted) 80%, transparent);
 }
 
+.hover\:qt-bg-primary:hover {
+  background-color: var(--color-primary);
+}
+
 .hover\:qt-bg-primary\/5:hover {
   background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
 }
@@ -2832,6 +2836,10 @@
 
 .hover\:qt-bg-destructive\/90:hover {
   background-color: color-mix(in srgb, var(--color-destructive) 90%, transparent);
+}
+
+.hover\:qt-bg-success:hover {
+  background-color: var(--color-success);
 }
 
 .hover\:qt-bg-success\/20:hover {

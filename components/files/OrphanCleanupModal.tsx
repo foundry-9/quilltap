@@ -57,7 +57,7 @@ export default function OrphanCleanupModal({
       <button
         onClick={onDelete}
         disabled={isProcessing}
-        className="qt-button bg-destructive qt-text-on-destructive hover:qt-bg-destructive/90 disabled:opacity-50"
+        className="qt-button qt-bg-destructive qt-text-on-destructive hover:qt-bg-destructive/90 disabled:opacity-50"
       >
         {isProcessing ? 'Processing...' : 'Delete All'}
       </button>
