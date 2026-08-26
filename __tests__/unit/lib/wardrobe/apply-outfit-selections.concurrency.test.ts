@@ -27,6 +27,9 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
   resolveEquippedOutfitForCharacter: jest.fn(),
 }))
+jest.mock('@/lib/wardrobe/wardrobe-instructions', () => ({
+  resolveWardrobeInstructions: jest.fn().mockResolvedValue(null),
+}))
 
 const mockChooseLLMOutfit = chooseLLMOutfit as jest.MockedFunction<typeof chooseLLMOutfit>
 const mockResolve = resolveEquippedOutfitForCharacter as jest.MockedFunction<

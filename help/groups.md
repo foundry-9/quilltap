@@ -50,7 +50,11 @@ will find:
   garment marked **default** dresses every member at the opening of the curtain. It
   sits between a character's own armoire and the project's wardrobe in the tiers, so
   a member's personal copy of an item shadows the Group's; see
-  *[The Wardrobe](wardrobe.md)*.
+  *[The Wardrobe](wardrobe.md)*. The shelf may also keep an optional page of
+  **Dressing Instructions** (`instructions.md`) — a standing second-person word on how
+  members prefer to dress, consulted when a member dresses themselves and keeps no
+  instructions of their own; see *[Dressing
+  Instructions](wardrobe.md#dressing-instructions-a-standing-word-with-the-valet)*.
 - **A shared ledger of State** — a `state.json` of persistent values the whole circle
   reads and writes. It is the **group tier** of the four-tier state cascade
   (chat → project → group → general); edit it from the **Group State** button on the

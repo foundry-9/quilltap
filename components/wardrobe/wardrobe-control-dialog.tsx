@@ -65,6 +65,7 @@ import {
 } from '@/lib/wardrobe/wardrobe-container'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
 import { useWardrobeContainerItems } from '@/lib/hooks/use-wardrobe-container-items'
+import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstructionsSection'
 import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeItemRow } from './wardrobe-item-row'
@@ -1134,6 +1135,10 @@ function WardrobeControlDialogInner({
             </p>
           )}
         </div>
+
+        {/* Optional dressing instructions for this container — consulted when
+            a character chooses their own opening outfit; nearest tier wins. */}
+        <WardrobeInstructionsSection container={selectedContainer} />
 
         <div className="grid md:grid-cols-2 gap-4">
           {/* LEFT: Wardrobe list */}

@@ -7,6 +7,12 @@
  *                                                 item. Body: { title, description?,
  *                                                 types, appropriateness?, isDefault?,
  *                                                 componentItemIds?, replace? }.
+ * GET  /api/v1/projects/[id]/wardrobe?action=instructions — read the store's
+ *                                                 `Wardrobe/instructions.md`
+ *                                                 dressing instructions.
+ * POST /api/v1/projects/[id]/wardrobe?action=instructions — write (or clear,
+ *                                                 with null/blank) them.
+ *                                                 Body: { instructions }.
  *
  * Project wardrobe is the project tier of the tri-tier wardrobe model (character
  * vault + project stores + Quilltap General), mirroring project scenarios. Both
@@ -16,11 +22,12 @@
  * @module app/api/v1/projects/[id]/wardrobe
  */
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
-import { createContextParamsHandler } from '@/lib/api/middleware';
+import { createContextParamsHandler, withActionDispatch } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
+import { z } from 'zod';
 import { badRequest, notFound, serverError, created, successResponse } from '@/lib/api/responses';
 import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
 import {
@@ -30,12 +37,70 @@ import {
 import { createProjectWardrobeItem } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { createWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
+import {
+  readWardrobeInstructionsFile,
+  writeWardrobeInstructionsFile,
+} from '@/lib/wardrobe/wardrobe-instructions';
+
+const instructionsBodySchema = z.object({
+  instructions: z.string().nullable(),
+});
+
+// GET /api/v1/projects/[id]/wardrobe?action=instructions
+async function handleGetInstructions(
+  _req: NextRequest,
+  { repos }: RequestContext,
+  { id }: { id: string },
+): Promise<NextResponse> {
+  const project = await repos.projects.findById(id);
+  if (!project) return notFound('Project');
+
+  const ensured = await ensureProjectOfficialStore(project.id, project.name);
+  if (!ensured) return serverError('Failed to ensure project document store');
+
+  const instructions = await readWardrobeInstructionsFile(ensured.mountPointId);
+  logger.debug('[Projects v1] Read project dressing instructions', {
+    projectId: id,
+    mountPointId: ensured.mountPointId,
+    present: instructions !== null,
+    context: 'wardrobe',
+  });
+  return successResponse({ instructions });
+}
+
+// POST /api/v1/projects/[id]/wardrobe?action=instructions
+async function handlePostInstructions(
+  req: NextRequest,
+  { user, repos }: RequestContext,
+  { id }: { id: string },
+): Promise<NextResponse> {
+  const project = await repos.projects.findById(id);
+  if (!project) return notFound('Project');
+
+  const { instructions } = instructionsBodySchema.parse(await req.json());
+  const cleared = !instructions || instructions.trim().length === 0;
+
+  const ensured = await ensureProjectOfficialStore(project.id, project.name);
+  if (!ensured) return serverError('Failed to ensure project document store');
+  await ensureProjectWardrobeFolder(ensured.mountPointId);
+
+  await writeWardrobeInstructionsFile(ensured.mountPointId, instructions);
+  logger.info('[Projects v1] Project dressing instructions updated', {
+    projectId: id,
+    userId: user.id,
+    mountPointId: ensured.mountPointId,
+    cleared,
+    context: 'wardrobe',
+  });
+  return successResponse({ instructions: cleared ? null : instructions!.trim() });
+}
 
 // ============================================================================
 // GET — list project wardrobe items
 // ============================================================================
 
 export const GET = createContextParamsHandler<{ id: string }>(
+  withActionDispatch({ instructions: handleGetInstructions },
   async (_req: NextRequest, { repos }: RequestContext, { id }) => {
     const project = await repos.projects.findById(id);
     if (!project) return notFound('Project');
@@ -52,7 +117,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
       mountPointId: ensured.mountPointId,
       wardrobeItems,
     });
-  },
+  }),
 );
 
 // ============================================================================
@@ -60,6 +125,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
 // ============================================================================
 
 export const POST = createContextParamsHandler<{ id: string }>(
+  withActionDispatch({ instructions: handlePostInstructions },
   async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
     const project = await repos.projects.findById(id);
     if (!project) return notFound('Project');
@@ -118,5 +184,5 @@ export const POST = createContextParamsHandler<{ id: string }>(
       wardrobeItem: stored,
       wardrobeItems,
     });
-  },
+  }),
 );

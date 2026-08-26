@@ -30,6 +30,19 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 export const CHARACTER_WARDROBE_FOLDER = 'Wardrobe';
 
+/**
+ * Optional per-tier dressing-instructions file living at the root of a
+ * `Wardrobe/` folder. Never a garment: every enumeration of Wardrobe items
+ * must skip it, and the wardrobe projection sweep must preserve it.
+ */
+export const WARDROBE_INSTRUCTIONS_FILENAME = 'instructions.md';
+export const WARDROBE_INSTRUCTIONS_PATH = `${CHARACTER_WARDROBE_FOLDER}/${WARDROBE_INSTRUCTIONS_FILENAME}`;
+
+/** Case-insensitive match for the dressing-instructions file name. */
+export function isWardrobeInstructionsFileName(fileName: string): boolean {
+  return fileName.toLowerCase() === WARDROBE_INSTRUCTIONS_FILENAME;
+}
+
 const logger = createServiceLogger('MountIndex:CharacterVault');
 
 export interface EnsureCharacterVaultResult {

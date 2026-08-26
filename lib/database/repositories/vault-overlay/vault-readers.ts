@@ -32,6 +32,7 @@ import {
   CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
   CHARACTER_WARDROBE_JSON_PATH,
   CHARACTER_WARDROBE_FOLDER,
+  isWardrobeInstructionsFileName,
   CHARACTER_PROMPTS_FOLDER,
   CHARACTER_SCENARIOS_FOLDER,
   CharacterVaultPropertiesSchema,
@@ -342,11 +343,15 @@ export async function readCharacterVaultWardrobe(
   // must NOT seed archetypes — that would recurse back through findArchetypes.
   const seedArchetypes = options?.seedArchetypes ?? true;
 
-  const itemDocs = await repos.docMountDocuments.findManyByMountPointsInFolder(
+  const allDocs = await repos.docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
     CHARACTER_WARDROBE_FOLDER,
     '.md',
   );
+  // `Wardrobe/instructions.md` is dressing guidance, never a garment. Filter
+  // before the length check so a folder holding only the instructions file
+  // still falls through to the legacy wardrobe.json branch below.
+  const itemDocs = allDocs.filter((doc) => !isWardrobeInstructionsFileName(doc.fileName));
 
   if (itemDocs.length > 0) {
     const items = itemDocs

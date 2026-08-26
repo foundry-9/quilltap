@@ -71,6 +71,7 @@ async function parserFor(pool = POOL): Promise<(content: string) => Choice> {
     'm',
     pool,
     'a formal evening',
+    null,
     { profileId: 'cheap' },
     'user-1',
     'chat-1',
@@ -185,6 +186,50 @@ describe('chooseLLMOutfit — response parsing', () => {
     expect(out.deliberatelyUnclothed).toBe(true);
   });
 
+  it('includes a Dressing Instructions block when instructions are provided', async () => {
+    mockExecute.mockResolvedValue({ success: true, result: null });
+    await chooseLLMOutfit(
+      'Bertie',
+      null,
+      null,
+      null,
+      POOL,
+      null,
+      'You prefer tweeds for fieldwork.',
+      { profileId: 'cheap' },
+      'user-1',
+    );
+    const messages = mockExecute.mock.calls[0][1] as Array<{ role: string; content: string }>;
+    const userMessage = messages.find((m) => m.role === 'user')!;
+    expect(userMessage.content).toContain('Dressing Instructions');
+    expect(userMessage.content).toContain('You prefer tweeds for fieldwork.');
+    expect(userMessage.content).toContain('"you" is Bertie');
+  });
+
+  it('emits a byte-identical user message when instructions are null or blank', async () => {
+    const runWith = async (instructions: string | null) => {
+      mockExecute.mockClear();
+      mockExecute.mockResolvedValue({ success: true, result: null });
+      await chooseLLMOutfit(
+        'Bertie',
+        null,
+        null,
+        null,
+        POOL,
+        null,
+        instructions,
+        { profileId: 'cheap' },
+        'user-1',
+      );
+      const messages = mockExecute.mock.calls[0][1] as Array<{ role: string; content: string }>;
+      return messages.find((m) => m.role === 'user')!.content;
+    };
+    const withNull = await runWith(null);
+    const withBlank = await runWith('   \n  ');
+    expect(withBlank).toBe(withNull);
+    expect(withNull).not.toContain('Dressing Instructions');
+  });
+
   it('short-circuits to empty slots without calling the model for an empty pool', async () => {
     mockExecute.mockResolvedValue({ success: true, result: null });
     const result = await chooseLLMOutfit(
@@ -193,6 +238,7 @@ describe('chooseLLMOutfit — response parsing', () => {
       null,
       null,
       [],
+      null,
       null,
       { profileId: 'cheap' },
       'user-1',

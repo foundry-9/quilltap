@@ -21,6 +21,7 @@ const OUTFIT_SELECTION_PROMPT = `You are a wardrobe assistant for a roleplay cha
 - The character's available wardrobe items
 - The scenario/setting description
 - The character's personality
+- The character's own dressing instructions, when provided — these describe what the character prefers to wear and under what circumstances; weigh them heavily, above general appropriateness guesses
 
 Choose items that are contextually appropriate. For example, formal wear for a business meeting, casual clothes for relaxing at home, or era-appropriate costume for a historical setting.
 
@@ -65,6 +66,8 @@ export interface LLMOutfitChoice {
  * @param characterManifesto Foundational tenets the character is built on (may be null)
  * @param wardrobeItems Available wardrobe items the LLM can choose from
  * @param scenarioText The scenario or setting for the chat (may be null)
+ * @param dressingInstructions Second-person dressing preferences from the
+ *   nearest `Wardrobe/instructions.md` in the tier cascade (may be null)
  * @param selection The cheap LLM provider selection to use
  * @param userId User ID for logging
  * @param chatId Chat ID for logging
@@ -77,6 +80,7 @@ export async function chooseLLMOutfit(
   characterManifesto: string | null,
   wardrobeItems: WardrobeItem[],
   scenarioText: string | null,
+  dressingInstructions: string | null,
   selection: CheapLLMSelection,
   userId: string,
   chatId?: string,
@@ -122,6 +126,10 @@ export async function chooseLLMOutfit(
     ? `\nScenario: ${scenarioText}`
     : '\nScenario: (general conversation, no specific setting)'
 
+  const instructionsNote = dressingInstructions && dressingInstructions.trim().length > 0
+    ? `\nDressing Instructions (addressed to ${characterName} in the second person — "you" is ${characterName}):\n${dressingInstructions.trim()}`
+    : ''
+
   const messages: LLMMessage[] = [
     {
       role: 'system',
@@ -129,7 +137,7 @@ export async function chooseLLMOutfit(
     },
     {
       role: 'user',
-      content: `Character: ${characterName}${manifestoNote}${descriptionNote}${personalityNote}${scenarioNote}
+      content: `Character: ${characterName}${manifestoNote}${descriptionNote}${personalityNote}${scenarioNote}${instructionsNote}
 
 Available Wardrobe Items:
 ${wardrobeSection}

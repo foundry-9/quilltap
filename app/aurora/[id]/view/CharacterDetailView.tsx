@@ -18,6 +18,7 @@ import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { EntityTabs } from '@/components/tabs'
 import { NewChatModal } from '@/components/new-chat'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstructionsSection'
 import { useCharacterView, useCharacterStats } from './hooks'
 import {
   CharacterHeader,
@@ -329,6 +330,9 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
             >
               Open wardrobe for {character?.name || 'this character'}
             </button>
+            {/* The character's own dressing instructions — the same
+                Wardrobe/instructions.md the wardrobe dialog edits. */}
+            <WardrobeInstructionsSection container={{ scope: 'character', id }} />
           </div>
         )
 

@@ -45,6 +45,8 @@ The **Wardrobe** card on each project's page is your atelier — and the [Wardro
 
 Project wardrobe items behave exactly like any other once a chat belongs to the project. Characters may wear them through the Wardrobe dialog, dress themselves into them via the wardrobe tools, and have them appear in scene-state, avatar, and image-generation prompts — all without the item being duplicated into each character's personal armoire.
 
+The project's `Wardrobe/` folder may also keep an optional page of **Dressing Instructions** (`instructions.md`) — a standing word, addressed to the character in the second person, consulted when a character in one of the project's chats dresses themselves and neither they nor their groups keep instructions of their own. Edit it from the collapsible **Dressing Instructions** panel in the [Wardrobe dialog](wardrobe.md#dressing-instructions-a-standing-word-with-the-valet) with the project selected.
+
 ## Keeping the Folder Healthy
 
 Should you, in some moment of housekeeping zeal, delete the `Wardrobe/` folder or even the entire `Project Files:` document store, fear not — both are reconstructed at the next server start (and at the next visit to the project page, whichever comes first). The structure reappears empty, ready for fresh garments; previously-deleted files do not return.

@@ -4,6 +4,22 @@
 
 ### 4.9-dev
 
+#### Added: per-wardrobe dressing instructions for "Let Character Choose"
+
+Every wardrobe — a character's vault, a group's store, a project's store, and Quilltap General — can now
+hold an optional `Wardrobe/instructions.md`: second-person guidance ("you prefer to wear…") that is read
+when a character dresses themselves at chat start (or when joining a chat under the same mode). Resolution
+is nearest-tier-first: character, then group, then project, then General; the first non-blank file wins and
+the search stops there. The content is added to the outfit-selection prompt and influences nothing else.
+
+Edited from a new collapsible "Dressing Instructions" panel under the container selector in the Wardrobe
+dialog — and, for a character's own wardrobe, from the Wardrobe tab of their Aurora page — backed by
+`?action=instructions` GET/POST on the four wardrobe collection routes. The file is
+never treated as a garment: the shared wardrobe reader skips it by name (previously it would have been
+parsed as an invalid item and logged a warning on every read), the wardrobe folder projection sweep
+preserves it (previously any wardrobe write would have deleted it), a garment titled "Instructions"
+projects to `instructions-1.md` instead of overwriting it, and the Almanack's garment counts exclude it.
+
 #### Fixed: hover states across the app did nothing, and a lint guard so it can't happen again
 
 Hovering a character card, a table row in the Scriptorium, a dropdown item, or a solid Delete button did

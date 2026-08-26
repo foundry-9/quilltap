@@ -26,6 +26,7 @@ import {
 import { listAllCustomTools } from '@/lib/pascal/custom-tools';
 import { PHOTOS_FOLDER } from '@/lib/photos/photos-paths';
 import { MAIL_FOLDER } from '@/lib/post-office/mailbox';
+import { WARDROBE_INSTRUCTIONS_PATH } from '@/lib/mount-index/character-vault';
 import { TOOLS_FOLDER } from '@/lib/pascal/custom-tool.types';
 import { getErrorMessage } from '@/lib/error-utils';
 import { isMountIndexAvailable, mainRows, mountRow, mountRows, num } from './db';
@@ -93,13 +94,26 @@ function inClause(ids: Iterable<string>): { sql: string; params: string[] } {
   return { sql: `(${params.map(() => '?').join(', ')})`, params };
 }
 
-/** Count links whose path sits under `folder/` within the given mounts. */
-function countLinksInFolder(mountIds: Iterable<string>, folder: string): number {
+/**
+ * Count links whose path sits under `folder/` within the given mounts.
+ * `excludeRelativePath` drops one exact (lowercased) path from the count —
+ * used to keep `Wardrobe/instructions.md` out of the garment figures.
+ */
+function countLinksInFolder(
+  mountIds: Iterable<string>,
+  folder: string,
+  excludeRelativePath?: string,
+): number {
   const { sql, params } = inClause(mountIds);
+  const exclusion = excludeRelativePath ? ' AND lower("relativePath") != ?' : '';
   const row = mountRow<{ n: number }>(
     `SELECT COUNT(*) AS n FROM "doc_mount_file_links"
-     WHERE "mountPointId" IN ${sql} AND lower("relativePath") LIKE ?`,
-    [...params, `${folder.toLowerCase()}/%`],
+     WHERE "mountPointId" IN ${sql} AND lower("relativePath") LIKE ?${exclusion}`,
+    [
+      ...params,
+      `${folder.toLowerCase()}/%`,
+      ...(excludeRelativePath ? [excludeRelativePath.toLowerCase()] : []),
+    ],
     `scriptorium.countLinksInFolder:${folder}`,
   );
   return num(row?.n);
@@ -425,7 +439,8 @@ export async function collectScriptorium(
 
   const wardrobe = wardrobeTiers.map(({ tier, ids }) => ({
     tier,
-    items: countLinksInFolder(ids, WARDROBE_FOLDER),
+    // The dressing-instructions file lives in the folder but is not a garment.
+    items: countLinksInFolder(ids, WARDROBE_FOLDER, WARDROBE_INSTRUCTIONS_PATH),
     archived: countLinksMatchingContent(ids, WARDROBE_FOLDER, '%archived: true%'),
   }));
 

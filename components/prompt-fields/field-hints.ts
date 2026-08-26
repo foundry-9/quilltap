@@ -100,6 +100,13 @@ export const PROMPT_FIELD_HINTS = {
     example:
       'You have known the others here for years; you do not explain yourselves to each other.',
   },
+  wardrobeInstructions: {
+    label: 'Dressing Instructions',
+    helper:
+      'Standing guidance for a character choosing their own opening outfit, addressed to the character in the second person. Consulted only when a chat begins with “Let character choose” — the nearest copy wins (a character’s own over their group’s, a group’s over the project’s, the project’s over Quilltap General) and the search stops there.',
+    example:
+      'You prefer practical tweeds for fieldwork, and reserve the brass-buttoned frock coat for occasions with an audience.',
+  },
   roleplayTemplatePrompt: {
     label: 'LLM Prompt',
     helper:

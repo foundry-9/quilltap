@@ -26,6 +26,20 @@ jest.mock('@/lib/api/middleware', () => ({
   createContextParamsHandler: (handler: (req: any, ctx: any, params: any) => Promise<any>) => {
     return async (req: any, routeCtx: any) => handler(req, mockCtx, await routeCtx.params)
   },
+  // Minimal dispatch mirror: route on ?action= when the fake request carries
+  // one, else fall through to the default handler (as the real middleware does).
+  withActionDispatch: (actions: Record<string, any>, defaultHandler: any) => {
+    return async (req: any, ctx: any, params: any) => {
+      const action = req?.nextUrl?.searchParams?.get?.('action') ?? null
+      if (action && actions[action]) return actions[action](req, ctx, params)
+      return defaultHandler(req, ctx, params)
+    }
+  },
+}))
+
+jest.mock('@/lib/wardrobe/wardrobe-instructions', () => ({
+  readWardrobeInstructionsFile: jest.fn(),
+  writeWardrobeInstructionsFile: jest.fn(),
 }))
 
 jest.mock('@/lib/api/responses', () => ({
@@ -55,6 +69,10 @@ import { GET, POST } from '@/app/api/v1/groups/[id]/wardrobe/route'
 import { GET as GET_ITEM, PUT, DELETE } from '@/app/api/v1/groups/[id]/wardrobe/[itemId]/route'
 import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store'
 import { ensureGroupWardrobeFolder, readGroupWardrobe } from '@/lib/mount-index/group-wardrobe'
+import {
+  readWardrobeInstructionsFile,
+  writeWardrobeInstructionsFile,
+} from '@/lib/wardrobe/wardrobe-instructions'
 import {
   createProjectWardrobeItem,
   updateProjectWardrobeItem,
@@ -172,4 +190,51 @@ it('DELETE 404s when the item is not in the group mount', async () => {
   ;(deleteProjectWardrobeItem as jest.Mock).mockResolvedValue(false)
   const res: any = await DELETE({} as any, routeCtx({ id: GROUP_ID, itemId: 'missing' }))
   expect(res.status).toBe(404)
+})
+
+// --- ?action=instructions — the group's Wardrobe/instructions.md ------------
+
+function actionReq(body?: unknown): any {
+  return {
+    nextUrl: { searchParams: new URLSearchParams('action=instructions') },
+    json: async () => body,
+  }
+}
+
+it('GET ?action=instructions reads the group store instructions (null when absent)', async () => {
+  ;(readWardrobeInstructionsFile as jest.Mock).mockResolvedValue(null)
+  const res: any = await GET(actionReq(), routeCtx({ id: GROUP_ID }))
+  expect(res.status).toBe(200)
+  expect(res.body.instructions).toBeNull()
+  expect(readWardrobeInstructionsFile).toHaveBeenCalledWith(MOUNT_ID)
+  expect(readGroupWardrobe).not.toHaveBeenCalled()
+})
+
+it('POST ?action=instructions writes to the group mount after ensuring the folder', async () => {
+  const res: any = await POST(
+    actionReq({ instructions: 'You favour the regimental colours.' }),
+    routeCtx({ id: GROUP_ID }),
+  )
+  expect(res.status).toBe(200)
+  expect(res.body.instructions).toBe('You favour the regimental colours.')
+  expect(ensureGroupWardrobeFolder).toHaveBeenCalledWith(MOUNT_ID)
+  expect(writeWardrobeInstructionsFile).toHaveBeenCalledWith(
+    MOUNT_ID,
+    'You favour the regimental colours.',
+  )
+})
+
+it('POST ?action=instructions with null clears and reports null', async () => {
+  const res: any = await POST(actionReq({ instructions: null }), routeCtx({ id: GROUP_ID }))
+  expect(res.status).toBe(200)
+  expect(res.body.instructions).toBeNull()
+  expect(writeWardrobeInstructionsFile).toHaveBeenCalledWith(MOUNT_ID, null)
+})
+
+it('instructions handlers 404 for an unknown group', async () => {
+  mockCtx.repos.groups.findById.mockResolvedValue(null)
+  const getRes: any = await GET(actionReq(), routeCtx({ id: 'nope' }))
+  const postRes: any = await POST(actionReq({ instructions: 'x' }), routeCtx({ id: 'nope' }))
+  expect(getRes.status).toBe(404)
+  expect(postRes.status).toBe(404)
 })

@@ -38,6 +38,7 @@ import {
   type CheapLLMConfig,
 } from '@/lib/llm/cheap-llm';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
+import { resolveWardrobeInstructions } from '@/lib/wardrobe/wardrobe-instructions';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import {
   sharedWardrobeTiersForCharacter,
@@ -421,6 +422,28 @@ export async function applyOutfitSelections(
                 consultedName = character.name;
                 context.progress?.wardrobeStart(characterId, character.name);
 
+                // Optional dressing instructions: nearest tier's
+                // `Wardrobe/instructions.md` wins (character > group >
+                // project > general) and the search stops there. Soft-fails
+                // to null — instructions never block the outfit choice.
+                const { groupMountPointIds } = await sharedWardrobeTiersForCharacter(
+                  characterId,
+                  [],
+                ).catch(() => ({ groupMountPointIds: [] as string[] }));
+                const dressingInstructions = await resolveWardrobeInstructions({
+                  characterMountPointId: character.characterDocumentMountPointId ?? null,
+                  groupMountPointIds: groupMountPointIds ?? [],
+                  projectMountPointIds,
+                }).catch(() => null);
+                if (dressingInstructions) {
+                  logger.debug('[applyOutfitSelections] Dressing instructions in play', {
+                    chatId,
+                    characterId,
+                    tier: dressingInstructions.tier,
+                    mountPointId: dressingInstructions.mountPointId,
+                  });
+                }
+
                 const startedAt = Date.now();
                 const result = await withTimeout(
                   chooseLLMOutfit(
@@ -430,6 +453,7 @@ export async function applyOutfitSelections(
                     character.manifesto || null,
                     wardrobeItems,
                     context.scenarioText || null,
+                    dressingInstructions?.content ?? null,
                     cheapSelection,
                     context.userId,
                     chatId,

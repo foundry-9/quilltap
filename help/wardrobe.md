@@ -213,6 +213,20 @@ If you have also chosen a **Play As** character to represent yourself in the con
 
 This ensures that every conversation starts with the appropriate sartorial context, whether your character is attending a gala or has just tumbled out of bed.
 
+### Dressing Instructions (a Standing Word with the Valet)
+
+A character left to dress themselves consults the scenario and their personality, but you may also leave them a **standing word on how they prefer to dress** --- and it will be read aloud, as it were, before the wardrobe is opened. Each wardrobe --- a character's own, a group's, a project's, or Quilltap General --- may keep a single optional page of **Dressing Instructions**, edited from a small collapsible panel just beneath the wardrobe selector in the Wardrobe dialog. A character's own page is also editable from the **Wardrobe** tab of their Aurora page, where the same panel sits beneath the "Open wardrobe" button.
+
+Write it **to the character, in the second person**, as one would leave instructions for a particularly attentive valet: *"You prefer practical tweeds for fieldwork, and reserve the brass-buttoned frock coat for occasions with an audience."* State the preferences and the circumstances under which each applies; the character will weigh them heavily when choosing.
+
+Three points of household protocol:
+
+- **Only the nearest copy is consulted.** When a character dresses themselves, Quilltap looks for instructions in the character's own wardrobe first, then their groups', then the project's, then Quilltap General --- and the *first* page found wins outright. The search stops there; farther tiers are not blended in. A character with their own instructions ignores the household's entirely.
+- **It speaks only at curtain-up.** Dressing Instructions are consulted solely when an outfit is being chosen for a character who is dressing themselves --- **Let Character Choose** at the start of a chat, or a character joining one under the same arrangement. They do not follow the character around the conversation, and no other system reads them.
+- **It is entirely optional.** No page, no matter --- the character simply chooses as they always have. Clearing the panel and saving removes the page altogether.
+
+(For the archivally curious: the page lives as `instructions.md` inside the wardrobe's own folder, travelling with exports and backups like any other document --- though it is never mistaken for a garment.)
+
 ## How the Wardrobe Affects Image Generation
 
 When Quilltap generates images of a character --- whether through the Lantern background system or direct image generation --- it consults the currently equipped wardrobe items rather than any legacy clothing description, so what the character is *actually wearing* in the conversation is what appears in the picture.

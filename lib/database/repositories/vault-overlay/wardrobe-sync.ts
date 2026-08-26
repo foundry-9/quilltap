@@ -25,6 +25,7 @@ import {
 import {
   CHARACTER_WARDROBE_FOLDER,
   CHARACTER_WARDROBE_JSON_PATH,
+  WARDROBE_INSTRUCTIONS_FILENAME,
 } from './schema';
 import { hasLinkedVault } from './parsers';
 import { readCharacterVaultWardrobe } from './vault-readers';
@@ -122,6 +123,9 @@ export async function projectVaultWardrobe(
       content: buildWardrobeItemFile(item, slugByItemId),
     }),
     characterId,
+    // The dressing-instructions file is not a garment: the sweep must never
+    // delete it, and an item titled "Instructions" must land on a suffix.
+    { preserveFileNames: [WARDROBE_INSTRUCTIONS_FILENAME] },
   );
 
   // The legacy single-JSON file is always cleaned up after a successful
