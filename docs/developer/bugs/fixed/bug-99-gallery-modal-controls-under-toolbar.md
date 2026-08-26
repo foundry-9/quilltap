@@ -85,6 +85,9 @@ With a character that has at least one photo, on `/aurora/<id>/view?tab=gallery`
   the backdrop covers the whole window rather than just the pane.
 - In the console, `document.elementFromPoint()` at the Download button's centre
   now returns the button's own icon `<span>`, not `.qt-page-toolbar`.
+- Regression coverage: `__tests__/unit/components/images/image-detail-modal-portal.test.tsx`
+  mounts the modal inside an `isolation: isolate` container and asserts the
+  overlay's parent is `document.body` — the structural property the fix turns on.
 
 ## Known adjacent wart (not this bug)
 

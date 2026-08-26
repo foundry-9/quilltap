@@ -73,3 +73,7 @@ or a multi-character continue). The notice appears, settles to
 `Successfully generated 1 image!`, and clears itself within ~6 seconds. Click
 the ✕ before then and it goes immediately. Abort a turn while
 `Generating image...` is up (Stop) and the notice clears at once.
+
+Regression coverage: `__tests__/unit/app/salon/hooks/useToolExecutionStatus.test.ts`,
+which drives the extracted `useToolExecutionStatus` controller through publish,
+settle, supersede, dismiss, turn boundary, and unmount on fake timers.

@@ -8,6 +8,7 @@ import type { ChatParticipantBase } from '@/lib/schemas/types'
 import { findActiveUserParticipant } from '@/lib/chat/turn-manager'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
+import { useToolExecutionStatus } from './useToolExecutionStatus'
 
 export interface PendingToolCall {
   id: string
@@ -28,14 +29,9 @@ export interface StreamingToolBatch {
   calls: PendingToolCall[]
 }
 
-export interface ToolExecutionStatus {
-  tool: string
-  status: 'pending' | 'success' | 'error'
-  message: string
-}
-
-/** How long a settled tool-execution notice lingers before it dismisses itself. */
-const TOOL_STATUS_DISMISS_MS = 6000
+// The tool-execution notice owns its own lifetime (bug 77); re-exported here
+// because this hook's consumers import the type from it.
+export type { ToolExecutionStatus } from './useToolExecutionStatus'
 
 export interface ResponseStatus {
   stage: string
@@ -148,6 +144,25 @@ export function resolveToolResultErrorText(
 }
 
 /**
+ * Compose the warning for attachments the provider plugin could not put on the
+ * wire. The `attachmentResults` ledger has always been emitted and was never
+ * displayed (bug 94), so an image that silently failed to reach a vision model
+ * looked exactly like a model that had seen it and ignored it.
+ *
+ * Returns null when there is nothing to warn about, so the caller can raise the
+ * toast unconditionally on a non-null result.
+ */
+export function buildFailedAttachmentWarning(
+  failed: Array<{ id: string; error: string }> | null | undefined
+): string | null {
+  if (!Array.isArray(failed) || failed.length === 0) return null
+  const first = failed[0]?.error ?? 'unknown reason'
+  const more = failed.length > 1 ? ` (and ${failed.length - 1} more)` : ''
+  const subject = failed.length === 1 ? 'An attachment was' : `${failed.length} attachments were`
+  return `${subject} not sent to the model${more}: ${first}`
+}
+
+/**
  * Parse a raw SSE data string into a structured event, or null if it should be skipped.
  */
 export function parseSSEData(rawData: string): SSEEvent | null {
@@ -252,13 +267,18 @@ export function useSSEStreaming({
   // the point in the prose where each fired (see StreamingToolBatch). Replaces a
   // single flat list so the streaming bubble can interleave them with the text.
   const [streamingToolBatches, setStreamingToolBatches] = useState<StreamingToolBatch[]>([])
-  const [toolExecutionStatus, setToolExecutionStatus] = useState<ToolExecutionStatus | null>(null)
   const [responseStatus, setResponseStatus] = useState<ResponseStatus | null>(null)
-  // Auto-dismiss timer for a settled (success/error) tool-execution notice. The
-  // banner used to be cleared only from the send path's onDone, so any turn that
-  // finished by another route — a chain's intermediate done, continue mode, an
-  // error, an autonomous turn — left it pinned above the composer forever.
-  const toolStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The tool-execution notice: raised, self-expiring, and dismissable from one
+  // place. The banner used to be cleared only from the send path's onDone, so
+  // any turn that finished by another route — a chain's intermediate done,
+  // continue mode, an error, an autonomous turn — left it pinned above the
+  // composer forever (bug 77).
+  const {
+    toolExecutionStatus,
+    publishToolExecutionStatus,
+    dismissToolExecutionStatus,
+    clearPendingToolExecutionStatus,
+  } = useToolExecutionStatus()
 
   const abortControllerRef = useRef<AbortController | null>(null)
   // Monotonic batch counter so tool-call React keys stay unique across batches.
@@ -338,8 +358,8 @@ export function useSSEStreaming({
     } : m))
   }, [setMessages])
 
-  // Cancel any pending rAF (and the tool-status auto-dismiss timer) on unmount
-  // to avoid setting state after teardown.
+  // Cancel any pending rAF on unmount to avoid setting state after teardown.
+  // (The tool-status auto-dismiss timer is cleaned up by its own hook.)
   useEffect(() => {
     return () => {
       if (streamingContentRafRef.current !== null) {
@@ -348,44 +368,6 @@ export function useSSEStreaming({
       if (streamingReasoningRafRef.current !== null) {
         cancelAnimationFrame(streamingReasoningRafRef.current)
       }
-      if (toolStatusTimerRef.current !== null) {
-        clearTimeout(toolStatusTimerRef.current)
-      }
-    }
-  }, [])
-
-  /** Clear the tool-execution notice and any pending auto-dismiss timer. */
-  const dismissToolExecutionStatus = useCallback(() => {
-    if (toolStatusTimerRef.current !== null) {
-      clearTimeout(toolStatusTimerRef.current)
-      toolStatusTimerRef.current = null
-    }
-    setToolExecutionStatus(null)
-  }, [])
-
-  /**
-   * Turn-boundary cleanup: drop a notice that is still 'pending' (its tool
-   * result never arrived). A settled notice is left alone — its own
-   * auto-dismiss timer is already running.
-   */
-  const clearPendingToolExecutionStatus = useCallback(() => {
-    setToolExecutionStatus(prev => (prev?.status === 'pending' ? null : prev))
-  }, [])
-
-  // Single door for the tool-execution notice. A 'pending' notice stays up until
-  // it settles or the turn ends; a settled one self-expires, so no caller has to
-  // remember to tear it down.
-  const publishToolExecutionStatus = useCallback((status: ToolExecutionStatus) => {
-    if (toolStatusTimerRef.current !== null) {
-      clearTimeout(toolStatusTimerRef.current)
-      toolStatusTimerRef.current = null
-    }
-    setToolExecutionStatus(status)
-    if (status.status !== 'pending') {
-      toolStatusTimerRef.current = setTimeout(() => {
-        toolStatusTimerRef.current = null
-        setToolExecutionStatus(null)
-      }, TOOL_STATUS_DISMISS_MS)
     }
   }, [])
 
@@ -599,20 +581,9 @@ export function useSSEStreaming({
         if (data.done) {
           setResponseStatus(null)
 
-          // Attachments the provider plugin could not put on the wire. This
-          // ledger has always been emitted and was never displayed (bug 94),
-          // so an image that silently failed to reach a vision model looked
-          // exactly like a model that had seen it and ignored it.
-          const failedAttachments = data.attachmentResults?.failed
-          if (Array.isArray(failedAttachments) && failedAttachments.length > 0) {
-            const first = failedAttachments[0]?.error ?? 'unknown reason'
-            const more = failedAttachments.length > 1
-              ? ` (and ${failedAttachments.length - 1} more)`
-              : ''
-            showWarningToast(
-              `${failedAttachments.length === 1 ? 'An attachment was' : `${failedAttachments.length} attachments were`} not sent to the model${more}: ${first}`
-            )
-          }
+          // Attachments the provider plugin could not put on the wire (bug 94).
+          const attachmentWarning = buildFailedAttachmentWarning(data.attachmentResults?.failed)
+          if (attachmentWarning) showWarningToast(attachmentWarning)
 
           if (inChain && opts.onIntermediateDone) {
             // Intermediate done during a chain — lighter cleanup, no state reset

@@ -75,3 +75,6 @@ Note that after bug 91's fix this is now hard to reach by accident — the
 describe-fallback intercepts that combination first, which is the point. The
 toast is the backstop for a plugin whose declared capability and actual
 behaviour disagree.
+
+Regression coverage: `__tests__/unit/hooks/useSSEStreaming-attachment-warning.test.ts`,
+over the extracted `buildFailedAttachmentWarning`.

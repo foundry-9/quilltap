@@ -96,3 +96,8 @@ that shares its symptom, and macOS keeps the receipts — one `.ips` file in
   repo. When nodejs/node#62393 is actually fixed in the supported Node lines
   (verify against the issue, not the changelog), delete `armSparkplugGuard()`
   and return the scripts to plain `jest`.
+- Regression coverage: `__tests__/unit/jest-sparkplug-guard.test.ts` asserts the
+  flag is present — exactly once — in the process a suite actually runs in. A
+  crash cannot be asserted on directly, so the guard is what is pinned: if the
+  flag ever stops arriving, that suite goes red instead of the segfaults
+  quietly returning and being re-run away.

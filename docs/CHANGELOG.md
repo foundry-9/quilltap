@@ -4,6 +4,32 @@
 
 ### 4.9-dev
 
+#### Added: release-checklist test coverage (checklist item 2)
+
+Audited every bug fixed since 4.8.4 (bugs 66-102, all 37) and all 55 source modules added in the
+same range. 29 bugs already had regression tests; 50 of the new modules already had coverage.
+Nine test files added, 70 cases:
+
+- Regression tests for the four fixed bugs that had none: bug 77 (tool-execution notice pinned above
+  the composer), bug 83 (V8 Sparkplug worker segfault), bug 94 (`attachmentResults` ledger never
+  displayed), bug 99 (gallery modal controls painted over by the page toolbar).
+- First coverage for five new modules: `lib/file-storage/digest-policy.ts`, `lib/realtime/ws.ts`,
+  `lib/database/repositories/help-doc-chunks.repository.ts`, `app/aurora/shared/save-generated-wardrobe.ts`,
+  and `components/chat/ChatScenarioControl.tsx`.
+
+Two behaviour-neutral extractions were needed to make bugs 77 and 94 testable, both following the
+pattern `resolveToolResultErrorText` already set in the same file: the tool-execution notice's state,
+timer, and callbacks moved out of `useSSEStreaming.ts` into a new `useToolExecutionStatus.ts`, and the
+failed-attachment toast sentence became an exported `buildFailedAttachmentWarning`. The hook's public
+surface is unchanged.
+
+Suite: 724 files, 11,213 tests, all passing (was 715 / 11,143).
+
+Bugs 89 and 90 remain without unit tests by design — 89 lives in the CLI bin's native-module linking
+and only misbehaves against a real install tree; 90 is guarded at build time by
+`scripts/assert-standalone-portable.mjs`. Bugs 100 and 102 are guarded by `scripts/check-qt-classes.mjs`
+in `npm run lint`.
+
 #### Added: realtime interface updates (WebSocket push + shared clock)
 
 Implements `docs/developer/features/complete/realtime-updates.md`. Two separate causes of a stale
