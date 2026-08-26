@@ -20,6 +20,7 @@ import {
   deleteProjectWardrobeItem,
 } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
+import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 
 /** Resolve the project's official store mount, or null when unavailable. */
 async function resolveProjectMount(
@@ -59,11 +60,24 @@ export const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
     if (!mountPointId) return notFound('Project');
 
     const body = await req.json();
-    const validated = updateWardrobeSchema.parse(body);
+    const { archived, ...fields } = updateWardrobeSchema.parse(body);
+
+    // `archived` is a request-shaped boolean; the item stores a timestamp.
+    // Archiving is idempotent, so an already-archived item keeps its stamp.
+    let archivePatch: { archivedAt: string | null } | null = null;
+    if (archived !== undefined) {
+      const items = await readProjectWardrobe(mountPointId, true);
+      const current = items.find((i) => i.id === itemId);
+      if (!current) return notFound('Project wardrobe item');
+      archivePatch = archivedPatch(current.archivedAt, archived, new Date().toISOString());
+    }
 
     let item;
     try {
-      item = await updateProjectWardrobeItem(mountPointId, itemId, validated);
+      item = await updateProjectWardrobeItem(mountPointId, itemId, {
+        ...fields,
+        ...(archivePatch ?? {}),
+      });
     } catch (error) {
       // Cycle rejection from the vault writer surfaces as a plain Error → 400.
       if (error instanceof Error && error.message.includes('component cycle')) {
@@ -79,6 +93,7 @@ export const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
       mountPointId,
       itemId,
       context: 'wardrobe',
+      ...(archivePatch !== null && { archivedAt: archivePatch.archivedAt }),
     });
 
     return successResponse({ wardrobeItem: item });

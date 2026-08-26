@@ -10,6 +10,10 @@
  * `[scenarioPath]` is the URL-encoded filename relative to `Scenarios/`.
  * The route accepts the bare filename (with or without `.md`) and prefixes
  * `Scenarios/` server-side; `..` segments are rejected.
+ *
+ * PUT, POST and DELETE all honour `?includeArchived=true` on the freshly-listed
+ * scenarios they return, so a manager with "Show archived" ticked gets back a
+ * list that still contains the row it just changed.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -27,8 +31,10 @@ import {
 } from '@/lib/mount-index/general-scenarios';
 import {
   buildScenarioFileContent,
+  isScenarioContentArchived,
   resolveScenarioPath,
 } from '@/lib/mount-index/scenarios-common';
+import { readIncludeArchived } from '@/lib/api/query-params';
 import {
   writeDatabaseDocument,
   deleteDatabaseDocument,
@@ -44,6 +50,9 @@ const updateScenarioSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(500).optional(),
   isDefault: z.boolean().optional(),
+  /** Omit to leave the current archived state alone; the serializer rewrites
+   *  the whole file, so an unmentioned flag would otherwise be dropped. */
+  archived: z.boolean().optional(),
   body: z.string().min(1, 'Scenario body cannot be empty'),
 });
 
@@ -110,6 +119,7 @@ export const PUT = createContextParamsHandler<{ scenarioPath: string }>(
       const lookup = await loadGeneralStore();
       if (!lookup.ok) return lookup.response;
 
+      const includeArchived = readIncludeArchived(req);
       const body = await req.json();
       const validated = updateScenarioSchema.parse(body);
 
@@ -123,6 +133,7 @@ export const PUT = createContextParamsHandler<{ scenarioPath: string }>(
         name: validated.name,
         description: validated.description,
         isDefault: validated.isDefault,
+        archived: validated.archived ?? isScenarioContentArchived(existing.content),
         body: validated.body,
       });
 
@@ -132,7 +143,7 @@ export const PUT = createContextParamsHandler<{ scenarioPath: string }>(
         await setGeneralScenarioDefault(resolved.path);
       }
 
-      const fresh = await listGeneralScenarios();
+      const fresh = await listGeneralScenarios({ includeArchived });
 
       logger.info('[General v1] Updated general scenario', {
         userId: user.id,
@@ -163,6 +174,7 @@ export const PUT = createContextParamsHandler<{ scenarioPath: string }>(
 export const POST = createContextParamsHandler<{ scenarioPath: string }>(
   async (req: NextRequest, { user, repos }: RequestContext, { scenarioPath }) => {
     try {
+      const includeArchived = readIncludeArchived(req);
       const url = new URL(req.url);
       const action = url.searchParams.get('action');
       if (action !== 'rename') {
@@ -183,7 +195,7 @@ export const POST = createContextParamsHandler<{ scenarioPath: string }>(
       const newPath = `${GENERAL_SCENARIOS_FOLDER}/${cleaned}.md`;
 
       if (newPath === resolved.path) {
-        const fresh = await listGeneralScenarios();
+        const fresh = await listGeneralScenarios({ includeArchived });
         return successResponse({ path: newPath, scenarios: fresh.scenarios, warnings: fresh.warnings });
       }
 
@@ -203,7 +215,7 @@ export const POST = createContextParamsHandler<{ scenarioPath: string }>(
 
       await moveDatabaseDocument(lookup.mountPointId, resolved.path, newPath);
 
-      const fresh = await listGeneralScenarios();
+      const fresh = await listGeneralScenarios({ includeArchived });
 
       logger.info('[General v1] Renamed general scenario', {
         userId: user.id,
@@ -232,8 +244,9 @@ export const POST = createContextParamsHandler<{ scenarioPath: string }>(
 // ============================================================================
 
 export const DELETE = createContextParamsHandler<{ scenarioPath: string }>(
-  async (_req: NextRequest, { user }: RequestContext, { scenarioPath }) => {
+  async (req: NextRequest, { user }: RequestContext, { scenarioPath }) => {
     try {
+      const includeArchived = readIncludeArchived(req);
       const resolved = resolveScenarioPath(scenarioPath, GENERAL_SCENARIOS_FOLDER);
       if (!resolved.ok) return badRequest(resolved.error);
 
@@ -243,7 +256,7 @@ export const DELETE = createContextParamsHandler<{ scenarioPath: string }>(
       const deleted = await deleteDatabaseDocument(lookup.mountPointId, resolved.path);
       if (!deleted) return notFound('Scenario');
 
-      const fresh = await listGeneralScenarios();
+      const fresh = await listGeneralScenarios({ includeArchived });
 
       logger.info('[General v1] Deleted general scenario', {
         userId: user.id,

@@ -406,6 +406,10 @@ export function CharacterBasicInfo({
         <p className="text-xs qt-text-secondary mb-1">
           Named settings and contexts for conversations &mdash; the stage, never the actor. Each scenario can be selected when starting a chat. Stored in the vault&rsquo;s Scenarios/ folder.
         </p>
+        <p className="text-xs qt-text-secondary mb-1">
+          Archiving a scenario keeps it here but hides it from the chat pickers unless
+          &ldquo;Show archived&rdquo; is ticked there. Chats already using it are unaffected.
+        </p>
         <p className="text-xs qt-text-secondary mb-3">
           Written as: <em>{PROMPT_FIELD_HINTS.scenario.example}</em>
         </p>
@@ -451,6 +455,34 @@ export function CharacterBasicInfo({
                     placeholder="Scenario title"
                     className="qt-input flex-1 disabled:cursor-not-allowed disabled:opacity-60"
                   />
+                  {scenario.archived && (
+                    <span className="qt-badge qt-badge-secondary shrink-0">Archived</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = formData.scenarios.map((s, i) => {
+                        if (i !== index) return s
+                        // Omission means active — drop the key rather than
+                        // writing `archived: false` into the vault file.
+                        const { archived: _was, ...rest } = s
+                        return {
+                          ...rest,
+                          ...(s.archived ? {} : { archived: true }),
+                          updatedAt: new Date().toISOString(),
+                        }
+                      })
+                      onScenariosChange(updated)
+                    }}
+                    className="qt-button-ghost qt-button-sm shrink-0"
+                    title={
+                      scenario.archived
+                        ? 'Restore this scenario to the chat pickers'
+                        : 'Hide this scenario from the chat pickers'
+                    }
+                  >
+                    {scenario.archived ? 'Restore' : 'Archive'}
+                  </button>
                   <button
                     type="button"
                     onClick={() => onScenariosChange(formData.scenarios.filter((_, i) => i !== index))}

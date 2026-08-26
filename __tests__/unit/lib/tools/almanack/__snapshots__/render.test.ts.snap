@@ -517,12 +517,12 @@ Definitions that would not load:
 
 ### Scenarios & State
 
-| Tier | Scenarios |
-|------|-----------|
-| character | 90 |
-| project | 14 |
-| group | 3 |
-| general | 22 |
+| Tier | Scenarios | Archived |
+|------|-----------|----------|
+| character | 90 | 7 |
+| project | 14 | 0 |
+| group | 3 | 1 |
+| general | 22 | 0 |
 
 State cascade coverage (chat → project → group → general):
 

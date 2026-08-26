@@ -6,6 +6,8 @@
  *                                                folder, with frontmatter
  *                                                parsed and default-conflict
  *                                                resolution applied.
+ *                                                `?includeArchived=true` also
+ *                                                returns archived scenarios.
  * POST /api/v1/groups/[id]/scenarios          — create a new scenario file.
  *                                                Body: { filename, name?,
  *                                                description?, isDefault?,
@@ -23,6 +25,7 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, created, successResponse } from '@/lib/api/responses';
+import { readIncludeArchived } from '@/lib/api/query-params';
 import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
 import {
   ensureGroupScenariosFolder,
@@ -45,6 +48,7 @@ const createScenarioSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(500).optional(),
   isDefault: z.boolean().optional(),
+  archived: z.boolean().optional(),
   body: z.string().min(1, 'Scenario body cannot be empty'),
 });
 
@@ -53,7 +57,8 @@ const createScenarioSchema = z.object({
 // ============================================================================
 
 export const GET = createContextParamsHandler<{ id: string }>(
-  async (_req: NextRequest, { user, repos }: RequestContext, { id }) => {
+  async (req: NextRequest, { repos }: RequestContext, { id }) => {
+    const includeArchived = readIncludeArchived(req);
     const group = await repos.groups.findById(id);
     if (!group) return notFound('Group');
 
@@ -64,7 +69,9 @@ export const GET = createContextParamsHandler<{ id: string }>(
     await ensureGroupScenariosFolder(ensured.mountPointId);
     await ensureGroupKnowledgeFolder(ensured.mountPointId);
 
-    const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId);
+    const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId, {
+      includeArchived,
+    });
 
     return successResponse({
       mountPointId: ensured.mountPointId,
@@ -112,6 +119,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
       name: validated.name,
       description: validated.description,
       isDefault: validated.isDefault,
+      archived: validated.archived,
       body: validated.body,
     });
 
@@ -132,7 +140,9 @@ export const POST = createContextParamsHandler<{ id: string }>(
     });
 
     // Return the freshly listed scenarios so the client doesn't need a follow-up GET.
-    const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId);
+    const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId, {
+      includeArchived: validated.archived === true,
+    });
     return created({
       mountPointId: ensured.mountPointId,
       path: relativePath,

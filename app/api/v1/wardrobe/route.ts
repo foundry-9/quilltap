@@ -14,6 +14,7 @@ import { createContextHandler, withCollectionActionDispatch } from '@/lib/api/mi
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { serverError, created, successResponse } from '@/lib/api/responses';
+import { readIncludeArchived } from '@/lib/api/query-params';
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { ensureGeneralWardrobeFolder } from '@/lib/mount-index/general-wardrobe';
@@ -78,7 +79,7 @@ export const GET = createContextHandler(
     { instructions: handleGetInstructions },
     async (req, { repos }) => {
       try {
-        const archetypeItems = await repos.wardrobe.findArchetypes();
+        const archetypeItems = await repos.wardrobe.findArchetypes(readIncludeArchived(req));
         return NextResponse.json({ wardrobeItems: archetypeItems });
       } catch (error) {
         logger.error(

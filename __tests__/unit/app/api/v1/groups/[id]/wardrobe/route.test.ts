@@ -128,13 +128,28 @@ beforeEach(() => {
 })
 
 it('GET lists the group mount wardrobe after ensuring store and folder', async () => {
-  const res: any = await GET({} as any, routeCtx({ id: GROUP_ID }))
+  const res: any = await GET(
+    { url: `http://localhost/api/v1/groups/${GROUP_ID}/wardrobe` } as any,
+    routeCtx({ id: GROUP_ID }),
+  )
 
   expect(res.status).toBe(200)
   expect(res.body.mountPointId).toBe(MOUNT_ID)
   expect(res.body.wardrobeItems).toEqual([storedItem])
   expect(ensureGroupOfficialStore).toHaveBeenCalledWith(GROUP_ID, 'Main Cast')
   expect(ensureGroupWardrobeFolder).toHaveBeenCalledWith(MOUNT_ID)
+  // Archived garments are hidden unless the caller asks.
+  expect(readGroupWardrobe).toHaveBeenCalledWith(MOUNT_ID, false)
+})
+
+it('GET includes archived garments when asked', async () => {
+  const res: any = await GET(
+    { url: `http://localhost/api/v1/groups/${GROUP_ID}/wardrobe?includeArchived=true` } as any,
+    routeCtx({ id: GROUP_ID }),
+  )
+
+  expect(res.status).toBe(200)
+  expect(readGroupWardrobe).toHaveBeenCalledWith(MOUNT_ID, true)
 })
 
 it('GET 404s for an unknown group', async () => {

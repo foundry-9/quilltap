@@ -107,6 +107,7 @@ The assembled system prompt addresses the character directly throughout, and eac
 - Add a new scenario when you begin a fresh campaign or a character finds themselves in significantly altered circumstances
 - Edit existing scenarios to adjust their descriptive content; rename them as the situation demands
 - Example additions: "The Road to Venice, 1924" when transitioning a tavern owner into a traveling merchant
+- **Archive** a scenario that has served its turn rather than deleting it: the **Archive** button beside each scenario's title draws a dust sheet over it. The scene stays here in the editor, wearing a small **Archived** badge and offering **Restore**, but it withdraws from the Starting Scenario drop-down wherever chats are begun — the new-chat form and the Salon's own picker alike — until somebody there ticks **Show archived**. Conversations already playing out in that scene are untouched, since the text was woven in at their creation. Marseille need not be forgotten; it need merely be put away.
 
 **First Message**
 
@@ -143,7 +144,7 @@ Each character carries a private vault in the Scriptorium — a small database-b
 | `physical-description.md` | The **Full Description** of the character's first (default) physical description |
 | `physical-prompts.json` | The **head-and-shoulders / short / medium / long / complete** prompts of the first (default) physical description (JSON with `headAndShoulders`, `short`, `medium`, `long`, `complete` keys) |
 | `Prompts/*.md` | The character's **System Prompts** — one file per named variant, with YAML frontmatter carrying `name` (required) and an optional `isDefault: true` |
-| `Scenarios/*.md` | The character's **Scenarios** — one file per scene, with the first `# heading` as the title and the body beneath as the context |
+| `Scenarios/*.md` | The character's **Scenarios** — one file per scene, with the first `# heading` as the title and the body beneath as the context. An optional YAML frontmatter block above the heading may carry `description` and `archived: true`; both are omitted for an ordinary, in-circulation scene |
 | `Wardrobe/*.md` | The character's **Wardrobe Items** — one Markdown file per garment, with frontmatter carrying `title`, `types`, an optional `imagePrompt`, an optional `componentItems` list (for a composite ensemble), `appropriateness`, the `default` and `replace` flags, and timestamps; the body beneath is the freeform description |
 
 By default, every one of these is read from the character's database row — the ordinary state of affairs, in which the editor is the single source of truth. Flip the switch marked **Read this character's core fields from the Scriptorium vault** at the top of the Aurora edit page, however, and henceforth Quilltap will consult the vault for all of the above every time any part of the application reads your character — the roster on the home page, the system prompt for a chat, the image-generation pipeline's appearance prompts, the scene state tracker, the turn manager's talkativeness roll, all of it.

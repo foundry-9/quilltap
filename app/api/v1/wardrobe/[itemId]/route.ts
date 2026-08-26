@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { notFound, serverError } from '@/lib/api/responses';
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
+import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 
 const updateArchetypeSchema = z.object({
   title: z.string().min(1).optional(),
@@ -25,6 +26,12 @@ const updateArchetypeSchema = z.object({
   componentItemIds: z.array(z.string()).optional(),
   /** Composite-only: clear the designated slots on equip instead of layering. */
   replace: z.boolean().optional(),
+  /**
+   * Archive (true) or restore (false) the item. Maps to `archivedAt`; omitting
+   * it leaves the current state alone. Archiving is idempotent — it does not
+   * reset an existing `archivedAt`.
+   */
+  archived: z.boolean().optional(),
 });
 
 // GET /api/v1/wardrobe/[itemId]
@@ -58,15 +65,27 @@ export const PUT = createContextParamsHandler<{ itemId: string }>(
     }
 
     const body = await req.json();
-    const validatedData = updateArchetypeSchema.parse(body);
+    const { archived, ...fields } = updateArchetypeSchema.parse(body);
 
-    const item = await repos.wardrobe.update(itemId, validatedData, null);
+    const archivePatch =
+      archived === undefined
+        ? null
+        : archivedPatch(existing.archivedAt, archived, new Date().toISOString());
+
+    const item = await repos.wardrobe.update(
+      itemId,
+      { ...fields, ...(archivePatch ?? {}) },
+      null,
+    );
 
     if (!item) {
       return notFound('Archetype wardrobe item');
     }
 
-    logger.info('[Wardrobe Archetypes v1] Archetype item updated', { itemId });
+    logger.info('[Wardrobe Archetypes v1] Archetype item updated', {
+      itemId,
+      ...(archivePatch !== null && { archivedAt: archivePatch.archivedAt }),
+    });
 
     return NextResponse.json({ wardrobeItem: item });
   }

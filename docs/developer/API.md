@@ -1446,9 +1446,11 @@ Delete a system prompt.
 
 Scenarios are named narrative contexts that can be selected when starting a chat with a character.
 
-#### `GET /api/v1/characters/[id]/scenarios`
+#### `GET /api/v1/characters/[id]/scenarios[?includeArchived=true]`
 
-Get all scenarios for a character.
+Get all scenarios for a character. Scenarios carrying `archived: true` are omitted unless `?includeArchived=true` is passed.
+
+> **This is a response filter only.** `character.scenarios` itself always carries the archived entries: the vault write overlay projects that array back over the `Scenarios/` folder and deletes every file the array doesn't contain, so a pre-filtered array would delete the archived files. Filter at the API boundary, never at the vault read.
 
 **Response**: `200 OK`
 
@@ -1458,11 +1460,14 @@ Get all scenarios for a character.
     {
       "id": "scenario-uuid",
       "title": "Coffee Shop Meeting",
-      "content": "You meet in a quiet coffee shop..."
+      "content": "You meet in a quiet coffee shop...",
+      "archived": false
     }
   ]
 }
 ```
+
+`archived` is accepted on the `POST` and `PUT` bodies. It is stored as `archived: true` in the vault file's frontmatter and omitted entirely when the scenario is active.
 
 #### `POST /api/v1/characters/[id]/scenarios`
 
@@ -1542,9 +1547,11 @@ Create an NPC character.
 
 Global archetype wardrobe items that can be shared across characters.
 
-#### `GET /api/v1/wardrobe`
+#### `GET /api/v1/wardrobe[?includeArchived=true]`
 
-List all archetype wardrobe items.
+List all archetype wardrobe items. Items with a non-null `archivedAt` are omitted unless `?includeArchived=true` is passed — the same opt-in honoured by the character (`/api/v1/characters/[id]/wardrobe`, including `?scope=group`), project (`/api/v1/projects/[id]/wardrobe`) and group (`/api/v1/groups/[id]/wardrobe`) collection endpoints. Clients should build these URLs through `wardrobeCollectionUrl()` / `withWardrobeArchivedParam()` in `lib/wardrobe/wardrobe-container.ts` so the parameter can't drift.
+
+The **outfit-selection LLM never receives archived items**, at any tier, with no parameter and no override: its candidate pool is built by `mergeWearablePool`, which drops them after the tier merge.
 
 **Response**: `200 OK`
 
@@ -1590,6 +1597,8 @@ Get a specific archetype wardrobe item.
 #### `PUT /api/v1/wardrobe/[itemId]`
 
 Update an archetype wardrobe item. All fields optional.
+
+Accepts **`archived: boolean`** alongside the content fields — the same field the character, project and group item `PUT`s take. It is translated into `archivedAt` by `archivedPatch()` (`lib/wardrobe/archived-patch.ts`): archiving is **idempotent** (re-archiving keeps the original `archivedAt` rather than resetting the clock), restoring sets it to `null`, and omitting the field leaves the current state alone. Archiving does **not** unequip a garment a character is presently wearing.
 
 #### `DELETE /api/v1/wardrobe/[itemId]`
 
@@ -5578,14 +5587,21 @@ Delete one group wardrobe item. Cleans up equipped references across chats first
 
 ### Scenarios
 
-Scenarios are Markdown files (with frontmatter: `name`, `description`, `isDefault`, body) kept in a `Scenarios/` folder. They exist at three tiers — **general** (instance-wide "Quilltap General" store), **project**, and **group** — that share an identical endpoint shape. Each collection endpoint ensures the backing store and its `Scenarios/` folder exist first, so callers don't wait for the next startup heal pass. Frontmatter is parsed and default-conflict resolution is applied on read.
+Scenarios are Markdown files (with frontmatter: `name`, `description`, `isDefault`, `archived`, body) kept in a `Scenarios/` folder. They exist at three tiers — **general** (instance-wide "Quilltap General" store), **project**, and **group** — that share an identical endpoint shape. Each collection endpoint ensures the backing store and its `Scenarios/` folder exist first, so callers don't wait for the next startup heal pass. Frontmatter is parsed and default-conflict resolution is applied on read.
+
+**Archived scenarios.** A file carrying `archived: true` is excluded from every list response unless the request passes **`?includeArchived=true`**; absence of the key means active, and the serializer never writes `archived: false`. The parameter is honoured by all three tiers' collection GETs, by the participant-aggregate route below, and by the item-level `PUT`/`POST ?action=rename`/`DELETE` on the freshly-listed scenarios they return (so a manager with "Show archived" ticked gets back a list that still contains the row it just changed). Two rules hold regardless of the parameter:
+
+- An archived scenario **never wins default-conflict resolution** — its `isDefault` comes back `false` even when it is being listed, and `rawIsDefault` still reflects what the file claims.
+- `resolveScenarioBody()` ignores the flag entirely, so a chat that already resolved an archived scenario keeps working.
+
+`archived` is also accepted on the create and update bodies. On `PUT` it is **optional and preserving**: the endpoint rewrites the whole file from the request body, so omitting `archived` keeps the file's current state rather than silently un-archiving it.
 
 For the single-scenario endpoints, `[scenarioPath]` is the URL-encoded filename relative to `Scenarios/`; the bare filename (with or without `.md`) is accepted and the `Scenarios/` prefix is applied server-side. `..` segments are rejected.
 
 **General tier**
 
 - `GET /api/v1/scenarios` — list general scenarios. Tolerates the pre-migration race (returns an empty list with `mountPointId: null`).
-- `POST /api/v1/scenarios` — create a general scenario. Body: `{ filename, name?, description?, isDefault?, body }`. Rejects writes during the pre-migration window.
+- `POST /api/v1/scenarios` — create a general scenario. Body: `{ filename, name?, description?, isDefault?, archived?, body }`. Rejects writes during the pre-migration window.
 - `GET /api/v1/scenarios/[scenarioPath]` — read one.
 - `PUT /api/v1/scenarios/[scenarioPath]` — update content + frontmatter.
 - `POST /api/v1/scenarios/[scenarioPath]?action=rename` — rename the file.
@@ -5601,7 +5617,7 @@ For the single-scenario endpoints, `[scenarioPath]` is the URL-encoded filename 
 - `GET /api/v1/groups/[id]/scenarios` · `POST /api/v1/groups/[id]/scenarios`
 - `GET`/`PUT`/`DELETE /api/v1/groups/[id]/scenarios/[scenarioPath]` · `POST …?action=rename`
 
-#### `GET /api/v1/groups/scenarios?characterIds=<id,id,...>`
+#### `GET /api/v1/groups/scenarios?characterIds=<id,id,...>[&includeArchived=true]`
 
 The New Chat dialog's participant-union aggregation: for every group that **any** of the supplied prospective participants belongs to, returns that group's `Scenarios/` entries grouped under the group's name. This is the one sanctioned exception to a group's otherwise strict per-responding-character isolation — scenarios are a chat-creation-time menu, not a per-turn access grant, so this route must never feed the per-turn tier resolver.
 

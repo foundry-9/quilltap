@@ -47,6 +47,9 @@ export function NewChatPageClient() {
     project,
     projectScenarios,
     generalScenarios,
+    groupScenarios,
+    showArchivedScenarios,
+    setShowArchivedScenarios,
     roleplayTemplates,
     defaultRoleplayTemplateId,
     availableProjects,
@@ -146,6 +149,9 @@ export function NewChatPageClient() {
             project={project}
             projectScenarios={projectScenarios}
             generalScenarios={generalScenarios}
+            groupScenarios={groupScenarios}
+            showArchivedScenarios={showArchivedScenarios}
+            onShowArchivedScenariosChange={setShowArchivedScenarios}
             roleplayTemplates={roleplayTemplates}
             defaultRoleplayTemplateId={defaultRoleplayTemplateId}
             availableProjects={availableProjects}

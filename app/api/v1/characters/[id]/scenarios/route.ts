@@ -1,25 +1,34 @@
 /**
  * Character Scenarios API v1
  *
- * GET /api/v1/characters/[id]/scenarios - Get all scenarios for a character
+ * GET /api/v1/characters/[id]/scenarios - Get all scenarios for a character.
+ *     Archived scenarios are omitted unless `?includeArchived=true`.
  * POST /api/v1/characters/[id]/scenarios - Add a new scenario to a character
  * PUT /api/v1/characters/[id]/scenarios?scenarioId=xxx - Update a scenario
  * DELETE /api/v1/characters/[id]/scenarios?scenarioId=xxx - Remove a scenario
+ *
+ * NOTE: the filtering here is a RESPONSE filter only. `character.scenarios`
+ * itself always carries the archived entries, because the vault write overlay
+ * projects that array back over the `Scenarios/` folder and deletes any file
+ * missing from it — a filtered array would delete the archived files.
  */
 
 import { z } from 'zod';
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { successResponse, notFound, serverError, badRequest, created } from '@/lib/api/responses';
+import { readIncludeArchived } from '@/lib/api/query-params';
 
 const createScenarioSchema = z.object({
   title: z.string().min(1).max(200),
   content: z.string().min(1),
+  archived: z.boolean().optional(),
 });
 
 const updateScenarioSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   content: z.string().min(1).optional(),
+  archived: z.boolean().optional(),
 });
 
 // GET /api/v1/characters/[id]/scenarios
@@ -32,7 +41,10 @@ export const GET = createContextParamsHandler<{ id: string }>(
         return notFound('Character');
       }
 
-      const scenarios = character.scenarios || [];
+      const all = character.scenarios || [];
+      const scenarios = readIncludeArchived(request)
+        ? all
+        : all.filter((s) => s.archived !== true);
       return successResponse({ scenarios });
     } catch (error) {
       logger.error('[Characters v1] Error fetching character scenarios', { characterId }, error instanceof Error ? error : undefined);
@@ -56,6 +68,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
     const scenario = await repos.characters.addScenario(characterId, {
       title: validated.title,
       content: validated.content,
+      ...(validated.archived !== undefined && { archived: validated.archived }),
     });
 
     if (!scenario) {

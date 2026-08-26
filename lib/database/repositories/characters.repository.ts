@@ -834,12 +834,20 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    */
   async addScenario(
     characterId: string,
-    data: { title: string; content: string }
+    data: { title: string; content: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
     return this.addToSubArray<CharacterScenario>(
       characterId,
       (c) => c.scenarios ?? [],
-      (id, now) => ({ id, title: data.title, content: data.content, createdAt: now, updatedAt: now }),
+      (id, now) => ({
+        id,
+        title: data.title,
+        content: data.content,
+        // Omission means active; never persist an explicit `archived: false`.
+        ...(data.archived === true && { archived: true }),
+        createdAt: now,
+        updatedAt: now,
+      }),
       (items) => ({ scenarios: items }),
       'Error adding scenario',
       { title: data.title }
@@ -856,13 +864,25 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   async updateScenario(
     characterId: string,
     scenarioId: string,
-    data: { title?: string; content?: string }
+    data: { title?: string; content?: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
     return this.updateInSubArray<CharacterScenario>(
       characterId,
       scenarioId,
       (c) => c.scenarios ?? [],
-      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
+      (existing, now) => {
+        const { archived: _dropped, ...rest } = existing;
+        const archived = data.archived ?? existing.archived;
+        return {
+          ...rest,
+          ...data,
+          // Omission means active; drop the key rather than writing `false`.
+          ...(archived === true ? { archived: true } : {}),
+          id: existing.id,
+          createdAt: existing.createdAt,
+          updatedAt: now,
+        };
+      },
       (items) => ({ scenarios: items }),
       'Error updating scenario',
       { scenarioId }

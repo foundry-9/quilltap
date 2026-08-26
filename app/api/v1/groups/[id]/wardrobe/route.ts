@@ -31,6 +31,7 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { badRequest, notFound, serverError, created, successResponse } from '@/lib/api/responses';
+import { readIncludeArchived } from '@/lib/api/query-params';
 import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
 import {
   ensureGroupWardrobeFolder,
@@ -103,7 +104,7 @@ async function handlePostInstructions(
 
 export const GET = createContextParamsHandler<{ id: string }>(
   withActionDispatch({ instructions: handleGetInstructions },
-  async (_req: NextRequest, { repos }: RequestContext, { id }) => {
+  async (req: NextRequest, { repos }: RequestContext, { id }) => {
     const group = await repos.groups.findById(id);
     if (!group) return notFound('Group');
 
@@ -113,7 +114,10 @@ export const GET = createContextParamsHandler<{ id: string }>(
     }
     await ensureGroupWardrobeFolder(ensured.mountPointId);
 
-    const wardrobeItems = await readGroupWardrobe(ensured.mountPointId, true);
+    const wardrobeItems = await readGroupWardrobe(
+      ensured.mountPointId,
+      readIncludeArchived(req),
+    );
 
     logger.debug('[Groups v1] Listed group wardrobe items', {
       groupId: id,

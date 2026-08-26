@@ -39,6 +39,7 @@ The **Wardrobe** card on each project's page is your atelier — and the [Wardro
 
 - **Create** a new item via the **+ New wardrobe item** button — supply a title, an optional description, an optional **Portrait Cue**, the slots it covers, an optional appropriateness note, and (for composites) the existing project items it bundles. The Portrait Cue is a short, literal phrase whispered to the portraitist and the Lantern *in place of* the title when the bare name fails to conjure the right picture (the prose description, being for human eyes, never reaches the easel).
 - **Edit** an existing item with its **Edit** button; the inline form returns pre-filled.
+- **Archive** an item with the **Archive** button — a dust sheet rather than a bonfire. The garment withdraws from the project's wardrobe lists and from the outfit composer, and is withheld outright from any character choosing their own attire, while the file itself stays put. Tick **Show archived**, which keeps company with **+ New wardrobe item**, to see what you have stored away; each retired garment wears a small **Archived** badge and offers a **Restore** button. A character presently *wearing* an archived garment goes on wearing it — archiving tidies the drawer, it does not undress anybody.
 - **Delete** an item with the **Delete** button, after a moment's confirmation. Equipped references across existing chats are cleaned up; composites that bundled the item tolerate its absence gracefully.
 
 ## Wearing Project Garments

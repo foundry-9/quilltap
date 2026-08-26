@@ -822,10 +822,10 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
     if (s.scenarios.every(row => row.count === 0)) {
       push('*No scenarios*', '');
     } else {
-      push('| Tier | Scenarios |');
-      push('|------|-----------|');
+      push('| Tier | Scenarios | Archived |');
+      push('|------|-----------|----------|');
       for (const row of s.scenarios) {
-        push(`| ${cell(row.tier)} | ${row.count} |`);
+        push(`| ${cell(row.tier)} | ${row.count} | ${row.archived} |`);
       }
       push('');
     }

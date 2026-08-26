@@ -130,8 +130,14 @@ export const wardrobeItemFieldsSchema = z.object({
 /** Body schema for creating a project wardrobe item (required fields). */
 export const createWardrobeSchema = wardrobeItemFieldsSchema;
 
-/** Body schema for updating a project wardrobe item (all fields optional). */
-export const updateWardrobeSchema = wardrobeItemFieldsSchema.partial();
+/**
+ * Body schema for updating a project or group wardrobe item (all fields
+ * optional), plus the `archived` boolean the item routes translate into
+ * `archivedAt` via `lib/wardrobe/archived-patch`.
+ */
+export const updateWardrobeSchema = wardrobeItemFieldsSchema.partial().extend({
+  archived: z.boolean().optional(),
+});
 
 // ============================================================================
 // WARDROBE ITEM

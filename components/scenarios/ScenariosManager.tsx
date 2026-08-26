@@ -14,6 +14,9 @@
  *
  * Surfaces soft warnings (e.g. multiple files marked default) above the list.
  *
+ * "Show archived" flips the mutator's fetch, not a client-side filter: the
+ * server decides what's hidden, so the list can never disagree with the API.
+ *
  * @module components/scenarios/ScenariosManager
  */
 
@@ -46,6 +49,9 @@ export function ScenariosManager({
     renameScenario,
     deleteScenario,
     setDefaultScenario,
+    setScenarioArchived,
+    showArchived,
+    setShowArchived,
   } = mutator
 
   const [editorOpen, setEditorOpen] = useState(false)
@@ -118,6 +124,12 @@ export function ScenariosManager({
     if (!result.ok) setActionError(result.error)
   }
 
+  async function handleToggleArchived(scenario: Scenario) {
+    setActionError(null)
+    const result = await setScenarioArchived(scenario.path, !scenario.archived)
+    if (!result.ok) setActionError(result.error)
+  }
+
   return (
     <div className="space-y-3 @container">
       {warnings.length > 0 && (
@@ -140,7 +152,16 @@ export function ScenariosManager({
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <label className="flex items-center gap-2 qt-text-small">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => setShowArchived(e.target.checked)}
+            className="qt-checkbox"
+          />
+          Show archived
+        </label>
         <button onClick={openCreate} className="qt-button qt-button-primary qt-button-sm">
           + New scenario
         </button>
@@ -161,6 +182,7 @@ export function ScenariosManager({
               onEdit={openEdit}
               onRename={handleRename}
               onDelete={handleDelete}
+              onToggleArchived={handleToggleArchived}
             />
           ))}
         </ul>

@@ -44,6 +44,13 @@ interface NewChatFormProps {
   /** Group scenarios from `/api/v1/groups/scenarios?characterIds=...`; fetched when characters are selected. */
   groupScenarios?: GroupScenarioOption[]
   /**
+   * "Show archived" plumbing for the scenario picker. Supplied together;
+   * omitting the setter hides the checkbox (the form is then a pure consumer
+   * of whatever tiers it was handed).
+   */
+  showArchivedScenarios?: boolean
+  onShowArchivedScenariosChange?: (next: boolean) => void
+  /**
    * Roleplay templates from `/api/v1/roleplay-templates`. When non-empty the
    * form renders a template dropdown, pre-set to whatever the chat would have
    * defaulted to (`state.roleplayTemplateId`, seeded by useNewChat).
@@ -108,6 +115,8 @@ export function NewChatForm({
   projectScenarios = [],
   generalScenarios = [],
   groupScenarios = [],
+  showArchivedScenarios = false,
+  onShowArchivedScenariosChange,
   roleplayTemplates = [],
   defaultRoleplayTemplateId = null,
   availableProjects,
@@ -136,11 +145,29 @@ export function NewChatForm({
   )
   const hasUserControlled = Boolean(userEntry)
 
+  /**
+   * Every scenario on the single LLM character, archived ones included. The
+   * character record always carries them (the vault projection sweeps files
+   * missing from the array), so the hiding happens here.
+   */
+  const allCharacterScenarios = useMemo(
+    () => (singleLlm ? singleLlm.character.scenarios ?? [] : []),
+    [singleLlm],
+  )
+
+  /**
+   * What the dropdown offers. Archived scenarios are hidden unless "Show
+   * archived" is ticked — with one exception: whatever is currently selected
+   * always stays in the list, so an archived pick made a moment ago doesn't
+   * blank the select out from under the user.
+   */
   const singleCharacterScenarios = useMemo(() => {
     if (!singleLlm) return null
-    const s = singleLlm.character.scenarios
-    return s && s.length > 0 ? s : null
-  }, [singleLlm])
+    const visible = allCharacterScenarios.filter(
+      (s) => showArchivedScenarios || s.archived !== true || s.id === state.scenarioId,
+    )
+    return visible.length > 0 ? visible : null
+  }, [singleLlm, allCharacterScenarios, showArchivedScenarios, state.scenarioId])
 
   const showScenarioDropdown = hasAnyScenarioOptions({
     projectScenarios,
@@ -162,8 +189,10 @@ export function NewChatForm({
           s.groupId === state.groupScenarioGroupId
       )
     : undefined
+  // Looked up against the unfiltered list: a scenario the chat already points
+  // at keeps previewing even after it's archived.
   const selectedCharacterScenario = state.scenarioId
-    ? singleCharacterScenarios?.find((s) => s.id === state.scenarioId)
+    ? allCharacterScenarios.find((s) => s.id === state.scenarioId)
     : undefined
   const selectedPreset = selectedProjectScenario
     ? { kind: 'project' as const, content: selectedProjectScenario.body }
@@ -537,6 +566,18 @@ export function NewChatForm({
               characterDefaultScenarioId={singleLlm?.character.defaultScenarioId ?? null}
               disabled={creating}
             />
+          )}
+          {onShowArchivedScenariosChange && (
+            <label className="mb-2 flex items-center gap-2 text-xs qt-text-muted">
+              <input
+                type="checkbox"
+                checked={showArchivedScenarios}
+                onChange={(e) => onShowArchivedScenariosChange(e.target.checked)}
+                disabled={creating}
+                className="qt-checkbox"
+              />
+              Show archived
+            </label>
           )}
           {showOverrideNote && characterDefaultScenario && (
             <p className="mb-2 text-xs qt-text-muted">

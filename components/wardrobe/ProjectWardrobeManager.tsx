@@ -9,6 +9,9 @@
  * chats. Supports leaf garments and composites (bundling existing project
  * items); cycle rejection is enforced server-side.
  *
+ * "Show archived" flips the mutator's fetch, not a client-side filter: the
+ * server owns the hiding, so the list can never disagree with the API.
+ *
  * @module components/wardrobe/ProjectWardrobeManager
  */
 
@@ -64,7 +67,17 @@ export function ProjectWardrobeManager({
   mutator,
   emptyMessage = "No project wardrobe yet. Add a garment and every character in this project's chats can wear it.",
 }: ProjectWardrobeManagerProps) {
-  const { items, loading, error, createItem, updateItem, deleteItem } = mutator
+  const {
+    items,
+    loading,
+    error,
+    createItem,
+    updateItem,
+    deleteItem,
+    setItemArchived,
+    showArchived,
+    setShowArchived,
+  } = mutator
 
   const [editingId, setEditingId] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
@@ -167,6 +180,15 @@ export function ProjectWardrobeManager({
     [deleteItem],
   )
 
+  const handleToggleArchived = useCallback(
+    async (item: WardrobeItem) => {
+      setActionError(null)
+      const result = await setItemArchived(item.id, !item.archivedAt)
+      if (!result.ok) setActionError(result.error)
+    },
+    [setItemArchived],
+  )
+
   return (
     <div className="space-y-3">
       {actionError && (
@@ -181,7 +203,16 @@ export function ProjectWardrobeManager({
       )}
 
       {!formOpen && (
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <label className="flex items-center gap-2 qt-text-small">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="qt-checkbox"
+            />
+            Show archived
+          </label>
           <button onClick={openCreate} className="qt-button qt-button-primary qt-button-sm">
             + New wardrobe item
           </button>
@@ -342,6 +373,17 @@ export function ProjectWardrobeManager({
                   title="Edit item"
                 >
                   Edit
+                </button>
+                <button
+                  onClick={() => handleToggleArchived(item)}
+                  className="qt-button qt-button-ghost qt-button-sm"
+                  title={
+                    item.archivedAt
+                      ? 'Restore this garment to the wardrobe pickers'
+                      : 'Hide this garment from the wardrobe pickers'
+                  }
+                >
+                  {item.archivedAt ? 'Restore' : 'Archive'}
                 </button>
                 <button
                   onClick={() => handleDelete(item)}

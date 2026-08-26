@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
+import { archivedPatch } from '@/lib/wardrobe/archived-patch';
 
 const updateWardrobeItemSchema = z.object({
   title: z.string().min(1).optional(),
@@ -24,6 +25,12 @@ const updateWardrobeItemSchema = z.object({
   componentItemIds: z.array(z.string()).optional(),
   /** Composite-only: clear the designated slots on equip instead of layering. */
   replace: z.boolean().optional(),
+  /**
+   * Archive (true) or restore (false) the item. Maps to `archivedAt`; omitting
+   * it leaves the current state alone. Archiving is idempotent — it does not
+   * reset an existing `archivedAt`.
+   */
+  archived: z.boolean().optional(),
 });
 
 // GET /api/v1/characters/[id]/wardrobe/[itemId]
@@ -65,9 +72,20 @@ export const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
     }
 
     const body = await req.json();
-    const validatedData = updateWardrobeItemSchema.parse(body);
+    const { archived, ...fields } = updateWardrobeItemSchema.parse(body);
 
-    const item = await repos.wardrobe.update(itemId, validatedData, id);
+    // `archived` is a request-shaped boolean; the item stores a timestamp.
+    // Archiving is idempotent, so an already-archived item keeps its stamp.
+    const archivePatch =
+      archived === undefined
+        ? null
+        : archivedPatch(existing.archivedAt, archived, new Date().toISOString());
+
+    const item = await repos.wardrobe.update(
+      itemId,
+      { ...fields, ...(archivePatch ?? {}) },
+      id,
+    );
 
     if (!item) {
       return notFound('Wardrobe item');
@@ -76,6 +94,7 @@ export const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
     logger.info('[Wardrobe v1] Wardrobe item updated', {
       characterId: id,
       itemId,
+      ...(archivePatch !== null && { archivedAt: archivePatch.archivedAt }),
     });
 
     return successResponse({ wardrobeItem: item });

@@ -160,6 +160,12 @@ Here is the subtle bit, and a rather useful one: a composite may be told to **de
 
 Items that have fallen out of favour need not be destroyed entirely. **Archiving** an item hides it from wardrobe lists and tool results while preserving it for posterity --- and it will remain equipped if currently worn, so mid-conversation wardrobe crises are averted. Should you wish to restore an archived item, simply unarchive it.
 
+To put a garment away, open the **⋮** menu on its row in the Wardrobe dialog and choose **Archive**; the same menu offers **Restore from archive** for anything already under a dust sheet. (The project wardrobe card on a project's page carries plain **Archive** and **Restore** buttons instead.) An archived garment leaves the wardrobe list at once, and leaves the outfit composer besides.
+
+To look in on what you have stored away, tick **Show archived**, which sits beneath the slot filters in the Wardrobe dialog and beside **+ New wardrobe item** on the project card. The retired garments return, each wearing a small **archived** badge, and remain perfectly wearable should you tick the box and decide otherwise --- archiving conceals a thing from the everyday view; it does not lock the drawer.
+
+There is exactly one party who is never consulted on the matter, and it is not you. When a character is asked to **choose their own attire** at the raising of the curtain, the list of candidates handed to them contains no archived garment whatsoever --- in *any* tier, personal or shared. There is no tickbox for this, no override, and no polite exception. An archived garment does not audition.
+
 **Permanent deletion** removes an item entirely and cleans up references in equipped slots across all chats. Any composite that bundled the deleted item will tolerate the absence gracefully — the dangling reference is dropped at read time without disturbing the rest of the bundle.
 
 ## Characters and Their Wardrobe Tools

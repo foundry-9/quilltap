@@ -54,6 +54,12 @@ interface WardrobeItemRowProps {
   onMove: (item: WardrobeItem) => void
   onCopy: (item: WardrobeItem) => void
   onDelete: (item: WardrobeItem) => void
+  /**
+   * Archive an active garment, or restore an archived one. Optional — a
+   * surface that can't archive (the outfit composer) simply omits it and the
+   * menu entry doesn't render.
+   */
+  onToggleArchived?: (item: WardrobeItem) => void
   onEquip?: (item: WardrobeItem) => void
   onAddToSlot?: (item: WardrobeItem, slot: WardrobeItemType) => void
   /** Nesting depth for composite components — used for indentation. */
@@ -74,6 +80,7 @@ export function WardrobeItemRow({
   onMove,
   onCopy,
   onDelete,
+  onToggleArchived,
   onEquip,
   onAddToSlot,
   depth = 0,
@@ -199,6 +206,9 @@ export function WardrobeItemRow({
             {!manageable && <span className="qt-text-xs qt-text-secondary">· shared</span>}
             {item.isDefault && (
               <span className="qt-text-xs qt-text-secondary">· default</span>
+            )}
+            {item.archivedAt && (
+              <span className="qt-badge qt-badge-secondary">archived</span>
             )}
             {item.types.map((t) => (
               <span key={t} className={`qt-badge ${WARDROBE_SLOT_META[t].badgeClass}`}>
@@ -332,6 +342,21 @@ export function WardrobeItemRow({
                             Duplicate
                           </button>
                         </li>
+                        {onToggleArchived && (
+                          <li>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setKebabOpen(false)
+                                onToggleArchived(item)
+                              }}
+                              className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
+                            >
+                              {item.archivedAt ? 'Restore from archive' : 'Archive'}
+                            </button>
+                          </li>
+                        )}
                       </>
                     )}
                     <li>

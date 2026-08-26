@@ -196,12 +196,14 @@ function CharacterOutfitSection({
   } = useCharacterWardrobeItems(wardrobeNeeded ? character.id : null, { projectId, chatId })
   const wardrobeFetched = !loadingWardrobe && allWardrobeItems.length > 0
 
-  // Visible items: skip archived and items lacking any of the four slots
-  // (defensive — schemas already enforce non-empty types).
-  const wardrobeItems = useMemo(
-    () => allWardrobeItems.filter((i) => !i.archivedAt),
-    [allWardrobeItems],
-  )
+  /**
+   * Visible items. The composer never asks for archived garments, so the
+   * loader has already dropped them — no client-side pass here, which would
+   * only be a second place for the rule to drift. There is deliberately no
+   * "Show archived" toggle on this surface: it composes the opening outfit,
+   * the same job the LLM does, and an archived garment must never audition.
+   */
+  const wardrobeItems = allWardrobeItems
 
   const itemsById = useMemo(
     () => new Map(wardrobeItems.map((i) => [i.id, i])),

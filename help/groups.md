@@ -33,7 +33,11 @@ will find:
   though addressing the members directly. Written as: *You have known the others
   here for years; you do not explain yourselves to each other.*
 - **A Scenarios shelf** — chat-starters that members can reach for when a new
-  conversation is struck up.
+  conversation is struck up. A scenario that has fallen out of season may be
+  **archived** rather than deleted: it withdraws from the Group Scenarios heading
+  in every menu until you tick **Show archived**, and chats that already began
+  with it carry on undisturbed. An archived scenario can never be the Group's
+  default.
 - **A Knowledge cabinet** — reference material the members can consult and search,
   woven into their replies as the moment demands.
 - **A Core shelf** *(optional)* — a `Core/` folder of shared grounding. Whatever a
@@ -46,7 +50,10 @@ will find:
   one of them owning the coat. Move or copy a garment onto the shelf from the item's
   `⋮` menu in the Wardrobe dialog, choosing the Group under **Groups** — or select
   the Group itself from the dialog's **Wardrobe** dropdown to stock, tailor, and
-  prune the shelf directly. A group
+  prune the shelf directly — the same `⋮` menu offers **Archive**, which retires a
+  garment from the shelf's listings (and from any member choosing their own attire)
+  without destroying it; tick **Show archived** in the dialog to see and restore
+  what has been put away. A group
   garment marked **default** dresses every member at the opening of the curtain. It
   sits between a character's own armoire and the project's wardrobe in the tiers, so
   a member's personal copy of an item shadows the Group's; see

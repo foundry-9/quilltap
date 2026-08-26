@@ -522,6 +522,9 @@ export async function collectScriptorium(
   const scenarios = wardrobeTiers.map(({ tier, ids }) => ({
     tier,
     count: countLinksInFolder(ids, SCENARIOS_FOLDER),
+    // Same LIKE match the wardrobe tally uses — the flag is frontmatter, so
+    // an archived scenario is one whose file body contains `archived: true`.
+    archived: countLinksMatchingContent(ids, SCENARIOS_FOLDER, '%archived: true%'),
   }));
 
   // --- State cascade ------------------------------------------------------

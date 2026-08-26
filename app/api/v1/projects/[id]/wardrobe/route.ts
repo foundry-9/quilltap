@@ -29,6 +29,7 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { badRequest, notFound, serverError, created, successResponse } from '@/lib/api/responses';
+import { readIncludeArchived } from '@/lib/api/query-params';
 import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store';
 import {
   ensureProjectWardrobeFolder,
@@ -101,7 +102,7 @@ async function handlePostInstructions(
 
 export const GET = createContextParamsHandler<{ id: string }>(
   withActionDispatch({ instructions: handleGetInstructions },
-  async (_req: NextRequest, { repos }: RequestContext, { id }) => {
+  async (req: NextRequest, { repos }: RequestContext, { id }) => {
     const project = await repos.projects.findById(id);
     if (!project) return notFound('Project');
 
@@ -111,7 +112,10 @@ export const GET = createContextParamsHandler<{ id: string }>(
     }
     await ensureProjectWardrobeFolder(ensured.mountPointId);
 
-    const wardrobeItems = await readProjectWardrobe(ensured.mountPointId, true);
+    const wardrobeItems = await readProjectWardrobe(
+      ensured.mountPointId,
+      readIncludeArchived(req),
+    );
 
     return successResponse({
       mountPointId: ensured.mountPointId,

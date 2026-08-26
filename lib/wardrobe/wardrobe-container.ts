@@ -53,8 +53,22 @@ export function sameWardrobeContainer(
   return a.scope === b.scope && (a.id ?? null) === (b.id ?? null)
 }
 
-/** Collection endpoint for a container (list with GET, create with POST). */
-export function wardrobeCollectionUrl(container: WardrobeContainer): string {
+/**
+ * Collection endpoint for a container (list with GET, create with POST).
+ *
+ * `opts.includeArchived` appends the opt-in every wardrobe list endpoint
+ * honours. Building it here — the one place these URLs are spelled — is what
+ * keeps the param from drifting, and means a caller that simply doesn't ask
+ * gets the archived-free list by construction.
+ */
+export function wardrobeCollectionUrl(
+  container: WardrobeContainer,
+  opts?: { includeArchived?: boolean },
+): string {
+  return withWardrobeArchivedParam(baseCollectionUrl(container), opts?.includeArchived === true)
+}
+
+function baseCollectionUrl(container: WardrobeContainer): string {
   switch (container.scope) {
     case 'character':
       return `/api/v1/characters/${container.id}/wardrobe`
@@ -67,7 +81,13 @@ export function wardrobeCollectionUrl(container: WardrobeContainer): string {
   }
 }
 
+/** Append `?includeArchived=true` to any wardrobe URL, query string or not. */
+export function withWardrobeArchivedParam(url: string, includeArchived: boolean): string {
+  if (!includeArchived) return url
+  return `${url}${url.includes('?') ? '&' : '?'}includeArchived=true`
+}
+
 /** Item endpoint for a container (GET / PUT / DELETE one item). */
 export function wardrobeItemUrl(container: WardrobeContainer, itemId: string): string {
-  return `${wardrobeCollectionUrl(container)}/${itemId}`
+  return `${baseCollectionUrl(container)}/${itemId}`
 }

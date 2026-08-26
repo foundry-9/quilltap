@@ -39,6 +39,7 @@ old friends who have nothing to prove…
 - **`name`** — Display title used in the drop-down. Falls back to the filename when absent.
 - **`description`** — Optional one-line subtitle.
 - **`isDefault`** — Marks the general default. One file should claim it; alphabetically-first wins ties, with a soft warning.
+- **`archived`** — Set `true` to retire the scenario from the pickers without destroying it. Omit the key entirely to keep it in circulation; there is no need to write `archived: false`.
 
 The body that follows the closing `---` is what is spliced into the system prompt at chat creation. The customary `{{char}}` and `{{user}}` substitutions are honoured.
 
@@ -51,8 +52,23 @@ The **Scenarios** entry in the sidebar opens the dedicated page where you may:
 - **Rename** the underlying file via **Rename** — useful as scenarios mature past their working titles.
 - **Delete** a scenario with **Delete**, after a moment's confirmation. Chats that already used it are unaffected, since the scenario text is woven into the chat at the moment of its creation.
 - **Set the default** by clicking the radio button at the start of a row. The newly elected default has its frontmatter rewritten to `isDefault: true`, and any sibling that previously claimed the title is gently demoted.
+- **Archive** a scenario that has served its purpose but which you cannot quite bring yourself to burn. Consult **Retiring a Scenario Without Burning It**, below.
 
-On a generous, full-width page the **Edit**, **Rename**, and **Delete** buttons present themselves inline; should the window narrow to a sliver, the three retire behind a tidy **⋮** menu at the end of each row, a click away from service.
+On a generous, full-width page the **Edit**, **Rename**, **Archive**, and **Delete** buttons present themselves inline; should the window narrow to a sliver, the four retire behind a tidy **⋮** menu at the end of each row, a click away from service.
+
+## Retiring a Scenario Without Burning It
+
+Not every scenario that has outlived its usefulness deserves the incinerator. Some are merely *out of season* — the Christmas envelope in July, the opening scene of a story since concluded. For these, Quilltap offers **archiving**: a dust sheet rather than a bonfire.
+
+Click **Archive** on any row and the scenario withdraws from every drop-down and every manager list at once — the Salon's in-chat picker, the New Chat dialog, this very page. The file itself is untouched save for a single line of frontmatter, `archived: true`, added at the top.
+
+To see what you have put away, tick the **Show archived** box that sits beside **+ New scenario**. The retired scenarios return to the list, each wearing a small **Archived** badge, and you may **Restore** any of them with a click. The same box appears above the scenario drop-down in the Salon sidebar and on the new-chat form; tick it there and an archived scenario may be selected outright. Archiving *conceals*; it does not forbid.
+
+Three courtesies are worth knowing:
+
+- **A chat already using an archived scenario carries on undisturbed.** The scenario text was woven into the chat when it began; putting the original under a dust sheet cannot unweave it.
+- **An archived scenario can never be the default.** Should you archive the reigning default, the scope is left with none until you elect another (or restore the old one). Its radio button is disabled while it sleeps, and the new-chat form will not pre-select it under any circumstances.
+- **Untick the box and they vanish again**, as decorously as they arrived.
 
 If multiple files claim the default at once (perhaps after direct editing through the Scriptorium), the page surfaces a soft warning so you can settle the matter at your leisure.
 

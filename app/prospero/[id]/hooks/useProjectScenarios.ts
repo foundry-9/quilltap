@@ -8,63 +8,30 @@
  * scenarios + any soft warnings (e.g. multiple `isDefault: true` files), so
  * a single round trip is enough to keep the UI in sync.
  *
+ * Implements the shared `ScenarioMutator` contract so this hook and
+ * `useGeneralScenarios` stay interchangeable behind `ScenariosManager` — the
+ * on-disk shape is identical across scopes, only the mount point differs.
+ *
  * @module app/prospero/[id]/hooks/useProjectScenarios
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { withArchivedParam } from '@/components/scenarios/archived-query'
+import type { Scenario, ScenarioMutator } from '@/components/scenarios/types'
 
-export interface ProjectScenario {
-  path: string
-  filename: string
-  name: string
-  description?: string
-  isDefault: boolean
-  rawIsDefault: boolean
-  body: string
-  lastModified: string
-  createdAt: string
-  updatedAt: string
-}
+/** Re-exported under the historical names to keep external call sites working. */
+export type ProjectScenario = Scenario
+export type UseProjectScenariosReturn = ScenarioMutator
 
 interface ListResponse {
   mountPointId: string
-  scenarios: ProjectScenario[]
+  scenarios: Scenario[]
   warnings: string[]
 }
 
 interface MutateResponse {
-  scenarios: ProjectScenario[]
+  scenarios: Scenario[]
   warnings: string[]
-}
-
-export interface UseProjectScenariosReturn {
-  scenarios: ProjectScenario[]
-  warnings: string[]
-  loading: boolean
-  error: string | null
-  refresh: () => Promise<void>
-  createScenario: (input: {
-    filename: string
-    name?: string
-    description?: string
-    isDefault?: boolean
-    body: string
-  }) => Promise<{ ok: true; path: string } | { ok: false; error: string }>
-  updateScenario: (
-    scenarioPath: string,
-    input: {
-      name?: string
-      description?: string
-      isDefault?: boolean
-      body: string
-    },
-  ) => Promise<{ ok: true } | { ok: false; error: string }>
-  renameScenario: (
-    scenarioPath: string,
-    newFilename: string,
-  ) => Promise<{ ok: true; path: string } | { ok: false; error: string }>
-  deleteScenario: (scenarioPath: string) => Promise<{ ok: true } | { ok: false; error: string }>
-  setDefaultScenario: (scenarioPath: string) => Promise<{ ok: true } | { ok: false; error: string }>
 }
 
 function encodePathSegment(p: string): string {
@@ -74,17 +41,34 @@ function encodePathSegment(p: string): string {
   return encodeURIComponent(stripped)
 }
 
-export function useProjectScenarios(projectId: string): UseProjectScenariosReturn {
-  const [scenarios, setScenarios] = useState<ProjectScenario[]>([])
+export function useProjectScenarios(projectId: string): ScenarioMutator {
+  const [scenarios, setScenarios] = useState<Scenario[]>([])
   const [warnings, setWarnings] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
-  const refresh = useCallback(async () => {
-    setLoading(true)
+  const collectionUrl = withArchivedParam(
+    `/api/v1/projects/${projectId}/scenarios`,
+    showArchived,
+  )
+
+  const itemUrl = useCallback(
+    (scenarioPath: string, query = '') =>
+      withArchivedParam(
+        `/api/v1/projects/${projectId}/scenarios/${encodePathSegment(scenarioPath)}${query}`,
+        showArchived,
+      ),
+    [projectId, showArchived],
+  )
+
+  const refresh = useCallback<ScenarioMutator['refresh']>(async (opts) => {
+    // A silent refresh (workspace tab re-activation) keeps the current list on
+    // screen instead of flipping the manager back to its loading state.
+    if (!opts?.silent) setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/v1/projects/${projectId}/scenarios`)
+      const res = await fetch(collectionUrl)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body?.error || `Failed to load scenarios (${res.status})`)
@@ -97,10 +81,12 @@ export function useProjectScenarios(projectId: string): UseProjectScenariosRetur
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [collectionUrl])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount; setState lands inside async refresh()
+    // Initial fetch, and a refetch whenever "Show archived" flips — the server
+    // decides what's visible, so the toggle is a new request, not a filter.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState lands inside async refresh()
     void refresh()
   }, [refresh])
 
@@ -109,10 +95,10 @@ export function useProjectScenarios(projectId: string): UseProjectScenariosRetur
     setWarnings(data.warnings || [])
   }, [])
 
-  const createScenario = useCallback<UseProjectScenariosReturn['createScenario']>(
+  const createScenario = useCallback<ScenarioMutator['createScenario']>(
     async (input) => {
       try {
-        const res = await fetch(`/api/v1/projects/${projectId}/scenarios`, {
+        const res = await fetch(collectionUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(input),
@@ -127,20 +113,17 @@ export function useProjectScenarios(projectId: string): UseProjectScenariosRetur
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     },
-    [projectId, applyMutateResponse],
+    [collectionUrl, applyMutateResponse],
   )
 
-  const updateScenario = useCallback<UseProjectScenariosReturn['updateScenario']>(
+  const updateScenario = useCallback<ScenarioMutator['updateScenario']>(
     async (scenarioPath, input) => {
       try {
-        const res = await fetch(
-          `/api/v1/projects/${projectId}/scenarios/${encodePathSegment(scenarioPath)}`,
-          {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(input),
-          },
-        )
+        const res = await fetch(itemUrl(scenarioPath), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        })
         const body = await res.json().catch(() => ({}))
         if (!res.ok) {
           return { ok: false, error: body?.error || `Failed to update (${res.status})` }
@@ -151,20 +134,17 @@ export function useProjectScenarios(projectId: string): UseProjectScenariosRetur
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     },
-    [projectId, applyMutateResponse],
+    [itemUrl, applyMutateResponse],
   )
 
-  const renameScenario = useCallback<UseProjectScenariosReturn['renameScenario']>(
+  const renameScenario = useCallback<ScenarioMutator['renameScenario']>(
     async (scenarioPath, newFilename) => {
       try {
-        const res = await fetch(
-          `/api/v1/projects/${projectId}/scenarios/${encodePathSegment(scenarioPath)}?action=rename`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ newFilename }),
-          },
-        )
+        const res = await fetch(itemUrl(scenarioPath, '?action=rename'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newFilename }),
+        })
         const body = await res.json().catch(() => ({}))
         if (!res.ok) {
           return { ok: false, error: body?.error || `Failed to rename (${res.status})` }
@@ -175,16 +155,13 @@ export function useProjectScenarios(projectId: string): UseProjectScenariosRetur
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     },
-    [projectId, applyMutateResponse],
+    [itemUrl, applyMutateResponse],
   )
 
-  const deleteScenario = useCallback<UseProjectScenariosReturn['deleteScenario']>(
+  const deleteScenario = useCallback<ScenarioMutator['deleteScenario']>(
     async (scenarioPath) => {
       try {
-        const res = await fetch(
-          `/api/v1/projects/${projectId}/scenarios/${encodePathSegment(scenarioPath)}`,
-          { method: 'DELETE' },
-        )
+        const res = await fetch(itemUrl(scenarioPath), { method: 'DELETE' })
         const body = await res.json().catch(() => ({}))
         if (!res.ok) {
           return { ok: false, error: body?.error || `Failed to delete (${res.status})` }
@@ -195,10 +172,10 @@ export function useProjectScenarios(projectId: string): UseProjectScenariosRetur
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     },
-    [projectId, applyMutateResponse],
+    [itemUrl, applyMutateResponse],
   )
 
-  const setDefaultScenario = useCallback<UseProjectScenariosReturn['setDefaultScenario']>(
+  const setDefaultScenario = useCallback<ScenarioMutator['setDefaultScenario']>(
     async (scenarioPath) => {
       // "Set default" = PUT with the existing fields and `isDefault: true`.
       // Find the current scenario state in our local list to preserve other fields.
@@ -216,16 +193,38 @@ export function useProjectScenarios(projectId: string): UseProjectScenariosRetur
     [scenarios, updateScenario],
   )
 
+  const setScenarioArchived = useCallback<ScenarioMutator['setScenarioArchived']>(
+    async (scenarioPath, archived) => {
+      const current = scenarios.find(s => s.path === scenarioPath)
+      if (!current) {
+        return { ok: false, error: 'Scenario not found in current list' }
+      }
+      return updateScenario(scenarioPath, {
+        name: current.name,
+        ...(current.description !== undefined && { description: current.description }),
+        // An archived scenario can never be the default; drop the claim on the
+        // way in rather than leaving a dead `isDefault: true` in the file.
+        isDefault: archived ? false : current.isDefault,
+        archived,
+        body: current.body,
+      })
+    },
+    [scenarios, updateScenario],
+  )
+
   return {
     scenarios,
     warnings,
     loading,
     error,
+    showArchived,
+    setShowArchived,
     refresh,
     createScenario,
     updateScenario,
     renameScenario,
     deleteScenario,
     setDefaultScenario,
+    setScenarioArchived,
   }
 }

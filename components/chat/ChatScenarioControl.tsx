@@ -12,6 +12,10 @@
  * The current scene seeds the control: when its text matches a preset exactly,
  * that preset is preselected; otherwise the control opens on "Custom…" with
  * the text in the box, ready to edit.
+ *
+ * "Show archived" re-fetches all four tiers with `?includeArchived=true`; the
+ * flag is part of each TanStack query key, so the two answers cache separately
+ * instead of one overwriting the other.
  */
 
 import { useMemo, useState } from 'react'
@@ -20,6 +24,7 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { ScenarioSelect, hasAnyScenarioOptions } from '@/components/scenario/ScenarioSelect'
+import { withArchivedParam } from '@/components/scenarios/archived-query'
 import {
   scenarioSelectionToPayload,
   type CharacterScenario,
@@ -72,6 +77,7 @@ export function ChatScenarioControl({
     null,
   )
   const [saving, setSaving] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
 
   const characterIdsKey = useMemo(
     () => [...llmCharacterIds].sort().join(','),
@@ -79,37 +85,46 @@ export function ChatScenarioControl({
   )
 
   const { data: generalData } = useQuery({
-    queryKey: queryKeys.scenarios.general,
+    queryKey: queryKeys.scenarios.general(showArchived),
     queryFn: ({ signal }) =>
-      apiFetch<{ scenarios: GeneralScenarioOption[] }>('/api/v1/scenarios', { signal }),
+      apiFetch<{ scenarios: GeneralScenarioOption[] }>(
+        withArchivedParam('/api/v1/scenarios', showArchived),
+        { signal },
+      ),
     enabled,
   })
 
   const { data: projectData } = useQuery({
-    queryKey: queryKeys.scenarios.project(projectId ?? ''),
+    queryKey: queryKeys.scenarios.project(projectId ?? '', showArchived),
     queryFn: ({ signal }) =>
       apiFetch<{ scenarios: ProjectScenarioOption[] }>(
-        `/api/v1/projects/${projectId}/scenarios`,
+        withArchivedParam(`/api/v1/projects/${projectId}/scenarios`, showArchived),
         { signal },
       ),
     enabled: enabled && Boolean(projectId),
   })
 
   const { data: groupData } = useQuery({
-    queryKey: queryKeys.scenarios.group(characterIdsKey),
+    queryKey: queryKeys.scenarios.group(characterIdsKey, showArchived),
     queryFn: ({ signal }) =>
       apiFetch<{ groupScenarios: GroupScenarioGroup[] }>(
-        `/api/v1/groups/scenarios?characterIds=${encodeURIComponent(characterIdsKey)}`,
+        withArchivedParam(
+          `/api/v1/groups/scenarios?characterIds=${encodeURIComponent(characterIdsKey)}`,
+          showArchived,
+        ),
         { signal },
       ),
     enabled: enabled && characterIdsKey.length > 0,
   })
 
   const { data: characterData } = useQuery({
-    queryKey: queryKeys.scenarios.character(singleLlmCharacterId ?? ''),
+    queryKey: queryKeys.scenarios.character(singleLlmCharacterId ?? '', showArchived),
     queryFn: ({ signal }) =>
       apiFetch<{ scenarios: CharacterScenario[] }>(
-        `/api/v1/characters/${singleLlmCharacterId}/scenarios`,
+        withArchivedParam(
+          `/api/v1/characters/${singleLlmCharacterId}/scenarios`,
+          showArchived,
+        ),
         { signal },
       ),
     enabled: enabled && Boolean(singleLlmCharacterId),
@@ -251,6 +266,16 @@ export function ChatScenarioControl({
           aria-label="Scenario"
         />
       )}
+      <label className="flex items-center gap-2 mb-2 qt-text-secondary text-xs font-normal">
+        <input
+          type="checkbox"
+          checked={showArchived}
+          onChange={(e) => setShowArchived(e.target.checked)}
+          disabled={saving}
+          className="qt-checkbox"
+        />
+        Show archived
+      </label>
       {selection.kind === 'custom' ? (
         <textarea
           value={customText}

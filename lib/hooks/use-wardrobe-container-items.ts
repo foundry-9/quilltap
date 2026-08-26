@@ -22,6 +22,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import {
   wardrobeCollectionUrl,
+  withWardrobeArchivedParam,
   type WardrobeContainer,
 } from '@/lib/wardrobe/wardrobe-container'
 
@@ -43,10 +44,15 @@ export interface UseWardrobeContainerItemsResult {
  */
 export function useWardrobeContainerItems(
   container: WardrobeContainer | null,
+  opts?: {
+    /** Fold archived garments into `items`, flagged rather than hidden. */
+    includeArchived?: boolean
+  },
 ): UseWardrobeContainerItemsResult {
   const scope = container?.scope ?? null
   const containerId = container?.id ?? null
   const active = scope !== null && scope !== 'character'
+  const includeArchived = opts?.includeArchived === true
 
   const [items, setItems] = useState<WardrobeItem[]>([])
   const [resolutionItems, setResolutionItems] = useState<WardrobeItem[]>([])
@@ -62,10 +68,14 @@ export function useWardrobeContainerItems(
     }
     setLoading(true)
     try {
-      const url = wardrobeCollectionUrl({ scope, id: containerId })
+      const url = wardrobeCollectionUrl({ scope, id: containerId }, { includeArchived })
       const [containerRes, generalRes] = await Promise.all([
         fetch(url),
-        scope === 'general' ? Promise.resolve(null) : fetch('/api/v1/wardrobe'),
+        // The resolution pool always includes archived archetypes: a composite
+        // may bundle one, and an unresolvable component would render as a gap.
+        scope === 'general'
+          ? Promise.resolve(null)
+          : fetch(withWardrobeArchivedParam('/api/v1/wardrobe', true)),
       ])
       if (!containerRes.ok) throw new Error(`HTTP ${containerRes.status}`)
       const data = (await containerRes.json()) as { wardrobeItems?: WardrobeItem[] }
@@ -87,7 +97,7 @@ export function useWardrobeContainerItems(
       setLoading(false)
       setFetched(true)
     }
-  }, [active, scope, containerId])
+  }, [active, scope, containerId, includeArchived])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reload wraps an async fetch; the setState lands well after this effect tick

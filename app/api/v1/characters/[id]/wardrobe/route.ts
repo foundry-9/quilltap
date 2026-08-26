@@ -19,6 +19,7 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 import { notFound, serverError, created, conflict, successResponse } from '@/lib/api/responses';
+import { readIncludeArchived } from '@/lib/api/query-params';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 import { resolveWardrobeMount } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
@@ -112,10 +113,14 @@ export const GET = createContextParamsHandler<{ id: string }>(
         return notFound('Character');
       }
 
+      const includeArchived = readIncludeArchived(req);
       const scope = new URL(req.url).searchParams.get('scope');
       if (scope === 'group') {
         const groupMountPointIds = await resolveGroupMountPointIdsForCharacter(id);
-        const wardrobeItems = await repos.wardrobe.findArchetypesInMounts(groupMountPointIds);
+        const wardrobeItems = await repos.wardrobe.findArchetypesInMounts(
+          groupMountPointIds,
+          includeArchived,
+        );
         logger.debug('[Wardrobe v1] Group-tier wardrobe read', {
           characterId: id,
           groupMountCount: groupMountPointIds.length,
@@ -125,7 +130,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
         return NextResponse.json({ wardrobeItems });
       }
 
-      const wardrobeItems = await repos.wardrobe.findByCharacterId(id);
+      const wardrobeItems = await repos.wardrobe.findByCharacterId(id, includeArchived);
       return NextResponse.json({ wardrobeItems });
     } catch (error) {
       logger.error('[Wardrobe v1] Error fetching wardrobe items', { characterId: id }, error instanceof Error ? error : undefined);

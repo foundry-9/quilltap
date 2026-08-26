@@ -100,6 +100,29 @@ describe('chooseLLMOutfit — response parsing', () => {
     ).toEqual([]);
   });
 
+  it('drops an ARCHIVED id a model conjured out of nowhere', async () => {
+    // The pool handed to this task never contains archived garments, so an
+    // archived id can only arrive by hallucination — and pool membership is
+    // the gate that stops it. Archiving is the one rule the model gets no
+    // say in: no parameter, no override.
+    const parse = await parserFor();
+    expect(
+      parse('{"top":["shelved-cape"],"bottom":[],"footwear":[],"accessories":[]}').slots.top,
+    ).toEqual([]);
+  });
+
+  it('would not accept an archived garment even if one leaked into the pool', async () => {
+    // Belt-and-braces: pool membership is by id, so a leaked archived item
+    // WOULD be accepted here. This case documents that the pool is the only
+    // guard — which is why the filtering lives in `mergeWearablePool` and is
+    // pinned end-to-end in `__tests__/unit/lib/wardrobe/archived-never-auditions.test.ts`.
+    const leaked = [item('shelved-cape', ['top'], { archivedAt: '2026-02-01T00:00:00.000Z' })];
+    const parse = await parserFor(leaked);
+    expect(
+      parse('{"top":["shelved-cape"],"bottom":[],"footwear":[],"accessories":[]}').slots.top,
+    ).toEqual(['shelved-cape']);
+  });
+
   it('drops an id whose types do not cover the slot it was placed in', async () => {
     const parse = await parserFor();
     // own-boots is footwear; the model put it in `top`.

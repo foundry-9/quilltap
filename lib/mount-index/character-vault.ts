@@ -217,8 +217,26 @@ export function buildSystemPromptFile(p: CharacterSystemPrompt): string {
   return `${frontmatter}${p.content}`;
 }
 
+/**
+ * Serialize one character scenario back to its `Scenarios/*.md` file.
+ *
+ * The heading carries the title, as it always has. A frontmatter block is
+ * emitted only when there is something to put in it — `archived: true` and/or
+ * a `description` — so files that use neither don't churn on every projection.
+ * (Before this, `description` was parsed but never written back, so the next
+ * projection silently dropped it.) The scenario's `id` is a stable UUID hashed
+ * from the file path, so archiving must never rename the file.
+ */
 export function buildScenarioFile(s: CharacterScenario): string {
-  return `# ${s.title}\n\n${s.content}`;
+  const frontmatter: string[] = [];
+  if (s.description && s.description.trim().length > 0) {
+    frontmatter.push(`description: ${escapeYaml(s.description.trim())}`);
+  }
+  if (s.archived) {
+    frontmatter.push('archived: true');
+  }
+  const fmBlock = frontmatter.length > 0 ? `---\n${frontmatter.join('\n')}\n---\n\n` : '';
+  return `${fmBlock}# ${s.title}\n\n${s.content}`;
 }
 
 export function sanitizeFileName(name: string): string {

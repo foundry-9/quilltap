@@ -7,12 +7,20 @@
  * here rather than in either surface's own module.
  */
 
+/**
+ * Suffix appended to a dropdown option for an archived entry. A native
+ * `<option>` can't hold a badge element, so the marker has to be text.
+ */
+export const ARCHIVED_OPTION_SUFFIX = ' (archived)'
+
 /** A scenario stored on the character record itself, addressed by UUID. */
 export interface CharacterScenario {
   id: string
   title: string
   content: string
   description?: string
+  /** Hidden from the picker unless the surface asked for archived entries. */
+  archived?: boolean
 }
 
 /**
@@ -26,6 +34,8 @@ export interface ProjectScenarioOption {
   name: string
   description?: string
   isDefault: boolean
+  /** Hidden from the picker unless the surface asked for archived entries. */
+  archived?: boolean
   body: string
 }
 
@@ -40,6 +50,8 @@ export interface GeneralScenarioOption {
   name: string
   description?: string
   isDefault: boolean
+  /** Hidden from the picker unless the surface asked for archived entries. */
+  archived?: boolean
   body: string
 }
 
@@ -57,6 +69,8 @@ export interface GroupScenarioOption {
   name: string
   description?: string
   isDefault: boolean
+  /** Hidden from the picker unless the surface asked for archived entries. */
+  archived?: boolean
   body: string
 }
 

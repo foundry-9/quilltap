@@ -1,8 +1,10 @@
 # Archived Scenarios and Wardrobe items (`archived` frontmatter)
 
-> **Status:** Plan for a future Claude Code session to execute. Not yet implemented.
+> **Status:** IMPLEMENTED (4.9-dev). Kept as the design record — the decisions in §3 are the
+> contract the code holds to, and §7's checklist is still the way to verify a change here by hand.
+> Deviations from the plan as written are noted inline with **[as built]**.
 > **Scope:** An `archived: true/false` frontmatter property on Scenario files and Wardrobe-item files (absence = `false`). Archived entries disappear from every normal list and dropdown; every listing interface gains a "Show archived" checkbox that reveals them and lets the human select them anyway. The Green Room's outfit-selection LLM must *never* see or choose an archived wardrobe item — no override.
-> **Prerequisite:** land the in-flight `Wardrobe/instructions.md` working-tree change first — it touches the same four wardrobe routes, `vault-projection.ts`, and `wardrobe-control-dialog.tsx`, and this plan cites its patterns.
+> **Prerequisite:** land the in-flight `Wardrobe/instructions.md` working-tree change first — it touches the same four wardrobe routes, `vault-projection.ts`, and `wardrobe-control-dialog.tsx`, and this plan cites its patterns. *(Landed in `b86bb1a58` before this work began.)*
 
 ---
 
@@ -47,6 +49,13 @@ A wardrobe item or scenario markdown file may carry `archived: true` in its YAML
 6. **Archived items must survive vault projection.** `projectArrayIntoVaultFolder` ([vault-overlay/vault-projection.ts](../../../lib/database/repositories/vault-overlay/vault-projection.ts)) deletes any file in the folder not present in the incoming array. Every write path that projects wardrobe items or character scenarios must fetch with `includeArchived: true` so archived files ride along flagged, not get swept. **This is the landmine of the whole feature — an "archived" item silently deleted on the next save is data loss.** The in-flight `preserveFileNames` option added for `instructions.md` is the precedent for exempting things from the sweep.
 7. **All four scenario scopes are in scope** — general, project, group (file-backed via `scenarios-common.ts`) *and* character scenarios (vault `Scenarios/` files). "Doesn't show up anywhere" includes the character optgroup of the picker. `parseScenarioFile` already parses frontmatter, so this is additive, but the character-scenario serializer emits no frontmatter today — see Phase C.
 8. **Checkbox copy:** "Show archived" (steampunk voice belongs in help docs, not a checkbox label; existing wardrobe UI uses plain "Archived" badges).
+
+**[as built] Two additions to decision 6 that the plan didn't anticipate:**
+
+- The *character-scenario* projection has the same landmine as the wardrobe one, and the fix is the same shape but lives elsewhere: `readCharacterVaultScenarios` keeps archived entries in `character.scenarios`, and `GET /api/v1/characters/[id]/scenarios` filters the **response**. The array itself must stay complete, because `applyManagedFieldWrites` projects it back over the folder. Both directions are pinned in `__tests__/unit/lib/database/repositories/character-scenarios-archived.test.ts`.
+- On the wardrobe side the projection was already safe — `readMountItems` reads the vault raw rather than through the archived-free `readSharedWardrobe` — but nothing said so. `__tests__/unit/lib/wardrobe/archived-survives-projection.test.ts` now pins it, including the failure case (filter the array first and the archived file *is* swept).
+
+**[as built] Decision 5 extends to implicit defaults.** `character.scenarios[0]` is used as the scene when a chat names none (three call sites across the Salon and Help prompt builders). An archived scenario at index 0 must not become the scene by accident, so those now go through `firstActiveScenarioContent()` in `lib/characters/active-scenarios.ts`.
 
 ## 4. Architecture map — scenarios (the greenfield half)
 

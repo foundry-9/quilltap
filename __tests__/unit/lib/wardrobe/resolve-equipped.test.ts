@@ -265,4 +265,22 @@ describe('resolveEquippedOutfitForCharacter', () => {
     expect(resolved.outfitValues.hair).toEqual([])
     expect(resolved.leafItemsBySlot.hair).toEqual([])
   })
+
+  // Archiving hides a garment from the pickers and bars it from the LLM's
+  // candidate list. It does NOT undress anyone: a character wearing an item
+  // that is archived mid-chat keeps wearing it until someone takes it off, so
+  // this read asks for archived items on purpose.
+  it('still resolves a garment archived while it was being worn', async () => {
+    const coat = { ...makeItem('coat-id', 'Travelling coat', ['top']), archivedAt: NOW }
+    const repos = makeRepos([coat])
+
+    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, {
+      ...emptySlots(),
+      top: ['coat-id'],
+    })
+
+    expect(resolved.outfitValues.top).toEqual(['Travelling coat'])
+    // The read must opt into archived items, or the title resolves to nothing.
+    expect(repos.wardrobe.findByCharacterId).toHaveBeenCalledWith(CHAR_ID, true)
+  })
 })

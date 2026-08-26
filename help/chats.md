@@ -81,6 +81,8 @@ Between the moment you press **Start** and the moment the room is yours to speak
 
 Rather than leave you drumming your fingers at a blank screen, Quilltap now raises a small status dialog — **The Green Room** — for the duration. It reports, in plain terms, what is presently afoot; and as each character finishes deciding, it displays their chosen ensemble across the five slots (**Top**, **Bottom**, **Footwear**, **Accessories**, and **Hair**), so you may see at a glance what everyone has elected to wear. A blank **Hair** panel means nothing more alarming than hair left in its natural state. A running log beneath keeps a tidy record of the proceedings.
 
+One quiet rule governs those wardrobe consultations: **an archived garment is never offered.** Whatever a character may be shown, it is drawn only from garments still in circulation — archived pieces are withheld from the candidate list entirely, in every tier, with no way to ask otherwise. (See *Wardrobe* for how to archive and restore.)
+
 The dialog cannot be waved away while the work is underway — there would be nothing to return to — and it retires of its own accord the instant the conversation is ready for you. The one exception is trouble: should something go amiss, it will say so and offer you a **Close** button. (This attends fresh conversations and the *Continue Elsewhere* manoeuvre; autonomous rooms keep their own counsel.)
 
 ### Taking a Character's Chair — "Play As"

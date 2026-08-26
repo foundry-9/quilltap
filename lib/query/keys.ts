@@ -49,14 +49,22 @@ export const queryKeys = {
    * Scenario option lists, per tier. Read by the New Chat dialog and the
    * Salon sidebar's in-chat picker; the files behind them live in document
    * stores, so these are cached per scope rather than per chat.
+   *
+   * `includeArchived` is part of every key: the two lists are different
+   * server responses, not one list filtered two ways, so they must not share
+   * a cache entry. Prefix invalidation on `scenarios.all` still sweeps both.
    */
   scenarios: {
     all: ['scenarios'] as const,
-    general: ['scenarios', 'general'] as const,
-    project: (projectId: string) => ['scenarios', 'project', projectId] as const,
+    general: (includeArchived = false) =>
+      ['scenarios', 'general', { includeArchived }] as const,
+    project: (projectId: string, includeArchived = false) =>
+      ['scenarios', 'project', projectId, { includeArchived }] as const,
     /** Keyed by the comma-joined, sorted character IDs the groups derive from. */
-    group: (characterIdsKey: string) => ['scenarios', 'group', characterIdsKey] as const,
-    character: (characterId: string) => ['scenarios', 'character', characterId] as const,
+    group: (characterIdsKey: string, includeArchived = false) =>
+      ['scenarios', 'group', characterIdsKey, { includeArchived }] as const,
+    character: (characterId: string, includeArchived = false) =>
+      ['scenarios', 'character', characterId, { includeArchived }] as const,
   },
   groups: {
     all: ['groups'] as const,

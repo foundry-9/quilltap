@@ -9,10 +9,16 @@
  * selection, and reports a new selection. What the surrounding surface does
  * with free text (New Chat layers notes beneath a preset; the sidebar swaps in
  * a textarea only for "Custom…") is the surface's own business.
+ *
+ * Archived entries only reach this component when the surface asked the server
+ * for them; when they do, they're marked "(archived)" and remain selectable —
+ * archiving hides an entry from the default view, it does not forbid a human
+ * who has deliberately gone looking for it.
  */
 
 import { useMemo } from 'react'
 import {
+  ARCHIVED_OPTION_SUFFIX,
   CUSTOM_SCENARIO_VALUE,
   GENERAL_SCENARIO_PREFIX,
   GROUP_SCENARIO_PREFIX,
@@ -101,6 +107,7 @@ export function ScenarioSelect({
             <option key={`project:${s.path}`} value={`${PROJECT_SCENARIO_PREFIX}${s.path}`}>
               {s.name}
               {s.isDefault ? ' (project default)' : ''}
+              {s.archived ? ARCHIVED_OPTION_SUFFIX : ''}
               {s.description ? ` — ${s.description}` : ''}
             </option>
           ))}
@@ -112,6 +119,7 @@ export function ScenarioSelect({
             <option key={`general:${s.path}`} value={`${GENERAL_SCENARIO_PREFIX}${s.path}`}>
               {s.name}
               {s.isDefault ? ' (general default)' : ''}
+              {s.archived ? ARCHIVED_OPTION_SUFFIX : ''}
               {s.description ? ` — ${s.description}` : ''}
             </option>
           ))}
@@ -123,6 +131,7 @@ export function ScenarioSelect({
             <option key={`group:${groupId}:${s.path}`} value={`${GROUP_SCENARIO_PREFIX}${groupId}:${s.path}`}>
               {s.name}
               {s.isDefault ? ' (group default)' : ''}
+              {s.archived ? ARCHIVED_OPTION_SUFFIX : ''}
               {s.description ? ` — ${s.description}` : ''}
             </option>
           ))}
@@ -134,6 +143,7 @@ export function ScenarioSelect({
             <option key={s.id} value={s.id}>
               {s.title}
               {characterDefaultScenarioId === s.id ? ' (character default)' : ''}
+              {s.archived ? ARCHIVED_OPTION_SUFFIX : ''}
               {s.description ? ` — ${s.description}` : ''}
             </option>
           ))}

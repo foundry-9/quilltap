@@ -5,6 +5,8 @@
  *                                   "Quilltap General" mount's `Scenarios/`
  *                                   folder, with frontmatter parsed and
  *                                   default-conflict resolution applied.
+ *                                   `?includeArchived=true` also returns
+ *                                   archived scenarios (hidden by default).
  * POST /api/v1/scenarios          — create a new scenario file.
  *                                   Body: { filename, name?, description?,
  *                                   isDefault?, body }.
@@ -21,6 +23,7 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, created } from '@/lib/api/responses';
+import { readIncludeArchived } from '@/lib/api/query-params';
 import {
   ensureGeneralScenariosFolder,
   listGeneralScenarios,
@@ -40,6 +43,7 @@ const createScenarioSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(500).optional(),
   isDefault: z.boolean().optional(),
+  archived: z.boolean().optional(),
   body: z.string().min(1, 'Scenario body cannot be empty'),
 });
 
@@ -48,8 +52,9 @@ const createScenarioSchema = z.object({
 // ============================================================================
 
 export const GET = createContextHandler(
-  async (_req: NextRequest, _ctx: RequestContext) => {
+  async (req: NextRequest, _ctx: RequestContext) => {
     try {
+      const includeArchived = readIncludeArchived(req);
       const ensured = await ensureGeneralScenariosFolder();
       if (!ensured.mountPointId) {
         // Pre-migration race: report empty list rather than 500.
@@ -59,7 +64,7 @@ export const GET = createContextHandler(
           warnings: [],
         });
       }
-      const { mountPointId, scenarios, warnings } = await listGeneralScenarios();
+      const { mountPointId, scenarios, warnings } = await listGeneralScenarios({ includeArchived });
       return NextResponse.json({ mountPointId, scenarios, warnings });
     } catch (error) {
       logger.error(
@@ -108,6 +113,7 @@ export const POST = createContextHandler(
         name: validated.name,
         description: validated.description,
         isDefault: validated.isDefault,
+        archived: validated.archived,
         body: validated.body,
       });
 
@@ -124,7 +130,7 @@ export const POST = createContextHandler(
         isDefault: validated.isDefault === true,
       });
 
-      const fresh = await listGeneralScenarios();
+      const fresh = await listGeneralScenarios({ includeArchived: validated.archived === true });
       return created({
         mountPointId: fresh.mountPointId,
         path: relativePath,

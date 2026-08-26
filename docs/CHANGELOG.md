@@ -4,6 +4,45 @@
 
 ### 4.9-dev
 
+#### Added: archivable scenarios and wardrobe items
+
+Scenarios and wardrobe items can now be archived instead of deleted. An archived entry disappears from
+every list, dropdown, and picker by default; each listing surface gained a "Show archived" checkbox that
+reveals it (badged) and still lets you select it. Archiving hides, it does not forbid — with one exception:
+the outfit-selection LLM at chat start never receives archived garments, in any tier, with no parameter and
+no override. Implements `docs/developer/features/archived-scenarios-and-wardrobe.md`.
+
+Scenarios use an `archived: true` frontmatter key across all four scopes — general, project, group (files in
+a `Scenarios/` folder) and character (vault `Scenarios/*.md`). The key is omitted entirely when a scenario is
+active; a hand-written `archived: true` with nothing else works. An archived scenario can never win
+default-conflict resolution or be auto-selected in the New Chat dialog, even when it is being listed.
+Existing chats are unaffected: `resolveScenarioBody` ignores the flag, so a chat whose scenario was archived
+mid-life keeps its scenario text.
+
+Wardrobe archiving already existed in the persistence layer with no way to reach it. The four item routes
+(character, general, project, group) now accept `archived: boolean`, translated to `archivedAt` by one shared
+helper — archiving is idempotent and does not reset an existing timestamp — and `repos.wardrobe.unarchive`
+finally has a caller. The four collection routes accept `?includeArchived=true`; project and group wardrobe
+lists previously returned archived items unconditionally and filtered client-side. Archive/Restore is in the
+Wardrobe dialog's per-item menu and on the project wardrobe card. A worn garment archived mid-chat stays worn.
+
+Filtering is server-side throughout: the checkboxes change the fetch, not a client-side pass, so a picker that
+never passes the parameter is safe by construction. The two client-side filters that existed (the wardrobe
+dialog, the outfit composer) were removed rather than left as a second place for the rule to drift.
+
+Other changes in the same work:
+
+- Character scenario files now round-trip their `description` frontmatter. It was parsed on read but never
+  written back, so the next vault projection silently dropped it.
+- The New Chat dialog now passes group scenarios through to the form. `useNewChat` fetched them and
+  `NewChatForm` accepted them, but nothing connected the two, so the Group Scenarios optgroup never appeared.
+- `useProjectScenarios` and the character edit form's local `CharacterScenario` were duplicate declarations of
+  shared types; both now alias the canonical ones, so a new field can't be added to one and missed on the other.
+- The Almanack's Scriptorium table splits scenario counts into total and archived, matching what the wardrobe
+  row already did.
+- `qtap-export.schema.json` declares `WardrobeItem.archivedAt` and the character-scenario `archived` flag, both
+  of which previously survived only via `additionalProperties: true`.
+
 #### Added: feature plan for archivable scenarios and wardrobe items
 
 New spec at `docs/developer/features/archived-scenarios-and-wardrobe.md`: an `archived: true/false`

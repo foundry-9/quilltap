@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useCreationProgress } from '@/components/providers/creation-progress-provider'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { withArchivedParam } from '@/components/scenarios/archived-query'
 import type {
   Character,
   ConnectionProfile,
@@ -18,6 +19,17 @@ import type {
   UserControlledCharacter,
 } from '../types'
 import type { TimestampConfig } from '@/lib/schemas/types'
+
+/** The wire shape every file-backed scenario tier returns. */
+interface ScenarioPayload {
+  path: string
+  filename: string
+  name: string
+  description?: string
+  isDefault: boolean
+  archived?: boolean
+  body: string
+}
 
 interface UseNewChatOptions {
   initialCharacterId?: string
@@ -86,6 +98,13 @@ interface UseNewChatReturn {
   /** Currently chosen project ID, or null for "no project (general)". */
   selectedProjectId: string | null
   setSelectedProjectId: (id: string | null) => void
+  /**
+   * "Show archived" for the scenario picker. Flipping it refetches every
+   * scenario tier with `?includeArchived=true` rather than filtering what's
+   * already loaded — the server owns the hiding.
+   */
+  showArchivedScenarios: boolean
+  setShowArchivedScenarios: (next: boolean) => void
   // Form state
   selectedCharacters: SelectedCharacter[]
   setSelectedCharacters: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
@@ -167,6 +186,7 @@ export function useNewChat({
   // re-syncs whenever the prop changes — the same props-as-state pattern
   // NewChatModal previously implemented locally for continuation mode.
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId ?? null)
+  const [showArchivedScenarios, setShowArchivedScenarios] = useState(false)
   const [lastSeenProjectIdProp, setLastSeenProjectIdProp] = useState<string | undefined>(projectId)
   if (projectId !== lastSeenProjectIdProp) {
     setLastSeenProjectIdProp(projectId)
@@ -203,14 +223,17 @@ export function useNewChat({
           fetch('/api/v1/characters'),
           fetch('/api/v1/connection-profiles'),
           fetch('/api/v1/image-profiles'),
-          fetch('/api/v1/scenarios'),
+          fetch(withArchivedParam('/api/v1/scenarios', showArchivedScenarios)),
           fetch('/api/v1/settings/chat'),
           fetch('/api/v1/projects'),
           fetch('/api/v1/roleplay-templates'),
         ]
         if (selectedProjectId) {
           requests.push(fetch(`/api/v1/projects/${selectedProjectId}`))
-          requests.push(fetch(`/api/v1/projects/${selectedProjectId}/scenarios`))
+          requests.push(fetch(withArchivedParam(
+            `/api/v1/projects/${selectedProjectId}/scenarios`,
+            showArchivedScenarios,
+          )))
         }
         if (initialCharacterId) {
           requests.push(fetch(`/api/v1/characters/${initialCharacterId}`))
@@ -219,7 +242,10 @@ export function useNewChat({
         // Fetch group scenarios when LLM characters are selected
         if (selectedLlmCharacterIds.length > 0) {
           requests.push(
-            fetch(`/api/v1/groups/scenarios?characterIds=${selectedLlmCharacterIds.join(',')}`)
+            fetch(withArchivedParam(
+              `/api/v1/groups/scenarios?characterIds=${selectedLlmCharacterIds.join(',')}`,
+              showArchivedScenarios,
+            ))
           )
         }
 
@@ -270,12 +296,13 @@ export function useNewChat({
         let loadedGeneralScenarios: GeneralScenarioOption[] = []
         if (generalScenariosRes.ok) {
           const data = await generalScenariosRes.json()
-          loadedGeneralScenarios = (data.scenarios || []).map((s: { path: string; filename: string; name: string; description?: string; isDefault: boolean; body: string }) => ({
+          loadedGeneralScenarios = (data.scenarios || []).map((s: ScenarioPayload) => ({
             path: s.path,
             filename: s.filename,
             name: s.name,
             ...(s.description !== undefined && { description: s.description }),
             isDefault: s.isDefault,
+            archived: s.archived === true,
             body: s.body,
           }))
         } else {
@@ -326,12 +353,13 @@ export function useNewChat({
         if (projectScenariosRes && projectScenariosRes.ok) {
           const data = await projectScenariosRes.json()
           // Server returns full ParsedProjectScenario[]; pick the fields the UI needs.
-          loadedProjectScenarios = (data.scenarios || []).map((s: { path: string; filename: string; name: string; description?: string; isDefault: boolean; body: string }) => ({
+          loadedProjectScenarios = (data.scenarios || []).map((s: ScenarioPayload) => ({
             path: s.path,
             filename: s.filename,
             name: s.name,
             ...(s.description !== undefined && { description: s.description }),
             isDefault: s.isDefault,
+            archived: s.archived === true,
             body: s.body,
           }))
         } else if (projectScenariosRes && !projectScenariosRes.ok) {
@@ -357,6 +385,7 @@ export function useNewChat({
                 name: s.name,
                 ...(s.description !== undefined && { description: s.description }),
                 isDefault: s.isDefault,
+                archived: s.archived === true,
                 body: s.body,
               })
             }
@@ -438,10 +467,14 @@ export function useNewChat({
         // Project default wins over general default for pre-selection. When a
         // project default exists, seed `projectScenarioPath`; otherwise fall
         // back to the general default.
+        // `!s.archived` is belt-and-braces: the server already refuses to let
+        // an archived file win default resolution, but with "Show archived"
+        // ticked an archived row carrying a stale `isDefault: true` would
+        // otherwise be a candidate for auto-selection here.
         const projectDefaultScenarioPath =
-          loadedProjectScenarios.find((s) => s.isDefault)?.path ?? null
+          loadedProjectScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
         const generalDefaultScenarioPath =
-          loadedGeneralScenarios.find((s) => s.isDefault)?.path ?? null
+          loadedGeneralScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
         const seededGeneralScenarioPath = projectDefaultScenarioPath
           ? null
           : generalDefaultScenarioPath
@@ -631,6 +664,7 @@ export function useNewChat({
     initialImageProfileId,
     initialAvatarGenerationEnabled,
     selectedLlmCharacterIdsKey,
+    showArchivedScenarios,
   ])
 
   // When exactly one LLM character is selected (and it wasn't seeded), propagate their defaults.
@@ -900,6 +934,8 @@ export function useNewChat({
     availableProjects,
     selectedProjectId,
     setSelectedProjectId,
+    showArchivedScenarios,
+    setShowArchivedScenarios,
     selectedCharacters,
     setSelectedCharacters,
     state,

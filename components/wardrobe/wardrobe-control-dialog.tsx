@@ -199,14 +199,22 @@ function WardrobeControlDialogInner({
   )
   const isCharacterScope = selectedContainer?.scope === 'character'
   const selectedCharacterId = isCharacterScope ? selectedContainer.id : null
+  /**
+   * "Show archived". Flipping it re-fetches every tier with
+   * `?includeArchived=true` rather than filtering what's already loaded — the
+   * server owns the hiding, so this list can never disagree with the API.
+   */
+  const [showArchived, setShowArchived] = useState(false)
   const { items, loading: itemsLoading, reload: reloadItems, projectId: dialogProjectId } =
-    useCharacterWardrobeItems(selectedCharacterId, { chatId })
+    useCharacterWardrobeItems(selectedCharacterId, { chatId, includeArchived: showArchived })
   const {
     items: containerItems,
     resolutionItems: containerResolutionItems,
     loading: containerItemsLoading,
     reload: reloadContainerItems,
-  } = useWardrobeContainerItems(isCharacterScope ? null : selectedContainer)
+  } = useWardrobeContainerItems(isCharacterScope ? null : selectedContainer, {
+    includeArchived: showArchived,
+  })
 
   /** Refresh whichever wardrobe view is on display. */
   const reloadActiveItems = useCallback(async (): Promise<void> => {
@@ -453,7 +461,9 @@ function WardrobeControlDialogInner({
     const sorted = [...listItems].sort((a, b) => a.title.localeCompare(b.title))
     const term = titleFilter.trim().toLowerCase()
     return sorted.filter((i) => {
-      if (i.archivedAt) return false
+      // No archived filter here on purpose: the fetch already omitted them
+      // unless "Show archived" is ticked, and a second client-side pass would
+      // be a place for the two rules to drift apart.
       const isComposite = i.componentItemIds.length > 0
       if (kindFilter === 'items' && isComposite) return false
       if (kindFilter === 'outfits' && !isComposite) return false
@@ -491,6 +501,34 @@ function WardrobeControlDialogInner({
       } finally {
         setUpdatingDefaultId(null)
       }
+    },
+    [selectedContainer, isCharacterScope, reloadActiveItems],
+  )
+
+  /**
+   * Archive or restore one garment. Archiving hides it from the pickers and
+   * bars it from the outfit-selection LLM's candidate list; it does NOT strip
+   * it off a character already wearing it, and does not forbid a human who has
+   * ticked "Show archived" from putting it back on.
+   */
+  const handleToggleArchived = useCallback(
+    async (item: WardrobeItem) => {
+      if (!selectedContainer) return
+      const url = isCharacterScope
+        ? item.characterId
+          ? `/api/v1/characters/${item.characterId}/wardrobe/${item.id}`
+          : `/api/v1/wardrobe/${item.id}`
+        : wardrobeItemUrl(selectedContainer, item.id)
+      const result = await fetchJson<{ wardrobeItem: WardrobeItem }>(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: !item.archivedAt }),
+      })
+      if (!result.ok) {
+        showErrorToast(result.error || 'Failed to update item')
+        return
+      }
+      await reloadActiveItems()
     },
     [selectedContainer, isCharacterScope, reloadActiveItems],
   )
@@ -1186,6 +1224,15 @@ function WardrobeControlDialogInner({
                   </button>
                 ))}
               </div>
+              <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={showArchived}
+                  onChange={(e) => setShowArchived(e.target.checked)}
+                  className="qt-checkbox"
+                />
+                Show archived
+              </label>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-1 max-h-[55vh] pb-12">
@@ -1217,6 +1264,7 @@ function WardrobeControlDialogInner({
                     addAction={useFittingActions ? 'add' : 'layer'}
                     isUpdatingDefault={updatingDefaultId === item.id}
                     onToggleDefault={handleToggleDefault}
+                    onToggleArchived={handleToggleArchived}
                     onEdit={(it) => setEditingItem(it)}
                     onDuplicate={handleDuplicate}
                     onMove={(it) => {

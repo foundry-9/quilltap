@@ -10,6 +10,7 @@
 import type { Character } from '@/lib/schemas/types'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
 import { buildIdentityReinforcement } from '@/lib/chat/context/system-prompt-builder'
+import { firstActiveScenarioContent } from '@/lib/characters/active-scenarios'
 import type { HelpPageContext } from './context-resolver'
 import { logger } from '@/lib/logger'
 
@@ -46,7 +47,7 @@ export function buildHelpChatSystemPrompt(options: HelpSystemPromptOptions): str
     user: userName,
     description: character.description || '',
     personality: character.personality || '',
-    scenario: character.scenarios?.[0]?.content || '',
+    scenario: firstActiveScenarioContent(character.scenarios),
     persona: userCharacter?.description || '',
   }
 

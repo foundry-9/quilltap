@@ -9,6 +9,7 @@ import type { Character, ChatParticipantBase, TimestampConfig } from '@/lib/sche
 import { type ParticipantStatus } from '@/lib/schemas/types'
 import { calculateCurrentTimestamp, shouldInjectTimestamp } from '@/lib/chat/timestamp-utils'
 import { processTemplate, type TemplateContext } from '@/lib/templates/processor'
+import { firstActiveScenarioContent } from '@/lib/characters/active-scenarios'
 
 /**
  * Universal formatting note appended to every character's system prompt,
@@ -157,7 +158,7 @@ export function buildIdentityStack(options: BuildIdentityStackOptions): string {
     user: userCharacter?.name || 'User',
     description: character.description || '',
     personality: character.personality || '',
-    scenario: scenarioText || character.scenarios?.[0]?.content || '',
+    scenario: scenarioText || firstActiveScenarioContent(character.scenarios),
     persona: userCharacter?.description || '',
   }
 
@@ -369,7 +370,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
     user: userCharacter?.name || 'User',
     description: character.description || '',
     personality: character.personality || '',
-    scenario: scenarioText || character.scenarios?.[0]?.content || '',
+    scenario: scenarioText || firstActiveScenarioContent(character.scenarios),
     persona: userCharacter?.description || '',
   }
 

@@ -14,6 +14,7 @@
  *   name: Optional Display Name        # overrides filename (without .md) as the title
  *   description: Optional subtitle      # one-line summary shown in the new-chat dropdown
  *   isDefault: true                     # marks this as the scope's default (one wins)
+ *   archived: true                      # hidden from every list unless "Show archived"
  *   ---
  *   <body — delivered to the LLM as `chat.scenarioText`>
  *
@@ -21,6 +22,13 @@
  * alphabetically-first filename wins. Losers are reported as `isDefault: false`
  * in the API response; the file frontmatter on disk is NOT auto-rewritten (the
  * surfaced warning lets the user fix it).
+ *
+ * Archived semantics: `archived: true` hides a scenario from every list and
+ * picker unless the caller opts in with `includeArchived`. Absence of the key
+ * means active — an archived file is written with `archived: true`, an active
+ * one omits the key entirely. Archived scenarios never win default resolution,
+ * even when they are being listed. `resolveScenarioBody()` deliberately ignores
+ * the flag so a chat whose scenario was archived mid-life keeps resolving.
  *
  * @module mount-index/scenarios-common
  */
@@ -51,6 +59,8 @@ export interface ParsedScenario {
   isDefault: boolean;
   /** True when the file's frontmatter set `isDefault: true`, regardless of conflict resolution. */
   rawIsDefault: boolean;
+  /** True when the file's frontmatter set `archived: true`. Absence means active. */
+  archived: boolean;
   /** Scenario body — content after frontmatter, trimmed. */
   body: string;
   lastModified: string;
@@ -61,6 +71,25 @@ export interface ParsedScenario {
 export interface ListScenariosResult {
   scenarios: ParsedScenario[];
   warnings: string[];
+}
+
+/**
+ * Coerce a frontmatter `archived` value. Truthy only for a real `true` or the
+ * string `"true"` — mirrors how `isDefault` is read. Absence means active.
+ */
+function isArchivedFrontmatter(data: Record<string, unknown> | null): boolean {
+  if (!data) return false;
+  return data.archived === true || data.archived === 'true';
+}
+
+/**
+ * Read the `archived` flag straight off raw file content. PUT handlers use this
+ * to preserve the flag when the request body doesn't mention `archived` — the
+ * serializer rewrites the whole file, so an unmentioned flag would otherwise be
+ * silently dropped and the scenario would un-archive itself on the next edit.
+ */
+export function isScenarioContentArchived(content: string): boolean {
+  return isArchivedFrontmatter(parseFrontmatter(content).data);
 }
 
 /**
@@ -84,6 +113,7 @@ export function parseScenarioDoc(doc: DocMountDocument): ParsedScenario | null {
     }
     rawIsDefault = parsed.data.isDefault === true;
   }
+  const archived = isArchivedFrontmatter(parsed.data);
 
   const body = content.slice(parsed.bodyStartOffset).trim();
 
@@ -104,6 +134,7 @@ export function parseScenarioDoc(doc: DocMountDocument): ParsedScenario | null {
     ...(frontmatterDescription !== undefined && { description: frontmatterDescription }),
     isDefault: rawIsDefault,
     rawIsDefault,
+    archived,
     body,
     lastModified: doc.lastModified,
     createdAt: doc.createdAt,
@@ -119,10 +150,15 @@ export function parseScenarioDoc(doc: DocMountDocument): ParsedScenario | null {
  *
  * Files at nested paths under the folder are excluded (top-level only).
  * Files with empty bodies are dropped with a logged warning.
+ *
+ * Archived scenarios are excluded unless `options.includeArchived` is true.
+ * Either way they are barred from winning default resolution — an archived
+ * file cannot be the scope's default.
  */
 export async function listScenariosInFolder(
   mountPointId: string,
   folderName: string,
+  options: { includeArchived?: boolean } = {},
 ): Promise<ListScenariosResult> {
   const repos = getRepositories();
 
@@ -137,13 +173,20 @@ export async function listScenariosInFolder(
   const parsed: ParsedScenario[] = [];
   for (const doc of docs) {
     const scenario = parseScenarioDoc(doc);
-    if (scenario) parsed.push(scenario);
+    if (!scenario) continue;
+    if (scenario.archived && !options.includeArchived) continue;
+    parsed.push(scenario);
   }
 
   const warnings: string[] = [];
   let defaultClaimed = false;
   const offenders: string[] = [];
   for (const scenario of parsed) {
+    // An archived scenario never wins — not even when it is being listed.
+    if (scenario.archived) {
+      scenario.isDefault = false;
+      continue;
+    }
     if (scenario.rawIsDefault) {
       if (!defaultClaimed) {
         defaultClaimed = true;
@@ -191,6 +234,9 @@ export async function readScenarioByPath(
  * filename or full relative path. Returns null when the file is missing or has
  * no usable body. Used by chat creation to bake the scenario into
  * `chat.scenarioText`.
+ *
+ * Deliberately ignores `archived` — archiving hides a scenario from the menus,
+ * it does not break the chats that already chose it.
  */
 export async function resolveScenarioBody(
   mountPointId: string,
@@ -287,6 +333,7 @@ export function buildScenarioFileContent(input: {
   name?: string;
   description?: string;
   isDefault?: boolean;
+  archived?: boolean;
   body: string;
 }): string {
   const frontmatter: Record<string, unknown> = {};
@@ -298,6 +345,10 @@ export function buildScenarioFileContent(input: {
   }
   if (input.isDefault) {
     frontmatter.isDefault = true;
+  }
+  // Omission means active — never write `archived: false`.
+  if (input.archived) {
+    frontmatter.archived = true;
   }
   const fmBlock = Object.keys(frontmatter).length > 0
     ? serializeFrontmatter(frontmatter)
