@@ -13,7 +13,7 @@
  */
 
 import { getRepositories } from '@/lib/repositories/factory';
-import { formatSelfUri, formatScopedUri, formatDocStoreUri } from './qtap-uri';
+import { formatSelfUri, formatScopedUri, formatDocStoreUri, docStoreAuthority } from './qtap-uri';
 // Type-only — erased at compile time, so no runtime dependency on path-resolver.
 import type { ResolvedPath } from './path-resolver';
 
@@ -116,20 +116,12 @@ export async function buildDocStoreUriResolver(characterId?: string): Promise<{
   uriForScope(scope: 'project' | 'general', relativePath: string): string;
 }> {
   let selfVaultId: string | null = null;
-  const ambiguous = new Set<string>();
   try {
     selfVaultId = await selfVaultMountPointId(characterId);
-    const enabled = await getRepositories().docMountPoints.findEnabled();
-    const counts = new Map<string, number>();
-    for (const mp of enabled) {
-      const key = mp.name.trim().toLowerCase();
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    for (const [key, count] of counts) if (count > 1) ambiguous.add(key);
   } catch {
-    // Degraded mount index — leave the ambiguity set empty; the name form is
-    // still readable.
+    // No acting character, or a degraded read — no self-vault shorthand.
   }
+  const ambiguous = await collectAmbiguousStoreNames();
   return {
     uriForMount(name, id, relativePath) {
       try {
@@ -149,6 +141,58 @@ export async function buildDocStoreUriResolver(characterId?: string): Promise<{
         return formatScopedUri(scope, relativePath);
       } catch {
         return '';
+      }
+    },
+  };
+}
+
+/**
+ * The lower-cased names shared by more than one enabled store. A name in this
+ * set can't address a store on its own, so producers fall back to the UUID.
+ * Degrades to an empty set on a broken mount index — the readable name form is
+ * still the better guess than nothing.
+ */
+async function collectAmbiguousStoreNames(): Promise<Set<string>> {
+  const ambiguous = new Set<string>();
+  try {
+    const enabled = await getRepositories().docMountPoints.findEnabled();
+    const counts = new Map<string, number>();
+    for (const mp of enabled) {
+      const key = mp.name.trim().toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    for (const [key, count] of counts) if (count > 1) ambiguous.add(key);
+  } catch {
+    // Degraded mount index — leave the ambiguity set empty.
+  }
+  return ambiguous;
+}
+
+/**
+ * The bare-reference sibling of {@link buildDocStoreUriResolver}: hands back a
+ * synchronous `refForMount` that yields the store **name**, or its **UUID**
+ * when the name is ambiguous or reserved. Used where the consumer wants an
+ * addressable store reference rather than a full `qtap://` URI — the global
+ * search bar's document results, whose click targets and deep links carry
+ * `mountPoint=<ref>`.
+ *
+ * There is no self-vault shorthand here: `self` only means anything inside a
+ * character's own prompt, and these references are handed to operator surfaces.
+ */
+export async function buildDocStoreRefResolver(): Promise<{
+  refForMount(mountPointName: string, mountPointId: string): string;
+}> {
+  const ambiguous = await collectAmbiguousStoreNames();
+  return {
+    refForMount(mountPointName, mountPointId) {
+      try {
+        return docStoreAuthority({
+          mountPointName,
+          mountPointId,
+          nameIsAmbiguous: !mountPointName || ambiguous.has(mountPointName.trim().toLowerCase()),
+        });
+      } catch {
+        return mountPointId;
       }
     },
   };

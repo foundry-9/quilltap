@@ -4,6 +4,36 @@
 
 ### 4.9-dev
 
+#### Added: the search bar searches every document store
+
+The global search bar (⌘K) gained a **Documents** type, with its own filter chip alongside Chats,
+Characters, Messages, Tags and Memories. It matches file names, relative paths, and extracted document
+text across every enabled document store — character vaults included — and shows the store name, the
+document's path, and a highlighted snippet of the match. One result per document: a file-name match
+outranks a match buried in the text, and both outrank nothing. Implements
+`docs/developer/features/complete/global-search-documents.md`.
+
+Clicking a document result opens it in Document Mode, and where it opens depends on what you were doing.
+If a Salon is focused, the document opens *in that conversation*, exactly as the composer's document
+picker would — the Librarian announces the open and the chat sees later saves. Otherwise it opens in
+standalone Document Mode, which is attached to no conversation and announces nothing, ever. A
+middle-click or "open in new tab" always takes the silent standalone route, because that is what the
+result's own link points at.
+
+Details and limits:
+
+- Vaults belonging to archived characters are never searched. An archived character is a tombstone, and
+  surfacing its files would offer a way back into it.
+- Documents marked `character_read: false` **are** searched. That flag hides a document from characters,
+  not from you.
+- Only documents Document Mode can open are searched (Markdown, text, JSON, JSONL), so every result is
+  clickable. PDFs, Word files, images and other binaries are not searched, and neither is a file whose
+  text extraction hasn't finished.
+- The search is substring matching, like every other type in the bar — not semantic search. `%` and `_`
+  typed into the box match themselves rather than acting as wildcards.
+- The list of search types now lives in one place (`components/search/types.ts`) instead of three; the
+  route, the filter chips, and the result groups all read it.
+
 #### Added: archivable scenarios and wardrobe items
 
 Scenarios and wardrobe items can now be archived instead of deleted. An archived entry disappears from

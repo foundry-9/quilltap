@@ -1,8 +1,43 @@
 # Global Search — Documents Chip (Search All Document Stores)
 
-**Status:** Proposal / Not Implemented
+**Status:** ✅ Implemented — shipped 2026-08-25 in 4.9-dev
 **Scope:** quilltap-server (search UI, `/api/v1/ui/search` route, mount-index query layer); no shell impact
 **Verified against codebase:** 2026-08-25
+
+## As built
+
+All five phases landed as specified. Deltas worth knowing:
+
+- **Only Document-Mode-openable file types are searched** (`markdown`, `txt`,
+  `json`, `jsonl` — `EDITABLE_TEXT_FILE_TYPES` in
+  [`lib/schemas/mount-index.types.ts`](/lib/schemas/mount-index.types.ts)). The
+  non-goals ruled out blobs and unextracted files; PDFs and DOCX carry extracted
+  text but can't be *opened*, and a result that can't be clicked is worse than
+  no result.
+- **The archived-vault lookup fails closed.** If
+  `getArchivedCharacterVaultMountPointIds()` throws, every `storeType:
+  'character'` store is dropped from the scan rather than the search failing or
+  a tombstone leaking.
+- **`ALL_SEARCH_TYPES`** in [`components/search/types.ts`](/components/search/types.ts)
+  replaced all three copies of the ordered type list — the dialog's chips and
+  the route's `VALID_TYPES` both read it (the dead copy in `search-bar.tsx` is
+  gone).
+- **The name-vs-UUID decision was extracted**, not reimplemented:
+  `docStoreAuthority` in [`qtap-uri.ts`](/lib/doc-edit/qtap-uri.ts) now backs
+  both `formatDocStoreUri` and the new `buildDocStoreRefResolver`
+  ([`uri-producers.ts`](/lib/doc-edit/uri-producers.ts)).
+- **LIKE escaping** lives in one place —
+  [`lib/database/repositories/like-escape.ts`](/lib/database/repositories/like-escape.ts)
+  — shared by both new repository queries.
+- **In-chat opening** was extracted to
+  [`lib/documents/open-document-in-chat.ts`](/lib/documents/open-document-in-chat.ts);
+  `qtap-link-provider.tsx` now calls it too.
+- **Measured, not assumed:** on a 7,388-chunk / 21 MB corpus (Friday) the
+  content scan is a few milliseconds; the debug log carries `elapsedMs`. Phase 2
+  (FTS5) stays unnecessary.
+
+Pre-existing defects listed at the bottom of this document were left alone, as
+scoped.
 
 ## Summary
 

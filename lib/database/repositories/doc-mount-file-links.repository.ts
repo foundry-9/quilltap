@@ -25,6 +25,7 @@ import {
   DocMountFileLink,
   DocMountFileLinkSchema,
   DocMountFileLinkWithContent,
+  EDITABLE_TEXT_FILE_TYPES,
 } from '@/lib/schemas/mount-index.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { DatabaseCollection } from '../interfaces';
@@ -34,6 +35,7 @@ import { generateDDL, extractSchemaMetadata } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { ensureLinkNocaseUniqueIndex, ensureLinkGroupColumn } from './mount-index-case-repair';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
+import { LIKE_ESCAPE_CHAR, likeContainsPattern } from './like-escape';
 import { reapOrphanedStoreChildren, type OrphanedStoreChildrenSwept } from '@/lib/mount-index/orphan-store-reaper';
 
 // Minimal subset of better-sqlite3's Database that the inline folder helper
@@ -353,6 +355,19 @@ interface LinkFilesystemFileInput {
 // beyond the JSON-decoded columns the SQLiteCollection helper handles for us.
 type JoinedRow = DocMountFileLink & Pick<DocMountFile, 'sha256' | 'fileSizeBytes' | 'fileType' | 'source'>;
 
+/**
+ * A link row matched by {@link DocMountFileLinksRepository.searchByNameOrPath}.
+ * Deliberately narrow — the global search only needs identity, location and a
+ * sort key, not the joined content columns.
+ */
+export interface DocMountLinkTextMatch {
+  id: string;
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  updatedAt: string;
+}
+
 export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMountFileLink> {
   private mountIndexCollectionInitialized = false;
 
@@ -594,6 +609,60 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       'Error counting file links by file ID',
       { fileId },
       0
+    );
+  }
+
+  /**
+   * Substring-search link rows by file name or relative path across a set of
+   * mount points. Powers the global search bar's Documents chip
+   * ({@link ../../mount-index/document-text-search}); the companion
+   * content search lives on the chunks repository.
+   *
+   * Scoped to {@link EDITABLE_TEXT_FILE_TYPES} — the search surface only
+   * offers documents Document Mode can actually open, so PDFs, DOCX and
+   * blobs are out. Matching is case-insensitive via `LOWER()` (SQLite's bare
+   * `LIKE` only folds ASCII), and `%`/`_` in the user's query are escaped so
+   * they match literally.
+   */
+  async searchByNameOrPath(
+    query: string,
+    mountPointIds: string[],
+    limit: number
+  ): Promise<DocMountLinkTextMatch[]> {
+    if (mountPointIds.length === 0 || query.length === 0) return [];
+    return this.safeQuery(
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return [];
+        await this.getCollection();
+
+        const placeholders = mountPointIds.map(() => '?').join(',');
+        const typePlaceholders = EDITABLE_TEXT_FILE_TYPES.map(() => '?').join(',');
+        const pattern = likeContainsPattern(query);
+
+        const rows = db.prepare(
+          `SELECT l.id, l.mountPointId, l.relativePath, l.fileName, l.updatedAt
+             FROM doc_mount_file_links l
+             JOIN doc_mount_files f ON f.id = l.fileId
+            WHERE l.mountPointId IN (${placeholders})
+              AND f.fileType IN (${typePlaceholders})
+              AND (LOWER(l.fileName) LIKE ? ESCAPE '${LIKE_ESCAPE_CHAR}'
+                OR LOWER(l.relativePath) LIKE ? ESCAPE '${LIKE_ESCAPE_CHAR}')
+            ORDER BY l.updatedAt DESC
+            LIMIT ?`
+        ).all(
+          ...mountPointIds,
+          ...EDITABLE_TEXT_FILE_TYPES,
+          pattern,
+          pattern,
+          limit
+        ) as DocMountLinkTextMatch[];
+
+        return rows;
+      },
+      'Error searching file links by name or path',
+      { mountPointIdCount: mountPointIds.length, queryLength: query.length },
+      []
     );
   }
 

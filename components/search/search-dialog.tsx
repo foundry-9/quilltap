@@ -6,6 +6,7 @@ import { Icon } from '@/components/ui/icon'
 import { useRouter } from 'next/navigation'
 import { useEscapeKey } from '@/hooks/useEscapeKey'
 import { SearchResults } from './search-results'
+import { ALL_SEARCH_TYPES } from './types'
 import type { SearchResult, SearchResponse, SearchType } from './types'
 
 type CountsByType = Partial<Record<SearchType, number>>
@@ -18,7 +19,7 @@ interface SearchDialogProps {
   initialTypes?: SearchType[]
 }
 
-const ALL_TYPES: SearchType[] = ['chats', 'characters', 'messages', 'tags', 'memories']
+const ALL_TYPES = ALL_SEARCH_TYPES
 const PAGE_SIZE = 20
 
 export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes }: SearchDialogProps) {
@@ -255,7 +256,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
                 value={query}
                 onChange={handleInputChange}
                 onKeyDown={handleKeyDown}
-                placeholder="Search chats, characters, messages, tags, memories..."
+                placeholder="Search chats, characters, messages, documents, tags, memories..."
                 className="w-full pl-10 pr-4 py-3 text-lg border-0 bg-transparent text-foreground placeholder-muted-foreground focus:outline-none focus:ring-0"
               />
               {query && (
@@ -322,7 +323,7 @@ export function SearchDialog({ isOpen, onClose, initialQuery = '', initialTypes 
               <div className="p-6 text-center qt-text-small">
                 <p>Type at least 2 characters to search</p>
                 <p className="qt-text-xs mt-1">
-                  Search across your chats, characters, messages, tags, and memories
+                  Search across your chats, characters, messages, documents, tags, and memories
                 </p>
               </div>
             )}

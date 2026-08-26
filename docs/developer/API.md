@@ -4910,11 +4910,55 @@ Uninstall a bundle theme.
 
 #### `GET /api/v1/ui/search?q=query`
 
-Global search across characters and chats.
+Global search (substring, case-insensitive) across every searchable entity. This
+is the endpoint behind the ⌘K search bar; the response shape is
+`SearchResponse` in [`components/search/types.ts`](/components/search/types.ts),
+returned **unwrapped** (no `{ data }` envelope).
 
 **Query Parameters**:
-- `q` - Search query (required)
-- `type` - Filter by type: `characters`, `chats`
+- `q` — search query (required, minimum 2 characters; shorter → `400`)
+- `types` — comma-separated list of types to search. Valid values:
+  `chats`, `characters`, `messages`, `documents`, `tags`, `memories`.
+  Unrecognised names are ignored; an empty or absent list searches all types.
+- `limit` — results per page (default `20`, capped at `50`)
+- `offset` — results to skip (default `0`)
+
+**Response**: `200 OK`
+
+```json
+{
+  "results": [ { "id": "...", "type": "documents", "name": "manifesto.md", "url": "...", "...": "..." } ],
+  "totalCount": 42,
+  "query": "manifesto",
+  "types": ["documents", "chats"],
+  "hasMore": true,
+  "countsByType": { "documents": 40, "chats": 2 }
+}
+```
+
+Every result carries `id`, `type`, `name`, `matchedField`, `matchedValue`,
+`snippet`, `url`, `matchPriority` (`0` exact, `1` substring, `2` weaker),
+`createdAt` and `updatedAt`, plus per-type extras. Results are sorted by
+`matchPriority` then by `updatedAt` descending, across all types together;
+`countsByType` counts the whole match set, before pagination.
+
+**Type notes**:
+- `messages` searches message content and links back to `/salon/<chatId>?msg=<id>`.
+- `memories` searches memory summaries per character.
+- `documents` searches file names, relative paths, and extracted document text
+  across every **enabled** document store — character vaults included, the
+  vaults of *archived* characters excluded. Documents flagged
+  `character_read: false` are included (that flag gates characters, not the
+  operator), and only file types Document Mode can open are searched
+  (`markdown`, `txt`, `json`, `jsonl`). Extras on the result:
+  `mountPointId`, `mountPointName`, `mountPointRef` (store name, or its UUID
+  when the name is ambiguous or reserved), `storeType` (`documents` |
+  `character`), and `relativePath`. The `url` is the **standalone** Document
+  Mode deep link
+  (`/workspace?open=document-standalone&scope=document_store&mountPoint=…&filePath=…`),
+  which attaches the document to no conversation; the search UI upgrades a
+  plain left click to an in-chat open when a Salon is focused. Implementation:
+  [`lib/mount-index/document-text-search.ts`](/lib/mount-index/document-text-search.ts).
 
 ---
 

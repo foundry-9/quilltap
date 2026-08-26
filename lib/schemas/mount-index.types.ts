@@ -94,6 +94,14 @@ export const DocMountFileSchema = z.object({
 
 export type DocMountFile = z.infer<typeof DocMountFileSchema>;
 
+/**
+ * The `fileType` values that hold editable plain text — the set the global
+ * search bar's Documents chip searches and the set Document Mode can open.
+ * `pdf`/`docx` carry extracted text but are not editable documents, and
+ * `blob` has no text representation at all.
+ */
+export const EDITABLE_TEXT_FILE_TYPES = ['markdown', 'txt', 'json', 'jsonl'] as const;
+
 // ============================================================================
 // DOCUMENT MOUNT FILE LINK (the hard link — per-(mountPoint, relativePath))
 // ============================================================================

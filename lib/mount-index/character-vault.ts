@@ -106,6 +106,31 @@ async function linkCharacterToVault(characterId: string, mountPointId: string): 
 }
 
 /**
+ * The vault mount-point ids belonging to **archived** characters.
+ *
+ * An archived character is a tombstone: its row survives, its vault is pruned
+ * but still enabled and still enumerable by `docMountPoints.findEnabled()`.
+ * Operator surfaces that walk every store (the global search bar's Documents
+ * chip) subtract this set, so a tombstone's leftovers never become a click
+ * target that leads back to an edit path the archive guards exist to prevent.
+ *
+ * Reads the raw character rows deliberately: the overlay read path mounts each
+ * character's vault, which is precisely what a pruned vault can't serve, and
+ * all we need is the `archivedAt` / `characterDocumentMountPointId` columns.
+ */
+export async function getArchivedCharacterVaultMountPointIds(): Promise<string[]> {
+  const characters = await getRepositories().characters.findAllRaw();
+  const ids = characters
+    .filter((c) => c.archivedAt && c.characterDocumentMountPointId)
+    .map((c) => c.characterDocumentMountPointId as string);
+  logger.debug('Collected archived character vault mount points', {
+    archivedWithVault: ids.length,
+    charactersScanned: characters.length,
+  });
+  return ids;
+}
+
+/**
  * Ensure the given character has a linked database-backed character vault.
  * Creates, scaffolds, populates, and links if missing. Idempotent.
  *
