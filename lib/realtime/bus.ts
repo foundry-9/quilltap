@@ -120,7 +120,6 @@ export function publishRealtime(topic: RealtimeTopic | string, id?: string): voi
   const existing = s.pending.get(key);
   if (existing) {
     existing.coalesced++;
-    log.debug('Realtime publish coalesced', { topic, id, coalesced: existing.coalesced });
     return;
   }
 
