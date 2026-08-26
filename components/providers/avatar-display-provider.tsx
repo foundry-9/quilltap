@@ -192,11 +192,3 @@ export function useAvatarDisplayContext() {
   }
   return ctx
 }
-
-/**
- * Optional hook that returns null if used outside provider context.
- * Useful for components that may be rendered before provider is mounted.
- */
-export function useAvatarDisplayContextOptional() {
-  return useContext(AvatarDisplayContext)
-}

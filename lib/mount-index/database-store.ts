@@ -596,27 +596,6 @@ export async function databaseFolderExists(
   return folder !== null;
 }
 
-export async function databaseFolderHasContents(
-  mountPointId: string,
-  relativePath: string
-): Promise<boolean> {
-  const repos = getRepositories();
-  const folder = normaliseRelativePath(relativePath);
-
-  // Try to find the folder row first
-  const folderRow = await repos.docMountFolders.findByMountPointAndPath(mountPointId, folder);
-  if (folderRow) {
-    const { folderHasContents } = await import('@/lib/mount-index/folder-paths');
-    return folderHasContents(mountPointId, folderRow.id);
-  }
-
-  // Fallback to prefix match for legacy data without folder rows. Link
-  // table carries every (mountPoint, path) tuple post-refactor.
-  const prefix = folder.endsWith('/') ? folder : `${folder}/`;
-  const links = await repos.docMountFileLinks.findByMountPointId(mountPointId);
-  return links.some(l => l.relativePath.startsWith(prefix));
-}
-
 /**
  * Rehydrate (rechunk) all documents in a database-backed mount point.
  * Used by the scan endpoint for DB-backed stores — the filesystem scanner

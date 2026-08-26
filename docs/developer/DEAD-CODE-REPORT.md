@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-07-30
+**Last Updated**: 2026-08-26
 **Tool Used**: knip
-**Codebase**: Quilltap v4.8.0-dev.124
+**Codebase**: Quilltap v4.9.0-dev.74
 
 ---
 
@@ -12,12 +12,79 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | 2 remaining as of 2026-07-30, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
-| Unused Dependencies | None flagged as of 2026-07-30 (`tar` false-positive added to `ignoreDependencies`; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
-| Unused Exports | 1169 (2026-07-30, from 1173); remainder are intentional barrel/plugin/registry/lifecycle/schema surface |
-| Unused Exported Types | 737 (2026-07-30, from 741); most are intentional plugin contracts and Zod `z.infer` data-model surface |
+| Unused Files | 2 remaining as of 2026-08-26, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
+| Unused Dependencies | None flagged as of 2026-08-26 (`tar` false-positive added to `ignoreDependencies` 2026-07-30; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
+| Unused Exports | 1051 (2026-08-26, from 1064); remainder are intentional barrel/plugin/registry/lifecycle/schema surface |
+| Unused Exported Types | 753 (2026-08-26, unchanged); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
 | Unused Enum Members | 3 in ErrorCode (preserved for future use) |
-| Duplicate Exports | 54 (named + default pattern, low priority) |
+| Duplicate Exports | 62 (named + default pattern, low priority) |
+
+---
+
+## 2026-08-26 — v4.9 release sweep (knip)
+
+knip flagged **4 unused files**, **1064 unused exports**, **753 unused exported types**, 3 unused enum members, and 62 duplicate exports. No unused or unlisted dependencies, and no unlisted binaries.
+
+Method as in the 2026-07-30 and 2026-06-03 rounds: a whole-repo identifier reference count over all 3,484 source files (`.ts/.tsx/.js/.jsx/.mjs/.cjs/.json/.md/.css/.mdx/.yml`, with `node_modules`, `.next`, `.claude` worktrees and build output excluded), scoring each of the 1,817 flagged symbols by references **outside** its defining file. That isolated **361 symbols with no external reference at all** and **4 referenced only by tests**.
+
+The 361 were then narrowed by in-file usage. A first pass counted raw identifier occurrences in the defining file and found 31 candidates; that undercounted, because JSDoc `{@link Foo}` mentions read as uses. A second pass stripped comments before counting and surfaced **6 more** (`readJsonFileOptional`, `parseComponentItemsField`, `joinFolderPath`, `createApiLogger`, `createRepositoryLogger`, `HAIR_PHYSICAL_BOUNDARY`) — `HAIR_PHYSICAL_BOUNDARY` in particular was masked entirely by a `{@link}` in its sibling's doc comment. The comment-stripper has its own false positives (a `/*` inside a string literal), so all 37 were confirmed by hand with a whole-repo `grep` before any deletion; that check reprieved `parseComponentItemsField`, which is called in-file.
+
+Everything not listed below has a real consumer knip does not follow (a barrel, a test, `packages/`, `plugins/`), or falls under a standing keep-rule from a prior round.
+
+Verified with `npx tsc` (exit 0), `npm run lint` (clean), and the full `npm run test:unit` suite (**724 suites / 11,213 tests / 68 snapshots passing**). Re-running knip confirms the reductions: unused files 4 → 2, unused exports 1064 → 1051 (−13, exactly the 11 removals plus the 2 constants now wired up).
+
+### Removed — functions / consts
+
+| File | Removed |
+|------|---------|
+| `components/providers/avatar-display-provider.tsx` | `useAvatarDisplayContextOptional` |
+| `lib/backup/restore/json-stream.ts` | `readJsonFileOptional` |
+| `lib/documents/open-document-in-chat.ts` | `standaloneTabPayload` (+ the now-orphaned `DocumentStandaloneTabPayload` type import) |
+| `lib/files/folder-utils.ts` | `joinFolderPath` |
+| `lib/logging/create-logger.ts` | `createApiLogger`, `createRepositoryLogger` |
+| `lib/mount-index/database-store.ts` | `databaseFolderHasContents` (+ its 5 stale `jest.mock` stubs) |
+| `lib/mount-index/group-wardrobe.ts` | `GROUP_WARDROBE_FOLDER` (+ orphaned `SHARED_WARDROBE_FOLDER` import) |
+| `lib/mount-index/project-wardrobe.ts` | `PROJECT_WARDROBE_FOLDER` (+ orphaned `SHARED_WARDROBE_FOLDER` import) |
+| `lib/wardrobe/shared-tiers.ts` | `resolveSharedWardrobeTiersForProject`, `noSharedWardrobeTiers` (+ the private `EMPTY` const and the orphaned `resolveProjectMountPointIds` import) |
+
+Notes:
+
+- **`useAvatarDisplayContextOptional`** is the last of the `use*Optional` context-hook family; `useSessionOptional`, `useSidebarOptional`, and `useAvatarDisplayOptional` all went in the 2026-06-03 sweep for the same reason. The throwing `useAvatarDisplayContext` is the live one.
+- **`readJsonFileOptional`** had no caller; `readJsonFile`, `readJsonArrayFile`, and `readJsonArrayFileOptional` are all live in `lib/backup/restore/archive.ts`. Its doc comment was the only thing naming it, from the sibling below it — that comment now points at `readJsonArrayFile`.
+- **`standaloneTabPayload`** existed, per its own doc comment, "so both halves of the 'open a document' decision read from one place". Nothing ever called it: all three sites that build a `DocumentStandaloneTabPayload` (`lib/hooks/use-open-document-from-search.ts:128`, `components/layout/left-sidebar/sidebar-footer.tsx:178`, `components/workspace/WorkspaceIntent.tsx:123`) construct the object inline. **Worth a follow-up:** that three-way duplication is real and is what the helper was meant to prevent; consolidating it is a refactor, not a deletion, so it is left for checklist item 3.
+- **`joinFolderPath`** joins `lib/files/folder-utils.ts`'s `buildFolderTree` / `isInFolder` / `isInFolderRecursive`, removed from the same file on 2026-06-03. `normalizeFolderPath`, which it wrapped, is live across the `/api/v1/files` routes.
+- **`createApiLogger`** and **`createRepositoryLogger`** are the two never-adopted members of the `create*Logger` family. The other three are heavily used — `createServiceLogger` (254 references), `createPluginLogger` (76), `createLogger` (43) — so the file keeps its purpose; these two had zero.
+- **`databaseFolderHasContents`** had no production caller anywhere. Its only references were five `jest.mock` factory stubs in the `doc-edit-handler-*` suites, which merely enumerate the mocked module's shape and do not prove use; those stale keys were removed with it. The `folderHasContents` helper it dynamic-imported from `lib/mount-index/folder-paths` is untouched, as are its live siblings `databaseFileExists` / `databaseFolderExists`.
+- **`GROUP_WARDROBE_FOLDER` / `PROJECT_WARDROBE_FOLDER`** were one-line re-export aliases of `SHARED_WARDROBE_FOLDER` with no consumer and no in-file use. The parallel `GENERAL_WARDROBE_FOLDER` in `general-wardrobe.ts` is **kept** — it is used in-file at line 42. The live surface of both modules (`ensure*WardrobeFolder`, `read*Wardrobe`) is untouched and still imported by the group/project wardrobe routes.
+- **`resolveSharedWardrobeTiersForProject`** was superseded rather than merely unused. Its doc comment names "chat creation, the outfit composer" as its callers, but both (`app/api/v1/chats/route.ts:1131`, `app/api/v1/chats/[id]/actions/participants.ts:220`) resolve the project tier once and then call `sharedWardrobeTiersForCharacter` per character inside the loop — the pattern that module documents for exactly that case. This was checked specifically against the module's stated raison d'être (a call site that threads only `projectMountPointIds` is the bug it exists to prevent): **those call sites are correct**, because the per-character loop supplies the group tier. `resolveSharedWardrobeTiersForChat` and `sharedWardrobeTiersForCharacter` remain live.
+
+### Deduplicated rather than deleted — the hair guidance constants
+
+`lib/wardrobe/slot-guidance.ts` exists, per its module docblock, so that "the wardrobe tools, the outfit-choosing prompt, the character generators, and the image analyser all draw the wardrobe/physical line the same way — a model that reads two different versions of this rule files hair colour as a garment." Two of its three constants were flagged as unused:
+
+- `HAIR_PHYSICAL_BOUNDARY` — the prose-paragraph phrasing, for the character generators and optimizer
+- `HAIR_PHYSICAL_DESCRIPTION_NOTE` — its complement, for physical-description prompts
+
+Both turned out to be duplicated **verbatim** — byte-for-byte, verified programmatically — as inline string literals inside `lib/services/character-field-semantics.ts` (`WARDROBE_SEMANTICS` and `PHYSICAL_DESCRIPTION_SEMANTICS` respectively). So they were not dead intent but a live single-source-of-truth violation of precisely the kind the module was written to prevent.
+
+Deleting them would have entrenched the duplication, so instead `character-field-semantics.ts` now interpolates the two constants. Because the strings are byte-identical, the rendered prompt text is unchanged: the patched file was expanded back to literals and compared against `HEAD`, and it matches exactly. That means no `IDENTITY_STACK_BUILDER_VERSION` bump and no golden regeneration are owed, and the 68 snapshots still pass. `slot-guidance.ts` has no imports of its own, so no cycle is introduced. The third constant, `HAIR_SLOT_GUIDANCE`, was already live in the four `wardrobe_*` tools.
+
+### knip.json — silenced two verified false positives
+
+- **`jest.integration.config.ts`** added to `entry`. knip reported it as an unused file, but it is invoked by two `package.json` scripts (`test:all`, `test:integration`) via `--config`, which knip's jest plugin does not parse. Listing it as an entry rather than an ignore also lets knip follow its `globalSetup` chain (the `armSparkplugGuard()` wiring from bug 83).
+- **`__tests__/helpers/lexicalPluginHarness.tsx`** added to `ignore`. It is imported by four live suites (`TextReplacementPlugin`, `SmartTypographyPlugin`, `CharTypeaheadPlugin.emoji`, `CharTypeaheadPlugin.unicode`). The sibling `__tests__/helpers/renderWithQuery.tsx` is *not* flagged; the difference is that the harness is imported only through deep relative paths (`../../../../../helpers/…`) while `renderWithQuery` is also imported via the `@/` alias. This is a knip resolution quirk, not a code fact — the code is correct as written and was left alone.
+
+### Investigated but KEPT (intentional surface / false positives)
+
+All 753 flagged types and the remaining flagged exports fall under standing keep-rules from prior rounds (Zod `z.infer` schema surface, `*ToolInputSchema` types, plugin SDK contracts, registry accessors, theme validation API, lifecycle `start`/`stop` pairs, barrel re-exports, and exported helpers used only inside their own module). Specifically cleared this round:
+
+- **The `lib/schemas/*` `z.infer` types** — `FileStatus`, `HelpDocChunkInput`, `MemoryKind`, `RealtimeClientMessage`, `RpFontKey`, `TerminalSessionCreate`, `TextReplacementRulePatch`, the four `plugin-manifest.ts` config types (`AuthProviderConfig`, `ThemeFontDefinition`, `SubsystemOverridesType`, `ToolConfig`, `SystemPromptConfig`), and the five `settings.types.ts` types (`AutoHousekeepingCapOverride`, `AutoHousekeepingSettings`, `AutonomousRoomVisibilityDefault`, `AutonomousRoomDestructiveToolPolicy`, `AutoLockSettings`). Standing rule since 2026-06-03: every `lib/schemas/*` schema and its inferred type is data-model surface.
+- **The theme validation family** — `validateThemeTokens`, `validateThemeManifest`, `safeValidateThemeManifest`, `validateQtapThemeManifest`, `validateThemePreference`, plus the `ThemeCompatibility` / `RegistryPreviewColors` `z.infer` types (whose schemas are used in-file at `lib/themes/types.ts:345`, `:476`, `:481`). Documented public theme API; kept since 2026-06-03.
+- **`parseComponentItemsField`** (`lib/database/repositories/vault-overlay/parsers.ts`) — flagged as an unused export, but called in-file at line 333. The "exported helper used only inside its own module" category; un-exporting is pure churn.
+- **`clearCompressionCache` / `getCompressionCacheStats`** (`lib/services/chat-message/compression-cache.service.ts`) — referenced only by their own test suite. Kept under the lifecycle-pair rule: they are the invalidation and introspection halves of a live cache, and unlike the `_clearHousekeepingOutcomesForTest` removed on 2026-06-03, a test does exercise them.
+- **`resetFrozenArchiveCacheForTests`** (`lib/memory/frozen-archive-cache.ts`) — an explicit test helper that its own suite uses. Kept for the same reason. Note the standing follow-up on its neighbour `invalidateFrozenArchive` from 2026-07-30 still applies.
+- **`components/files/svar/index.ts` and `components/files/svar/SvarFilePicker.tsx`** — unchanged from 2026-07-20 and 2026-07-30. Still the in-progress SVAR file-manager surface (`docs/developer/features/svar-file-manager-implementation-plan.md`): the barrel is the documented runtime-free public API, `SvarFilePicker` is the Phase 4 costume awaiting page wiring, and the Phase 3 `SvarFileManager` sibling **is** wired behind the "New file manager (beta)" toggle.
+- **The 3 `ErrorCode` enum members and 62 duplicate exports** — unchanged in character from prior rounds; the duplicates are the named + default export pattern, still low priority.
 
 ---
 

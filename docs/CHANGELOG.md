@@ -4,6 +4,38 @@
 
 ### 4.9-dev
 
+#### Removed: dead code sweep (checklist item 5)
+
+Ran knip over the repo and removed 11 unused exports across 9 files. knip's raw output is mostly
+intentional surface, so each candidate was scored by whole-repo reference count and then confirmed
+by hand before deletion.
+
+- `useAvatarDisplayContextOptional` (`components/providers/avatar-display-provider.tsx`) — the last
+  of the `use*Optional` context hooks; the other three went in an earlier sweep.
+- `readJsonFileOptional` (`lib/backup/restore/json-stream.ts`), `joinFolderPath`
+  (`lib/files/folder-utils.ts`), `standaloneTabPayload` (`lib/documents/open-document-in-chat.ts`).
+- `createApiLogger` and `createRepositoryLogger` (`lib/logging/create-logger.ts`) — the two members
+  of the logger family with no callers; the other three are used 373 times between them.
+- `databaseFolderHasContents` (`lib/mount-index/database-store.ts`) — no production caller; its only
+  references were five `jest.mock` stubs, removed with it.
+- `GROUP_WARDROBE_FOLDER` and `PROJECT_WARDROBE_FOLDER` — unused one-line aliases of
+  `SHARED_WARDROBE_FOLDER`.
+- `resolveSharedWardrobeTiersForProject` and `noSharedWardrobeTiers` (`lib/wardrobe/shared-tiers.ts`)
+  — superseded by the per-character loop the module documents for that case.
+
+Two flagged constants were deduplicated instead of deleted. `HAIR_PHYSICAL_BOUNDARY` and
+`HAIR_PHYSICAL_DESCRIPTION_NOTE` (`lib/wardrobe/slot-guidance.ts`) were duplicated verbatim as inline
+literals in `lib/services/character-field-semantics.ts` — the exact divergence that module exists to
+prevent — so the semantics file now interpolates them. The strings are byte-identical, verified by
+expanding the patched file back to literals and diffing against HEAD, so no prompt text changed and
+no identity-stack version bump is owed.
+
+Two knip "unused file" reports were false positives and are now handled in `knip.json`:
+`jest.integration.config.ts` (invoked by two `package.json` scripts via `--config`) is listed as an
+entry, and `__tests__/helpers/lexicalPluginHarness.tsx` (imported by four live suites) is ignored.
+
+`docs/developer/DEAD-CODE-REPORT.md` records the full round, including the symbols kept with reasons.
+
 #### Added: release-checklist test coverage (checklist item 2)
 
 Audited every bug fixed since 4.8.4 (bugs 66-102, all 37) and all 55 source modules added in the

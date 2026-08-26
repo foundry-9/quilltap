@@ -74,7 +74,6 @@ jest.mock('@/lib/doc-edit/mime-registry', () => ({
 jest.mock('@/lib/mount-index/database-store', () => ({
   databaseDocumentExists: jest.fn(),
   databaseFolderExists: jest.fn().mockResolvedValue(false),
-  databaseFolderHasContents: jest.fn().mockResolvedValue(false),
   deleteDatabaseDocument: jest.fn(),
   moveDatabaseDocument: jest.fn().mockResolvedValue(undefined),
   createDatabaseFolder: jest.fn(),

@@ -23,7 +23,7 @@
  */
 
 import { openDocumentForChat } from '@/app/salon/[id]/hooks/documentModeApi'
-import type { DocumentStandaloneTabPayload, TabKind } from '@/lib/workspace/types'
+import type { TabKind } from '@/lib/workspace/types'
 
 /** Scope of the document being opened, as the chat API understands it. */
 export type ChatDocumentScope = 'document_store' | 'project' | 'general'
@@ -79,23 +79,5 @@ export async function openDocumentInChat(
     window.dispatchEvent(new CustomEvent('qtap-document-opened', {
       detail: { chatId, chatDocumentId: data.document.id },
     }))
-  }
-}
-
-/**
- * The standalone (chat-less) counterpart's tab payload. Kept here so both
- * halves of the "open a document" decision read from one place; the caller
- * hands it to `openTab('document-standalone', …)`.
- */
-export function standaloneTabPayload(
-  docKey: string,
-  params: { scope: DocumentStandaloneTabPayload['scope']; mountPoint?: string | null; filePath: string; displayTitle?: string },
-): DocumentStandaloneTabPayload {
-  return {
-    docKey,
-    scope: params.scope,
-    mountPoint: params.mountPoint ?? null,
-    filePath: params.filePath,
-    displayTitle: params.displayTitle,
   }
 }
