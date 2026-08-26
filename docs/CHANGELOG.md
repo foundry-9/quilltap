@@ -4,6 +4,17 @@
 
 ### 4.9-dev
 
+#### Added: feature plan for archivable scenarios and wardrobe items
+
+New spec at `docs/developer/features/archived-scenarios-and-wardrobe.md`: an `archived: true/false`
+frontmatter property on scenario and wardrobe-item files (absent = false). Archived entries are hidden
+from every list, dropdown, and picker by default; each listing surface gets a "Show archived" checkbox
+that reveals them and still lets the user pick them. The outfit-selection LLM at chat start never sees
+archived garments (already true today; the plan pins it with tests). Wardrobe archiving is already
+half-built in the persistence layer, so that half of the plan exposes existing plumbing (archive/unarchive
+via the item routes, `?includeArchived=true` on the collection routes); scenarios get the property from
+scratch across all four scopes. Docs only; no code changes yet.
+
 #### Added: feature plan for a Documents chip in the global search
 
 New spec at `docs/developer/features/global-search-documents.md`: extend the global search bar to
