@@ -4,6 +4,29 @@
 
 ### 4.9-dev
 
+#### Verified: published packages and consistent installs (checklist item 9)
+
+Audited every package under `packages/` that changed since 4.8.4 and confirmed each is
+version-bumped, published to npm, and consistently referenced by everything that consumes it. No
+code changed in this pass: the one defect it found, the OpenAI-Compatible plugin's undeclared
+`@quilltap/plugin-types`, is recorded under checklist item 8 below, which landed the same fix.
+
+- All four changed packages are bumped and published: `plugin-types` 2.5.8, `plugin-utils` 2.4.0,
+  `theme-storybook` 1.0.64, and the `quilltap` CLI at 4.9.0-dev.75 (the CLI publishes automatically
+  at release). Every bump landed in the same commit as its content change, so no package shipped
+  source ahead of its version, and nothing awaits a manual `npm publish`.
+- Root `package.json` is current, and after a clean install all 15 plugins resolve plugin-utils
+  2.4.0 and plugin-types 2.5.8. The committed bundles already carry the current 2.3.0/2.4.0 APIs.
+- The older caret ranges some plugins declare (`^2.2.20`, `^2.5.6`) are accurate floors — those
+  plugins use no 2.3.0+ API — so they were left alone rather than tightened into a minimum they do
+  not actually require.
+- A full `npm run build:plugins` rewrites seven bundles, but every drifted section is third-party
+  float: `openai` `^7.4.0` now resolving 7.5.0, plus `@openrouter/sdk` and an MCP URI-template
+  dependency. No Quilltap package code differs, so the rebuild was left out. Plugins carry no
+  lockfiles, so any rebuild picks up whatever the carets resolve to that day.
+- `plugin-types` 2.5.8 and `theme-storybook` 1.0.64 are published with no CHANGELOG entry of their
+  own; 2.5.8 ships new public API (`supportsThinking`, `thinksByDefault`, `ThinkingTurnRule`).
+
 #### Removed: leftover debug logging (checklist item 6)
 
 Swept every `.ts`/`.tsx` change since 4.8.4 for logging added during development and removed one
