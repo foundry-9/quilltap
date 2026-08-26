@@ -17,6 +17,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { formatRelativeAge } from '@/lib/format-time';
+import { useNow } from '@/hooks/useNow';
+
 type ProgressTier = { current: number; total: number; unit: string };
 
 interface StartupEvent {
@@ -141,15 +144,11 @@ function formatTier(t: ProgressTier): string {
   return t.total > 0 ? `${t.current}/${t.total} ${t.unit}` : `${t.current} ${t.unit}`;
 }
 
-function formatRelativeAge(ts: number): string {
-  const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
-  if (seconds < 2) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}m ago`;
-}
-
 export function StartupProgress() {
+  // The event ages used to advance only as a side effect of the 1 s status
+  // poll landing. The shared clock makes them tick on their own, so a stalled
+  // step visibly stalls instead of looking freshly finished.
+  const nowMs = useNow(1_000);
   const [status, setStatus] = useState<StartupStatus | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const stoppedRef = useRef(false);
@@ -251,7 +250,7 @@ export function StartupProgress() {
                   }
                 >
                   <span className="qt-text-secondary mr-2 tabular-nums">
-                    {formatRelativeAge(event.ts)}
+                    {formatRelativeAge(event.ts, nowMs)}
                   </span>
                   {event.prettyLabel}
                   {event.detail && (

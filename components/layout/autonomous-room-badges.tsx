@@ -9,14 +9,17 @@
  * readout, and exposes an inline play/pause button.
  *
  * Polling mirrors the queue-status badges and the Settings → System
- * management list: SWR at 5s. A local 1s tick refreshes the time readout
- * between polls for running, time-budgeted rooms.
+ * management list: 5s. A shared 1s clock (`useNow`) refreshes the time readout
+ * between polls for running, time-budgeted rooms — that readout drifts because
+ * the *client's* clock advances, so it never involves the server.
  *
  * @module components/layout/autonomous-room-badges
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { useNow } from '@/hooks/useNow'
+import { useRealtimeRefetchInterval } from '@/hooks/useRealtime'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -156,10 +159,11 @@ export function AutonomousRoomBadges() {
     queryKey: queryKeys.system.autonomousRooms,
     queryFn: ({ signal }) =>
       apiFetch<{ rooms: AutonomousRoom[] }>('/api/v1/system/autonomous-rooms', { signal, cache: 'no-store' }),
-    refetchInterval: POLL_INTERVAL_MS,
+    // Pushed by the `autonomousRooms` topic; the 5 s poll is the fallback
+    // for a dropped socket.
+    refetchInterval: useRealtimeRefetchInterval(POLL_INTERVAL_MS),
   })
   const [busyChatId, setBusyChatId] = useState<string | null>(null)
-  const [nowMs, setNowMs] = useState<number>(() => Date.now())
 
   // Optimistic toggle: patch the cached run state immediately, roll back on
   // error, revalidate on settle (the TanStack equivalent of SWR's
@@ -200,11 +204,9 @@ export function AutonomousRoomBadges() {
     (r) => r.runState === 'running' && r.budgetMaxWallClockMs != null,
   )
 
-  useEffect(() => {
-    if (!hasTimeBudgetedRunning) return
-    const id = setInterval(() => setNowMs(Date.now()), TICK_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [hasTimeBudgetedRunning])
+  // Only a running, time-budgeted room needs a second hand; everything else
+  // reads a frozen snapshot and costs no re-renders at all.
+  const nowMs = useNow(TICK_INTERVAL_MS, hasTimeBudgetedRunning)
 
   if (rooms.length === 0) return null
 

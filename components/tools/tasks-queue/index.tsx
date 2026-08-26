@@ -6,6 +6,7 @@ import { TaskItem } from './TaskItem'
 import { TaskDetails } from './TaskDetails'
 import { useTasksQueue } from './hooks/useTasksQueue'
 import { formatRelativeDate } from '@/lib/format-time'
+import { useNow } from '@/hooks/useNow'
 import { Icon } from '@/components/ui/icon'
 
 const DEFAULT_CONCURRENCY = 4
@@ -57,7 +58,11 @@ export function TasksQueueCard() {
     return tokens.toString()
   }
 
-  const formatDate = formatRelativeDate
+  // One shared minute tick drives every relative timestamp in the card,
+  // including the ones TaskDetails renders through this same callback.
+  const nowMs = useNow(60_000)
+  const formatDate = (dateString: string | null | undefined) =>
+    formatRelativeDate(dateString, nowMs)
 
   return (
     <div className="qt-card p-6">

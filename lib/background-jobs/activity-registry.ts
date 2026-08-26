@@ -31,6 +31,8 @@
 
 import { AsyncLocalStorage } from 'async_hooks';
 
+import { publishRealtime } from '@/lib/realtime/bus';
+
 import { ACTIVITY_KINDS, emptyActivityCounts, type ActivityKind } from './activity-kinds';
 import type { ChildActivityMessage } from './ipc-types';
 
@@ -110,6 +112,11 @@ export function beginActivity(kind: ActivityKind): () => void {
   const s = state();
   s.local[kind]++;
   mirrorToParent(kind, 1);
+  // Both edges of the span move a chip, so both are worth a hint. In the job
+  // child this is a no-op — the child's counts reach the parent through
+  // `mirrorToParent`, and the parent republishes from
+  // `applyChildActivityDelta`.
+  publishRealtime('jobs');
   const startedAt = Date.now();
 
   let ended = false;
@@ -122,6 +129,7 @@ export function beginActivity(kind: ActivityKind): () => void {
       mirrorToParent(kind, 'blip');
     }
     mirrorToParent(kind, -1);
+    publishRealtime('jobs');
   };
 }
 
@@ -190,6 +198,8 @@ export function applyChildActivityDelta(msg: ChildActivityMessage): void {
   } else {
     s.child[msg.kind] = Math.max(0, s.child[msg.kind] - 1);
   }
+  // This is where the child's chips become visible; the parent owns the socket.
+  publishRealtime('jobs');
 }
 
 /**
@@ -198,6 +208,7 @@ export function applyChildActivityDelta(msg: ChildActivityMessage): void {
  */
 export function resetChildActivity(): void {
   state().child = emptyActivityCounts();
+  publishRealtime('jobs');
 }
 
 /** Test hook: drop all counters. */

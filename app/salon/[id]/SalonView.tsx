@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useRealtimeConnected, useRealtimeTopic } from '@/hooks/useRealtime'
 import ChatSidebar from '@/components/chat/ChatSidebar'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
@@ -78,6 +79,11 @@ import { useDocumentMode, type DocFocusTarget } from './hooks/useDocumentMode'
 import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 import { Icon } from '@/components/ui/icon'
 import { CopyChatIdButton } from '@/components/chat/CopyChatIdButton'
+
+/** Fallback re-read cadence for the avatar watch, while the socket is down. */
+const AVATAR_POLL_INTERVAL_MS = 5000
+/** How long the avatar watch waits before giving up on a generation. */
+const AVATAR_WATCH_TIMEOUT_MS = 2 * 60_000
 
 export interface SalonViewProps {
   /** The conversation this Salon tab renders. */
@@ -201,60 +207,72 @@ export function SalonView({ chatId }: SalonViewProps) {
     setWhisperTarget({ participantId, name })
   }, [chat?.participants])
 
-  // --- Avatar generation polling ---
-  // After triggering avatar generation, poll fetchChat until the avatar updates
-  const avatarPollRef = useRef<NodeJS.Timeout | null>(null)
-  const avatarPollCountRef = useRef(0)
+  // --- Avatar generation watch ---
+  // After triggering avatar generation, watch for the participant's avatar URL
+  // to change and then refresh the chat.
+  //
+  // The live signal is a `chats:<id>` hint, published when the
+  // CHARACTER_AVATAR_GENERATION job's writes commit — normally the very first
+  // check finds the new avatar. The interval is the fallback for a dropped
+  // socket, and the expiry keeps a failed generation from watching forever.
+  const [avatarWatch, setAvatarWatch] = useState<
+    { characterId: string; snapshotAvatarUrl: string | null; expiresAt: number } | null
+  >(null)
+
+  const checkAvatarUpdate = useCallback(async (watch: {
+    characterId: string
+    snapshotAvatarUrl: string | null
+  }) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${id}`, { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      // Check the enriched participant avatar URL — this changes when avatarOverrides update
+      const updatedParticipant = data.chat?.participants?.find(
+        (p: { character?: { id?: string } }) => p.character?.id === watch.characterId
+      )
+      const newAvatarUrl = updatedParticipant?.character?.avatarUrl ?? null
+      if (newAvatarUrl && newAvatarUrl !== watch.snapshotAvatarUrl) {
+        setAvatarWatch(null)
+        await fetchChat()
+        showInfoToast('Avatar updated')
+      }
+    } catch {
+      // Silently keep watching.
+    }
+  }, [id, fetchChat])
 
   const startAvatarPoll = useCallback((characterId: string) => {
     // Snapshot the current avatar URL for this character to detect when it changes
     const participant = chat?.participants.find(p => p.character?.id === characterId)
-    const snapshotAvatarUrl = participant?.character?.avatarUrl ?? null
+    setAvatarWatch({
+      characterId,
+      snapshotAvatarUrl: participant?.character?.avatarUrl ?? null,
+      expiresAt: Date.now() + AVATAR_WATCH_TIMEOUT_MS,
+    })
+  }, [chat?.participants])
 
-    // Clear any existing poll
-    if (avatarPollRef.current) {
-      clearInterval(avatarPollRef.current)
-    }
-    avatarPollCountRef.current = 0
+  useRealtimeTopic('chats', () => {
+    if (avatarWatch) void checkAvatarUpdate(avatarWatch)
+  }, id)
 
-    avatarPollRef.current = setInterval(async () => {
-      avatarPollCountRef.current++
-      // Poll for up to 2 minutes (24 polls at 5s intervals)
-      if (avatarPollCountRef.current > 24) {
-        if (avatarPollRef.current) clearInterval(avatarPollRef.current)
-        avatarPollRef.current = null
-        return
-      }
-      try {
-        const res = await fetch(`/api/v1/chats/${id}`, { cache: 'no-store' })
-        if (!res.ok) return
-        const data = await res.json()
-        // Check the enriched participant avatar URL — this changes when avatarOverrides update
-        const updatedParticipant = data.chat?.participants?.find(
-          (p: { character?: { id?: string } }) => p.character?.id === characterId
-        )
-        const newAvatarUrl = updatedParticipant?.character?.avatarUrl ?? null
-        if (newAvatarUrl && newAvatarUrl !== snapshotAvatarUrl) {
-          // Avatar URL changed — do a full fetchChat to update React state
-          if (avatarPollRef.current) clearInterval(avatarPollRef.current)
-          avatarPollRef.current = null
-          await fetchChat()
-          showInfoToast('Avatar updated')
-        }
-      } catch {
-        // Silently continue polling
-      }
-    }, 5000)
-  }, [chat?.participants, id, fetchChat])
-
-  // Cleanup avatar polling on unmount
+  const realtimeConnected = useRealtimeConnected()
   useEffect(() => {
-    return () => {
-      if (avatarPollRef.current) {
-        clearInterval(avatarPollRef.current)
-      }
-    }
-  }, [])
+    if (!avatarWatch || realtimeConnected) return
+    const interval = setInterval(() => {
+      void checkAvatarUpdate(avatarWatch)
+    }, AVATAR_POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [avatarWatch, realtimeConnected, checkAvatarUpdate])
+
+  useEffect(() => {
+    if (!avatarWatch) return
+    const timer = setTimeout(
+      () => setAvatarWatch(null),
+      Math.max(0, avatarWatch.expiresAt - Date.now()),
+    )
+    return () => clearTimeout(timer)
+  }, [avatarWatch])
 
   const handleRegenerateAvatar = useCallback(async (participantId: string) => {
     const participant = chat?.participants.find(p => p.id === participantId)

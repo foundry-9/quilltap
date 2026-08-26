@@ -310,6 +310,43 @@ Click on a task to see more information:
 - Try restarting
 - Contact support if queue remains stuck
 
+## The live wire
+
+The Tasks Queue does not sit there going stale until you prod it. Quilltap keeps
+a slender private line open between the engine room and every window you have
+open — a speaking-tube, if you like — and the moment a task is entered, taken
+up, finished, or abandoned, word travels up it at once. The list you are looking
+at redraws itself within the same breath. Nothing is *sent* along the tube but
+the news that something has changed; the page then asks for the particulars
+through the ordinary channels, so what you read is always the genuine article
+and never a rumour.
+
+The same wire serves the chips in the toolbar, the autonomous-room badges, the
+progress readouts on the housekeeping levers, and the little status lamps beside
+a conversation being filed in the Scriptorium.
+
+**Fallback polling (5s).** Beneath the queue controls sits a switch by that
+name. It governs what happens when the wire is *down* — a server restarted
+beneath you, a network hiccup, a laptop lid closed and reopened. With it on, the
+page falls back to the old arrangement and asks for fresh figures every five
+seconds until the line is restored; with it off, the page waits quietly for the
+line to come back. Either way you lose nothing: the instant the wire is
+reconnected, every readout re-asks for the truth, so a spell of silence costs
+you a little delay and never a wrong number.
+
+There is nothing to configure beyond that switch, and nothing to restart. If you
+ever find a readout that seems becalmed, reloading the page is the whole of the
+remedy.
+
+### Clocks, not wires
+
+A phrase like *"4m ago"* goes out of date for an entirely different reason: not
+because anything happened at the engine, but because the clock on your wall
+moved. Those readings now advance on their own, all together, on the stroke of
+each minute — in the queue, on the conversation cards, wherever they appear —
+and a card that says *Today* becomes *Yesterday* at midnight without being
+asked. No line to the server is involved, and none is wanted.
+
 ## The chips on the mantelpiece
 
 You need not open Settings to know whether the household is busy. A small row of
@@ -333,7 +370,9 @@ again, quite as it should. Two things of the same kind at once read as `2`.
 
 Work that begins and ends between two glances would otherwise pass unnoticed, so
 a chip gives a brief double-blink to mark that something went through. A chip at
-rest is dimmed; it is never merely stale.
+rest is dimmed; it is never merely stale — the chips ride the same live wire
+described above, and light the instant work starts rather than at the next
+glance.
 
 Not everything appears here. Pure housekeeping the Estate performs on its own
 account is left off, and autonomous rooms keep their own [row of

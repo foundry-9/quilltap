@@ -13,24 +13,33 @@
  * lit for the entire span of the work it names, from the first token of prompt
  * crafting through to the result landing.
  *
- * Polling is a heartbeat, not an invitation:
- * - Idle: a slow tick, so server-initiated work (autonomous rooms, scheduled
- *   housekeeping, a wardrobe change enqueuing an avatar) shows up without any
- *   client having to remember to announce it.
- * - Active: a fast tick, so counts track the work as it drains.
- * - `notifyQueueChange()` remains as an instant kick after a known-enqueuing
- *   action, but nothing depends on it any more.
+ * How the counts arrive:
+ * - **Push, normally.** The server publishes a `jobs` hint from every queue
+ *   chokepoint — enqueue, claim, complete, fail, cancel, and both edges of an
+ *   activity span — and the realtime provider invalidates this query. The bus
+ *   coalesces, so a thousand-job reindex is a stream of hints the chips can
+ *   actually keep up with.
+ * - **Polling, as the fallback.** While the socket is down the original
+ *   adaptive heartbeat comes back: a fast tick while something is in flight, a
+ *   slow one while everything is idle. A dropped connection costs latency, not
+ *   correctness.
+ * - `notifyQueueChange()` remains as an instant same-tab kick after a
+ *   known-enqueuing action, but nothing depends on it any more.
  *
- * Work that starts and finishes between two polls would otherwise be invisible,
+ * Work that starts and finishes between two reads would otherwise be invisible,
  * so the API also returns a monotonic `startedByKind` counter; a chip that has
- * advanced since the previous poll pulses even if its live count is back to
- * zero.
+ * advanced since the previous read pulses even if its live count is back to
+ * zero. That stays exactly as it was — it is the missed-event insurance this
+ * design wants, push or no push.
  *
  * @module components/layout/queue-status-badges
  */
 
-import { useState, useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useRealtimeConnected } from '@/hooks/useRealtime'
 import {
   ACTIVITY_CHIPS,
   ACTIVITY_KINDS,
@@ -42,11 +51,12 @@ import {
 const QUEUE_CHANGE_EVENT = 'quilltap:queue-change'
 
 /**
- * Nudge the toolbar chips to re-poll immediately.
+ * Nudge the toolbar chips to re-read immediately.
  *
- * Optional — the chips poll on their own heartbeat and will notice the work
- * regardless. Call this after an action you know enqueues something, purely so
- * the chip lights within a tick instead of within a heartbeat.
+ * Optional — the chips are pushed to by the server and fall back to their own
+ * heartbeat, and will notice the work regardless. Call this after an action you
+ * know enqueues something, purely so the chip lights within this tab's next
+ * frame instead of within a round trip.
  */
 export function notifyQueueChange() {
   if (typeof window !== 'undefined') {
@@ -54,18 +64,18 @@ export function notifyQueueChange() {
   }
 }
 
-/** Poll cadence while something is in flight. */
+/** Fallback poll cadence while something is in flight. */
 const ACTIVE_POLL_INTERVAL = 1_500
-/** Poll cadence while everything is idle. */
+/** Fallback poll cadence while everything is idle. */
 const IDLE_POLL_INTERVAL = 8_000
-/** How long a chip keeps pulsing after between-poll work is detected. */
+/** How long a chip keeps pulsing after between-read work is detected. */
 const PULSE_DURATION = 1_200
 
 type Counts = Record<ActivityKind, number>
 
-interface ActivitySnapshot {
-  active: Counts
-  started: Counts
+interface ActivityResponse {
+  activeByKind?: unknown
+  startedByKind?: unknown
 }
 
 function coerceCounts(raw: unknown): Counts {
@@ -85,34 +95,68 @@ function hasActivity(counts: Counts): boolean {
 }
 
 /**
- * Poll the activity snapshot, fast while busy and slow while idle, and report
- * both live counts and the kinds that blipped between polls.
+ * Read the activity snapshot — pushed while the socket is up, polled on the
+ * old adaptive cadence while it is down — and report both live counts and the
+ * kinds that blipped between reads.
  */
 function useActivitySnapshot(): { counts: Counts; pulsing: Set<ActivityKind> } {
-  const [counts, setCounts] = useState<Counts>(() => emptyActivityCounts())
+  const queryClient = useQueryClient()
   const [pulsing, setPulsing] = useState<Set<ActivityKind>>(() => new Set())
-  const pathname = usePathname()
+  const previousStartedRef = useRef<Counts | null>(null)
+  const pulseTimersRef = useRef(new Map<ActivityKind, ReturnType<typeof setTimeout>>())
 
+  const connected = useRealtimeConnected()
+
+  const { data } = useQuery({
+    queryKey: queryKeys.system.jobs,
+    queryFn: ({ signal }) =>
+      apiFetch<ActivityResponse>('/api/v1/system/jobs', { signal, cache: 'no-store' }),
+    // Counts are a live readout; a cached one is worse than none.
+    staleTime: 0,
+    // The old adaptive heartbeat, kept whole but gated. Reading the cadence off
+    // the query's own last response is what lets it stay adaptive without a
+    // second timer racing the first.
+    refetchInterval: connected
+      ? false
+      : (query) =>
+          hasActivity(coerceCounts(query.state.data?.activeByKind))
+            ? ACTIVE_POLL_INTERVAL
+            : IDLE_POLL_INTERVAL,
+    // Keep the last good snapshot on a transient error rather than blanking
+    // every chip, matching the old fetch-returns-null behaviour.
+    retry: false,
+  })
+
+  const counts = coerceCounts(data?.activeByKind)
+  const started = coerceCounts(data?.startedByKind)
+
+  // A kind whose monotonic completed-span counter advanced did work since the
+  // last read — pulse it even though the work has already finished. The counter
+  // resets when the server restarts, so a decrease is a fresh baseline rather
+  // than a blip.
   useEffect(() => {
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | null = null
-    let previousStarted: Counts | null = null
-    const pulseTimers = new Map<ActivityKind, ReturnType<typeof setTimeout>>()
+    if (!data) return
+    const previous = previousStartedRef.current
+    previousStartedRef.current = started
+    if (!previous) return
 
-    const pulse = (kind: ActivityKind) => {
-      setPulsing((prev) => {
-        if (prev.has(kind)) return prev
-        const next = new Set(prev)
-        next.add(kind)
-        return next
-      })
-      const existing = pulseTimers.get(kind)
+    const blipped = ACTIVITY_KINDS.filter((kind) => started[kind] > previous[kind])
+    if (blipped.length === 0) return
+
+    setPulsing((prev) => {
+      const next = new Set(prev)
+      for (const kind of blipped) next.add(kind)
+      return next
+    })
+
+    const timers = pulseTimersRef.current
+    for (const kind of blipped) {
+      const existing = timers.get(kind)
       if (existing) clearTimeout(existing)
-      pulseTimers.set(
+      timers.set(
         kind,
         setTimeout(() => {
-          pulseTimers.delete(kind)
-          if (cancelled) return
+          timers.delete(kind)
           setPulsing((prev) => {
             if (!prev.has(kind)) return prev
             const next = new Set(prev)
@@ -122,77 +166,28 @@ function useActivitySnapshot(): { counts: Counts; pulsing: Set<ActivityKind> } {
         }, PULSE_DURATION)
       )
     }
+    // `started` is derived fresh each render; `data` identity is the real signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data])
 
-    const fetchSnapshot = async (): Promise<ActivitySnapshot | null> => {
-      try {
-        const res = await fetch('/api/v1/system/jobs', {
-          cache: 'no-store',
-          headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
-        })
-        if (!res.ok) return null
-
-        const data = await res.json()
-        return {
-          active: coerceCounts(data.activeByKind),
-          started: coerceCounts(data.startedByKind),
-        }
-      } catch {
-        return null
-      }
+  // Clear any pulse timers still running when the toolbar unmounts.
+  useEffect(() => {
+    const timers = pulseTimersRef.current
+    return () => {
+      for (const timer of timers.values()) clearTimeout(timer)
+      timers.clear()
     }
+  }, [])
 
-    const tick = async () => {
-      if (timer) {
-        clearTimeout(timer)
-        timer = null
-      }
-
-      const snapshot = await fetchSnapshot()
-      if (cancelled) return
-
-      if (!snapshot) {
-        // Server unreachable or erroring — back off to the idle cadence
-        // rather than hammering it.
-        timer = setTimeout(() => void tick(), IDLE_POLL_INTERVAL)
-        return
-      }
-
-      setCounts(snapshot.active)
-
-      // A kind whose monotonic completed-span counter advanced did work since
-      // the last poll — pulse it even though the work has already finished.
-      // The counter resets when the server restarts, so a decrease is a fresh
-      // baseline rather than a blip.
-      if (previousStarted) {
-        for (const kind of ACTIVITY_KINDS) {
-          if (snapshot.started[kind] > previousStarted[kind]) pulse(kind)
-        }
-      }
-      previousStarted = snapshot.started
-
-      timer = setTimeout(
-        () => void tick(),
-        hasActivity(snapshot.active) ? ACTIVE_POLL_INTERVAL : IDLE_POLL_INTERVAL
-      )
-    }
-
-    void tick()
-
+  // Same-tab zero-latency kick, unchanged in spirit: an action that just
+  // enqueued something invalidates instead of driving a bespoke re-poll.
+  useEffect(() => {
     const handleQueueChange = () => {
-      void tick()
+      void queryClient.invalidateQueries({ queryKey: queryKeys.system.jobs })
     }
     window.addEventListener(QUEUE_CHANGE_EVENT, handleQueueChange)
-
-    return () => {
-      cancelled = true
-      if (timer) clearTimeout(timer)
-      for (const pending of pulseTimers.values()) clearTimeout(pending)
-      pulseTimers.clear()
-      window.removeEventListener(QUEUE_CHANGE_EVENT, handleQueueChange)
-    }
-    // Restarting on navigation is deliberate: it re-reads immediately on the
-    // new page rather than waiting out the current interval.
-  }, [pathname])
+    return () => window.removeEventListener(QUEUE_CHANGE_EVENT, handleQueueChange)
+  }, [queryClient])
 
   return { counts, pulsing }
 }
@@ -201,7 +196,7 @@ function useActivitySnapshot(): { counts: Counts; pulsing: Set<ActivityKind> } {
  * Queue Status Badges component
  *
  * Renders the chip group. Chips dim when idle and pulse when work passed
- * through between two polls.
+ * through between two reads.
  */
 export function QueueStatusBadges() {
   const { counts, pulsing } = useActivitySnapshot()

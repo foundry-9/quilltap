@@ -8,6 +8,7 @@ import { ChatCard } from '@/components/chat/ChatCard'
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
+import { useRealtimeConnected, useRealtimeTopic } from '@/hooks/useRealtime'
 import {
   confirmAndDeleteChat,
   transformCharacterChatToCardData,
@@ -29,6 +30,16 @@ interface CharacterConversationsTabProps {
 }
 
 const CHATS_PER_PAGE = 10
+/** Fallback re-read cadence for a Scriptorium watch, while the socket is down. */
+const SCRIPTORIUM_POLL_INTERVAL_MS = 5000
+/**
+ * How long a watch waits before giving up. A render that never reaches
+ * `embedded` (a failed job, an embedding provider that isn't answering) used to
+ * leave the single-chat watch re-reading forever.
+ */
+const SCRIPTORIUM_WATCH_TIMEOUT_MS = 5 * 60_000
+/** The archive re-render watch covers a fan-out, so it just runs for a minute. */
+const SCRIPTORIUM_ARCHIVE_WATCH_MS = 60_000
 
 export function CharacterConversationsTab({ characterId, characterName, refreshKey }: CharacterConversationsTabProps) {
   const [chats, setChats] = useState<Chat[]>([])
@@ -166,22 +177,54 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
     }
   }
 
-  // Scriptorium status polling: re-fetch chats while render/embed is in progress
-  const scriptoriumPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const scriptoriumPollChatIdRef = useRef<string | null>(null)
+  // Scriptorium status watch: re-read the chat list while a render/embed is in
+  // progress, so the badge walks red → amber → green.
+  //
+  // The live signal is the `jobs` topic — CONVERSATION_RENDER and the embedding
+  // jobs behind it all move it, and the hint arrives when the write actually
+  // commits. The interval below is the fallback for a dropped socket. A watch
+  // is declarative state rather than a stashed interval handle so both paths,
+  // and the timeout, read it the same way.
+  const [scriptoriumWatch, setScriptoriumWatch] = useState<
+    { targetChatId: string | null; expiresAt: number } | null
+  >(null)
 
-  const stopScriptoriumPolling = useCallback(() => {
-    if (scriptoriumPollRef.current) {
-      clearInterval(scriptoriumPollRef.current)
-      scriptoriumPollRef.current = null
-    }
-    scriptoriumPollChatIdRef.current = null
-  }, [])
+  const refreshScriptoriumStatus = useCallback(async () => {
+    await fetchChats(0, searchQuery, false)
+  }, [fetchChats, searchQuery])
 
-  // Clean up polling on unmount
+  // A single-chat watch is satisfied the moment its chat reads `embedded`.
+  // Derived rather than stored: the answer is already on screen in `chats`, and
+  // copying it into state would just be a second thing to keep in step. The
+  // timeout below is what eventually clears the stored watch.
+  const activeScriptoriumWatch = useMemo(() => {
+    if (!scriptoriumWatch) return null
+    if (!scriptoriumWatch.targetChatId) return scriptoriumWatch
+    const target = chats.find(c => c.id === scriptoriumWatch.targetChatId)
+    return target?.scriptoriumStatus === 'embedded' ? null : scriptoriumWatch
+  }, [scriptoriumWatch, chats])
+
+  useRealtimeTopic('jobs', () => {
+    if (activeScriptoriumWatch) void refreshScriptoriumStatus()
+  })
+
+  const realtimeConnected = useRealtimeConnected()
   useEffect(() => {
-    return () => stopScriptoriumPolling()
-  }, [stopScriptoriumPolling])
+    if (!activeScriptoriumWatch || realtimeConnected) return
+    const interval = setInterval(() => {
+      void refreshScriptoriumStatus()
+    }, SCRIPTORIUM_POLL_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [activeScriptoriumWatch, realtimeConnected, refreshScriptoriumStatus])
+
+  useEffect(() => {
+    if (!scriptoriumWatch) return
+    const timer = setTimeout(
+      () => setScriptoriumWatch(null),
+      Math.max(0, scriptoriumWatch.expiresAt - Date.now()),
+    )
+    return () => clearTimeout(timer)
+  }, [scriptoriumWatch])
 
   const handleRenderConversation = async (chatId: string) => {
     try {
@@ -197,24 +240,11 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
         setPage(0)
         fetchChats(0, searchQuery, false)
 
-        // Start polling to track status updates (red → amber → green)
-        if (!scriptoriumPollRef.current) {
-          scriptoriumPollChatIdRef.current = chatId
-          scriptoriumPollRef.current = setInterval(async () => {
-            await fetchChats(0, searchQuery, false)
-            // Check if the target chat has reached 'embedded' status
-            const targetId = scriptoriumPollChatIdRef.current
-            if (targetId) {
-              setChats(currentChats => {
-                const target = currentChats.find(c => c.id === targetId)
-                if (target?.scriptoriumStatus === 'embedded') {
-                  stopScriptoriumPolling()
-                }
-                return currentChats
-              })
-            }
-          }, 5000)
-        }
+        // Watch this chat's status until it reaches 'embedded'.
+        setScriptoriumWatch({
+          targetChatId: chatId,
+          expiresAt: Date.now() + SCRIPTORIUM_WATCH_TIMEOUT_MS,
+        })
       } else {
         showErrorToast(data.error || 'Failed to queue conversation rendering')
       }
@@ -234,14 +264,11 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
       if (res.ok) {
         showSuccessToast(`Queued re-render for ${data.queued} of ${data.total} conversations`)
         notifyQueueChange()
-        // Start polling to track status updates
-        if (!scriptoriumPollRef.current) {
-          scriptoriumPollRef.current = setInterval(async () => {
-            await fetchChats(0, searchQuery, false)
-          }, 5000)
-          // Stop after 60 seconds to avoid infinite polling
-          setTimeout(() => stopScriptoriumPolling(), 60000)
-        }
+        // Watch the fan-out for a minute; there's no single chat to wait on.
+        setScriptoriumWatch({
+          targetChatId: null,
+          expiresAt: Date.now() + SCRIPTORIUM_ARCHIVE_WATCH_MS,
+        })
       } else {
         showErrorToast(data.error || 'Failed to refresh conversation archive')
       }

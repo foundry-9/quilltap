@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
+import { useRealtimeConnected, useRealtimeTopic } from '@/hooks/useRealtime'
 
 interface RegenerateStatus {
   inFlightFanOut: number
@@ -12,6 +13,7 @@ interface RegenerateStatus {
   inFlight: number
 }
 
+/** Fallback poll cadence, used only while the realtime socket is down. */
 const POLL_INTERVAL_MS = 5000
 
 export function MemoryRegenerateCard() {
@@ -20,50 +22,49 @@ export function MemoryRegenerateCard() {
   const [error, setError] = useState<string | null>(null)
   const [status, setStatus] = useState<RegenerateStatus | null>(null)
 
+  const loadStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/memories?action=regenerate-all')
+      if (!res.ok) return
+      const data = await res.json()
+      setStatus({
+        inFlightFanOut: data.inFlightFanOut ?? 0,
+        inFlightWipes: data.inFlightWipes ?? 0,
+        inFlightExtractions: data.inFlightExtractions ?? 0,
+        inFlight: data.inFlight ?? 0,
+      })
+    } catch {
+      // Status read failures aren't fatal — the UI still works without it.
+    }
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     ;(async () => {
-      try {
-        const statusRes = await fetch('/api/v1/memories?action=regenerate-all')
-        if (!cancelled && statusRes.ok) {
-          const data = await statusRes.json()
-          setStatus({
-            inFlightFanOut: data.inFlightFanOut ?? 0,
-            inFlightWipes: data.inFlightWipes ?? 0,
-            inFlightExtractions: data.inFlightExtractions ?? 0,
-            inFlight: data.inFlight ?? 0,
-          })
-        }
-      } catch {
-        // Initial load failures aren't fatal — UI still works without status.
-      }
+      if (!cancelled) await loadStatus()
     })()
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadStatus])
 
-  // Poll status while a sweep is in flight so the user sees it drain.
+  // The sweep is a fan-out of background jobs, so it drains visibly on the
+  // `jobs` topic. Only while something is actually in flight, matching what the
+  // old poll did — an idle card has no reason to re-read on every unrelated job.
+  useRealtimeTopic('jobs', () => {
+    if ((status?.inFlight ?? 0) > 0) void loadStatus()
+  })
+
+  // Fallback: re-read on a timer while a sweep is in flight and the socket is down.
+  const connected = useRealtimeConnected()
   useEffect(() => {
+    if (connected) return
     if (!status || status.inFlight === 0) return
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/v1/memories?action=regenerate-all')
-        if (res.ok) {
-          const data = await res.json()
-          setStatus({
-            inFlightFanOut: data.inFlightFanOut ?? 0,
-            inFlightWipes: data.inFlightWipes ?? 0,
-            inFlightExtractions: data.inFlightExtractions ?? 0,
-            inFlight: data.inFlight ?? 0,
-          })
-        }
-      } catch {
-        // Polling errors are non-fatal.
-      }
+    const interval = setInterval(() => {
+      void loadStatus()
     }, POLL_INTERVAL_MS)
     return () => clearInterval(interval)
-  }, [status])
+  }, [connected, status, loadStatus])
 
   const handleConfirm = async () => {
     setSubmitting(true)

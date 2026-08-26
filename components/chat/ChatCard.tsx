@@ -18,6 +18,7 @@ import { TagDisplay } from '@/components/tags/tag-display'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import AvatarStack from '@/components/ui/AvatarStack'
 import { formatChatListDate } from '@/lib/format-time'
+import { DAY_GRANULARITY_MS, useNow } from '@/hooks/useNow'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 
@@ -147,8 +148,17 @@ export function ChatCard({
   const { formatCharacterName } = useUserCharacterDisplayName()
   const [copiedLink, setCopiedLink] = useState(false)
 
+  // A day-boundary tick — one timer, firing once at local midnight — is all
+  // this readout needs to roll "today" over to "Yesterday" on a list that
+  // has been open since last night.
+  const nowMs = useNow(DAY_GRANULARITY_MS)
+
   const participantNames = formatParticipantNames(chat.participants)
-  const dateStr = formatChatListDate(chat.lastMessageAt || chat.updatedAt, useRelativeDates)
+  const dateStr = formatChatListDate(
+    chat.lastMessageAt || chat.updatedAt,
+    useRelativeDates,
+    nowMs,
+  )
   const displayTitle = chat.title || (characterName ? `Chat with ${characterName}` : 'Untitled Chat')
 
   const handleCopyLink = async (e: React.MouseEvent) => {

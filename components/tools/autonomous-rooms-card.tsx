@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useRealtimeRefetchInterval } from '@/hooks/useRealtime'
 import { EditEnclaveModal } from '@/components/new-chat/EditEnclaveModal'
 
 interface AutonomousRoom {
@@ -68,12 +69,17 @@ function summarizeBudget(room: AutonomousRoom): string {
   return parts.join(' · ')
 }
 
+/** Fallback poll cadence while the realtime socket is down. */
+const ROOMS_POLL_INTERVAL_MS = 5_000
+
 export function AutonomousRoomsCard() {
   const queryClient = useQueryClient()
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: queryKeys.system.autonomousRooms,
     queryFn: ({ signal }) => apiFetch<{ rooms: AutonomousRoom[] }>('/api/v1/system/autonomous-rooms', { signal }),
-    refetchInterval: 5_000,
+    // Same reading as the toolbar badges: pushed by `autonomousRooms`, with
+    // the original 5 s cadence held in reserve.
+    refetchInterval: useRealtimeRefetchInterval(ROOMS_POLL_INTERVAL_MS),
   })
   const [busyChatId, setBusyChatId] = useState<string | null>(null)
   const [editRoom, setEditRoom] = useState<{ id: string; title: string } | null>(null)

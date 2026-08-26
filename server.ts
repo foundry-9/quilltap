@@ -31,36 +31,61 @@ async function main(): Promise<void> {
 
   await app.prepare();
 
+  // Dispatch one upgrade to a lazily-loaded handler module.
+  //
+  // Lazy so config-only environments (build, lint) don't drag in node-pty and
+  // friends. The `.js` extension is required for Node's ESM resolution at
+  // runtime: esbuild keeps these imports external (--external:./lib/...), so we
+  // get a native dynamic import that needs the explicit suffix even though the
+  // source is .ts.
+  const dispatchUpgrade = (
+    label: string,
+    req: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+    load: () => Promise<(ws: WebSocket, req: IncomingMessage) => Promise<void>>,
+  ): void => {
+    const url = req.url ?? '';
+    load()
+      .then((handle) => {
+        wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
+          handle(ws, req).catch((err) => {
+            moduleLogger.error(`${label} WS upgrade error`, { url }, err as Error);
+            try {
+              ws.close(1011, 'internal error');
+            } catch {
+              // ignore
+            }
+          });
+        });
+      })
+      .catch((err) => {
+        moduleLogger.error(`Failed to load ${label} WS handler`, { url }, err as Error);
+        socket.destroy();
+      });
+  };
+
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const url = req.url ?? '';
     // Terminal WebSocket: /api/v1/terminals/[id]/stream
     if (/^\/api\/v1\/terminals\/[^/]+\/stream(\?|$)/.test(url)) {
-      // Lazy-load so config-only environments (build, lint) don't try to load node-pty.
-      // The `.js` extension is required for Node's ESM resolution at runtime: esbuild
-      // keeps this import external (--external:./lib/terminal/ws), so we get a native
-      // dynamic import that needs the explicit suffix even though the source is .ts.
-      import('./lib/terminal/ws.js')
-        .then(({ handleTerminalUpgrade }) => {
-          wss.handleUpgrade(req, socket, head, (ws: WebSocket) => {
-            handleTerminalUpgrade(ws, req).catch((err) => {
-              moduleLogger.error('Terminal WS upgrade error', { url }, err as Error);
-              try {
-                ws.close(1011, 'internal error');
-              } catch {
-                // ignore
-              }
-            });
-          });
-        })
-        .catch((err) => {
-          moduleLogger.error('Failed to load terminal WS handler', { url }, err as Error);
-          socket.destroy();
-        });
+      dispatchUpgrade('Terminal', req, socket, head, () =>
+        import('./lib/terminal/ws.js').then((m) => m.handleTerminalUpgrade),
+      );
+      return;
+    }
+    // Realtime invalidation WebSocket: /api/v1/system/realtime/stream
+    if (/^\/api\/v1\/system\/realtime\/stream(\?|$)/.test(url)) {
+      dispatchUpgrade('Realtime', req, socket, head, () =>
+        import('./lib/realtime/ws.js').then((m) => m.handleRealtimeUpgrade),
+      );
       return;
     }
     // Other upgrades (Next HMR, dev RSC, devtools) are handled by Next's own
     // upgrade listener, which it attaches to this same server on first request.
-    // Returning without destroying lets that listener take over.
+    // Returning without destroying lets that listener take over. Both branches
+    // above are anchored regexes for exactly that reason — a loose match would
+    // swallow Next's HMR socket.
   });
 
   server.listen(port, hostname, () => {

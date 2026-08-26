@@ -103,6 +103,12 @@ export const queryKeys = {
     recent: (limit: number) => ['llm-logs', 'recent', limit] as const,
   },
   system: {
+    /**
+     * The background-activity snapshot behind the toolbar chips
+     * (`GET /api/v1/system/jobs`). Shares the `jobs` realtime topic with
+     * `tasksQueue`, which reads the same queue from a different angle.
+     */
+    jobs: ['system', 'jobs'] as const,
     tasksQueue: ['system', 'tasks-queue'] as const,
     capabilitiesReports: ['system', 'capabilities-reports'] as const,
     autonomousRooms: ['system', 'autonomous-rooms'] as const,

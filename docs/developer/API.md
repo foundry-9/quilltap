@@ -93,6 +93,7 @@ API reference for Quilltap v4.3 and later.
   - [System Conversation Summaries](#system-conversation-summaries)
   - [System Image Aesthetics](#system-image-aesthetics)
   - [System Startup Status](#system-startup-status)
+  - [System Realtime Stream](#system-realtime-stream)
   - [System Plugin Initialization](#system-plugin-initialization)
   - [System Plugin Upgrades](#system-plugin-upgrades)
   - [System Pepper Vault (Deprecated)](#system-pepper-vault-deprecated)
@@ -5989,6 +5990,47 @@ Write that file — or, when the body is empty, delete it.
 Return the live state of server startup — coarse phase plus the event stream, current label, and sub-progress — to drive the loading-screen UI.
 
 **Authentication**: Not required. The loading screen runs before any session exists; the only data exposed is generic "what the server is doing right now," so no user data leaks.
+
+---
+
+### System Realtime Stream
+
+#### `GET /api/v1/system/realtime/stream` (WebSocket)
+
+A single multiplexed WebSocket carrying **invalidation hints** — never data — from the server to every
+connected tab. The client maps each hint onto a TanStack Query invalidation, so this REST API remains
+the single source of truth for what the data *is*; the socket only says *when to look again*.
+
+Not a Next.js route handler: the upgrade is dispatched from `server.ts`'s `upgrade` listener to
+`lib/realtime/ws.ts`, the same way the terminal stream is.
+
+**Authentication**: `lib/realtime/upgrade-auth.ts` — a live session, the instance not in locked mode,
+and an `Origin` (when present) whose host matches `Host`. Browsers do not apply CORS to WebSocket
+upgrades, so that origin check is what stops another site opening a socket against a localhost
+instance; a request with no `Origin` at all is treated as a non-browser client and allowed. A refusal
+closes with `1008`.
+
+**Server → client**:
+
+```json
+{ "v": 1, "topic": "chats", "id": "chat-uuid", "at": 1787763506398 }
+```
+
+- `topic` — a `lib/query/keys.ts` namespace name. Canonical values live in `REALTIME_TOPICS`
+  (`lib/schemas/realtime.types.ts`): `jobs`, `autonomousRooms`, `chats`, `projects`, `characters`,
+  `mountPoints`. Clients **must ignore topics they don't recognise** — an older tab meeting a newer
+  server is the normal case after an upgrade.
+- `id` — present only when the change is row-scoped; absent means the whole namespace.
+- `at` — server ms, for log correlation only. Clients must not order, dedupe, or expire on it.
+
+**Client → server**: `{"type":"ping"}` only, answered `{"type":"pong"}`. There is no subscribe verb —
+every event goes to every connected client (a single-user instance has a handful of tabs and an event
+is ~40 bytes), and invalidating a query key nothing is watching is already a no-op.
+
+**Coalescing**: the bus debounces per `topic:id` on a 250 ms trailing edge, so a job storm becomes one
+event. Clients must therefore tolerate both duplicates (invalidation is idempotent) and gaps — on
+(re)connect a client invalidates every prefix it knows about, which is what makes a missed event a
+latency problem rather than a correctness one.
 
 ---
 

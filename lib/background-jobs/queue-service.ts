@@ -13,6 +13,7 @@ import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
 import { ACTIVITY_KINDS, emptyActivityCounts, type ActivityKind } from './activity-kinds';
 import { getActivityCounts, getActivityStartTotals } from './activity-registry';
+import { publishRealtime } from '@/lib/realtime/bus';
 import {
   COMPLETED_JOB_RETENTION_DAYS,
   DEAD_JOB_RETENTION_DAYS,
@@ -450,6 +451,10 @@ export async function enqueueJob(
   });
 
   logger.info('Background job enqueued', { jobId: job.id, type, userId });
+
+  // Tell every open tab the queue moved. The bus coalesces, so a batch of
+  // enqueues arrives as one hint rather than one per job.
+  publishRealtime('jobs');
 
   // Auto-start the processor when a job is enqueued
   ensureProcessorRunning();
@@ -1086,6 +1091,7 @@ export async function enqueueMemoryExtractionBatch(
   });
 
   if (jobIds.length > 0) {
+    publishRealtime('jobs');
     ensureProcessorRunning();
   }
 
@@ -1145,7 +1151,9 @@ export async function getActivitySnapshot(userId?: string): Promise<{
  */
 export async function cancelJob(jobId: string): Promise<boolean> {
   const repos = getRepositories();
-  return repos.backgroundJobs.cancel(jobId);
+  const cancelled = await repos.backgroundJobs.cancel(jobId);
+  if (cancelled) publishRealtime('jobs');
+  return cancelled;
 }
 
 /**

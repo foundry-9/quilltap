@@ -151,3 +151,17 @@ The Next.js dev server reloads the module graph; if the host module re-evaluates
 Both parent and child build their own per-character vector stores and mount-chunk caches lazily. After the parent applies an embedding write that affects character X, it calls `unloadStore(X)` locally and posts `{ type: 'invalidate', target: 'vectorStore', key: characterId }` to the child. The child's RPC handler unloads its copy. Stale reads on the child are bounded to the IPC round-trip (~ms).
 
 The same pattern applies to `mount-chunk-cache` after `doc-mount-chunks` writes.
+
+### Realtime hints ride the same moment
+
+`dispatchInvalidations` also publishes realtime invalidation hints to every connected browser tab —
+`topicsForWriteBatch(writes)` maps each buffered write's repository namespace to a topic (+ id) and
+calls `publishRealtime`. Separate concern from the caches above (that one is about *this process's*
+in-memory state, this one about every tab's query cache), same moment: the writes have committed and
+are readable.
+
+The child never publishes. `publishRealtime` is a no-op when `QUILLTAP_JOB_CHILD=1`, so shared modules
+that run on both sides — `queue-service`, `activity-registry` — need no guard of their own. A handler's
+changes reach the socket through the parent: the write batch here, `topicsForCompletedJob(job.type,
+job.payload)` on `markCompleted`, and `applyChildActivityDelta` for the mirrored activity spans. Full
+design: [features/complete/realtime-updates.md](features/complete/realtime-updates.md).

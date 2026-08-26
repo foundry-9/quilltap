@@ -4,6 +4,61 @@
 
 ### 4.9-dev
 
+#### Added: realtime interface updates (WebSocket push + shared clock)
+
+Implements `docs/developer/features/complete/realtime-updates.md`. Two separate causes of a stale
+screen, two separate mechanisms.
+
+**Server state changing — push it.** A single multiplexed WebSocket at
+`/api/v1/system/realtime/stream` carries invalidation hints (`{v, topic, id?, at}`, ~40 bytes) to every
+open tab. Hints never carry data: the client maps a topic onto `queryClient.invalidateQueries`, so the
+REST API stays the single source of truth and a reconnect is just "invalidate everything and refetch."
+
+- `lib/realtime/bus.ts` — parent-process fan-out singleton (`globalThis`-backed, so it survives dev
+  HMR) with a mandatory 250 ms trailing-edge debounce per topic+id. Verified live: 12 concurrent
+  enqueues arrive as one frame. Publishing from the forked job child is a no-op; the child's changes
+  reach the bus through the existing IPC.
+- `lib/realtime/ws.ts` + a second branch in `server.ts`'s `upgrade` listener, anchored so Next's own
+  HMR/dev-RSC upgrades still fall through. `scripts/build-standalone-overlay.mjs` emits the new handler
+  alongside the terminal one so it exists in the tarball.
+- Publish points: `enqueueJob` / `enqueueMemoryExtractionBatch` / `cancelJob`, successful
+  `claimNextJob`, `markCompleted` / `markFailed`, activity-registry span start and end plus
+  `applyChildActivityDelta`, the autonomous-room run-state transitions, and — for entity topics —
+  `topicsForCompletedJob` on job completion and `topicsForWriteBatch` inside the dispatcher's
+  post-commit `dispatchInvalidations`, which sees every background-job write after it lands.
+- Client: `lib/realtime/client.ts` (one socket per tab, 1 s → 30 s jittered backoff, 30 s ping,
+  visibility-aware), `lib/realtime/topic-map.ts` (topic → query-key prefixes; unknown topics ignored so
+  an older tab survives a server upgrade), and `RealtimeProvider`, which invalidates every mapped
+  prefix on connect as the catch-up for anything missed while disconnected.
+
+**Polling is now the fallback, not the mechanism.** Every migrated site keeps its original cadence
+wired but gated on socket health via `useRealtimeRefetchInterval` / `useRealtimeTopic`: toolbar queue
+chips (now a TanStack query on `queryKeys.system.jobs`, adaptive 1.5 s/8 s retained as fallback),
+autonomous-room badges and card, tasks queue, story background (both the 30 s passive sweep and the
+3-minute active loop), the memory-backfill / memory-regenerate / summary-regenerate cards, the
+character conversations tab's Scriptorium watch, and the Salon's avatar watch. `StartupProgress` and
+`useHealthCheck` deliberately keep polling. Measured on a live instance: zero background fetches in a
+10 s idle window that previously cost at least one.
+
+**Auth hardening.** `lib/realtime/upgrade-auth.ts` is now the single gate for both WebSocket handlers:
+live session, not locked, and same-origin. It replaces the terminal handler's "a session-ish cookie
+exists" fallback, which proved nothing — Quilltap sets no session cookie, so it accepted any request
+carrying any cookie. Browsers do not apply CORS to WebSocket upgrades, so the origin check is what
+actually keeps another site from opening a socket against a localhost instance; a missing `Origin`
+(non-browser clients) is still allowed.
+
+**The clock advancing — tick it locally.** `hooks/useNow.ts` is a shared, boundary-aligned ticker: one
+timer per granularity regardless of how many components subscribe, ticks just after each minute /
+second / local-midnight boundary so every "4m ago" on screen flips together, inert during SSR, and
+paused for sub-minute granularities while the tab is hidden. Adopted by the tasks queue, the merge
+picker, `ChatCard` (day granularity, for the Today → Yesterday rollover), `StartupProgress`, and the
+autonomous-room budget readout, which drops its bespoke 1 s interval. `StartupProgress`'s private
+`formatRelativeAge` moved into `lib/format-time.ts`; `formatRelativeDate` and `formatChatListDate` take
+an optional `nowMs`.
+
+**User-visible change:** the tasks queue's "Auto-refresh (5s)" toggle is now "Fallback polling (5s)" —
+same switch, honest name. Documented in `help/system-tasks-queue.md`.
+
 #### Fixed: the toolbar activity chips now count the whole job
 
 The **Mem / Emb / Sum / Dgr / Img** chips in the page toolbar only ever counted rows in the

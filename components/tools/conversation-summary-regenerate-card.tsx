@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
+import { useRealtimeConnected, useRealtimeTopic } from '@/hooks/useRealtime'
 
 const STATUS_URL = '/api/v1/system/conversation-summaries?action=regenerate'
+/** Fallback poll cadence, used only while the realtime socket is down. */
 const POLL_INTERVAL_MS = 5000
 
 export function ConversationSummaryRegenerateCard() {
@@ -13,7 +15,7 @@ export function ConversationSummaryRegenerateCard() {
   const [error, setError] = useState<string | null>(null)
   const [inFlight, setInFlight] = useState<number>(0)
 
-  const loadStatus = async () => {
+  const loadStatus = useCallback(async () => {
     try {
       const res = await fetch(STATUS_URL)
       if (res.ok) {
@@ -23,7 +25,7 @@ export function ConversationSummaryRegenerateCard() {
     } catch {
       // Status failures aren't fatal — the button still works.
     }
-  }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -33,14 +35,24 @@ export function ConversationSummaryRegenerateCard() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [loadStatus])
 
-  // Poll while a regeneration is in flight so the user sees it drain.
+  // The regeneration is a fan-out of background jobs, so it drains on the
+  // `jobs` topic — but only while something is in flight, matching the old
+  // poll's scope rather than re-reading on every unrelated job.
+  useRealtimeTopic('jobs', () => {
+    if (inFlight > 0) void loadStatus()
+  })
+
+  // Fallback: a timer while work is in flight and the socket is down.
+  const connected = useRealtimeConnected()
   useEffect(() => {
-    if (inFlight === 0) return
-    const interval = setInterval(loadStatus, POLL_INTERVAL_MS)
+    if (connected || inFlight === 0) return
+    const interval = setInterval(() => {
+      void loadStatus()
+    }, POLL_INTERVAL_MS)
     return () => clearInterval(interval)
-  }, [inFlight])
+  }, [connected, inFlight, loadStatus])
 
   const handleClick = async () => {
     setSubmitting(true)

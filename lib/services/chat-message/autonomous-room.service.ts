@@ -20,6 +20,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueAutonomousRoomTurn } from '@/lib/background-jobs/queue-service';
 import { beginAutonomousRun } from '@/lib/background-jobs/handlers/autonomous-run-start';
 import { logger } from '@/lib/logger';
+import { publishRealtime } from '@/lib/realtime/bus';
 import type { ChatMetadataBase } from '@/lib/schemas/types';
 
 const HANDLER = 'autonomous-room.service';
@@ -145,6 +146,7 @@ export async function pauseAutonomousRoom(
     runPausedAt: new Date().toISOString(),
   } as unknown as Partial<ChatMetadataBase>);
   logger.info('Autonomous-room: paused', { context: HANDLER, chatId });
+  publishRealtime('autonomousRooms');
   return { ok: true };
 }
 
@@ -171,6 +173,7 @@ export async function stopAutonomousRoom(
     runEndedAt: new Date().toISOString(),
   } as unknown as Partial<ChatMetadataBase>);
   logger.info('Autonomous-room: stopped', { context: HANDLER, chatId });
+  publishRealtime('autonomousRooms');
   return { ok: true };
 }
 
@@ -254,6 +257,7 @@ export async function resumeAutonomousRoom(
     jobId,
     runPausedAccumMs,
   });
+  publishRealtime('autonomousRooms');
 
   return { ok: true, runId, jobId };
 }
@@ -424,6 +428,7 @@ export async function updateAutonomousRoomSettings(
     nextRunAt: update.scheduleNextRunAt,
     clampedDestructive,
   });
+  publishRealtime('autonomousRooms');
 
   return { ok: true, clampedDestructive };
 }
@@ -559,6 +564,7 @@ export async function reconcileFailedAutonomousTurn(
       runTurnsConsumed: chat.runTurnsConsumed,
       runTokensConsumed: chat.runTokensConsumed,
     });
+    publishRealtime('autonomousRooms');
   } catch (err) {
     logger.error('Autonomous-room: reconcile-after-failure threw', {
       context: HANDLER,
