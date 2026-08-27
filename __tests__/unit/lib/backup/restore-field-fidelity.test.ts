@@ -7,9 +7,15 @@
  * a Zod schema rides along for free — but it also means a stray destructure in
  * `restore()` can silently drop a column with nothing to catch it.
  *
- * These tests pin the data-model additions of the 4.8 cycle end-to-end, and
- * assert the id-preservation contract that keeps cross-entity references
- * (notably the Commonplace Book's `relatedMemoryIds` graph) intact.
+ * These tests pin the data-model additions of the 4.8 and 4.9 cycles
+ * end-to-end, and assert the id-preservation contract that keeps cross-entity
+ * references (notably the Commonplace Book's `relatedMemoryIds` graph) intact.
+ *
+ * They also pin the two connection-profile columns whose SQLite DEFAULT is the
+ * WRONG answer for an archive that predates them — a column absent from the
+ * archive is absent from the INSERT, so the table default silently decides a
+ * setting the user never chose. Riding along for free only works for a field
+ * the archive actually carries.
  */
 
 import { restore } from '@/lib/backup/restore/restore';
@@ -117,6 +123,16 @@ const NEW_CHAT_SETTINGS_FIELDS = {
   answerConfirmationSettings: { enabled: true, model: 'some-model' },
 }
 
+/** Columns added to connection_profiles in 4.9. */
+const NEW_CONNECTION_PROFILE_FIELDS = {
+  multiCharacterPrefill: false,
+}
+
+/** The 4.9 `chats.equippedOutfit` slot bag, with the hair slot added this cycle. */
+const NEW_EQUIPPED_OUTFIT = {
+  'char-1': { top: ['item-1'], bottom: [], footwear: [], accessories: [], hair: ['item-hair'] },
+}
+
 /**
  * A repo stand-in whose every accessed method is an auto-created jest.fn.
  * `restore()` touches a long tail of repositories we don't care about here;
@@ -142,11 +158,15 @@ function buildRepoMocks() {
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-memory-id' })
   )
   const chatSettingsCreate = jest.fn().mockResolvedValue({})
+  const connectionsCreate = jest.fn().mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
+    Promise.resolve({ ...data, id: opts?.id ?? 'generated-profile-id' })
+  )
 
   const userRepos = new Proxy({} as Record<string, unknown>, {
     get(_t, prop: string) {
       if (prop === 'chats') return repoStub({ create: chatsCreate, addMessage })
       if (prop === 'memories') return repoStub({ create: memoriesCreate })
+      if (prop === 'connections') return repoStub({ create: connectionsCreate, findAll: jest.fn().mockResolvedValue([]) })
       return repoStub()
     },
   })
@@ -161,7 +181,7 @@ function buildRepoMocks() {
   mockedGetUserRepositories.mockReturnValue(userRepos as never)
   mockedGetRepositories.mockReturnValue(globalRepos as never)
 
-  return { chatsCreate, addMessage, memoriesCreate, chatSettingsCreate }
+  return { chatsCreate, addMessage, memoriesCreate, chatSettingsCreate, connectionsCreate }
 }
 
 function primeArchive(data: Record<string, unknown>) {
@@ -171,6 +191,103 @@ function primeArchive(data: Record<string, unknown>) {
     rootFolder: '',
   })
 }
+
+describe('restore field fidelity — 4.9 data-model additions', () => {
+  beforeEach(() => {
+    jest.clearAllMocks()
+  })
+
+  function profileArchive(profile: Record<string, unknown>) {
+    primeArchive(
+      makeBackupData({
+        connectionProfiles: [
+          {
+            id: 'profile-1',
+            userId: 'old-user',
+            name: 'A Profile',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            ...profile,
+          },
+        ],
+      })
+    )
+  }
+
+  it('carries every new connection_profiles column through restore', async () => {
+    const { connectionsCreate } = buildRepoMocks()
+    profileArchive({ provider: 'OPENAI', supportsImageUpload: true, ...NEW_CONNECTION_PROFILE_FIELDS })
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(connectionsCreate).toHaveBeenCalledTimes(1)
+    expect(connectionsCreate.mock.calls[0][0]).toMatchObject(NEW_CONNECTION_PROFILE_FIELDS)
+    expect(connectionsCreate.mock.calls[0][1]).toEqual({ id: 'profile-1' })
+  })
+
+  it('restores an archive older than multiCharacterPrefill as "never chosen", not as the table default', async () => {
+    const { connectionsCreate } = buildRepoMocks()
+    // A pre-4.9 archive has no multiCharacterPrefill key at all. Left absent,
+    // the INSERT omits the column and SQLite's DEFAULT 1 turns the [Name]
+    // prefill ON — which is precisely what Anthropic 4.6+ rejects outright,
+    // and what add-profile-multi-character-prefill-field-v1 exists to avoid on
+    // the upgrade path. An explicit null keeps it "never chosen" so
+    // profileUsesNamePrefill() resolves the provider default.
+    profileArchive({ provider: 'ANTHROPIC', supportsImageUpload: true })
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(connectionsCreate).toHaveBeenCalledTimes(1)
+    expect(connectionsCreate.mock.calls[0][0]).toHaveProperty('multiCharacterPrefill', null)
+  })
+
+  it('seeds supportsImageUpload from the provider map for an archive older than the flag', async () => {
+    const { connectionsCreate } = buildRepoMocks()
+    // Pre-4.3 archives predate the per-profile flag. `supportsImageUpload`
+    // defaults to 0, so restoring one silently stripped image upload from
+    // every profile that had it — while a .qtap import of the same data seeded
+    // it from the historic provider map. The two paths now agree.
+    profileArchive({ provider: 'ANTHROPIC' })
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(connectionsCreate.mock.calls[0][0]).toHaveProperty('supportsImageUpload', true)
+  })
+
+  it('leaves supportsImageUpload alone for a provider that never had the capability', async () => {
+    const { connectionsCreate } = buildRepoMocks()
+    profileArchive({ provider: 'OLLAMA' })
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(connectionsCreate.mock.calls[0][0]).toHaveProperty('supportsImageUpload', false)
+  })
+
+  it('carries the hair wardrobe slot in chats.equippedOutfit through restore', async () => {
+    const { chatsCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chats: [
+          {
+            id: 'chat-1',
+            userId: 'old-user',
+            title: 'A Conversation',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            participants: [],
+            tags: [],
+            equippedOutfit: NEW_EQUIPPED_OUTFIT,
+            messages: [],
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(chatsCreate.mock.calls[0][0]).toMatchObject({ equippedOutfit: NEW_EQUIPPED_OUTFIT })
+  })
+})
 
 describe('restore field fidelity — 4.8 data-model additions', () => {
   beforeEach(() => {

@@ -4,6 +4,41 @@
 
 ### 4.9-dev
 
+#### Fixed: restore let the table DEFAULT decide two connection-profile settings (bug 103, checklist item 10)
+
+Audited every data-model addition since 4.8.4 against backup and restore. All of them ride along
+correctly, but the audit turned up a defect in the mechanism that makes that true.
+
+Restore rebuilds a row by spreading the archive record, which is what lets a *new* column ride along
+with no restore change — and is exactly why a column the archive is **older than** got no answer at
+all. An absent key is absent from the INSERT column list, and SQLite fills it from the table DEFAULT.
+`connection_profiles.multiCharacterPrefill DEFAULT 1` turned the `[Name]` prefill on for every profile
+in a pre-4.9 backup, Anthropic included, where 4.6+ rejects an assistant tail and every multi-character
+turn then 400s. `supportsImageUpload DEFAULT 0` did the mirror image to a pre-4.3 backup and stripped
+vision from the profiles that had it. Both columns' migrations backfill thoughtfully, but a migration
+runs on the upgrade path only.
+
+New `lib/llm/connection-profile-legacy-fields.ts` seeds the columns an older archive cannot carry:
+`supportsImageUpload` from the frozen historic provider map, `multiCharacterPrefill` as an explicit
+`null` — the documented "never chosen" state — so `profileUsesNamePrefill()` resolves the provider
+default. Both `restore.ts` and `import-profiles.ts` call it, so a backup ZIP and a `.qtap` bundle
+carrying the same profile now land the same row; import's private copy of the provider set is gone.
+A key the archive did carry is never touched, a stored `false` and a stored `null` included. The
+provider set is matched case-insensitively — `ProviderEnum` is a plugin-supplied `z.string()`, not a
+closed enum, so the exact-case check the inline version used would have missed a lowercased `openai`.
+
+Tests: 16 cases for the helper, and a 4.9 block in `restore-field-fidelity.test.ts` (the three
+seeding cases fail against the pre-fix restore, plus pass-through coverage for `multiCharacterPrefill`
+and the `hair` slot in `chats.equippedOutfit`). Suite: 725 files, 11,234 tests, all passing
+(was 724 / 11,213).
+
+Docs: `docs/BACKUP-RESTORE.md`'s "What's Included" list was several cycles stale — it omitted document
+stores, instance settings, chat settings, text replacement rules, Document Mode state and the whole
+embedding family, and still advertised the `wardrobe_items` and `outfit_presets` tables dropped in 4.7
+and 4.5. Rewritten, with the exclusions stated and their reasons. `help/system-backup-restore.md` and
+`help/connection-profiles.md` gained the same corrections in the user's voice. DDL.md now documents
+`Wardrobe/instructions.md` and the scenario `archived` frontmatter key, both added this cycle.
+
 #### Verified: published packages and consistent installs (checklist item 9)
 
 Audited every package under `packages/` that changed since 4.8.4 and confirmed each is
@@ -129,6 +164,7 @@ Both guards originally compared flags by substring, which passes for a flag that
 another flag has it as a prefix — `--max` reads as present when only `--max-nodes` is listed. They now
 match whole tokens, and the help-function pattern tolerates reformatting rather than asserting on
 whitespace.
+
 
 #### Removed: dead code sweep (checklist item 5)
 
