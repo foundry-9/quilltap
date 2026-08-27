@@ -2,16 +2,34 @@
 
 | | |
 |---|---|
-| **Status** | OPEN |
+| **Status** | FIXED in v4 (2026-08-27) |
 | **Found** | 2026-08-27 |
+| **Fixed** | 2026-08-27 |
 | **Severity** | Medium (a `.qtap` bundle carrying one malformed connection-profile record now imports **nothing at all** instead of naming the bad item and continuing) |
 | **Who it bites** | Anyone importing a hand-edited or third-party-authored `.qtap` bundle whose `connectionProfiles` array carries a record with a non-string `provider` |
 | **Provenance** | Found by the v5 port's differential — `system_import_state`'s named-item-failures arm (whose corpus deliberately carries malformed records) went from five per-item warnings to one abort sentence and an empty write when its oracle was regenerated at `e000d6bfc` |
 | **Defect site** | `lib/import/quilltap-import/import-profiles.ts:41` (the call outside the try) × `lib/llm/connection-profile-legacy-fields.ts:60` (the throwing expression) |
+| **Fix site** | `lib/import/quilltap-import/import-profiles.ts` (seeding moved inside the per-item `try`; the catch names `rawProfile`) × `lib/llm/connection-profile-legacy-fields.ts` (`typeof` guard in place of `??`) |
 | **v5 status** | Not affected — v5 parses before it seeds, and its helper reads the provider as `as_str().unwrap_or("")`; pinned v5-side by `a_non_string_provider_is_named_and_does_not_abort_the_import` |
 | **Index** | [../bugs.md](../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-08-27).** Both halves named in *The fix* were taken, because
+they answer different questions and only one of them is about this helper. The
+`??` became a `typeof` guard, so the helper is now total over junk input — a
+number, boolean, object or array `provider` seeds `supportsImageUpload: false`
+rather than throwing, which is what a *seeding* helper owes a caller reading an
+archive. And the call moved inside `importConnectionProfiles`'s per-item `try`,
+which is the half that would have contained this defect and any future one like
+it: the catch now names `rawProfile`, since `profile` is block-scoped to the try.
+Each half was verified to fail the other's test in isolation — the helper's four
+new junk-provider cases throw against the old `??`, and the import-path test
+survives the old helper only because the try now wraps it — so neither is
+decoration. The restore path was checked as the bug asked and needed nothing:
+`restore.ts`'s per-profile loop already try-wraps its whole body, seeding
+included, which is exactly why the two paths diverged in the first place. No v5
+change is owed.
 
 ## Symptom
 
@@ -67,10 +85,18 @@ per-profile loop already try-wraps the whole body — verify while there.
 
 ## Verification
 
-Add a malformed-provider record to an import test's bundle and assert the
-import completes with a named warning rather than aborting. (The v5 repo's
-`system_import_state` corpus carries exactly this shape if a ready-made
-vector is wanted.)
+Two regression tests, one per half:
+
+- `__tests__/unit/lib/llm/connection-profile-legacy-fields.test.ts` — four
+  junk-provider cases (number, boolean, object, array) assert the helper seeds
+  `false` rather than throwing. All four throw against the pre-fix `??`.
+- `__tests__/unit/lib/import/quilltap-import-service.test.ts` — a bundle whose
+  `connectionProfiles` array holds one record with `provider: 42` beside a
+  healthy one asserts the malformed item is named in a warning, the healthy one
+  is created, and `imported.connectionProfiles` is 1. It pins the try
+  placement: with the helper reverted it still passes, because the try now
+  catches the TypeError and the repository — the layer that is *meant* to reject
+  a malformed record — produces the named warning instead.
 
 ## v5 coordination
 

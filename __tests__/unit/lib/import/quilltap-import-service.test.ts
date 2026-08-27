@@ -679,6 +679,45 @@ describe('quilltap-import-service', () => {
       expect(result.warnings.join('\n')).toContain('Failed to import connection profile "Local Ollama"');
     });
 
+    it('names a malformed connection profile and imports the rest of the bundle (bug 105)', async () => {
+      // A `.qtap` bundle is untrusted data: a hand-edited one can carry a
+      // non-string `provider`. Bug 105 had the legacy-field seeding running
+      // above the per-item try, so that record's TypeError escaped to the
+      // outer catch and the whole import wrote nothing.
+      const malformed = createMockSanitizedConnectionProfile({ name: 'Hand Edited' });
+      (malformed as unknown as { provider: unknown }).provider = 42;
+      const healthy = createMockSanitizedConnectionProfile({ name: 'Perfectly Fine' });
+
+      const exportData = {
+        manifest: createMockExportManifest({ exportType: 'connection-profiles' }),
+        data: { connectionProfiles: [malformed, healthy] },
+      };
+
+      // The repository is where a malformed record is meant to be rejected —
+      // one named item, not the bundle.
+      mockUserRepos.connections.create.mockImplementation(async (data: any) => {
+        if (typeof data.provider !== 'string') {
+          throw new Error('provider: Expected string, received number');
+        }
+        return { ...data, id: data.id ?? generateId() };
+      });
+
+      const result = await executeImport(testUserId, exportData as any, {
+        conflictStrategy: 'skip',
+        includeMemories: false,
+        includeRelatedEntities: false,
+      });
+
+      expect(result.warnings.join('\n')).toContain('Failed to import connection profile "Hand Edited"');
+      expect(result.warnings.join('\n')).not.toContain('Perfectly Fine');
+      expect(result.imported.connectionProfiles).toBe(1);
+      expect(
+        mockUserRepos.connections.create.mock.calls.some(
+          ([data]: [any]) => data.name === 'Perfectly Fine'
+        )
+      ).toBe(true);
+    });
+
     it('says why the import was refused when the preserveIds preflight cannot read the destination', async () => {
       const character = createMockExportedCharacter();
       const exportData = {

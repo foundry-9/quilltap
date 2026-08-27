@@ -4,6 +4,23 @@
 
 ### 4.9-dev
 
+#### Fixed: one malformed connection profile no longer aborts a whole `.qtap` import (bug 105)
+
+Importing a bundle whose `connectionProfiles` array held a record with a non-string `provider` (a
+hand-edited or third-party-authored `.qtap`) failed the entire import with `(seeded.provider ??
+"").toUpperCase is not a function` and wrote nothing.
+
+The 4.9 legacy-field seeding was called at the top of the import loop's body, outside the per-item
+`try` that wraps the rest of the iteration, and the helper's `??` guards only `null`/`undefined` — a
+number, boolean, object or array reached `.toUpperCase` and threw past the loop to the import's outer
+catch. Two changes: the helper now tests `typeof provider === 'string'`, so junk input seeds
+`supportsImageUpload: false` instead of throwing, and the call moved inside the per-item `try`, so any
+future failure there names the bad profile in a warning and the rest of the bundle imports. The
+backup restore path already try-wrapped its whole per-profile body and needed no change.
+
+Regression tests on both halves: four junk-provider cases on the helper, and an import test asserting
+a bundle with one malformed record beside a healthy one warns by name and imports the healthy one.
+
 #### Added: an outfit pull-down above the slot rows, and slot pickers that list garments only
 
 The outfit composer — the chat-start Starting Outfit panel and both dressing columns of the wardrobe

@@ -38,23 +38,26 @@ export async function importConnectionProfiles(
   const takenNames = new Set(existingProfiles.map((p) => normalizeProfileName(p.name)));
 
   for (const rawProfile of profiles) {
-    // Older exports predate some of the columns; seed them so the bundle's
-    // age, not the table DEFAULT, decides what the profile comes back as.
-    // Shared with backup restore so the two paths can't drift.
-    const profile: ConnectionProfile = seedLegacyConnectionProfileFields(rawProfile);
-    if (
-      rawProfile.multiCharacterPrefill === undefined ||
-      rawProfile.supportsImageUpload === undefined
-    ) {
-      moduleLogger.debug('Seeded connection-profile columns the bundle predates', {
-        profileId: profile.id,
-        provider: profile.provider,
-        seededMultiCharacterPrefill: rawProfile.multiCharacterPrefill === undefined,
-        seededSupportsImageUpload: rawProfile.supportsImageUpload === undefined,
-      });
-    }
-
     try {
+      // Older exports predate some of the columns; seed them so the bundle's
+      // age, not the table DEFAULT, decides what the profile comes back as.
+      // Shared with backup restore so the two paths can't drift. This lives
+      // *inside* the per-item try: a bundle is untrusted data, and one item
+      // that fails to seed must be named and skipped, not abort the import
+      // (bug 105).
+      const profile: ConnectionProfile = seedLegacyConnectionProfileFields(rawProfile);
+      if (
+        rawProfile.multiCharacterPrefill === undefined ||
+        rawProfile.supportsImageUpload === undefined
+      ) {
+        moduleLogger.debug('Seeded connection-profile columns the bundle predates', {
+          profileId: profile.id,
+          provider: profile.provider,
+          seededMultiCharacterPrefill: rawProfile.multiCharacterPrefill === undefined,
+          seededSupportsImageUpload: rawProfile.supportsImageUpload === undefined,
+        });
+      }
+
       const existing = await repos.connections.findById(profile.id);
 
       if (existing) {
@@ -112,12 +115,12 @@ export async function importConnectionProfiles(
       imported++;
     } catch (error) {
       warnings.push(
-        `Failed to import connection profile "${profile.name}": ${
+        `Failed to import connection profile "${rawProfile.name}": ${
           error instanceof Error ? error.message : String(error)
         }`
       );
       moduleLogger.warn('Failed to import connection profile', {
-        profileId: profile.id,
+        profileId: rawProfile.id,
         error: error instanceof Error ? error.message : String(error),
       });
     }

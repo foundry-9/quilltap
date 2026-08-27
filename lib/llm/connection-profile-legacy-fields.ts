@@ -56,9 +56,13 @@ export function seedLegacyConnectionProfileFields<T extends Partial<ConnectionPr
   const seeded = { ...profile };
 
   if (seeded.supportsImageUpload === undefined) {
-    seeded.supportsImageUpload = LEGACY_IMAGE_CAPABLE_PROVIDERS.has(
-      (seeded.provider ?? '').toUpperCase()
-    );
+    // Total over junk: an archive is data, not a contract, and a hand-edited
+    // bundle can hold a number or an object here. `??` would guard only
+    // null/undefined and let everything else reach `.toUpperCase` — a throw
+    // from a *seeding* helper is the wrong shape of failure for one bad record
+    // (bug 105).
+    const provider = typeof seeded.provider === 'string' ? seeded.provider : '';
+    seeded.supportsImageUpload = LEGACY_IMAGE_CAPABLE_PROVIDERS.has(provider.toUpperCase());
   }
 
   // Absent is NOT the same as unset here: the column is a tri-state, and only

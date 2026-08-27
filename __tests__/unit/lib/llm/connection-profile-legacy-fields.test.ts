@@ -46,6 +46,20 @@ describe('seedLegacyConnectionProfileFields', () => {
     it('seeds false rather than throwing when the archive carries no provider', () => {
       expect(seedLegacyConnectionProfileFields({}).supportsImageUpload).toBe(false)
     })
+
+    it.each([
+      ['a number', 42],
+      ['a boolean', true],
+      ['an object', { name: 'openai' }],
+      ['an array', ['openai']],
+    ])('seeds false rather than throwing when the provider is %s (bug 105)', (_label, provider) => {
+      // A bundle is untrusted data. `??` guards only null/undefined, so
+      // anything else reached `.toUpperCase` and threw a TypeError out of a
+      // helper the import loop called outside its per-item try — one bad
+      // record aborted the whole import.
+      const seeded = seedLegacyConnectionProfileFields({ provider } as never)
+      expect(seeded.supportsImageUpload).toBe(false)
+    })
   })
 
   describe('multiCharacterPrefill (4.9+, DEFAULT 1)', () => {

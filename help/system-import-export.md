@@ -333,6 +333,7 @@ instance cannot reach the outside world; otherwise a refresh knows better.
 - An export that fails with **"doc_mount_blob_chunk received without preceding doc_mount_blob"** was written by a build predating this fix and read by one predating it too; the file itself is sound. Import it again on a current build and its large attachments will arrive whole
 - A genuinely truncated export now says so plainly — *"NDJSON export truncated"*, naming the attachments that never finished arriving — rather than complaining about an orphaned chunk
 - Very old exports above ~450 MB that used the monolithic JSON format are too large to import on modern runtimes — re-export them from a newer Quilltap build first
+- A bundle that has been opened up and edited by hand — or written by some other establishment's tooling — may carry a record whose fields are not the shape Quilltap expects. Such a record is named in the warnings and set aside; the rest of the bundle arrives as usual. Should a whole import fall over on account of one such item, you are running a build predating version 4.9, and a newer one will take the same file in stride
 - Try changing conflict resolution strategy
 - Contact support if error persists
 
