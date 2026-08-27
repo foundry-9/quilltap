@@ -4,6 +4,21 @@
 
 ### 4.9-dev
 
+#### Removed: the Salon's hidden desktop message actions
+
+`MessageDesktopActions` rendered a hover toolbar above every message bubble and a row of text
+buttons (Edit, Delete, Resend, Regenerate, Re-attribute, swipe arrows) below it. Both containers
+had been unconditionally hidden since the icon action bar replaced them: `_chat.css` set
+`display: none !important` on `.qt-chat-desktop-hover-actions` and
+`.qt-chat-message-desktop-actions`. The component was still constructed and its handlers still
+threaded through `MessageRow` for every non-editing message in a chat.
+
+Deleted the component, its render site in `MessageRow`, and the three `display: none !important`
+rules — including `.qt-chat-desktop-timestamp`, which had no markup left to hide. No behavior
+changes: the visible controls are `MessageActionBar`, which is untouched, and every prop the
+removed component took is still consumed by the action bar. The classes had no
+`@quilltap/theme-storybook` mirror, so nothing to remove there.
+
 #### Fixed: message action buttons and the verdict badge now use Quilltap's own tooltips
 
 Every control at the bottom of a Salon message named itself with the HTML `title` attribute, so the

@@ -3341,19 +3341,6 @@
    These styles are outside @layer to ensure they have proper specificity
    ========================================================================== */
 
-/* Always hide old hover actions and text buttons - replaced by icon action bar */
-.qt-chat-desktop-hover-actions {
-  display: none !important;
-}
-
-.qt-chat-message-desktop-actions {
-  display: none !important;
-}
-
-.qt-chat-desktop-timestamp {
-  display: none !important;
-}
-
 /* Always show the icon action bar */
 .qt-chat-message-action-bar {
   display: flex !important;
