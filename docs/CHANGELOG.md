@@ -4,6 +4,59 @@
 
 ### 4.9-dev
 
+#### Added: 4.9.0 release notes, and a documentation-freshness sweep (checklist item 13)
+
+Walked the seven files checklist item 13 names, against the 67 commits of the 4.9 cycle
+(`0cd769f3..HEAD`).
+
+`docs/releases/4.9.0.md` did not exist and now does — the production release notes for 4.9.0, matching
+the version in `package.json`, drafted from the CHANGELOG in the pattern of `docs/releases/4.8.0.md`.
+It leads on realtime, the wardrobe work, archivable scenarios and garments, the Documents search chip,
+mid-chat scenario changes, and prompt person consistency, and carries an Upgrading section covering the
+three new migrations, the `PROMPT_CACHE_STRUCTURE_VERSION` 3 - 4 roll, the reverse-proxy requirement
+for the WebSocket upgrade, and the new `NANOGPT` key type. **The human should review it before the
+release** — `tag-for-release` asks whether the developer would rather write a minor release's notes
+themselves, and this was drafted rather than asked.
+
+Three genuine drifts in `docs/developer/API.md`, all found by diffing the documented paths against
+`app/api/**/route.ts`:
+
+- `GET /api/v1/embedding-profiles/models` is not a route. The three real actions
+  (`?action=list-providers`, `?action=list-models`, `?action=fetch-models`) are now documented, including
+  what `fetch-models` does for a provider whose plugin implements no `getAvailableModels`.
+- `PATCH /api/v1/user/profile/avatar` is not a route either; it is `?action=set-avatar` on the profile
+  route, the only action that verb accepts.
+- `/api/v1/settings/brahma-console` (GET/PUT) was undocumented entirely.
+
+Everything else matched: 131 of the 132 route files were already documented, and the only "documented
+but missing" path left is `GET /api/v1/system/realtime/stream`, which is the realtime WebSocket and has
+no `route.ts` by design.
+
+Smaller fixes:
+
+- `README.md` — the realtime interface and shared clock, the Documents search chip and where a result
+  opens, mid-chat scenario changes, per-wardrobe dressing instructions and the all-container Wardrobe
+  dialog, outfit-with-components transfers, archivable scenarios and garments, anti-chorus discipline,
+  per-turn conversation summaries, and `describe_image` plus the two-question image transport check. The
+  version badge was already current.
+- `docs/developer/DEVELOPMENT.md` — `lib/realtime/` and `server.ts` added to the project structure, and
+  the Linting section now documents `scripts/check-qt-classes.mjs` (the third `npm run lint` gate, added
+  this cycle with bugs 100/102) and notes that `lint:fix` does not run it.
+- `CLAUDE.md` — the same `qt-*` guard as a standing rule under Themes.
+- `app/about/AboutView.tsx` — the provider list was missing DeepSeek, Z.AI, and NanoGPT; added, along
+  with a Key Features bullet for the live interface. The version there reads from `package.json` and was
+  already current.
+- `.claude/commands/update-documentation.md` — two links pointed at `features/artifacts.md` and
+  `features/qt-docs-auto-embed.md`, both of which moved into `features/complete/`. Every one of the 80
+  document links in that file now resolves.
+
+`docs/CHANGELOG.md` needed nothing: all 67 commits of the cycle are recorded, in plain voice. Its
+`### 4.9-dev` heading is renamed to `### 4.9.0` by `tag-for-release` itself, so it is correct as it
+stands on a dev branch. The help set needed nothing either — every user-visible commit this cycle
+carried its `help/*.md` update, and all 120 help files have `url` frontmatter with a matching
+`help_navigate(...)` (the seven apparent mismatches are the deliberate ones: `url: *` for the
+everywhere-surfaces, `/salon/:id` for a pattern, and `/` for the two floating panels that are not routes).
+
 #### Fixed: restore let the table DEFAULT decide two connection-profile settings (bug 103, checklist item 10)
 
 Audited every data-model addition since 4.8.4 against backup and restore. All of them ride along

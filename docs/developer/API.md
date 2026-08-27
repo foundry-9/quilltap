@@ -379,9 +379,10 @@ Update current user's profile.
 
 Returns updated profile (same format as GET).
 
-#### `PATCH /api/v1/user/profile/avatar`
+#### `PATCH /api/v1/user/profile?action=set-avatar`
 
-Set or clear user's profile avatar.
+Set or clear the user's profile avatar. `set-avatar` is the only action this verb accepts; any other value
+is a `400`.
 
 **Request Body**:
 
@@ -487,6 +488,34 @@ Update the retention window. Merges with the current value and validates (intege
 ```json
 {
   "staleChatDays": 90
+}
+```
+
+#### `GET /api/v1/settings/brahma-console`
+
+Read the instance-wide Brahma Console settings (`instance_settings['brahmaConsole']`, not a `chat_settings`
+column — same class as the data-retention knob). Holds the agent-turn budget the streaming orchestrator and
+the one-shot `@Brahma` Carina path both read through `resolveBrahmaMaxAgentTurns`. Defaults to 50; the
+duplicate/stale-query guard still stops a self-repeating loop regardless of this number.
+
+**Response:**
+
+```json
+{
+  "maxAgentTurns": 50
+}
+```
+
+#### `PUT /api/v1/settings/brahma-console`
+
+Update the Console settings. The body is merged over the current value before validation (integer, 5-200
+turns), so a partial body is a partial update rather than a wipe.
+
+**Request Body:**
+
+```json
+{
+  "maxAgentTurns": 80
 }
 ```
 
@@ -848,9 +877,25 @@ Update an embedding profile. When the update changes what the default profile pr
 
 Delete an embedding profile.
 
-#### `GET /api/v1/embedding-profiles/models`
+#### `GET /api/v1/embedding-profiles?action=list-providers`
 
-Get available embedding models for a provider.
+List the providers that support embeddings.
+
+**Response**: `{ "providers": ["OPENAI", "OLLAMA", "OPENROUTER", "NANOGPT", "BUILTIN"] }`
+
+#### `GET /api/v1/embedding-profiles?action=list-models`
+
+Get the statically catalogued embedding models. With `&provider=OPENAI`, returns `{ provider, models }`
+for that provider alone; without it, returns every provider's models grouped by provider name. Either way
+the result is cached into `provider_models` so the profile editor can render offline.
+
+#### `GET /api/v1/embedding-profiles?action=fetch-models&provider=OLLAMA&baseUrl=…`
+
+Ask the provider itself what it has installed, rather than reading the static catalogue. `provider` is
+required and must be one of the embedding providers; `baseUrl` is optional and forwarded to the provider
+instance. Local providers (and any provider whose plugin implements no `getAvailableModels`) answer with
+an empty list rather than an error. Where a fetched model id also appears in the static catalogue, its
+name, dimensions, and description are merged in; every returned model carries `installed: true`.
 
 ---
 
