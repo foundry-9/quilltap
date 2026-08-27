@@ -349,18 +349,21 @@ export class OpenAICompatibleProvider implements TextProvider {
   }
 
   /**
-   * Sends a message and returns the complete response.
+   * Build the Chat Completions request body — the ONE build both
+   * {@link sendMessage} and {@link streamMessage} call, so the streaming and
+   * non-streaming shapes cannot drift apart. Maps Quilltap messages to the
+   * OpenAI wire format (tool results and assistant tool calls included),
+   * applies {@link applySystemMessagePolicy}, assembles the body literal, and
+   * finishes with {@link applyProfileParams}.
    *
-   * @param params - LLM parameters including messages, model, and settings
-   * @param apiKey - API key for authentication
-   * @returns Complete LLM response with content and usage statistics
+   * Subclasses that keep the base class's send/stream loops can override this
+   * to reshape the body in one place.
+   *
+   * @param params - LLM parameters for the request
+   * @param stream - Whether the body is for a streaming request; adds
+   *   `stream: true` and `stream_options: { include_usage: true }`
    */
-  async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    this.validateApiKeyRequirement(apiKey);
-    const attachmentResults = this.collectAttachmentFailures(params);
-
-    const client = this.createClient(apiKey);
-
+  protected buildRequestBody(params: LLMParams, stream: boolean): Record<string, unknown> {
     // Map messages to OpenAI Chat Completions format, including tool messages
     const mappedMessages = params.messages
       .filter((m) => {
@@ -411,6 +414,10 @@ export class OpenAICompatibleProvider implements TextProvider {
       max_tokens: params.maxTokens ?? 4096,
       top_p: params.topP ?? 1,
       stop: params.stop,
+      // Spread here — not appended after the literal — so the streaming keys
+      // keep their historical position between `stop` and `user` and the
+      // serialized body stays byte-identical.
+      ...(stream ? { stream: true, stream_options: { include_usage: true } } : {}),
       ...(params.cacheKey ? { user: params.cacheKey } : {}),
       // Tools arrive only once the runtime gate (the profile's "Allow tool
       // use") has passed, so no separate guard is needed here.
@@ -419,6 +426,22 @@ export class OpenAICompatibleProvider implements TextProvider {
         : {}),
     };
     this.applyProfileParams(body, params);
+    return body;
+  }
+
+  /**
+   * Sends a message and returns the complete response.
+   *
+   * @param params - LLM parameters including messages, model, and settings
+   * @param apiKey - API key for authentication
+   * @returns Complete LLM response with content and usage statistics
+   */
+  async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
+    this.validateApiKeyRequirement(apiKey);
+    const attachmentResults = this.collectAttachmentFailures(params);
+
+    const client = this.createClient(apiKey);
+    const body = this.buildRequestBody(params, false);
 
     try {
       const response = (await client.chat.completions.create(
@@ -462,64 +485,7 @@ export class OpenAICompatibleProvider implements TextProvider {
     const attachmentResults = this.collectAttachmentFailures(params);
 
     const client = this.createClient(apiKey);
-
-    // Map messages to OpenAI Chat Completions format, including tool messages
-    const mappedMessages = params.messages
-      .filter((m) => {
-        // Skip tool messages without toolCallId (backward compat)
-        if (m.role === 'tool' && !m.toolCallId) return false;
-        return true;
-      })
-      .map((m) => {
-        // Tool result messages
-        if (m.role === 'tool' && m.toolCallId) {
-          return {
-            role: 'tool' as const,
-            tool_call_id: m.toolCallId as string,
-            content: m.content,
-          };
-        }
-        // Assistant messages with tool calls
-        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
-          return {
-            role: 'assistant' as const,
-            content: m.content || null,
-            tool_calls: m.toolCalls.map((tc: any) => ({
-              id: tc.id,
-              type: tc.type,
-              function: tc.function,
-            })),
-          };
-        }
-        // Standard messages (strip attachments)
-        return {
-          role: m.role as 'system' | 'user' | 'assistant',
-          content: m.content,
-        };
-      });
-
-    // Endpoints whose chat template insists the system message be first and
-    // singular get the leading run folded into one (Bug 82); everyone else is
-    // handed the array untouched.
-    const messages = this.applySystemMessagePolicy(mappedMessages);
-
-    // See the note in sendMessage: a Record so non-standard allow-listed keys
-    // are writable without scattering casts.
-    const body: Record<string, unknown> = {
-      model: params.model,
-      messages,
-      temperature: params.temperature ?? 0.7,
-      max_tokens: params.maxTokens ?? 4096,
-      top_p: params.topP ?? 1,
-      stop: params.stop,
-      stream: true,
-      stream_options: { include_usage: true },
-      ...(params.cacheKey ? { user: params.cacheKey } : {}),
-      ...(params.tools && params.tools.length > 0
-        ? { tools: params.tools, tool_choice: params.toolChoice ?? 'auto' }
-        : {}),
-    };
-    this.applyProfileParams(body, params);
+    const body = this.buildRequestBody(params, true);
 
     try {
       const stream = (await client.chat.completions.create(

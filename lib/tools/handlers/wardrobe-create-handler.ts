@@ -22,13 +22,13 @@ import type {
 } from '../wardrobe-create-tool';
 import { validateWardrobeCreateInput } from '../wardrobe-create-tool';
 import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES, makeEmptyEquippedSlots, isSlotReportedWhenEmpty } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { equipItem } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { unionTypes } from '@/lib/wardrobe/composite-types';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
-import { describeWardrobeEffect } from './wardrobe-handler-shared';
+import { describeWardrobeEffect, formatEquippedSlotLines } from './wardrobe-handler-shared';
 
 export interface WardrobeCreateToolContext {
   userId: string;
@@ -378,19 +378,7 @@ export function formatWardrobeCreateResults(output: WardrobeCreateToolOutput): s
     parts.push(`- Equipped immediately${recipientNote ? ` on ${output.recipient_name}` : ''}`);
 
     if (output.current_state) {
-      const slotSummary = WARDROBE_SLOT_TYPES
-        // An unreported-if-blank slot (hair) drops out when empty — never
-        // surfaced as "(empty)", which reads as "has no hair".
-        .filter((slot) => {
-          const ids = output.current_state![slot];
-          return (ids && ids.length > 0) || isSlotReportedWhenEmpty(slot);
-        })
-        .map((slot) => {
-          const ids = output.current_state![slot];
-          const label = !ids || ids.length === 0 ? '(empty)' : ids.join(', ');
-          return `  ${slot}: ${label}`;
-        })
-        .join('\n');
+      const slotSummary = formatEquippedSlotLines(output.current_state).join('\n');
       parts.push(`- Current outfit:\n${slotSummary}`);
     }
   } else {

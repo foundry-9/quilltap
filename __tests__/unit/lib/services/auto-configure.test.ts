@@ -14,7 +14,7 @@
 import { autoConfigureProfile, type AutoConfigureResult } from '@/lib/services/auto-configure.service'
 import { executeWebSearchTool, formatWebSearchResults, isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler'
 import { createLLMProvider } from '@/lib/llm'
-import { parseLLMJson } from '@/lib/services/ai-import.service'
+import { parseLLMJson } from '@/lib/llm/llm-json'
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm'
 import { getUserRepositories } from '@/lib/repositories/user-scoped'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
@@ -43,7 +43,7 @@ jest.mock('@/lib/llm', () => ({
   createLLMProvider: jest.fn(),
 }))
 
-jest.mock('@/lib/services/ai-import.service', () => ({
+jest.mock('@/lib/llm/llm-json', () => ({
   parseLLMJson: jest.fn(),
 }))
 

@@ -19,17 +19,7 @@ import type {
   UserControlledCharacter,
 } from '../types'
 import type { TimestampConfig } from '@/lib/schemas/types'
-
-/** The wire shape every file-backed scenario tier returns. */
-interface ScenarioPayload {
-  path: string
-  filename: string
-  name: string
-  description?: string
-  isDefault: boolean
-  archived?: boolean
-  body: string
-}
+import { toScenarioOption, type ScenarioPayload } from '@/components/scenario/types'
 
 interface UseNewChatOptions {
   initialCharacterId?: string
@@ -296,15 +286,7 @@ export function useNewChat({
         let loadedGeneralScenarios: GeneralScenarioOption[] = []
         if (generalScenariosRes.ok) {
           const data = await generalScenariosRes.json()
-          loadedGeneralScenarios = (data.scenarios || []).map((s: ScenarioPayload) => ({
-            path: s.path,
-            filename: s.filename,
-            name: s.name,
-            ...(s.description !== undefined && { description: s.description }),
-            isDefault: s.isDefault,
-            archived: s.archived === true,
-            body: s.body,
-          }))
+          loadedGeneralScenarios = (data.scenarios || []).map((s: ScenarioPayload) => toScenarioOption(s))
         } else {
           console.warn('[useNewChat] Failed to load general scenarios', {
             status: generalScenariosRes.status,
@@ -353,15 +335,7 @@ export function useNewChat({
         if (projectScenariosRes && projectScenariosRes.ok) {
           const data = await projectScenariosRes.json()
           // Server returns full ParsedProjectScenario[]; pick the fields the UI needs.
-          loadedProjectScenarios = (data.scenarios || []).map((s: ScenarioPayload) => ({
-            path: s.path,
-            filename: s.filename,
-            name: s.name,
-            ...(s.description !== undefined && { description: s.description }),
-            isDefault: s.isDefault,
-            archived: s.archived === true,
-            body: s.body,
-          }))
+          loadedProjectScenarios = (data.scenarios || []).map((s: ScenarioPayload) => toScenarioOption(s))
         } else if (projectScenariosRes && !projectScenariosRes.ok) {
           console.warn('[useNewChat] Failed to load project scenarios', {
             projectId: selectedProjectId,
@@ -378,15 +352,9 @@ export function useNewChat({
             const scenarios = group.scenarios || []
             for (const s of scenarios) {
               loadedGroupScenarios.push({
+                ...toScenarioOption(s),
                 groupId: group.groupId,
                 groupName: group.groupName,
-                path: s.path,
-                filename: s.filename,
-                name: s.name,
-                ...(s.description !== undefined && { description: s.description }),
-                isDefault: s.isDefault,
-                archived: s.archived === true,
-                body: s.body,
               })
             }
           }

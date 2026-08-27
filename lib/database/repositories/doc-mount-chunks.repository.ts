@@ -23,7 +23,8 @@ import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
-import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
+import { generateDDL, classifySchemaColumns } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { LIKE_ESCAPE_CHAR, likeContainsPattern } from './like-escape';
 
@@ -51,14 +52,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   }
 
   protected async getCollection(): Promise<DatabaseCollection<DocMountChunk>> {
-    if (isMountIndexDegraded()) {
-      throw new Error('Mount index database is in degraded mode');
-    }
-
-    const db = getRawMountIndexDatabase();
-    if (!db) {
-      throw new Error('Mount index database not initialized');
-    }
+    const db = requireMountIndexDb();
 
     if (!this.mountIndexCollectionInitialized) {
       try {
@@ -85,16 +79,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
       }
     }
 
-    const metadata = extractSchemaMetadata(this.collectionName, this.schema);
-    const jsonColumns = metadata.fields
-      .filter(f => f.type === 'array' || f.type === 'object')
-      .map(f => f.name);
-    const arrayColumns = metadata.fields
-      .filter(f => f.type === 'array')
-      .map(f => f.name);
-    const booleanColumns = metadata.fields
-      .filter(f => f.type === 'boolean')
-      .map(f => f.name);
+    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
 
     // Float32 BLOBs in the embedding column need explicit blob-column
     // handling so they're deserialized to Float32Array instead of being

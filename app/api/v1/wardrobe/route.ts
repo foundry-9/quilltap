@@ -12,65 +12,43 @@
 import { NextResponse } from 'next/server';
 import { createContextHandler, withCollectionActionDispatch } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { z } from 'zod';
 import { serverError, created, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
-import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
+import { createWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { ensureGeneralWardrobeFolder } from '@/lib/mount-index/general-wardrobe';
 import {
-  readWardrobeInstructionsFile,
-  writeWardrobeInstructionsFile,
-} from '@/lib/wardrobe/wardrobe-instructions';
-
-const instructionsBodySchema = z.object({
-  instructions: z.string().nullable(),
-});
-
-const createArchetypeSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().nullable().optional(),
-  /** Plain-text image-generation cue; preferred over title in image prompts. */
-  imagePrompt: z.string().nullable().optional(),
-  types: z.array(WardrobeItemTypeEnum).min(1, 'At least one type is required'),
-  appropriateness: z.string().nullable().optional(),
-  isDefault: z.boolean().optional(),
-  /**
-   * IDs of other items this composite bundles. Empty/omitted = leaf item.
-   * Cycle rejection is enforced by the repository.
-   */
-  componentItemIds: z.array(z.string()).optional(),
-  /** Composite-only: clear the designated slots on equip instead of layering. */
-  replace: z.boolean().optional(),
-});
+  parseWardrobeInstructionsBody,
+  handleReadWardrobeInstructions,
+  handleWriteWardrobeInstructions,
+} from '@/lib/wardrobe/wardrobe-instructions-handlers';
 
 // GET /api/v1/wardrobe?action=instructions
 async function handleGetInstructions(): Promise<NextResponse> {
   const mountPointId = await getGeneralMountPointId();
-  const instructions = mountPointId ? await readWardrobeInstructionsFile(mountPointId) : null;
-  logger.debug('[Wardrobe Archetypes v1] Read General dressing instructions', {
-    mountPointId,
-    present: instructions !== null,
+  return handleReadWardrobeInstructions(mountPointId, ({ present }) => {
+    logger.debug('[Wardrobe Archetypes v1] Read General dressing instructions', {
+      mountPointId,
+      present,
+    });
   });
-  return successResponse({ instructions });
 }
 
 // POST /api/v1/wardrobe?action=instructions
 async function handlePostInstructions(req: Request): Promise<NextResponse> {
-  const { instructions } = instructionsBodySchema.parse(await req.json());
-  const cleared = !instructions || instructions.trim().length === 0;
+  const body = await parseWardrobeInstructionsBody(req);
   const { mountPointId } = await ensureGeneralWardrobeFolder();
   if (!mountPointId) {
     // Clearing instructions that can't exist yet is a harmless no-op.
-    if (cleared) return successResponse({ instructions: null });
+    if (body.cleared) return successResponse({ instructions: null });
     return serverError('Quilltap General store is not provisioned yet');
   }
-  await writeWardrobeInstructionsFile(mountPointId, instructions);
-  logger.info('[Wardrobe Archetypes v1] General dressing instructions updated', {
-    mountPointId,
-    cleared,
+  return handleWriteWardrobeInstructions(mountPointId, body, ({ cleared }) => {
+    logger.info('[Wardrobe Archetypes v1] General dressing instructions updated', {
+      mountPointId,
+      cleared,
+    });
   });
-  return successResponse({ instructions: cleared ? null : instructions!.trim() });
 }
 
 // GET /api/v1/wardrobe
@@ -97,7 +75,7 @@ export const GET = createContextHandler(
 export const POST = createContextHandler(
   withCollectionActionDispatch({ instructions: handlePostInstructions }, async (req, { repos }) => {
     const body = await req.json();
-    const validatedData = createArchetypeSchema.parse(body);
+    const validatedData = createWardrobeSchema.parse(body);
 
     const item = await repos.wardrobe.create({
       characterId: null,

@@ -41,8 +41,6 @@ export {
   resolveEditorTags,
   enrichWithDefaultImage,
   enrichProfile,
-  enrichMany,
-  unsetAllDefaults,
   type EnrichedApiKey,
   type EnrichedTag,
   type EditorTag,

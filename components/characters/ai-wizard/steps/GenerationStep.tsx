@@ -12,8 +12,9 @@ import ReactMarkdown from 'react-markdown'
 import { QtapLink } from '@/components/qtap/QtapLink'
 import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
 import type { GeneratableField, GenerationProgress, GeneratedCharacterData } from '../types'
-import { FIELD_LABELS, FIELD_HINT_KEYS, normalizeGeneratedScenarios } from '../types'
-import { PROMPT_FIELD_HINTS, type PromptFieldHint } from '@/components/prompt-fields/field-hints'
+import { FIELD_LABELS, normalizeGeneratedScenarios } from '../types'
+import { FIELD_HINT_KEYS, PROMPT_FIELD_HINTS, type PromptFieldHint } from '@/components/prompt-fields/field-hints'
+import { PromptFieldExample } from '@/components/prompt-fields/PromptFieldLabel'
 
 interface GenerationStepProps {
   generating: boolean
@@ -375,11 +376,7 @@ export function GenerationStep({
                     <p className="text-sm qt-text-destructive">{progress.errors[field]}</p>
                   ) : content ? (
                     <>
-                      {voiceExample && (
-                        <p className="text-xs qt-text-secondary">
-                          Written as: <em>{voiceExample}</em>
-                        </p>
-                      )}
+                      {voiceExample && <PromptFieldExample example={voiceExample} />}
                       {renderFieldPreview(field)}
                     </>
                   ) : (

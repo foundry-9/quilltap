@@ -355,18 +355,6 @@ export function getMountIndexDatabasePath(): string {
 }
 
 /**
- * Get the main database key file path
- *
- * The .dbkey file contains the encrypted pepper used for SQLCipher database
- * encryption. File permissions should be 0o600 (owner read/write only).
- *
- * @returns Database key file path (<base>/data/quilltap.dbkey)
- */
-export function getDbKeyPath(): string {
-  return path.join(getDataDir(), 'quilltap.dbkey');
-}
-
-/**
  * Get the physical database backups directory path
  *
  * Physical backups are stored alongside the database file under data/backups/.

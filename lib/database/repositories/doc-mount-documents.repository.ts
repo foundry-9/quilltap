@@ -16,8 +16,9 @@ import { DocMountDocument, DocMountDocumentSchema } from '@/lib/schemas/mount-in
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
-import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
-import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { getRawMountIndexDatabase } from '../backends/sqlite/mount-index-client';
+import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
+import { generateDDL, classifySchemaColumns } from '../schema-translator';
 import { ensureLinkGroupColumn } from './mount-index-case-repair';
 
 /**
@@ -46,14 +47,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
   }
 
   protected async getCollection(): Promise<DatabaseCollection<DocMountDocument>> {
-    if (isMountIndexDegraded()) {
-      throw new Error('Mount index database is in degraded mode');
-    }
-
-    const db = getRawMountIndexDatabase();
-    if (!db) {
-      throw new Error('Mount index database not initialized');
-    }
+    const db = requireMountIndexDb();
 
     if (!this.mountIndexCollectionInitialized) {
       try {
@@ -83,16 +77,7 @@ export class DocMountDocumentsRepository extends AbstractBaseRepository<DocMount
       }
     }
 
-    const metadata = extractSchemaMetadata(this.collectionName, this.schema);
-    const jsonColumns = metadata.fields
-      .filter(f => f.type === 'array' || f.type === 'object')
-      .map(f => f.name);
-    const arrayColumns = metadata.fields
-      .filter(f => f.type === 'array')
-      .map(f => f.name);
-    const booleanColumns = metadata.fields
-      .filter(f => f.type === 'boolean')
-      .map(f => f.name);
+    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
 
     return new SQLiteCollection<DocMountDocument>(
       db, this.collectionName, jsonColumns, arrayColumns, booleanColumns

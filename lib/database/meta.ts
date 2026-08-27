@@ -10,6 +10,7 @@
 
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { getDefaultSQLitePath, ensureDataDirectoryExists, DatabaseBackendType } from './config';
+import { applySqlcipherKey } from './backends/sqlite/sqlcipher-key';
 import { logger } from '@/lib/logger';
 import path from 'path';
 
@@ -46,11 +47,7 @@ function getMetaConnection(): DatabaseType | null {
     const db = new Database(dbPath);
 
     // SQLCipher key MUST be the first pragma before any other operations.
-    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
-    if (sqlcipherKey) {
-      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
-      db.pragma(`key = "x'${keyHex}'"`);
-    }
+    applySqlcipherKey(db);
 
     // Basic pragmas for safety. Use TRUNCATE journal mode (single file)
     // rather than WAL to stay safe on cloud-synced data directories.

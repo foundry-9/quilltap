@@ -337,46 +337,22 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     );
   }
 
+  protected createErrorMessage(): string {
+    return 'Error creating character entity';
+  }
+
   /**
-   * Vault-aware override of the base `_create`. Mirrors `_update`: strips
-   * vault-managed keys before INSERT so callers that pass e.g. `title` or
-   * `description` to `create()` don't blow up with "no such column" — those
-   * fields belong in the character vault, not the DB row.
+   * Vault-aware row transform for the base `_create`. Mirrors `_update`:
+   * strips vault-managed keys before INSERT so callers that pass e.g. `title`
+   * or `description` to `create()` don't blow up with "no such column" —
+   * those fields belong in the character vault, not the DB row.
    */
-  protected async _create(
-    data: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: CreateOptions
-  ): Promise<Character> {
-    return this.safeQuery(async () => {
-      const id = options?.id || crypto.randomUUID();
-      const now = this.getCurrentTimestamp();
-      const createdAt = options?.createdAt || now;
-      const updatedAt = options?.updatedAt || now;
-
-      const entityInput = {
-        ...data,
-        id,
-        createdAt,
-        updatedAt,
-      };
-
-      const validated = this.validate(entityInput);
-
-      const dbRow = { ...validated } as Record<string, unknown>;
-      for (const f of MANAGED_FIELDS) {
-        delete dbRow[f as string];
-      }
-
-      const collection = await this.getCollection();
-      await collection.insertOne(dbRow as Character);
-
-      logger.info('Entity created', {
-        collection: 'characters',
-        id,
-      });
-
-      return validated;
-    }, 'Error creating character entity');
+  protected toPersistedRow(validated: Character): Character {
+    const dbRow = { ...validated } as Record<string, unknown>;
+    for (const f of MANAGED_FIELDS) {
+      delete dbRow[f as string];
+    }
+    return dbRow as Character;
   }
 
   /**

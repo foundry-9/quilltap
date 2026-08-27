@@ -136,10 +136,8 @@ import {
   type SceneStateEmissionEntry,
 } from './context/memory-injector'
 import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
-import { describeOutfit, decorateOutfitItems, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash'
-import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers'
+import { describeEquippedOutfitTitleOnly } from '@/lib/wardrobe/resolve-equipped'
 import {
   resolveTieredMountPool,
   type TieredMountPool,
@@ -1612,16 +1610,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           const { projectMountPointIds } = await getTurnMountPool()
           // Group stores follow each character's own memberships, so they can't
           // come from the turn pool (which is keyed on the responding character).
-          const resolved = await resolveEquippedOutfitForCharacter(
+          const description = await describeEquippedOutfitTitleOnly(
             repos,
             c.characterId,
             equippedSlots!,
-            await sharedWardrobeTiersForCharacter(c.characterId, projectMountPointIds),
-          )
-          const description = describeOutfit(
-            buildOutfitSlotValues((slot) =>
-              decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
-            ),
+            projectMountPointIds,
           )
           if (description) liveClothingByCharacterId.set(c.characterId, description)
         } catch (error) {

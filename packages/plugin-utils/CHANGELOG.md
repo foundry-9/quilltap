@@ -2,6 +2,12 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [2.5.0] - 2026-08-26
+
+### Added
+
+- `OpenAICompatibleProvider` gained a `protected buildRequestBody(params, stream)` — the one Chat Completions body build both `sendMessage` and `streamMessage` now call, replacing two byte-identical copies of the message mapping and body literal. Behavior-preserving: the streaming keys (`stream`, `stream_options`) keep their historical position between `stop` and `user`, so the serialized body is unchanged. Subclasses that keep the base send/stream loops get a single override point for reshaping the body.
+
 ## [2.4.0] - 2026-08-19
 
 ### Added

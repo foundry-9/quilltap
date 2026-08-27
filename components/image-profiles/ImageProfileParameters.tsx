@@ -6,6 +6,66 @@ interface ImageProfileParametersProps {
   onChange: (params: Record<string, any>) => void
 }
 
+/**
+ * Providers whose only optional parameter is a default size share this block —
+ * same wrapper, heading, and select; only the option list and caption differ.
+ */
+function SizeOnlyParameters({
+  sizes,
+  caption,
+  value,
+  onSizeChange,
+}: {
+  sizes: Array<{ value: string; label: string }>
+  caption: string
+  value: string
+  onSizeChange: (size: string) => void
+}) {
+  return (
+    <div className="space-y-4 border-t qt-border-default pt-4">
+      <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
+
+      {/* Size */}
+      <div>
+        <label className="qt-label mb-1">
+          Default Size
+        </label>
+        <select
+          value={value}
+          onChange={e => onSizeChange(e.target.value)}
+          className="qt-select"
+        >
+          {sizes.map(size => (
+            <option key={size.value} value={size.value}>{size.label}</option>
+          ))}
+        </select>
+        <p className="qt-text-xs mt-1">{caption}</p>
+      </div>
+    </div>
+  )
+}
+
+const Z_AI_SIZES = [
+  { value: '1024x1024', label: 'Square (1024x1024)' },
+  { value: '1280x1280', label: 'Square (1280x1280)' },
+  { value: '1568x1056', label: 'Landscape (1568x1056)' },
+  { value: '1664x928', label: 'Wide (1664x928)' },
+  { value: '1472x1104', label: 'Landscape (1472x1104)' },
+  { value: '1056x1568', label: 'Portrait (1056x1568)' },
+  { value: '928x1664', label: 'Tall (928x1664)' },
+  { value: '1104x1472', label: 'Portrait (1104x1472)' },
+]
+
+const NANOGPT_SIZES = [
+  { value: '1024x1024', label: 'Square (1024x1024)' },
+  { value: '1248x832', label: 'Landscape (1248x832)' },
+  { value: '1360x768', label: 'Wide (1360x768)' },
+  { value: '1536x1024', label: 'Landscape (1536x1024)' },
+  { value: '832x1248', label: 'Portrait (832x1248)' },
+  { value: '768x1360', label: 'Tall (768x1360)' },
+  { value: '1024x1536', label: 'Portrait (1024x1536)' },
+]
+
 export function ImageProfileParameters({
   provider,
   parameters,
@@ -125,59 +185,22 @@ export function ImageProfileParameters({
 
     case 'Z_AI':
       return (
-        <div className="space-y-4 border-t qt-border-default pt-4">
-          <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
-
-          {/* Size */}
-          <div>
-            <label className="qt-label mb-1">
-              Default Size
-            </label>
-            <select
-              value={parameters.size || '1024x1024'}
-              onChange={e => handleChange('size', e.target.value)}
-              className="qt-select"
-            >
-              <option value="1024x1024">Square (1024x1024)</option>
-              <option value="1280x1280">Square (1280x1280)</option>
-              <option value="1568x1056">Landscape (1568x1056)</option>
-              <option value="1664x928">Wide (1664x928)</option>
-              <option value="1472x1104">Landscape (1472x1104)</option>
-              <option value="1056x1568">Portrait (1056x1568)</option>
-              <option value="928x1664">Tall (928x1664)</option>
-              <option value="1104x1472">Portrait (1104x1472)</option>
-            </select>
-            <p className="qt-text-xs mt-1">Z.AI&apos;s recommended sizes for CogView and GLM-Image</p>
-          </div>
-        </div>
+        <SizeOnlyParameters
+          sizes={Z_AI_SIZES}
+          caption="Z.AI's recommended sizes for CogView and GLM-Image"
+          value={parameters.size || '1024x1024'}
+          onSizeChange={size => handleChange('size', size)}
+        />
       )
 
     case 'NANOGPT':
       return (
-        <div className="space-y-4 border-t qt-border-default pt-4">
-          <h3 className="text-sm qt-text-primary">Image Parameters (Optional)</h3>
-
-          {/* Size */}
-          <div>
-            <label className="qt-label mb-1">
-              Default Size
-            </label>
-            <select
-              value={parameters.size || '1024x1024'}
-              onChange={e => handleChange('size', e.target.value)}
-              className="qt-select"
-            >
-              <option value="1024x1024">Square (1024x1024)</option>
-              <option value="1248x832">Landscape (1248x832)</option>
-              <option value="1360x768">Wide (1360x768)</option>
-              <option value="1536x1024">Landscape (1536x1024)</option>
-              <option value="832x1248">Portrait (832x1248)</option>
-              <option value="768x1360">Tall (768x1360)</option>
-              <option value="1024x1536">Portrait (1024x1536)</option>
-            </select>
-            <p className="qt-text-xs mt-1">Common sizes across NanoGPT&apos;s image models; each model maps to its nearest native resolution</p>
-          </div>
-        </div>
+        <SizeOnlyParameters
+          sizes={NANOGPT_SIZES}
+          caption="Common sizes across NanoGPT's image models; each model maps to its nearest native resolution"
+          value={parameters.size || '1024x1024'}
+          onSizeChange={size => handleChange('size', size)}
+        />
       )
 
     case 'GROK':

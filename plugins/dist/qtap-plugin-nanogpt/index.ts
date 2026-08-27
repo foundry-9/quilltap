@@ -18,7 +18,7 @@
  */
 
 import type { TextProviderPlugin, ImageProviderConstraints, EmbeddingModelInfo, ProviderOptionsSchema } from './types';
-import { NanoGPTProvider } from './provider';
+import { NanoGPTProvider, NANOGPT_SUPPORTED_IMAGE_MIME_TYPES } from './provider';
 import { NanoGPTImageProvider } from './image-provider';
 import { NanoGPTEmbeddingProvider } from './embedding-provider';
 import { STATIC_MODELS, STATIC_MODEL_IDS, STATIC_IMAGE_MODEL_IDS, STATIC_EMBEDDING_MODELS } from './models';
@@ -93,7 +93,7 @@ const capabilities = {
 
 const attachmentSupport = {
   supportsAttachments: true as const,
-  supportedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'] as string[],
+  supportedMimeTypes: NANOGPT_SUPPORTED_IMAGE_MIME_TYPES,
   description: 'Images (JPEG, PNG, GIF, WebP) — requires a vision-capable routed model',
   notes:
     'NanoGPT routes to hundreds of upstream models, so the plugin forwards images for any model and lets the host decide: attachments only reach a profile whose supportsImageUpload flag is set, and the describe-fallback substitutes text otherwise.',

@@ -17,21 +17,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, exists, withActionDispatch } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
-import { z } from 'zod';
 import { notFound, serverError, created, conflict, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
-import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
+import { createWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import { resolveWardrobeMount } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
 import {
-  readWardrobeInstructionsFile,
-  writeWardrobeInstructionsFile,
-} from '@/lib/wardrobe/wardrobe-instructions';
-
-const instructionsBodySchema = z.object({
-  instructions: z.string().nullable(),
-});
+  parseWardrobeInstructionsBody,
+  handleReadWardrobeInstructions,
+  handleWriteWardrobeInstructions,
+} from '@/lib/wardrobe/wardrobe-instructions-handlers';
 
 // GET /api/v1/characters/[id]/wardrobe?action=instructions
 async function handleGetInstructions(
@@ -44,13 +40,13 @@ async function handleGetInstructions(
     return notFound('Character');
   }
   const mountPointId = character.characterDocumentMountPointId ?? null;
-  const instructions = mountPointId ? await readWardrobeInstructionsFile(mountPointId) : null;
-  logger.debug('[Wardrobe v1] Read character dressing instructions', {
-    characterId: id,
-    mountPointId,
-    present: instructions !== null,
+  return handleReadWardrobeInstructions(mountPointId, ({ present }) => {
+    logger.debug('[Wardrobe v1] Read character dressing instructions', {
+      characterId: id,
+      mountPointId,
+      present,
+    });
   });
-  return successResponse({ instructions });
 }
 
 // POST /api/v1/characters/[id]/wardrobe?action=instructions
@@ -63,8 +59,7 @@ async function handlePostInstructions(
   if (!exists(character)) {
     return notFound('Character');
   }
-  const { instructions } = instructionsBodySchema.parse(await req.json());
-  const cleared = !instructions || instructions.trim().length === 0;
+  const body = await parseWardrobeInstructionsBody(req);
 
   let loc;
   try {
@@ -76,32 +71,19 @@ async function handlePostInstructions(
     throw error;
   }
   if (!loc) {
-    if (cleared) return successResponse({ instructions: null });
+    if (body.cleared) return successResponse({ instructions: null });
     return serverError('Character has no vault to hold dressing instructions');
   }
 
-  await writeWardrobeInstructionsFile(loc.mountPointId, instructions);
-  logger.info('[Wardrobe v1] Character dressing instructions updated', {
-    characterId: id,
-    mountPointId: loc.mountPointId,
-    cleared,
+  const mountPointId = loc.mountPointId;
+  return handleWriteWardrobeInstructions(mountPointId, body, ({ cleared }) => {
+    logger.info('[Wardrobe v1] Character dressing instructions updated', {
+      characterId: id,
+      mountPointId,
+      cleared,
+    });
   });
-  return successResponse({ instructions: cleared ? null : instructions!.trim() });
 }
-
-const createWardrobeItemSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  description: z.string().nullable().optional(),
-  /** Plain-text image-generation cue; preferred over title in image prompts. */
-  imagePrompt: z.string().nullable().optional(),
-  types: z.array(WardrobeItemTypeEnum).min(1, 'At least one type is required'),
-  appropriateness: z.string().nullable().optional(),
-  isDefault: z.boolean().optional(),
-  /** Optional composite components — empty/omitted = leaf item. */
-  componentItemIds: z.array(z.string()).optional(),
-  /** Composite-only: clear the designated slots on equip instead of layering. */
-  replace: z.boolean().optional(),
-});
 
 // GET /api/v1/characters/[id]/wardrobe
 export const GET = createContextParamsHandler<{ id: string }>(
@@ -149,7 +131,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
     }
 
     const body = await req.json();
-    const validatedData = createWardrobeItemSchema.parse(body);
+    const validatedData = createWardrobeSchema.parse(body);
 
     const item = await repos.wardrobe.create({
       characterId: id,

@@ -5,7 +5,7 @@
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { executeCheapLLMTask } from './core-execution'
-import { parseTitleVerdict, type TitleVerdict } from './title-verdict'
+import { cleanTitle, parseTitleVerdict, type TitleVerdict } from './title-verdict'
 import type { ChatMessage, CheapLLMTaskResult } from './types'
 
 /**
@@ -314,17 +314,7 @@ export async function titleChat(
     selection,
     llmMessages,
     userId,
-    (content: string): string => {
-      // Clean up the title
-      let title = content.trim()
-      // Remove quotes if present
-      title = title.replace(/^["']|["']$/g, '')
-      // Truncate if too long
-      if (title.length > 50) {
-        title = title.substring(0, 47) + '...'
-      }
-      return title
-    },
+    (content: string): string => cleanTitle(content, 50),
     'title-chat',
     chatId
   )
@@ -367,15 +357,48 @@ export async function titleHelpChat(
     selection,
     llmMessages,
     userId,
-    (content: string): string => {
-      let title = content.trim()
-      title = title.replace(/^["']|["']$/g, '')
-      if (title.length > 60) {
-        title = title.substring(0, 57) + '...'
-      }
-      return title
-    },
+    (content: string): string => cleanTitle(content),
     'title-chat',
+    chatId
+  )
+}
+
+/**
+ * Shared implementation for the two title-consideration tasks. The help-chat
+ * and normal-chat twins differ only in the system prompt and the label passed
+ * to `parseTitleVerdict` — the message formatting, task type, and verdict
+ * parsing are identical.
+ */
+async function considerTitleUpdateWithPrompt(
+  systemPrompt: string,
+  parseLabel: string,
+  currentTitle: string,
+  recentMessages: ChatMessage[],
+  existingSummaryOrTitle: string | null,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<TitleVerdict>> {
+  // Format recent messages
+  const conversationText = recentMessages
+    .map(m => `${m.role.toUpperCase()}: ${m.content.substring(0, 500)}`) // Truncate long messages
+    .join('\n\n')
+
+  const contextInfo = existingSummaryOrTitle
+    ? `Previous context: ${existingSummaryOrTitle}`
+    : 'No previous context'
+
+  const llmMessages: LLMMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: `Current Title: "${currentTitle}"\n\n${contextInfo}\n\nRecent Messages:\n${conversationText}` },
+  ]
+
+  return executeCheapLLMTask(
+    selection,
+    llmMessages,
+    userId,
+    (content: string): TitleVerdict => parseTitleVerdict(content, parseLabel, chatId),
+    'consider-title-update',
     chatId
   )
 }
@@ -391,25 +414,40 @@ export async function considerHelpChatTitleUpdate(
   userId: string,
   chatId?: string
 ): Promise<CheapLLMTaskResult<TitleVerdict>> {
-  const conversationText = recentMessages
-    .map(m => `${m.role.toUpperCase()}: ${m.content.substring(0, 500)}`)
-    .join('\n\n')
+  return considerTitleUpdateWithPrompt(
+    HELP_CHAT_TITLE_CONSIDERATION_PROMPT,
+    'consider-help-chat-title-update',
+    currentTitle,
+    recentMessages,
+    existingSummaryOrTitle,
+    selection,
+    userId,
+    chatId
+  )
+}
 
-  const contextInfo = existingSummaryOrTitle
-    ? `Previous context: ${existingSummaryOrTitle}`
-    : 'No previous context'
-
+/**
+ * Shared implementation for the two title-from-summary tasks. The help-chat
+ * and normal-chat twins differ only in the system prompt.
+ */
+async function generateTitleFromSummaryWithPrompt(
+  systemPrompt: string,
+  summary: string,
+  selection: CheapLLMSelection,
+  userId: string,
+  chatId?: string
+): Promise<CheapLLMTaskResult<string>> {
   const llmMessages: LLMMessage[] = [
-    { role: 'system', content: HELP_CHAT_TITLE_CONSIDERATION_PROMPT },
-    { role: 'user', content: `Current Title: "${currentTitle}"\n\n${contextInfo}\n\nRecent Messages:\n${conversationText}` },
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: `Summary:\n${summary}` },
   ]
 
   return executeCheapLLMTask(
     selection,
     llmMessages,
     userId,
-    (content: string): TitleVerdict => parseTitleVerdict(content, 'consider-help-chat-title-update', chatId),
-    'consider-title-update',
+    (content: string): string => cleanTitle(content),
+    'title-from-summary',
     chatId
   )
 }
@@ -423,24 +461,11 @@ export async function generateHelpChatTitleFromSummary(
   userId: string,
   chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
-  const llmMessages: LLMMessage[] = [
-    { role: 'system', content: HELP_CHAT_TITLE_FROM_SUMMARY_PROMPT },
-    { role: 'user', content: `Summary:\n${summary}` },
-  ]
-
-  return executeCheapLLMTask(
+  return generateTitleFromSummaryWithPrompt(
+    HELP_CHAT_TITLE_FROM_SUMMARY_PROMPT,
+    summary,
     selection,
-    llmMessages,
     userId,
-    (content: string): string => {
-      let title = content.trim()
-      title = title.replace(/^["']|["']$/g, '')
-      if (title.length > 60) {
-        title = title.substring(0, 57) + '...'
-      }
-      return title
-    },
-    'title-from-summary',
     chatId
   )
 }
@@ -459,33 +484,11 @@ export async function generateTitleFromSummary(
   userId: string,
   chatId?: string
 ): Promise<CheapLLMTaskResult<string>> {
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: CHAT_TITLE_FROM_SUMMARY_PROMPT,
-    },
-    {
-      role: 'user',
-      content: `Summary:\n${summary}`,
-    },
-  ]
-
-  return executeCheapLLMTask(
+  return generateTitleFromSummaryWithPrompt(
+    CHAT_TITLE_FROM_SUMMARY_PROMPT,
+    summary,
     selection,
-    llmMessages,
     userId,
-    (content: string): string => {
-      // Clean up the title
-      let title = content.trim()
-      // Remove quotes if present
-      title = title.replace(/^["']|["']$/g, '')
-      // Truncate if too long (60 characters max)
-      if (title.length > 60) {
-        title = title.substring(0, 57) + '...'
-      }
-      return title
-    },
-    'title-from-summary',
     chatId
   )
 }
@@ -509,32 +512,14 @@ export async function considerTitleUpdate(
   userId: string,
   chatId?: string
 ): Promise<CheapLLMTaskResult<TitleVerdict>> {
-  // Format recent messages
-  const conversationText = recentMessages
-    .map(m => `${m.role.toUpperCase()}: ${m.content.substring(0, 500)}`) // Truncate long messages
-    .join('\n\n')
-
-  const contextInfo = existingSummaryOrTitle
-    ? `Previous context: ${existingSummaryOrTitle}`
-    : 'No previous context'
-
-  const llmMessages: LLMMessage[] = [
-    {
-      role: 'system',
-      content: CHAT_TITLE_CONSIDERATION_PROMPT,
-    },
-    {
-      role: 'user',
-      content: `Current Title: "${currentTitle}"\n\n${contextInfo}\n\nRecent Messages:\n${conversationText}`,
-    },
-  ]
-
-  return executeCheapLLMTask(
-    selection,
-    llmMessages,
-    userId,
-    (content: string): TitleVerdict => parseTitleVerdict(content, 'consider-title-update', chatId),
+  return considerTitleUpdateWithPrompt(
+    CHAT_TITLE_CONSIDERATION_PROMPT,
     'consider-title-update',
+    currentTitle,
+    recentMessages,
+    existingSummaryOrTitle,
+    selection,
+    userId,
     chatId
   )
 }

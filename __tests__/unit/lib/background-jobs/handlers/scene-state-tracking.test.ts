@@ -13,6 +13,8 @@ jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
     leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
     itemsById: new Map(),
   }),
+  // What the real pipeline renders for the empty outfit mocked above.
+  describeEquippedOutfitTitleOnly: jest.fn().mockResolvedValue('- completely naked and unadorned\n'),
 }))
 
 jest.mock('@/lib/logging/create-logger', () => ({

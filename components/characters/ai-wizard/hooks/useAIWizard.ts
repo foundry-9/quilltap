@@ -17,25 +17,14 @@ import type {
   GeneratedCharacterData,
   AIWizardRequest,
   AIWizardResponse,
+  WizardCharacterData,
 } from '../types'
 import { normalizeGeneratedScenarios } from '../types'
 
 interface UseAIWizardProps {
   characterId?: string
   characterName: string
-  currentData: {
-    title?: string
-    identity?: string
-    description?: string
-    manifesto?: string
-    personality?: string
-    scenarios?: Array<{ id: string; title: string; content: string }>
-    exampleDialogues?: string
-    systemPrompt?: string
-    firstMessage?: string
-    pronouns?: { subject: string; object: string; possessive: string } | null
-    aliases?: string[]
-  }
+  currentData: WizardCharacterData
   onApply: (data: GeneratedCharacterData) => void
   onClose: () => void
 }

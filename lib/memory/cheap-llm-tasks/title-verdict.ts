@@ -15,7 +15,7 @@
  * @module memory/cheap-llm-tasks/title-verdict
  */
 
-import { stripCodeFences } from '@/lib/services/ai-import.service'
+import { stripCodeFences } from '@/lib/llm/llm-json'
 import { logger } from '@/lib/logger'
 
 /** The verdict shape both title tasks resolve to. */
@@ -79,15 +79,25 @@ function readTitleKey(parsed: Record<string, unknown>): { value: unknown; key: s
   return null
 }
 
-/** Trim, strip a wrapping quote pair, and cap the length. */
-function normalizeTitle(raw: string): string | null {
+/**
+ * Trim, strip a wrapping quote pair, and cap the length.
+ *
+ * Shared by the title-generation tasks in `chat-tasks.ts` and by
+ * `normalizeTitle` below. Returns `''` when nothing survives the cleanup.
+ */
+export function cleanTitle(raw: string, maxLength: number = MAX_TITLE_LENGTH): string {
   const cleaned = raw.trim().replace(/^["']/, '').replace(/["']$/, '').trim()
   if (!cleaned) {
-    return null
+    return ''
   }
-  return cleaned.length > MAX_TITLE_LENGTH
-    ? cleaned.substring(0, MAX_TITLE_LENGTH - 3) + '...'
+  return cleaned.length > maxLength
+    ? cleaned.substring(0, maxLength - 3) + '...'
     : cleaned
+}
+
+/** Trim, strip a wrapping quote pair, and cap the length. */
+function normalizeTitle(raw: string): string | null {
+  return cleanTitle(raw) || null
 }
 
 /**

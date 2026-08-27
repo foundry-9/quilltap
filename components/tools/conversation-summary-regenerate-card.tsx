@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
-import { useRealtimeConnected, useRealtimeTopic } from '@/hooks/useRealtime'
+import { useRealtimeFallbackPoll, useRealtimeTopic } from '@/hooks/useRealtime'
 
 const STATUS_URL = '/api/v1/system/conversation-summaries?action=regenerate'
 /** Fallback poll cadence, used only while the realtime socket is down. */
@@ -45,14 +45,9 @@ export function ConversationSummaryRegenerateCard() {
   })
 
   // Fallback: a timer while work is in flight and the socket is down.
-  const connected = useRealtimeConnected()
-  useEffect(() => {
-    if (connected || inFlight === 0) return
-    const interval = setInterval(() => {
-      void loadStatus()
-    }, POLL_INTERVAL_MS)
-    return () => clearInterval(interval)
-  }, [connected, inFlight, loadStatus])
+  useRealtimeFallbackPoll(() => {
+    void loadStatus()
+  }, POLL_INTERVAL_MS, inFlight > 0)
 
   const handleClick = async () => {
     setSubmitting(true)

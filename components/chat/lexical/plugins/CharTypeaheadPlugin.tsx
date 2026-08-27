@@ -32,9 +32,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { JSX } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import { LexicalTypeaheadMenuPlugin } from '@lexical/react/LexicalTypeaheadMenuPlugin'
 import type { MenuTextMatch } from '@lexical/react/LexicalTypeaheadMenuPlugin'
@@ -65,9 +63,6 @@ import { CHAR_INSERT_TAG } from '../../char-insert/insert-char'
 
 /** Rows visible at once; the menu scrolls with the keyboard beyond this. */
 const MENU_LIMIT = 10
-
-/** Both profiles' toggles live on the chat-settings row. */
-type ChatSettingsResponse = Partial<Record<CharProfile['settingsKey'], boolean>>
 
 function toOption(profile: CharProfile, entry: CharEntry): TypeaheadOption<CharEntry> {
   return new TypeaheadOption<CharEntry>(
@@ -148,10 +143,8 @@ export function CharTypeaheadPlugin({
   profile,
 }: Readonly<CharTypeaheadPluginProps>): JSX.Element | null {
   const [editor] = useLexicalComposerContext()
-  const { data: chatSettings } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
-  })
+  // Both profiles' toggles live on the chat-settings row.
+  const { data: chatSettings } = useChatSettingsQuery()
 
   const [index, setIndex] = useState<CharIndex | null>(() => profile.loader.getLoaded())
   const [query, setQuery] = useState<string | null>(null)

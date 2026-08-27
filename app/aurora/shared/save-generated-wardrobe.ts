@@ -8,6 +8,7 @@
  */
 
 import { orderGeneratedItemsLeafFirst } from '@/lib/wardrobe/generated-items'
+import { wardrobeCollectionUrl } from '@/lib/wardrobe/wardrobe-container'
 import type { GeneratedWardrobeItem } from '@/components/characters/ai-wizard'
 
 export async function saveGeneratedWardrobeItems(
@@ -25,7 +26,7 @@ export async function saveGeneratedWardrobeItems(
       .filter((id): id is string => Boolean(id))
 
     try {
-      const res = await fetch(`/api/v1/characters/${characterId}/wardrobe`, {
+      const res = await fetch(wardrobeCollectionUrl({ scope: 'character', id: characterId }), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

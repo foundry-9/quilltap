@@ -56,11 +56,6 @@ export class PreserveIdsCollisionError extends Error {
   }
 }
 
-function getPreserveIdsCreateOptions(sourceId: string | undefined, options: ImportOptions) {
-  if (!sourceId || !options.preserveIds) return undefined;
-  return { id: sourceId };
-}
-
 /**
  * Pre-scan every id the bundle would claim and check it against the live
  * instance, before a single write happens.

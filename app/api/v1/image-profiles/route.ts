@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
-import { successResponse, created, notFound, badRequest, serverError } from '@/lib/api/responses';
+import { successResponse, created, conflict, notFound, badRequest, serverError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
@@ -360,10 +360,7 @@ export const POST = createContextHandler(async (req, context) => {
     // Check for duplicate name
     const existingProfile = await repos.imageProfiles.findByName(user.id, name.trim());
     if (existingProfile) {
-      return NextResponse.json(
-        { error: 'An image profile with this name already exists' },
-        { status: 409 }
-      );
+      return conflict('An image profile with this name already exists');
     }
 
     // If setting as default, unset other defaults

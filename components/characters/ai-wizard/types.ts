@@ -5,7 +5,7 @@
  */
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
-import { PROMPT_FIELD_HINTS, type PromptFieldHintKey } from '@/components/prompt-fields/field-hints'
+import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 
 // ============================================================================
 // WIZARD STATE
@@ -142,6 +142,26 @@ export interface AIWizardState {
 // API TYPES
 // ============================================================================
 
+/**
+ * The character's current field values as the wizard sees them — sent to the
+ * API as `existingData` and threaded through the modal and hook props as
+ * `currentData`. A type alias rather than an interface so it stays assignable
+ * to the `Record<string, unknown>` surfaces that receive it.
+ */
+export type WizardCharacterData = {
+  title?: string
+  identity?: string
+  description?: string
+  manifesto?: string
+  personality?: string
+  scenarios?: Array<{ id: string; title: string; content: string }>
+  exampleDialogues?: string
+  systemPrompt?: string
+  firstMessage?: string
+  pronouns?: { subject: string; object: string; possessive: string } | null
+  aliases?: string[]
+}
+
 export interface AIWizardRequest {
   primaryProfileId: string
   visionProfileId?: string
@@ -151,19 +171,7 @@ export interface AIWizardRequest {
   documentId?: string
 
   characterName: string
-  existingData?: {
-    title?: string
-    identity?: string
-    description?: string
-    manifesto?: string
-    personality?: string
-    scenarios?: Array<{ id: string; title: string; content: string }>
-    exampleDialogues?: string
-    systemPrompt?: string
-    firstMessage?: string
-    pronouns?: { subject: string; object: string; possessive: string } | null
-    aliases?: string[]
-  }
+  existingData?: WizardCharacterData
 
   background: string
 
@@ -187,19 +195,7 @@ export interface AIWizardModalProps {
   onClose: () => void
   characterId?: string
   characterName: string
-  currentData: {
-    title?: string
-    identity?: string
-    description?: string
-    manifesto?: string
-    personality?: string
-    scenarios?: Array<{ id: string; title: string; content: string }>
-    exampleDialogues?: string
-    systemPrompt?: string
-    firstMessage?: string
-    pronouns?: { subject: string; object: string; possessive: string } | null
-    aliases?: string[]
-  }
+  currentData: WizardCharacterData
   onApply: (data: GeneratedCharacterData) => void
 }
 
@@ -267,24 +263,6 @@ export const FIELD_LABELS: Record<GeneratableField, string> = {
   properties: 'Properties (Pronouns & Aliases)',
   physicalDescription: 'Physical Description',
   wardrobeItems: 'Wardrobe',
-}
-
-/**
- * Maps wizard field keys to their `PROMPT_FIELD_HINTS` entries, for surfaces
- * that show the shared hint copy (the checkbox descriptions below and the
- * review pane in `GenerationStep`). Fields absent here (name, title,
- * properties, wardrobeItems) have no prompt-voice hint.
- */
-export const FIELD_HINT_KEYS: Partial<Record<GeneratableField, PromptFieldHintKey>> = {
-  identity: 'identity',
-  description: 'description',
-  manifesto: 'manifesto',
-  personality: 'personality',
-  scenarios: 'scenario',
-  exampleDialogues: 'exampleDialogues',
-  firstMessage: 'firstMessage',
-  systemPrompt: 'systemPrompt',
-  physicalDescription: 'physicalDescription',
 }
 
 // Checkbox descriptions single-source their field-vantage wording from

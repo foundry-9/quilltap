@@ -18,6 +18,7 @@
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
+import { applySqlcipherKey } from './sqlcipher-key';
 import { stopLLMLogsPeriodicCheckpoints, runLLMLogsShutdownCheckpoint } from './llm-logs-protection';
 
 const moduleLogger = logger.child({ module: 'database:llm-logs-client' });
@@ -58,10 +59,7 @@ export function getLLMLogsSQLiteClient(config: SQLiteConfig): DatabaseType | nul
     const db = new Database(config.path);
 
     // SQLCipher key MUST be the first pragma before any other operations.
-    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
-    if (sqlcipherKey) {
-      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
-      db.pragma(`key = "x'${keyHex}'"`);
+    if (applySqlcipherKey(db)) {
       moduleLogger.debug('SQLCipher key set on LLM logs database');
     }
 

@@ -19,7 +19,7 @@ import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 
 import { getErrorMessage } from '@/lib/error-utils'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
-import { stripCodeFences } from '@/lib/services/ai-import.service'
+import { stripCodeFences } from '@/lib/llm/llm-json'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 import { createHash } from 'node:crypto'
 import { moderationProviderRegistry } from '@/lib/plugins/moderation-provider-registry'

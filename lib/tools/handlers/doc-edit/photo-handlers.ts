@@ -1,5 +1,5 @@
 /**
- * Photo Album Tool Handlers (keep_image / list_images / attach_image)
+ * Photo Album Tool Handlers (keep_image / list_images / attach_image / describe_image)
  *
  * Photos are documents in the character vault — a `photos/` subfolder in the
  * character's mount point. `keep_image` makes a hard link to an existing
@@ -33,18 +33,6 @@ import {
   collectPeerCharacterIdsForReads,
 } from './shared';
 
-// ============================================================================
-// Photo Album Tools (keep_image / list_images / attach_image)
-//
-// Photos are documents in the character vault — a `photos/` subfolder in the
-// character's mount point. `keep_image` makes a hard link to an existing
-// image binary (dedup by sha256) and writes a Markdown context document
-// (prompt + scene snapshot + caption + tags) as the link's extractedText,
-// so the standard character-vault search picks it up. `list_images` is a
-// thin facade over the existing search infrastructure. `attach_image`
-// resurfaces a kept image into the current outgoing message.
-// ============================================================================
-
 interface ResolvedCharacterVault {
   characterId: string;
   characterName: string;
@@ -69,6 +57,31 @@ async function resolveActingCharacterVault(
   };
 }
 
+/**
+ * The shared preamble for the custodial photo tools: require a character
+ * context, then resolve the acting character's vault. Returns either the
+ * resolved vault or the exact error string the caller should surface.
+ */
+async function requireActingCharacterVault(
+  context: DocEditToolContext,
+  toolName: string
+): Promise<
+  | { ok: true; vault: ResolvedCharacterVault }
+  | { ok: false; error: string }
+> {
+  if (!context.characterId) {
+    return { ok: false, error: `${toolName} requires a character context` };
+  }
+  const vault = await resolveActingCharacterVault(context);
+  if (!vault) {
+    return {
+      ok: false,
+      error: 'No database-backed character vault is linked to the acting character',
+    };
+  }
+  return { ok: true, vault };
+}
+
 async function findExistingPhotosLinkBySha(
   mountPointId: string,
   sha256: string
@@ -90,17 +103,11 @@ export async function handleKeepImage(
   input: KeepImageInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: KeepImageOutput; error?: string; formattedText?: string }> {
-  if (!context.characterId) {
-    return { success: false, error: 'keep_image requires a character context' };
+  const resolved = await requireActingCharacterVault(context, 'keep_image');
+  if (!resolved.ok) {
+    return { success: false, error: resolved.error };
   }
-
-  const vault = await resolveActingCharacterVault(context);
-  if (!vault) {
-    return {
-      success: false,
-      error: 'No database-backed character vault is linked to the acting character',
-    };
-  }
+  const vault = resolved.vault;
 
   try {
     const saved = await saveImageToAlbum({
@@ -243,17 +250,11 @@ export async function handleListImages(
   input: ListImagesInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: ListImagesOutput; error?: string; formattedText?: string }> {
-  if (!context.characterId) {
-    return { success: false, error: 'list_images requires a character context' };
+  const resolved = await requireActingCharacterVault(context, 'list_images');
+  if (!resolved.ok) {
+    return { success: false, error: resolved.error };
   }
-
-  const selfVault = await resolveActingCharacterVault(context);
-  if (!selfVault) {
-    return {
-      success: false,
-      error: 'No database-backed character vault is linked to the acting character',
-    };
-  }
+  const selfVault = resolved.vault;
 
   const vaults = await collectVisiblePhotoVaults(context, selfVault);
   const vaultByMountPoint = new Map(vaults.map(v => [v.mountPointId, v]));
@@ -378,17 +379,11 @@ export async function handleAttachImage(
   error?: string;
   formattedText?: string;
 }> {
-  if (!context.characterId) {
-    return { success: false, error: 'attach_image requires a character context' };
+  const resolved = await requireActingCharacterVault(context, 'attach_image');
+  if (!resolved.ok) {
+    return { success: false, error: resolved.error };
   }
-
-  const vault = await resolveActingCharacterVault(context);
-  if (!vault) {
-    return {
-      success: false,
-      error: 'No database-backed character vault is linked to the acting character',
-    };
-  }
+  const vault = resolved.vault;
 
   const repos = getRepositories();
 

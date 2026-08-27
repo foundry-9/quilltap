@@ -16,7 +16,7 @@ import type {
   ExportedDocumentStoreBlob,
   ExportedProjectDocMountLink,
 } from '@/lib/export/types';
-import type { ImportOptions, IdMappingState, DocumentStoreImportCounts } from './types';
+import { type ImportOptions, type IdMappingState, type DocumentStoreImportCounts, getPreserveIdsCreateOptions } from './types';
 import { nextUniqueMountPointName } from '@/lib/mount-index/unique-mount-point-name';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
@@ -106,7 +106,7 @@ export async function importDocumentStores(
       // stranger-cloned every time. Only when the id is free — a 'duplicate'
       // import onto an id clash must mint a fresh id instead.
       const preserveArchiveId = !existing;
-      const createOptions = options.preserveIds ? { id: mp.id } : undefined;
+      const createOptions = getPreserveIdsCreateOptions(mp.id, options);
       const created = options.preserveIds
         ? await globalRepos.docMountPoints.create(
             {

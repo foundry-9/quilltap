@@ -29,6 +29,7 @@ import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection, DEFAULT_CHEAP_
 import type { CheapLLMSettings, DangerousContentSettings } from '@/lib/schemas/settings.types';
 import type { ChatSettings } from '@/lib/schemas/types';
 import {
+  equippedWardrobeItemsForAppearance,
   resolveCharacterAppearances,
   sanitizeAppearancesIfNeeded,
   type AppearanceResolutionInput,
@@ -51,9 +52,6 @@ import {
   resolveUncensoredImageProfileForReroute,
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
-import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 import {
   resolveAesthetic,
@@ -989,24 +987,12 @@ async function resolveAppearances(
           let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> | undefined;
           if (context.chatId && p.entityId) {
             try {
-              const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(context.chatId, p.entityId);
-              if (equippedSlots) {
-                const resolved = await resolveEquippedOutfitForCharacter(
-                  repos,
-                  p.entityId,
-                  equippedSlots,
-                  await sharedWardrobeTiersForCharacter(p.entityId, projectMountPointIds),
-                );
-                const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = [];
-                for (const slot of WARDROBE_SLOT_TYPES) {
-                  for (const item of resolved.leafItemsBySlot[slot]) {
-                    flat.push({ slot, title: item.title, description: item.description, imagePrompt: item.imagePrompt });
-                  }
-                }
-                if (flat.length > 0) {
-                  equippedWardrobeItems = flat;
-                }
-              }
+              equippedWardrobeItems = await equippedWardrobeItemsForAppearance(
+                repos,
+                context.chatId,
+                p.entityId,
+                projectMountPointIds,
+              );
             } catch (err) {
               logger.warn('[Image Generation] Failed to load equipped wardrobe items for character', {
                 characterId: p.entityId,

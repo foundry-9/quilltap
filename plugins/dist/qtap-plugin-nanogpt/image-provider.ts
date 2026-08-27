@@ -12,11 +12,9 @@ import OpenAI from 'openai';
 import type { Images } from 'openai/resources';
 import type { ImageProvider as ImageProviderBase, ImageGenParams, ImageGenResponse } from './types';
 import { createPluginLogger, getQuilltapUserAgent } from '@quilltap/plugin-utils';
-import { STATIC_IMAGE_MODEL_IDS } from './models';
+import { NANOGPT_BASE_URL, STATIC_IMAGE_MODEL_IDS } from './models';
 
 const logger = createPluginLogger('qtap-plugin-nanogpt');
-
-const NANOGPT_BASE_URL = 'https://nano-gpt.com/api/v1';
 
 interface NanoGPTImageModelEntry {
   id: string;

@@ -22,6 +22,7 @@ import { getErrorMessage } from '@/lib/error-utils';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import {
+  equippedWardrobeItemsForAppearance,
   resolveCharacterAppearances,
   sanitizeAppearancesIfNeeded,
   type AppearanceResolutionInput,
@@ -45,9 +46,6 @@ import { resolveOrientation } from '@/lib/image-gen/orientation';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
-import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { genderPrefixFromPronouns } from '@/lib/characters/pronoun-gender';
 import type { Character } from '@/lib/schemas/types';
@@ -259,24 +257,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   for (const char of validCharacters) {
     let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> | undefined;
     try {
-      const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
-      if (equippedSlots) {
-        const resolved = await resolveEquippedOutfitForCharacter(
-          repos,
-          char!.id,
-          equippedSlots,
-          await sharedWardrobeTiersForCharacter(char!.id, projectMountPointIds),
-        );
-        const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = [];
-        for (const slot of WARDROBE_SLOT_TYPES) {
-          for (const item of resolved.leafItemsBySlot[slot]) {
-            flat.push({ slot, title: item.title, description: item.description, imagePrompt: item.imagePrompt });
-          }
-        }
-        if (flat.length > 0) {
-          equippedWardrobeItems = flat;
-        }
-      }
+      equippedWardrobeItems = await equippedWardrobeItemsForAppearance(
+        repos,
+        payload.chatId,
+        char!.id,
+        projectMountPointIds,
+      );
     } catch (err) {
       logger.warn('[StoryBackground] Failed to load equipped wardrobe items for character', {
         characterId: char!.id,

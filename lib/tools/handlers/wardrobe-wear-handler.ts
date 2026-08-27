@@ -28,13 +28,11 @@ import { validateWardrobeWearInput } from '../wardrobe-wear-tool';
 import { equipItem, replaceItem, addToSlot } from '@/lib/wardrobe/outfit-displacement';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import {
-  buildWardrobeCoverageSummaryFromState,
+  buildWardrobeMutationFailure,
   describeWardrobeEffect,
-  emptyEquippedState,
+  finalizeWardrobeMutation,
   formatWardrobeMutationResults,
-  loadCurrentWardrobeState,
   normalizeNoItemSentinel,
-  notifyWardrobeChanged,
   resolveWardrobeItemAcrossTiers,
   wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
@@ -48,16 +46,6 @@ export interface WardrobeWearToolContext {
 }
 
 class WardrobeWearError extends Error {}
-
-function buildFailureResponse(error: string): WardrobeWearToolOutput {
-  return {
-    success: false,
-    operations: [],
-    current_state: emptyEquippedState(),
-    coverage_summary: '',
-    error,
-  };
-}
 
 export async function executeWardrobeWearTool(
   input: unknown,
@@ -75,7 +63,7 @@ export async function executeWardrobeWearTool(
       characterId: context.characterId,
       input,
     });
-    return buildFailureResponse(
+    return buildWardrobeMutationFailure(
       'Invalid input: provide a non-empty "operations" array. Each operation needs ' +
         'an item_id or item_title; mode=add_to_slot also needs a slot.',
     );
@@ -174,35 +162,12 @@ export async function executeWardrobeWearTool(
     }
   }
 
-  // Fire side effects ONCE, only if at least one operation actually landed.
-  if (appliedCount > 0) {
-    await notifyWardrobeChanged(
-      repos,
-      {
-        userId: context.userId,
-        chatId: context.chatId,
-        characterId: context.characterId,
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-      },
-      'wardrobe-wear-handler',
-    );
-  }
-
-  const currentState = await loadCurrentWardrobeState(repos, context.chatId, context.characterId);
-  const coverageSummary = await buildWardrobeCoverageSummaryFromState(
-    repos,
-    context.characterId,
-    currentState,
+  return finalizeWardrobeMutation(repos, context, 'wardrobe-wear-handler', {
+    appliedCount,
+    results,
+    failedError,
     tiers,
-  );
-
-  return {
-    success: failedError === undefined,
-    operations: results,
-    current_state: currentState,
-    coverage_summary: coverageSummary,
-    ...(failedError ? { error: failedError } : {}),
-  };
+  });
 }
 
 /**

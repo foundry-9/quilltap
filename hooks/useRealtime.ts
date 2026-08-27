@@ -57,6 +57,38 @@ export function useRealtimeRefetchInterval(pollMs: number | false): number | fal
 }
 
 /**
+ * Run `onTick` on a timer, but only while the socket is down — and, when
+ * `active` is given, only while it is true (e.g. while a sweep is in flight).
+ *
+ * The offline half of the housekeeping-card pattern: {@link useRealtimeTopic}
+ * carries the live path, and this keeps the pre-realtime cadence as the
+ * fallback so a dropped connection degrades to the behaviour that shipped
+ * before realtime existed rather than to a frozen screen.
+ *
+ * The handler is held in a ref, so an inline arrow function won't churn the
+ * interval on every render.
+ *
+ * @param onTick Called on each poll tick.
+ * @param pollMs The pre-realtime cadence.
+ * @param active Optional gate; omit to poll whenever the socket is down.
+ */
+export function useRealtimeFallbackPoll(onTick: () => void, pollMs: number, active?: boolean): void {
+  const connected = useRealtimeConnected()
+  const handlerRef = useRef(onTick)
+  useEffect(() => {
+    handlerRef.current = onTick
+  }, [onTick])
+
+  useEffect(() => {
+    if (connected || active === false) return
+    const interval = setInterval(() => {
+      handlerRef.current()
+    }, pollMs)
+    return () => clearInterval(interval)
+  }, [connected, active, pollMs])
+}
+
+/**
  * Run `onChange` whenever the server announces a change under `topic`.
  *
  * The escape hatch for readouts that aren't (yet) TanStack queries — the

@@ -41,20 +41,20 @@ import type {
   LLMMessage,
   FileAttachment,
 } from './types';
+import { NANOGPT_BASE_URL } from './models';
 
 /** One part of an OpenAI-style multimodal `content` array. */
 type ChatContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } };
 
-const NANOGPT_BASE_URL = 'https://nano-gpt.com/api/v1';
-
 /**
- * Image MIME types NanoGPT will forward to a routed vision model. Mirrors the
- * `attachmentSupport.supportedMimeTypes` declared in index.ts — keep the two
- * in step.
+ * Image MIME types NanoGPT will forward to a routed vision model. This is the
+ * single source of truth: `index.ts` imports it for
+ * `attachmentSupport.supportedMimeTypes`, so the declaration the plugin
+ * registry reads cannot drift from what the wire actually carries.
  */
-const NANOGPT_SUPPORTED_IMAGE_MIME_TYPES: string[] = [
+export const NANOGPT_SUPPORTED_IMAGE_MIME_TYPES: string[] = [
   'image/jpeg',
   'image/png',
   'image/gif',

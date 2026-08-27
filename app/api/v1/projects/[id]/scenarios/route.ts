@@ -33,23 +33,9 @@ import {
   setProjectScenarioDefault,
   PROJECT_SCENARIOS_FOLDER,
 } from '@/lib/mount-index/project-scenarios';
-import { buildScenarioFileContent } from '@/lib/mount-index/scenarios-common';
+import { buildScenarioFileContent, createScenarioSchema } from '@/lib/mount-index/scenarios-common';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import { sanitizeFileName } from '@/lib/mount-index/character-vault';
-
-// ============================================================================
-// Schemas
-// ============================================================================
-
-const createScenarioSchema = z.object({
-  /** Desired filename without `.md` extension. Will be sanitised. */
-  filename: z.string().min(1).max(100),
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().max(500).optional(),
-  isDefault: z.boolean().optional(),
-  archived: z.boolean().optional(),
-  body: z.string().min(1, 'Scenario body cannot be empty'),
-});
 
 // ============================================================================
 // GET — list scenarios

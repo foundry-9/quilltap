@@ -33,6 +33,7 @@
  * @module mount-index/scenarios-common
  */
 
+import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
@@ -45,6 +46,39 @@ import {
   updateFrontmatterInContent,
 } from '@/lib/doc-edit/markdown-parser';
 import type { DocMountDocumentWithLink as DocMountDocument } from '@/lib/database/repositories/doc-mount-documents.repository';
+
+// ============================================================================
+// Request-body schemas (shared by every scenario scope's API routes)
+// ============================================================================
+
+/** POST body for creating a scenario — shared by the general, group and
+ *  project collection routes. (The character-scoped route has its own,
+ *  genuinely different schema.) */
+export const createScenarioSchema = z.object({
+  /** Desired filename without `.md` extension. Will be sanitised. */
+  filename: z.string().min(1).max(100),
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(500).optional(),
+  isDefault: z.boolean().optional(),
+  archived: z.boolean().optional(),
+  body: z.string().min(1, 'Scenario body cannot be empty'),
+});
+
+/** PUT body for updating a scenario's content + frontmatter. */
+export const updateScenarioSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(500).optional(),
+  isDefault: z.boolean().optional(),
+  /** Omit to leave the current archived state alone; the serializer rewrites
+   *  the whole file, so an unmentioned flag would otherwise be dropped. */
+  archived: z.boolean().optional(),
+  body: z.string().min(1, 'Scenario body cannot be empty'),
+});
+
+/** POST ?action=rename body. */
+export const renameScenarioSchema = z.object({
+  newFilename: z.string().min(1).max(100),
+});
 
 export interface ParsedScenario {
   /** Relative path inside the mount point, e.g. `Scenarios/welcome.md`. */

@@ -17,7 +17,7 @@ import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { DatabaseCollection, TypedQueryFilter, QueryOptions } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawLLMLogsDatabase, isLLMLogsDegraded } from '../backends/sqlite/llm-logs-client';
-import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { generateDDL, classifySchemaColumns } from '../schema-translator';
 
 /**
  * LLM Logs Repository
@@ -62,16 +62,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
     }
 
     // Detect JSON, array, and boolean columns from schema
-    const metadata = extractSchemaMetadata(this.collectionName, this.schema);
-    const jsonColumns = metadata.fields
-      .filter(f => f.type === 'array' || f.type === 'object')
-      .map(f => f.name);
-    const arrayColumns = metadata.fields
-      .filter(f => f.type === 'array')
-      .map(f => f.name);
-    const booleanColumns = metadata.fields
-      .filter(f => f.type === 'boolean')
-      .map(f => f.name);
+    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
 
     return new SQLiteCollection<LLMLog>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
   }

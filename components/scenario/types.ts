@@ -74,6 +74,34 @@ export interface GroupScenarioOption {
   body: string
 }
 
+/** The wire shape every file-backed scenario tier returns. */
+export interface ScenarioPayload {
+  path: string
+  filename: string
+  name: string
+  description?: string
+  isDefault: boolean
+  archived?: boolean
+  body: string
+}
+
+/**
+ * Map a wire payload onto the option shape the pickers consume. Project and
+ * general options share this shape verbatim; a group option spreads it and
+ * adds its `groupId`/`groupName`.
+ */
+export function toScenarioOption(s: ScenarioPayload): ProjectScenarioOption {
+  return {
+    path: s.path,
+    filename: s.filename,
+    name: s.name,
+    ...(s.description !== undefined && { description: s.description }),
+    isDefault: s.isDefault,
+    archived: s.archived === true,
+    body: s.body,
+  }
+}
+
 export const CUSTOM_SCENARIO_VALUE = '__custom__'
 /**
  * Stable token used in the dropdown's `<option value>` to identify a project

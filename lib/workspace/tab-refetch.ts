@@ -31,6 +31,7 @@
  */
 
 import { queryKeys } from '@/lib/query/keys'
+import { queryKeysForTopic } from '@/lib/realtime/topic-map'
 import type { CharacterViewTabPayload, WorkspaceTab } from './types'
 
 type QueryKeyPrefix = readonly unknown[]
@@ -64,11 +65,9 @@ export function tabActivationQueryKeys(tab: WorkspaceTab): QueryKeyPrefix[] {
     case 'character-view': {
       const payload = tab.payload as CharacterViewTabPayload | undefined
       if (!payload?.characterId) return []
-      return [
-        queryKeys.characters.detail(payload.characterId),
-        queryKeys.characters.prompts(payload.characterId),
-        queryKeys.characters.photos(payload.characterId),
-      ]
+      // The realtime topic map already owns the row-scoped character keys
+      // (detail/prompts/photos); reuse it rather than restating the triple.
+      return [...queryKeysForTopic('characters', payload.characterId)]
     }
     case 'prospero':
       return [queryKeys.projects.all]

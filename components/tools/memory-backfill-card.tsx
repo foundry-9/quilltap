@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
-import { useRealtimeConnected, useRealtimeTopic } from '@/hooks/useRealtime'
+import { useRealtimeFallbackPoll, useRealtimeTopic } from '@/hooks/useRealtime'
 
 interface BackfillProgress {
   remaining: number
@@ -14,7 +14,6 @@ interface BackfillProgress {
 const FALLBACK_POLL_INTERVAL_MS = 4_000
 
 export function MemoryBackfillCard() {
-  const connected = useRealtimeConnected()
   const [progress, setProgress] = useState<BackfillProgress | null>(null)
   const [loading, setLoading] = useState(true)
   const [running, setRunning] = useState(false)
@@ -42,21 +41,17 @@ export function MemoryBackfillCard() {
 
   useEffect(() => {
     // The first tick fires almost immediately so the user doesn't wait for a
-    // round trip to see the initial load. The repeating 4 s poll is the
-    // fallback for a dropped socket.
+    // round trip to see the initial load.
     const firstTick = setTimeout(() => {
       void fetchProgress()
     }, 0)
-    const interval = connected
-      ? null
-      : setInterval(() => {
-          void fetchProgress()
-        }, FALLBACK_POLL_INTERVAL_MS)
-    return () => {
-      if (interval) clearInterval(interval)
-      clearTimeout(firstTick)
-    }
-  }, [fetchProgress, connected])
+    return () => clearTimeout(firstTick)
+  }, [fetchProgress])
+
+  // The repeating 4 s poll is the fallback for a dropped socket.
+  useRealtimeFallbackPoll(() => {
+    void fetchProgress()
+  }, FALLBACK_POLL_INTERVAL_MS)
 
   const handleStart = async () => {
     setRunning(true)

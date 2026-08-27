@@ -6,7 +6,7 @@ import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
 import { describeOutfit, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
-import { stripCodeFences } from '@/lib/services/ai-import.service'
+import { stripCodeFences } from '@/lib/llm/llm-json'
 import { executeCheapLLMTask } from './core-execution'
 import type {
   AppearanceResolutionItem,

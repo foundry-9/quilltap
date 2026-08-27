@@ -20,7 +20,7 @@ import { getMaxConcurrentJobs } from '@/lib/instance-settings';
 import type { Database } from 'better-sqlite3';
 import { logger } from '@/lib/logger';
 import { publishRealtime } from '@/lib/realtime/bus';
-import { topicsForCompletedJob, topicsForWriteBatch } from '@/lib/realtime/job-topics';
+import { firstIdArg, topicsForCompletedJob, topicsForWriteBatch } from '@/lib/realtime/job-topics';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
@@ -536,11 +536,13 @@ function dispatchInvalidations(writes: ChildWritePayload[]): void {
   const mountPointKeys = new Set<string>();
 
   for (const w of writes) {
-    const charId = extractCharacterId(w);
+    // Many of the listed methods take the id as a top-level field on the
+    // first arg, or as the first positional arg; firstIdArg probes both shapes.
+    const charId = firstIdArg(w.args, 'characterId');
     if (charId && WRITES_INVALIDATING_VECTOR_STORE.has(w.method)) {
       vectorStoreKeys.add(charId);
     }
-    const mountId = extractMountPointId(w);
+    const mountId = firstIdArg(w.args, 'mountPointId');
     if (mountId && WRITES_INVALIDATING_MOUNT_CACHE.has(w.method)) {
       mountPointKeys.add(mountId);
     }
@@ -600,28 +602,6 @@ const WRITES_INVALIDATING_MOUNT_CACHE = new Set<string>([
   'docMountChunks.delete',
   'docMountChunks.deleteByMountPointId',
 ]);
-
-function extractCharacterId(w: ChildWritePayload): string | null {
-  // Many of the listed methods take the characterId as a top-level field on
-  // the first arg, or as the first positional arg. Probe both shapes.
-  const a0 = w.args?.[0];
-  if (typeof a0 === 'string' && a0.length > 0) return a0;
-  if (a0 && typeof a0 === 'object') {
-    const obj = a0 as Record<string, unknown>;
-    if (typeof obj.characterId === 'string') return obj.characterId;
-  }
-  return null;
-}
-
-function extractMountPointId(w: ChildWritePayload): string | null {
-  const a0 = w.args?.[0];
-  if (typeof a0 === 'string' && a0.length > 0) return a0;
-  if (a0 && typeof a0 === 'object') {
-    const obj = a0 as Record<string, unknown>;
-    if (typeof obj.mountPointId === 'string') return obj.mountPointId;
-  }
-  return null;
-}
 
 function applyRepositoryWrite(w: ChildWritePayload): unknown {
   const repos = getRepositories();

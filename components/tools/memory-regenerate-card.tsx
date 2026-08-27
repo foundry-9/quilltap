@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
-import { useRealtimeConnected, useRealtimeTopic } from '@/hooks/useRealtime'
+import { useRealtimeFallbackPoll, useRealtimeTopic } from '@/hooks/useRealtime'
 
 interface RegenerateStatus {
   inFlightFanOut: number
@@ -56,15 +56,9 @@ export function MemoryRegenerateCard() {
   })
 
   // Fallback: re-read on a timer while a sweep is in flight and the socket is down.
-  const connected = useRealtimeConnected()
-  useEffect(() => {
-    if (connected) return
-    if (!status || status.inFlight === 0) return
-    const interval = setInterval(() => {
-      void loadStatus()
-    }, POLL_INTERVAL_MS)
-    return () => clearInterval(interval)
-  }, [connected, status, loadStatus])
+  useRealtimeFallbackPoll(() => {
+    void loadStatus()
+  }, POLL_INTERVAL_MS, (status?.inFlight ?? 0) > 0)
 
   const handleConfirm = async () => {
     setSubmitting(true)
@@ -83,20 +77,7 @@ export function MemoryRegenerateCard() {
       showSuccessToast(data.message || 'Regeneration enqueued — chats will rebuild in the background')
       notifyQueueChange()
       // Refresh status so the badge in this card lights up immediately.
-      try {
-        const statusRes = await fetch('/api/v1/memories?action=regenerate-all')
-        if (statusRes.ok) {
-          const statusData = await statusRes.json()
-          setStatus({
-            inFlightFanOut: statusData.inFlightFanOut ?? 0,
-            inFlightWipes: statusData.inFlightWipes ?? 0,
-            inFlightExtractions: statusData.inFlightExtractions ?? 0,
-            inFlight: statusData.inFlight ?? 0,
-          })
-        }
-      } catch {
-        // Non-fatal.
-      }
+      await loadStatus()
       setConfirming(false)
     } catch (err) {
       const msg = getErrorMessage(err, 'Failed to start regeneration')

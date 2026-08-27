@@ -59,6 +59,60 @@ export interface ResolveScenarioSelectionOptions {
 }
 
 /**
+ * Resolve one store-backed tier (project or group) into a scenario body.
+ *
+ * The two tiers are the same dance with different owners: guard on the owning
+ * id, read the slim raw row for its store pointer, then resolve the path
+ * inside that store. Every miss logs a warning and returns `undefined` so the
+ * chain falls through to the next tier.
+ */
+async function resolveStoreScenarioTier(options: {
+  logTag: string;
+  /** The owner word in the "has no officialMountPointId" warning. */
+  ownerLabel: 'project' | 'group';
+  /** The path field's name as it reads in warnings and their metadata. */
+  pathField: string;
+  /** The owning id's name as it reads in warnings and their metadata. */
+  ownerIdField: string;
+  ownerId: string | null | undefined;
+  path: string;
+  /** Slim raw-row read — only the store pointer is needed, and the raw row
+   * keeps resolution from throwing on a degraded store. */
+  findRaw: (id: string) => Promise<{ officialMountPointId?: string | null } | null | undefined>;
+  /** Dynamic-import thunk for the tier's body resolver. */
+  loadResolver: () => Promise<(mountPointId: string, scenarioPath: string) => Promise<string | null>>;
+}): Promise<string | undefined> {
+  const { logTag, ownerLabel, pathField, ownerIdField, ownerId, path } = options;
+
+  if (!ownerId) {
+    logger.warn(`${logTag} ${pathField} provided without ${ownerIdField}; ignoring`, {
+      [pathField]: path,
+    });
+    return undefined;
+  }
+
+  const owner = await options.findRaw(ownerId);
+  if (!owner?.officialMountPointId) {
+    logger.warn(`${logTag} ${pathField} provided but ${ownerLabel} has no officialMountPointId`, {
+      [ownerIdField]: ownerId,
+      [pathField]: path,
+    });
+    return undefined;
+  }
+
+  const resolveBody = await options.loadResolver();
+  const body = await resolveBody(owner.officialMountPointId, path);
+  if (!body) {
+    logger.warn(`${logTag} ${pathField} did not resolve to a body`, {
+      [ownerIdField]: ownerId,
+      [pathField]: path,
+    });
+    return undefined;
+  }
+  return body;
+}
+
+/**
  * Resolve a scenario selection into the text that lands on `chat.scenarioText`.
  * Returns `undefined` when nothing was chosen and nothing was typed.
  */
@@ -83,67 +137,31 @@ export async function resolveScenarioSelection(
   }
 
   if (!presetBody && fields.projectScenarioPath) {
-    if (!projectId) {
-      logger.warn(`${logTag} projectScenarioPath provided without projectId; ignoring`, {
-        projectScenarioPath: fields.projectScenarioPath,
-      });
-    } else {
-      // Only the store pointer is needed here, which lives on the raw row — use
-      // findByIdRaw so scenario resolution doesn't throw on a degraded store.
-      const project = await repos.projects.findByIdRaw(projectId);
-      if (!project?.officialMountPointId) {
-        logger.warn(`${logTag} projectScenarioPath provided but project has no officialMountPointId`, {
-          projectId,
-          projectScenarioPath: fields.projectScenarioPath,
-        });
-      } else {
-        const { resolveProjectScenarioBody } = await import('@/lib/mount-index/project-scenarios');
-        const body = await resolveProjectScenarioBody(
-          project.officialMountPointId,
-          fields.projectScenarioPath,
-        );
-        if (body) {
-          presetBody = body;
-        } else {
-          logger.warn(`${logTag} projectScenarioPath did not resolve to a body`, {
-            projectId,
-            projectScenarioPath: fields.projectScenarioPath,
-          });
-        }
-      }
-    }
+    presetBody = await resolveStoreScenarioTier({
+      logTag,
+      ownerLabel: 'project',
+      pathField: 'projectScenarioPath',
+      ownerIdField: 'projectId',
+      ownerId: projectId,
+      path: fields.projectScenarioPath,
+      findRaw: (id) => repos.projects.findByIdRaw(id),
+      loadResolver: async () =>
+        (await import('@/lib/mount-index/project-scenarios')).resolveProjectScenarioBody,
+    });
   }
 
   if (!presetBody && fields.groupScenarioPath) {
-    if (!fields.groupScenarioGroupId) {
-      logger.warn(`${logTag} groupScenarioPath provided without groupScenarioGroupId; ignoring`, {
-        groupScenarioPath: fields.groupScenarioPath,
-      });
-    } else {
-      // Only the store pointer is needed — read the slim row so resolution
-      // doesn't throw on a degraded store.
-      const group = await repos.groups.findByIdRaw(fields.groupScenarioGroupId);
-      if (!group?.officialMountPointId) {
-        logger.warn(`${logTag} groupScenarioPath provided but group has no officialMountPointId`, {
-          groupScenarioGroupId: fields.groupScenarioGroupId,
-          groupScenarioPath: fields.groupScenarioPath,
-        });
-      } else {
-        const { resolveGroupScenarioBody } = await import('@/lib/mount-index/group-scenarios');
-        const body = await resolveGroupScenarioBody(
-          group.officialMountPointId,
-          fields.groupScenarioPath,
-        );
-        if (body) {
-          presetBody = body;
-        } else {
-          logger.warn(`${logTag} groupScenarioPath did not resolve to a body`, {
-            groupScenarioGroupId: fields.groupScenarioGroupId,
-            groupScenarioPath: fields.groupScenarioPath,
-          });
-        }
-      }
-    }
+    presetBody = await resolveStoreScenarioTier({
+      logTag,
+      ownerLabel: 'group',
+      pathField: 'groupScenarioPath',
+      ownerIdField: 'groupScenarioGroupId',
+      ownerId: fields.groupScenarioGroupId,
+      path: fields.groupScenarioPath,
+      findRaw: (id) => repos.groups.findByIdRaw(id),
+      loadResolver: async () =>
+        (await import('@/lib/mount-index/group-scenarios')).resolveGroupScenarioBody,
+    });
   }
 
   if (!presetBody && fields.generalScenarioPath) {

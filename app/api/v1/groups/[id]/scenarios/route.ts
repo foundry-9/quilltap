@@ -22,7 +22,6 @@
 import { NextRequest } from 'next/server';
 import { createContextParamsHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
-import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, created, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
@@ -34,23 +33,9 @@ import {
   setGroupScenarioDefault,
   GROUP_SCENARIOS_FOLDER,
 } from '@/lib/mount-index/group-scenarios';
-import { buildScenarioFileContent } from '@/lib/mount-index/scenarios-common';
+import { buildScenarioFileContent, createScenarioSchema } from '@/lib/mount-index/scenarios-common';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import { sanitizeFileName } from '@/lib/mount-index/character-vault';
-
-// ============================================================================
-// Schemas
-// ============================================================================
-
-const createScenarioSchema = z.object({
-  /** Desired filename without `.md` extension. Will be sanitised. */
-  filename: z.string().min(1).max(100),
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().max(500).optional(),
-  isDefault: z.boolean().optional(),
-  archived: z.boolean().optional(),
-  body: z.string().min(1, 'Scenario body cannot be empty'),
-});
 
 // ============================================================================
 // GET — list scenarios

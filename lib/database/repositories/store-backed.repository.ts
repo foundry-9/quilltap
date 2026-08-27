@@ -231,36 +231,22 @@ export abstract class AbstractStoreBackedRepository<
     );
   }
 
+  protected createErrorMessage(): string {
+    return `Error creating ${this.store.entityLabel.toLowerCase()} entity`;
+  }
+
   /**
-   * Store-aware override of the base `_create`. Strips store-resident keys before
-   * INSERT so callers that pass e.g. `description` or `state` to `create()` don't
-   * blow up with "no such column" — those fields belong in the document store.
+   * Store-aware row transform for the base `_create`. Strips store-resident
+   * keys before INSERT so callers that pass e.g. `description` or `state` to
+   * `create()` don't blow up with "no such column" — those fields belong in
+   * the document store.
    */
-  protected async _create(
-    data: Omit<T, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: CreateOptions,
-  ): Promise<T> {
-    return this.safeQuery(async () => {
-      const id = options?.id || this.generateId();
-      const now = this.getCurrentTimestamp();
-      const createdAt = options?.createdAt || now;
-      const updatedAt = options?.updatedAt || now;
-
-      const entityInput = { ...data, id, createdAt, updatedAt };
-      const validated = this.validate(entityInput) as T;
-
-      const dbRow = { ...validated } as Record<string, unknown>;
-      for (const f of this.store.managedFields) {
-        delete dbRow[f as string];
-      }
-
-      const collection = await this.getCollection();
-      await collection.insertOne(dbRow as T);
-
-      logger.info('Entity created', { collection: this.collectionName, id });
-
-      return validated;
-    }, `Error creating ${this.store.entityLabel.toLowerCase()} entity`);
+  protected toPersistedRow(validated: T): T {
+    const dbRow = { ...validated } as Record<string, unknown>;
+    for (const f of this.store.managedFields) {
+      delete dbRow[f as string];
+    }
+    return dbRow as T;
   }
 
   /**

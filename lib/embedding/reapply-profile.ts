@@ -34,6 +34,7 @@ import path from 'path'
 import Database, { Database as DatabaseType } from 'better-sqlite3'
 import { logger } from '@/lib/logger'
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client'
+import { applySqlcipherKey } from '@/lib/database/backends/sqlite/sqlcipher-key'
 import { getMountIndexDatabasePath, getSQLiteDatabasePath } from '@/lib/paths'
 import { invalidateAll as invalidateMountChunkCacheAll } from '@/lib/mount-index/mount-chunk-cache'
 import { getVectorStoreManager } from '@/lib/embedding/vector-store'
@@ -115,11 +116,7 @@ function openMountIndexDb(): DatabaseType | null {
   if (!fs.existsSync(dbPath)) return null
   const db = new Database(dbPath)
   try {
-    const pepper = process.env.ENCRYPTION_MASTER_PEPPER
-    if (pepper) {
-      const keyHex = Buffer.from(pepper, 'base64').toString('hex')
-      db.pragma(`key = "x'${keyHex}'"`)
-    }
+    applySqlcipherKey(db)
     db.pragma('busy_timeout = 5000')
     return db
   } catch (error) {

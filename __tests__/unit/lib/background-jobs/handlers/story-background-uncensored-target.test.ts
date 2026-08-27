@@ -65,6 +65,7 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
 jest.mock('@/lib/image-gen/appearance-resolution', () => ({
   resolveCharacterAppearances: jest.fn(),
   sanitizeAppearancesIfNeeded: jest.fn(),
+  equippedWardrobeItemsForAppearance: jest.fn().mockResolvedValue(undefined),
 }))
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
   resolveEquippedOutfitForCharacter: jest.fn(),

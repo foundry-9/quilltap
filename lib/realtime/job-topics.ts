@@ -113,17 +113,27 @@ const TOPIC_ID_FIELDS: Record<RealtimeTopic, readonly string[]> = {
   jobs: [],
 };
 
-function extractTopicId(topic: RealtimeTopic, args: readonly unknown[] | undefined): string | undefined {
+/**
+ * Read an entity id off a repository call's first argument. Handles the two
+ * shapes a write takes: the id as the first positional arg
+ * (`chats.update(chatId, patch)`), or an object payload naming it in one of
+ * `fields`.
+ */
+export function firstIdArg(args: readonly unknown[] | undefined, ...fields: string[]): string | undefined {
   const first = args?.[0];
   if (typeof first === 'string' && first.length > 0) return first;
   if (first && typeof first === 'object') {
     const obj = first as Record<string, unknown>;
-    for (const field of TOPIC_ID_FIELDS[topic]) {
+    for (const field of fields) {
       const value = obj[field];
       if (typeof value === 'string' && value.length > 0) return value;
     }
   }
   return undefined;
+}
+
+function extractTopicId(topic: RealtimeTopic, args: readonly unknown[] | undefined): string | undefined {
+  return firstIdArg(args, ...TOPIC_ID_FIELDS[topic]);
 }
 
 /**

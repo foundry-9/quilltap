@@ -27,6 +27,40 @@ function isThinkRejection(errorText: string): boolean {
   return /think/i.test(errorText);
 }
 
+/**
+ * Issue the request via `send`, and when the server rejects the `think`
+ * parameter (see {@link isThinkRejection}), strip it from `requestBody` and
+ * retry once. Shared by sendMessage and streamMessage so the retry semantics
+ * cannot drift apart. Returns the final response plus whatever error text was
+ * read from a non-ok one; the caller owns logging and throwing on failure.
+ */
+async function fetchWithThinkRetry(
+  send: () => Promise<Response>,
+  requestBody: any,
+  ctx: { context: string; model: string; enableThinking: boolean | string }
+): Promise<{ response: Response; errorText: string }> {
+  let response = await send();
+  let errorText = '';
+  if (!response.ok) {
+    errorText = await response.text();
+    if ('think' in requestBody && isThinkRejection(errorText)) {
+      // Some models refuse the think parameter outright (e.g. ones that
+      // cannot disable thinking). Retry once without it rather than
+      // failing the whole call.
+      logger.warn('Ollama rejected the think parameter; retrying without it', {
+        context: ctx.context,
+        model: ctx.model,
+        enableThinking: ctx.enableThinking,
+        error: errorText,
+      });
+      delete requestBody.think;
+      response = await send();
+      if (!response.ok) errorText = await response.text();
+    }
+  }
+  return { response, errorText };
+}
+
 // `params.cacheKey` is ignored: Ollama runs locally and manages its own
 // per-process KV cache; no remote routing or isolation hint applies.
 export class OllamaProvider implements TextProvider {
@@ -56,9 +90,16 @@ export class OllamaProvider implements TextProvider {
     return { sent: [], failed };
   }
 
-  async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
-    const attachmentResults = this.collectAttachmentFailures(params);
-
+  /**
+   * Build the `/api/chat` request body — the ONE build both sendMessage and
+   * streamMessage call, so the streaming and non-streaming shapes cannot
+   * drift apart. Returns the resolved think setting alongside the body
+   * because both callers log it.
+   */
+  private buildRequestBody(
+    params: LLMParams,
+    stream: boolean
+  ): { requestBody: any; enableThinking: boolean | string } {
     // Map messages to Ollama/OpenAI Chat Completions format, including tool messages
     const mappedMessages = params.messages
       .filter((m) => {
@@ -108,11 +149,12 @@ export class OllamaProvider implements TextProvider {
     const requestBody: any = {
       model: params.model,
       messages,
-      stream: false,
+      stream,
       // Ollama's native thinking switch (0.9+; older servers ignore unknown
       // fields). When off, thinking-capable models answer directly; when on,
-      // Ollama returns the reasoning separately as `message.thinking`. Newer
-      // servers also accept an effort level in place of the boolean.
+      // Ollama returns the reasoning separately as `message.thinking` — as
+      // deltas when streaming. Newer servers also accept an effort level in
+      // place of the boolean.
       think: enableThinking,
       options: {
         temperature: params.temperature ?? 0.7,
@@ -130,6 +172,14 @@ export class OllamaProvider implements TextProvider {
       requestBody.tools = params.tools;
     }
 
+    return { requestBody, enableThinking };
+  }
+
+  async sendMessage(params: LLMParams, apiKey: string): Promise<LLMResponse> {
+    const attachmentResults = this.collectAttachmentFailures(params);
+
+    const { requestBody, enableThinking } = this.buildRequestBody(params, false);
+
     try {
       const doFetch = () =>
         fetch(`${this.baseUrl}/api/chat`, {
@@ -145,27 +195,14 @@ export class OllamaProvider implements TextProvider {
           signal: buildRequestAbortSignal(params, resolveProfileTimeoutMs(params)),
         });
 
-      let response = await doFetch();
+      const { response, errorText } = await fetchWithThinkRetry(doFetch, requestBody, {
+        context: 'OllamaProvider.sendMessage',
+        model: params.model,
+        enableThinking,
+      });
       if (!response.ok) {
-        let errorText = await response.text();
-        if ('think' in requestBody && isThinkRejection(errorText)) {
-          // Some models refuse the think parameter outright (e.g. ones that
-          // cannot disable thinking). Retry once without it rather than
-          // failing the whole call.
-          logger.warn('Ollama rejected the think parameter; retrying without it', {
-            context: 'OllamaProvider.sendMessage',
-            model: params.model,
-            enableThinking,
-            error: errorText,
-          });
-          delete requestBody.think;
-          response = await doFetch();
-          if (!response.ok) errorText = await response.text();
-        }
-        if (!response.ok) {
-          logger.error('Ollama API error response', { context: 'OllamaProvider.sendMessage', status: response.status, error: errorText });
-          throw new Error(`Ollama API error: ${response.status} ${errorText}`);
-        }
+        logger.error('Ollama API error response', { context: 'OllamaProvider.sendMessage', status: response.status, error: errorText });
+        throw new Error(`Ollama API error: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
@@ -206,75 +243,7 @@ export class OllamaProvider implements TextProvider {
   async *streamMessage(params: LLMParams, apiKey: string): AsyncGenerator<StreamChunk> {
     const attachmentResults = this.collectAttachmentFailures(params);
 
-    // Map messages to Ollama/OpenAI Chat Completions format, including tool messages
-    const mappedMessages = params.messages
-      .filter((m) => {
-        // Skip tool messages without toolCallId (backward compat)
-        if (m.role === 'tool' && !m.toolCallId) return false;
-        return true;
-      })
-      .map((m) => {
-        // Tool result messages
-        if (m.role === 'tool' && m.toolCallId) {
-          return {
-            role: 'tool' as const,
-            tool_call_id: m.toolCallId,
-            content: m.content,
-          };
-        }
-        // Assistant messages with tool calls
-        if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length > 0) {
-          return {
-            role: 'assistant' as const,
-            content: m.content || null,
-            tool_calls: m.toolCalls.map((tc) => ({
-              id: tc.id,
-              type: tc.type,
-              function: tc.function,
-            })),
-          };
-        }
-        // Standard messages (strip attachments)
-        return {
-          role: m.role,
-          content: m.content,
-        };
-      });
-
-    // LOAD-BEARING: Ollama hands the array to the *model's own* chat template,
-    // and the Qwen family — plus several Llama- and Gemma-derived templates —
-    // `raise_exception` on any system message after index 0. Quilltap's context
-    // builder deliberately emits up to three leading system blocks so its cache
-    // breakpoints survive, which meant the opening greeting worked and every
-    // turn after it died with a 500 (Bug 82). Fold the run here, where the
-    // endpoint's constraint is known, rather than in the context assembly,
-    // where it would cost every hosted provider its cache prefix.
-    const messages = collapseLeadingSystemMessages(mappedMessages);
-
-    const enableThinking = resolveThinkSetting(params);
-    // Log message details for debugging
-    const requestBody: any = {
-      model: params.model,
-      messages,
-      stream: true,
-      // Ollama's native thinking switch (0.9+; older servers ignore unknown
-      // fields). When off, thinking-capable models answer directly; when on,
-      // Ollama streams reasoning deltas as `message.thinking`. Newer servers
-      // also accept an effort level in place of the boolean.
-      think: enableThinking,
-      options: {
-        temperature: params.temperature ?? 0.7,
-        num_predict: params.maxTokens ?? 4096,
-        top_p: params.topP ?? 1,
-        stop: params.stop,
-      },
-    };
-    // Everything else the profile may set — see applyOllamaProfileParameters.
-    applyOllamaProfileParameters(requestBody, params);
-    // Add tools if provided
-    if (params.tools && params.tools.length > 0) {
-      requestBody.tools = params.tools;
-    }
+    const { requestBody, enableThinking } = this.buildRequestBody(params, true);
 
     try {
       // Streaming: bound how long the endpoint may take to *start* answering,
@@ -306,27 +275,14 @@ export class OllamaProvider implements TextProvider {
           clearTimeout(firstByteTimer);
         }
       };
-      let response = await openStream();
+      const { response, errorText } = await fetchWithThinkRetry(openStream, requestBody, {
+        context: 'OllamaProvider.streamMessage',
+        model: params.model,
+        enableThinking,
+      });
       if (!response.ok) {
-        let errorText = await response.text();
-        if ('think' in requestBody && isThinkRejection(errorText)) {
-          // Some models refuse the think parameter outright (e.g. ones that
-          // cannot disable thinking). Retry once without it rather than
-          // failing the whole call.
-          logger.warn('Ollama rejected the think parameter; retrying without it', {
-            context: 'OllamaProvider.streamMessage',
-            model: params.model,
-            enableThinking,
-            error: errorText,
-          });
-          delete requestBody.think;
-          response = await openStream();
-          if (!response.ok) errorText = await response.text();
-        }
-        if (!response.ok) {
-          logger.error('Ollama streaming API error', { context: 'OllamaProvider.streamMessage', status: response.status, error: errorText });
-          throw new Error(`Ollama API error: ${response.status} ${errorText}`);
-        }
+        logger.error('Ollama streaming API error', { context: 'OllamaProvider.streamMessage', status: response.status, error: errorText });
+        throw new Error(`Ollama API error: ${response.status} ${errorText}`);
       }
 
       const reader = response.body?.getReader();

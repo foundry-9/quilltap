@@ -33,6 +33,8 @@ import {
   buildScenarioFileContent,
   isScenarioContentArchived,
   resolveScenarioPath,
+  updateScenarioSchema,
+  renameScenarioSchema,
 } from '@/lib/mount-index/scenarios-common';
 import { readIncludeArchived } from '@/lib/api/query-params';
 import {
@@ -41,24 +43,6 @@ import {
   moveDatabaseDocument,
 } from '@/lib/mount-index/database-store';
 import { sanitizeFileName } from '@/lib/mount-index/character-vault';
-
-// ============================================================================
-// Schemas
-// ============================================================================
-
-const updateScenarioSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().max(500).optional(),
-  isDefault: z.boolean().optional(),
-  /** Omit to leave the current archived state alone; the serializer rewrites
-   *  the whole file, so an unmentioned flag would otherwise be dropped. */
-  archived: z.boolean().optional(),
-  body: z.string().min(1, 'Scenario body cannot be empty'),
-});
-
-const renameScenarioSchema = z.object({
-  newFilename: z.string().min(1).max(100),
-});
 
 // ============================================================================
 // Helpers

@@ -13,7 +13,7 @@ import type { Character } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ExportedCharacter } from '@/lib/export/types';
 import { type LegacyOutfitPreset, legacyPresetToComposite } from './legacy-presets';
-import type { ImportOptions, IdMappingState, ImportCounts } from './types';
+import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -177,7 +177,7 @@ export async function importCharacters(
 
       const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
       const createData = options.preserveIds ? { ...charData, id: character.id } : charData;
-      const createOptions = options.preserveIds ? { id: character.id } : undefined;
+      const createOptions = getPreserveIdsCreateOptions(character.id, options);
       // create() provisions vault + projects managed fields atomically.
       const newCharacter = options.preserveIds
         ? await repos.characters.create(createData, createOptions)

@@ -18,7 +18,7 @@ import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { logger } from '@/lib/logger';
 import { rankMemoriesByWeight } from '@/lib/memory/memory-weighting';
-import { parseLLMJson, stripCodeFences } from '@/lib/services/ai-import.service';
+import { parseLLMJson, stripCodeFences } from '@/lib/llm/llm-json';
 import {
   FIELD_SEMANTICS_PREAMBLE,
   FULL_FIELD_SEMANTICS,

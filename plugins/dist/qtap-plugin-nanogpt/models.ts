@@ -16,6 +16,13 @@
 
 import type { ModelInfo, EmbeddingModelInfo } from './types';
 
+/**
+ * NanoGPT's OpenAI-compatible gateway root. The single source of truth: the
+ * chat, image, and embedding providers all import it from here, so the three
+ * cannot drift apart.
+ */
+export const NANOGPT_BASE_URL = 'https://nano-gpt.com/api/v1';
+
 export const STATIC_MODELS: ModelInfo[] = [
   {
     id: 'auto-model',

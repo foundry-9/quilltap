@@ -16,7 +16,7 @@ import type {
 } from '@/lib/schemas/types';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
 import { seedLegacyConnectionProfileFields } from '@/lib/llm/connection-profile-legacy-fields';
-import type { ImportOptions, IdMappingState, ImportCounts } from './types';
+import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -82,18 +82,12 @@ export async function importConnectionProfiles(
             });
           }
           takenNames.add(normalizeProfileName(uniqueName));
-          const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-          const newProfile = options.preserveIds
-            ? await repos.connections.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: uniqueName,
-              }, createOptions)
-            : await repos.connections.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: uniqueName,
-              });
+          const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+          const newProfile = await repos.connections.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+            name: uniqueName,
+          }, createOptions);
           imported++;
           continue;
         }
@@ -108,18 +102,12 @@ export async function importConnectionProfiles(
         });
       }
       takenNames.add(normalizeProfileName(uniqueName));
-      const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-      const newProfile = options.preserveIds
-        ? await repos.connections.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-            name: uniqueName,
-          }, createOptions)
-        : await repos.connections.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-            name: uniqueName,
-          });
+      const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+      const newProfile = await repos.connections.create({
+        ...profileData,
+        apiKeyId: null, // Don't restore API keys
+        name: uniqueName,
+      }, createOptions);
       idMaps.connectionProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {
@@ -168,34 +156,23 @@ export async function importImageProfiles(
           const newId = randomUUID();
           idMaps.imageProfiles.set(profile.id, newId);
           const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-          const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-          const newProfile = options.preserveIds
-            ? await repos.imageProfiles.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: `${profileData.name} (imported)`,
-              }, createOptions)
-            : await repos.imageProfiles.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: `${profileData.name} (imported)`,
-              });
+          const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+          const newProfile = await repos.imageProfiles.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+            name: `${profileData.name} (imported)`,
+          }, createOptions);
           imported++;
           continue;
         }
       }
 
       const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-      const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-      const newProfile = options.preserveIds
-        ? await repos.imageProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-          }, createOptions)
-        : await repos.imageProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-          });
+      const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+      const newProfile = await repos.imageProfiles.create({
+        ...profileData,
+        apiKeyId: null, // Don't restore API keys
+      }, createOptions);
       idMaps.imageProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {
@@ -244,34 +221,23 @@ export async function importEmbeddingProfiles(
           const newId = randomUUID();
           idMaps.embeddingProfiles.set(profile.id, newId);
           const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-          const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-          const newProfile = options.preserveIds
-            ? await repos.embeddingProfiles.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: `${profileData.name} (imported)`,
-              }, createOptions)
-            : await repos.embeddingProfiles.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: `${profileData.name} (imported)`,
-              });
+          const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+          const newProfile = await repos.embeddingProfiles.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+            name: `${profileData.name} (imported)`,
+          }, createOptions);
           imported++;
           continue;
         }
       }
 
       const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-      const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-      const newProfile = options.preserveIds
-        ? await repos.embeddingProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-          }, createOptions)
-        : await repos.embeddingProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-          });
+      const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+      const newProfile = await repos.embeddingProfiles.create({
+        ...profileData,
+        apiKeyId: null, // Don't restore API keys
+      }, createOptions);
       idMaps.embeddingProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {

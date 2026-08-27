@@ -17,7 +17,7 @@ import {
 import { resolveDayReference, type DayReferenceResolution } from '@/lib/memory/day-references'
 import { executeCheapLLMTask } from './core-execution'
 import { logger } from '@/lib/logger'
-import { stripCodeFences } from '@/lib/services/ai-import.service'
+import { stripCodeFences } from '@/lib/llm/llm-json'
 import type {
   ChatMessage,
   CheapLLMTaskResult,

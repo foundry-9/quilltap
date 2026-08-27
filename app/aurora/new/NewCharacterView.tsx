@@ -13,6 +13,8 @@ import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import { useConnectionProfiles } from '@/hooks/useConnectionProfiles'
 import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../shared/wizard-text-fields'
 import { saveGeneratedWardrobeItems } from '../shared/save-generated-wardrobe'
+import { saveGeneratedPhysicalDescription } from '../shared/save-generated-physical-description'
+import { saveGeneratedScenarios } from '../shared/save-generated-scenarios'
 import { Icon } from '@/components/ui/icon'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useCloseSelfTab } from '@/components/workspace/useCloseSelfTab'
@@ -141,17 +143,7 @@ export function NewCharacterView() {
 
       // Save pending scenarios if any (from wizard)
       if (pendingScenarios.current && pendingScenarios.current.length > 0) {
-        for (const scenario of pendingScenarios.current) {
-          try {
-            await fetch(`/api/v1/characters/${characterId}/scenarios`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ title: scenario.title, content: scenario.content }),
-            })
-          } catch (scenErr) {
-            console.error('Error saving scenario', scenErr instanceof Error ? scenErr.message : String(scenErr))
-          }
-        }
+        await saveGeneratedScenarios(characterId, pendingScenarios.current)
         pendingScenarios.current = null
       }
 
@@ -159,34 +151,9 @@ export function NewCharacterView() {
       // multi-record array to a single record on the character row; PATCH the
       // character directly and the repository routes it into the vault.
       if (pendingPhysicalDescription.current) {
-        try {
-          const descResponse = await fetch(`/api/v1/characters/${characterId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              physicalDescription: {
-                name: pendingPhysicalDescription.current.name,
-                headAndShouldersPrompt: pendingPhysicalDescription.current.headAndShouldersPrompt,
-                shortPrompt: pendingPhysicalDescription.current.shortPrompt,
-                mediumPrompt: pendingPhysicalDescription.current.mediumPrompt,
-                longPrompt: pendingPhysicalDescription.current.longPrompt,
-                completePrompt: pendingPhysicalDescription.current.completePrompt,
-                fullDescription: pendingPhysicalDescription.current.fullDescription,
-              },
-            }),
-          })
-
-          if (descResponse.ok) {
-            showSuccessToast('Physical description saved')
-          } else {
-            const errorData = await descResponse.json().catch(() => ({}))
-            console.error('Failed to save physical description', errorData.error || 'Unknown error')
-            showErrorToast('Character created, but physical description failed to save')
-          }
-        } catch (descErr) {
-          console.error('Error saving physical description', descErr instanceof Error ? descErr.message : String(descErr))
-          showErrorToast('Character created, but physical description failed to save')
-        }
+        await saveGeneratedPhysicalDescription(characterId, pendingPhysicalDescription.current, {
+          failureMessage: 'Character created, but physical description failed to save',
+        })
       }
 
       // Save pending properties (pronouns + aliases) if any (from wizard)

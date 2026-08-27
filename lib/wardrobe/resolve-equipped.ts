@@ -29,7 +29,13 @@
 import { logger } from '@/lib/logger';
 import { expandComposites } from '@/lib/wardrobe/expand-composites';
 import { hydrateComponentGraph } from '@/lib/wardrobe/hydrate-components';
+import {
+  buildOutfitSlotValues,
+  decorateOutfitItems,
+  describeOutfit,
+} from '@/lib/wardrobe/outfit-description';
 import type { OutfitSlotValues } from '@/lib/wardrobe/outfit-description';
+import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import {
   WARDROBE_SLOT_TYPES,
@@ -184,5 +190,35 @@ export async function resolveEquippedOutfitForCharacter(
   }
 
   return { outfitValues, leafItemsBySlot, itemsById };
+}
+
+/**
+ * Describe a character's currently equipped outfit as a concise, title-only
+ * markdown block — the shared "what are they wearing right now" pipeline for
+ * prompt builders that must stay terse (scene-state baselines, mid-turn
+ * clothing overrides).
+ *
+ * Resolves the equipped slots against the character's shared wardrobe tiers
+ * (the group tier is looked up per character; the project tier is passed in,
+ * already resolved by the caller) and renders via `describeOutfit` with
+ * `titleOnly` decoration.
+ */
+export async function describeEquippedOutfitTitleOnly(
+  repos: ResolveEquippedRepos,
+  characterId: string,
+  equippedSlots: EquippedSlots,
+  projectMountPointIds: string[] | undefined,
+): Promise<string> {
+  const resolved = await resolveEquippedOutfitForCharacter(
+    repos,
+    characterId,
+    equippedSlots,
+    await sharedWardrobeTiersForCharacter(characterId, projectMountPointIds),
+  );
+  return describeOutfit(
+    buildOutfitSlotValues((slot) =>
+      decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
+    ),
+  );
 }
 

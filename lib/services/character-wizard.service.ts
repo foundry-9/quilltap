@@ -16,7 +16,8 @@ import { fileStorageManager } from '@/lib/file-storage/manager';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logger } from '@/lib/logger';
-import { parseLLMJson, sanitizePronouns } from '@/lib/services/ai-import.service';
+import { parseLLMJson } from '@/lib/llm/llm-json';
+import { sanitizePronouns } from '@/lib/characters/sanitize-pronouns';
 import {
   FIELD_SEMANTICS_PREAMBLE,
   PROMPT_SEMANTICS,
@@ -30,9 +31,6 @@ import {
 import type { ConnectionProfile, FileEntry } from '@/lib/schemas/types';
 import type { FileAttachment } from '@/lib/llm/base';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
-
-export { WARDROBE_ITEMS_GENERATION_PROMPT, sanitizeGeneratedWardrobeItems };
-export type { GeneratedWardrobeItem };
 
 // ============================================================================
 // Types

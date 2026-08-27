@@ -16,13 +16,14 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import type { WardrobeArchiveToolInput, WardrobeArchiveToolOutput } from '../wardrobe-archive-tool';
 import { validateWardrobeArchiveInput } from '../wardrobe-archive-tool';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import {
+  findEquippedSlots,
   isOwnWardrobeItem,
   normalizeNoItemSentinel,
   notifyWardrobeChanged,
   resolveWardrobeItemAcrossTiers,
+  sharedWardrobeItemReadOnlyMessage,
   wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
 
@@ -73,16 +74,13 @@ export async function executeWardrobeArchiveTool(
     }
 
     if (!isOwnWardrobeItem(item, context.characterId)) {
-      return buildFailureResponse(
-        `"${item.title}" is a shared wardrobe item — you can wear it but not edit or retire it. ` +
-          'Only items in your own wardrobe can be archived.',
-      );
+      return buildFailureResponse(sharedWardrobeItemReadOnlyMessage(item.title, 'archived'));
     }
 
     // Is the item currently equipped? (Archive doesn't clear equipped slots, but
     // an equipped-then-archived item warrants a visible refresh.)
     const equipped = await repos.chats.getEquippedOutfitForCharacter(context.chatId, context.characterId);
-    const wasEquipped = !!equipped && WARDROBE_SLOT_TYPES.some((s) => (equipped[s] ?? []).includes(item.id));
+    const wasEquipped = findEquippedSlots(item.id, equipped).length > 0;
 
     const archived = await repos.wardrobe.archive(item.id, item.characterId);
     if (!archived) {

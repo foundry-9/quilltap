@@ -38,6 +38,26 @@ export interface PromptFieldLabelProps {
   actions?: ReactNode
 }
 
+/**
+ * The `Written as: <em>…</em>` example line, shared with review surfaces (the
+ * AI Wizard's GenerationStep, the optimizer's SuggestionCard) that show the
+ * worked example without the rest of the header. Callers may override the
+ * paragraph classes; the header below adds `mt-1` to sit under the helper.
+ */
+export function PromptFieldExample({
+  example,
+  className = 'text-xs qt-text-secondary',
+}: {
+  example: string
+  className?: string
+}) {
+  return (
+    <p className={className}>
+      Written as: <em>{example}</em>
+    </p>
+  )
+}
+
 export function PromptFieldLabel({
   hint,
   label,
@@ -66,9 +86,7 @@ export function PromptFieldLabel({
         <p className="text-xs qt-text-secondary mt-1">{helperText}</p>
       )}
       {exampleText && (
-        <p className="text-xs qt-text-secondary mt-1">
-          Written as: <em>{exampleText}</em>
-        </p>
+        <PromptFieldExample example={exampleText} className="text-xs qt-text-secondary mt-1" />
       )}
     </div>
   )

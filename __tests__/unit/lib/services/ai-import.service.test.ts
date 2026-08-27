@@ -7,6 +7,8 @@ import {
   parseLLMJson,
   repairTruncatedJson,
   escapeControlCharsInStrings,
+} from '@/lib/llm/llm-json';
+import {
   assembleQtapExport,
   restampStructuralFields,
 } from '@/lib/services/ai-import.service';

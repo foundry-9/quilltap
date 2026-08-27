@@ -30,8 +30,9 @@ import {
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { DatabaseCollection } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
-import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
-import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { getRawMountIndexDatabase } from '../backends/sqlite/mount-index-client';
+import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
+import { generateDDL, classifySchemaColumns } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { ensureLinkNocaseUniqueIndex, ensureLinkGroupColumn } from './mount-index-case-repair';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
@@ -376,14 +377,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
   }
 
   protected async getCollection(): Promise<DatabaseCollection<DocMountFileLink>> {
-    if (isMountIndexDegraded()) {
-      throw new Error('Mount index database is in degraded mode');
-    }
-
-    const db = getRawMountIndexDatabase();
-    if (!db) {
-      throw new Error('Mount index database not initialized');
-    }
+    const db = requireMountIndexDb();
 
     if (!this.mountIndexCollectionInitialized) {
       try {
@@ -421,16 +415,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       }
     }
 
-    const metadata = extractSchemaMetadata(this.collectionName, this.schema);
-    const jsonColumns = metadata.fields
-      .filter(f => f.type === 'array' || f.type === 'object')
-      .map(f => f.name);
-    const arrayColumns = metadata.fields
-      .filter(f => f.type === 'array')
-      .map(f => f.name);
-    const booleanColumns = metadata.fields
-      .filter(f => f.type === 'boolean')
-      .map(f => f.name);
+    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
 
     return new SQLiteCollection<DocMountFileLink>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
   }

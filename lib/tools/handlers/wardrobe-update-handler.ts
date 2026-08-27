@@ -23,6 +23,7 @@ import {
   isOwnWardrobeItem,
   normalizeNoItemSentinel,
   resolveWardrobeItemAcrossTiers,
+  sharedWardrobeItemReadOnlyMessage,
   wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
 import { buildWardrobeReadFailure, buildWardrobeReadOutput } from './wardrobe-read-handler';
@@ -80,10 +81,7 @@ export async function executeWardrobeUpdateTool(
     }
 
     if (!isOwnWardrobeItem(item, context.characterId)) {
-      return buildWardrobeReadFailure(
-        `"${item.title}" is a shared wardrobe item — you can wear it but not edit or retire it. ` +
-          'Only items in your own wardrobe can be changed.',
-      );
+      return buildWardrobeReadFailure(sharedWardrobeItemReadOnlyMessage(item.title, 'changed'));
     }
 
     const patch: Partial<WardrobeItem> = {};

@@ -19,7 +19,7 @@ import type {
   Project,
   Group,
 } from '@/lib/schemas/types';
-import type { ImportOptions, IdMappingState, ImportCounts } from './types';
+import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -64,7 +64,7 @@ export async function importTags(
 
       const { id: _, userId: __, createdAt, updatedAt, ...tagData } = tag;
       const createData = options.preserveIds ? { ...tagData, id: tag.id } : tagData;
-      const createOptions = options.preserveIds ? { id: tag.id } : undefined;
+      const createOptions = getPreserveIdsCreateOptions(tag.id, options);
       const newTag = options.preserveIds
         ? await repos.tags.create(createData, createOptions)
         : await repos.tags.create(createData);
@@ -161,7 +161,7 @@ export async function importRoleplayTemplates(
 
       const { id: _, createdAt, updatedAt, ...templateData } = template;
       const createData = options.preserveIds ? { ...templateData, id: template.id } : templateData;
-      const createOptions = options.preserveIds ? { id: template.id } : undefined;
+      const createOptions = getPreserveIdsCreateOptions(template.id, options);
       const newTemplate = options.preserveIds
         ? await globalRepos.roleplayTemplates.create({
             ...createData,
@@ -236,7 +236,7 @@ export async function importProjects(
       // fresh values and provisions a new store.
       const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...projectData } = project;
       const createData = options.preserveIds ? { ...projectData, id: project.id } : projectData;
-      const createOptions = options.preserveIds ? { id: project.id } : undefined;
+      const createOptions = getPreserveIdsCreateOptions(project.id, options);
       const newProject = options.preserveIds
         ? await repos.projects.create(createData, createOptions)
         : await repos.projects.create(createData);
@@ -303,7 +303,7 @@ export async function importGroups(
       // generates fresh values and provisions a new store.
       const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...groupData } = group;
       const createData = options.preserveIds ? { ...groupData, id: group.id } : groupData;
-      const createOptions = options.preserveIds ? { id: group.id } : undefined;
+      const createOptions = getPreserveIdsCreateOptions(group.id, options);
       const newGroup = options.preserveIds
         ? await repos.groups.create(createData, createOptions)
         : await repos.groups.create(createData);
@@ -382,7 +382,7 @@ export async function importChats(
 
       const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
       const createData = options.preserveIds ? { ...chatData, id: chat.id } : chatData;
-      const createOptions = options.preserveIds ? { id: chat.id } : undefined;
+      const createOptions = getPreserveIdsCreateOptions(chat.id, options);
       const newChat = options.preserveIds
         ? await repos.chats.create(createData, createOptions)
         : await repos.chats.create(createData);
@@ -499,7 +499,7 @@ export async function importMemories(
       // The orchestrator enqueues an EMBEDDING_GENERATE per created row.
       const { id: _, createdAt, updatedAt, embedding: _embedding, ...memoryData } = memory;
       const createData = options.preserveIds ? { ...memoryData, id: memory.id } : memoryData;
-      const createOptions = options.preserveIds ? { id: memory.id } : undefined;
+      const createOptions = getPreserveIdsCreateOptions(memory.id, options);
       const payload = {
         ...createData,
         characterId: newCharacterId,

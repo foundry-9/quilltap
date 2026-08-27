@@ -53,6 +53,11 @@ jest.mock('@/lib/database/schema-translator', () => ({
       { name: 'cacheUsage', type: 'object' },
     ],
   }),
+  classifySchemaColumns: jest.fn().mockReturnValue({
+    jsonColumns: ['request', 'response', 'usage', 'cacheUsage'],
+    arrayColumns: [],
+    booleanColumns: [],
+  }),
 }));
 
 // Create a shared mock collection that SQLiteCollection will return

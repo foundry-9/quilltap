@@ -14,10 +14,11 @@ import { DescriptionsTab } from '../view/components/DescriptionsTab'
 import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo } from './components'
 import { AestheticEditorField } from '@/components/settings/AestheticEditorField'
-import type { CharacterScenario } from './types'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showSuccessToast } from '@/lib/toast'
 import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../../shared/wizard-text-fields'
 import { saveGeneratedWardrobeItems } from '../../shared/save-generated-wardrobe'
+import { saveGeneratedPhysicalDescription } from '../../shared/save-generated-physical-description'
+import { saveGeneratedScenarios } from '../../shared/save-generated-scenarios'
 
 /**
  * Tab configuration for character edit page
@@ -131,35 +132,10 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
     // multi-record array to a single record; PATCH the character row directly
     // and the repository's write overlay routes it into the vault.
     if (data.physicalDescription) {
-      try {
-        const response = await fetch(`/api/v1/characters/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            physicalDescription: {
-              name: data.physicalDescription.name,
-              headAndShouldersPrompt: data.physicalDescription.headAndShouldersPrompt,
-              shortPrompt: data.physicalDescription.shortPrompt,
-              mediumPrompt: data.physicalDescription.mediumPrompt,
-              longPrompt: data.physicalDescription.longPrompt,
-              completePrompt: data.physicalDescription.completePrompt,
-              fullDescription: data.physicalDescription.fullDescription,
-            },
-          }),
-        })
-
-        if (response.ok) {
-          showSuccessToast('Physical description saved')
-        } else {
-          const errorData = await response.json().catch(() => ({}))
-          showErrorToast(errorData.error || 'Failed to save physical description')
-        }
-      } catch (err) {
-        console.error('Failed to save physical description', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-        showErrorToast('Failed to save physical description')
-      }
+      await saveGeneratedPhysicalDescription(id, data.physicalDescription, {
+        failureMessage: 'Failed to save physical description',
+        preferServerErrorInToast: true,
+      })
     }
 
     // Handle wizard-generated properties (pronouns + aliases): stage them in
@@ -191,35 +167,8 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
     // Handle wizard-generated scenarios
     const normalizedScenarios = normalizeGeneratedScenarios(data.scenarios)
     if (normalizedScenarios.length > 0) {
-      let scenariosSaved = 0
-      const savedScenarios: CharacterScenario[] = []
-      for (const scenario of normalizedScenarios) {
-        try {
-          const res = await fetch(`/api/v1/characters/${id}/scenarios`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: scenario.title, content: scenario.content }),
-          })
-          if (res.ok) {
-            const resData = await res.json()
-            scenariosSaved++
-            // Collect saved scenario with its server-assigned ID
-            if (resData.scenario) {
-              savedScenarios.push({
-                id: resData.scenario.id,
-                title: resData.scenario.title,
-                content: resData.scenario.content,
-                createdAt: resData.scenario.createdAt,
-                updatedAt: resData.scenario.updatedAt,
-              })
-            }
-          }
-        } catch (err) {
-          console.error('Failed to create scenario', {
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
+      const { saved: scenariosSaved, scenarios: savedScenarios } =
+        await saveGeneratedScenarios(id, normalizedScenarios)
       if (scenariosSaved > 0) {
         showSuccessToast(`${scenariosSaved} scenario${scenariosSaved > 1 ? 's' : ''} created`)
         // Update scenarios in form state directly instead of re-fetching

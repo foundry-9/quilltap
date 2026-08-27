@@ -116,3 +116,24 @@ export const PROMPT_FIELD_HINTS = {
 } satisfies Record<string, PromptFieldHint>
 
 export type PromptFieldHintKey = keyof typeof PROMPT_FIELD_HINTS
+
+/**
+ * Character-record field key → `PROMPT_FIELD_HINTS` entry, for surfaces that
+ * look hints up by the field names character data actually uses (the AI
+ * Wizard's field checkboxes and review pane, the optimizer's suggestion
+ * cards). Includes the `systemPrompts` alias the optimizer emits for
+ * system-prompt collections. Fields absent here (name, title, properties,
+ * wardrobeItems, talkativeness, aliases) have no prompt-voice hint.
+ */
+export const FIELD_HINT_KEYS: Partial<Record<string, PromptFieldHintKey>> = {
+  identity: 'identity',
+  description: 'description',
+  manifesto: 'manifesto',
+  personality: 'personality',
+  scenarios: 'scenario',
+  exampleDialogues: 'exampleDialogues',
+  firstMessage: 'firstMessage',
+  systemPrompt: 'systemPrompt',
+  systemPrompts: 'systemPrompt',
+  physicalDescription: 'physicalDescription',
+}

@@ -4,6 +4,70 @@
 
 ### 4.9-dev
 
+#### Changed: refactor sweep over everything touched since 4.8.0 (checklist item 3)
+
+Reviewed all 524 non-test TypeScript files changed since 4.8.0 for duplication, SRP, YAGNI, and
+encapsulation leaks, then applied the confirmed findings. Behavior is preserved throughout — same
+strings, status codes, wire bodies, and log lines. Highlights, grouped:
+
+- **Route factories.** The byte-near-identical group/project scenario item routes (292/290 lines each)
+  are now thin configs (48/46) over `lib/mount-index/scenario-item-route-factory.ts`; the four
+  group/project wardrobe routes (671 lines combined) collapse to 154 over
+  `mount-wardrobe-route-factory.ts`. The `?action=instructions` GET/POST pair, copy-pasted across four
+  wardrobe routes, lives once in `lib/wardrobe/wardrobe-instructions-handlers.ts`. Scenario
+  create/update/rename Zod schemas single-sourced in `scenarios-common.ts`; two wardrobe routes'
+  local schemas replaced with the existing `createWardrobeSchema`.
+- **Hooks.** `useProjectScenarios`/`useGeneralScenarios` (~200 duplicated lines) are now one
+  `useScenarioMutator(basePath)`. `useChatSettings`'s ~23 copy-pasted PUT-and-mutate handlers share one
+  `patchChatSettings` helper. New shared `useChatSettingsQuery`, `useRealtimeFallbackPoll`, and
+  `useAutonomousRoomAction` hooks replace five ad-hoc settings-query types, three hand-rolled
+  socket-down polls, and a duplicated optimistic mutation.
+- **Wardrobe/tools.** Wear/take-off handlers share `finalizeWardrobeMutation`; equipped-slot rendering
+  (with the hair "never report empty" rule), the shared-item refusal message, and the equipped-slot
+  probe are single-sourced in `wardrobe-handler-shared.ts`; the photo handlers' triplicated vault guard
+  is one helper. Generic cheap-LLM parsing (`stripCodeFences`, `parseLLMJson`) moved out of the
+  1,400-line `ai-import.service.ts` into `lib/llm/llm-json.ts` (eight importers re-pointed);
+  `sanitizePronouns` to `lib/characters/sanitize-pronouns.ts`.
+- **Data layer.** `resolveDefaultOutfit` (three call sites, all reaching the same unreachable-fallback
+  path) deleted in favor of the existing `buildDefaultOutfit`. New `classifySchemaColumns` and
+  `requireMountIndexDb` helpers replace eleven and nine verbatim blocks across the repositories. The
+  characters/store-backed `_create` overrides (~30 duplicated lines each) are now `toPersistedRow` +
+  `createErrorMessage` hooks on the base repository. The dead `getPreserveIdsCreateOptions` became the
+  real one, used at 14 import sites. Title cleanup and the help-chat/normal-chat title twins in
+  `cheap-llm-tasks` collapsed into `cleanTitle` and two parameterized implementations.
+- **Runtime.** Outfit description and appearance-resolution flattening deduped between the chat context
+  manager, scene-state tracking, story-background, and image generation; job-dispatcher id probes fold
+  into `job-topics.firstIdArg`; the SQLCipher key pragma is one `applySqlcipherKey` across six sites;
+  tab-refetch asks `topic-map` for the character key triple; duplicate `getDbKeyPath` and the dead
+  `enrichMany`/`unsetAllDefaults` middleware utilities deleted.
+- **Components.** AI-wizard's four-times-repeated character-data shape is one `WizardCharacterData`;
+  optimizer field maps, the field-hint key lookup, and the "Written as:" example render moved into
+  their chokepoints; scenario option mapping, the wizard save-physical-description/save-scenarios
+  blocks, and the size-only image-provider parameter markup deduped; wardrobe URL literals now go
+  through `wardrobe-container`; the emoji/unicode picker wrappers deleted in favor of one
+  `CharPickerToolbarButton`.
+- **Plugins/packages.** `@quilltap/plugin-utils` 2.5.0 (needs `npm publish`): OpenAI-compatible
+  send/stream now share one `buildRequestBody`. NanoGPT 1.1.1: base URL and image MIME list
+  single-sourced (the bug-97 pattern). Ollama 1.0.46: think-parameter retry and request build deduped.
+- Also: legacy `useMessageStreaming` hook deleted (pre-Salon leftover with duplicate types); routes
+  now use `conflict()`/`created()` helpers instead of hand-rolled `NextResponse.json`; a scenarios
+  route stopped bypassing middleware-supplied repositories (this also fixed a latent crash — the
+  refactor pass's one live-bug catch: general-scenario POST referenced `repos` without destructuring
+  it after an earlier edit).
+
+Known tiny deviations, all judged harmless and noted in review: the four chat-title sites gain a
+second trim (a title like `"My Title "` now cleans fully); two views' console-only error-log formats
+unified; group scenario options' object key order shifts. Deliberately left alone: the two
+image-description-profile handlers in `useChatSettings` (three-way deviation from the pattern),
+`BrahmaConsoleSettings`/`DataRetentionSettings` (pre-existing twin, barely in the diff), the typeahead
+insert helpers (docblock names a planned consumer), `validateProviderConfig`'s api-key default
+disagreement (a behavior decision, not a refactor), and the plugin embedding-provider/image-entry
+dedups (would grow plugin-utils' public API for two consumers each).
+
+Verified: `npx tsc` clean; full unit suite green (725 suites / 11,237 tests, tool-schema snapshot
+unchanged); `npm run lint` clean. Net: roughly 2,800 lines removed across 134 modified files, plus
+the new shared modules.
+
 #### Added: 4.9.0 release notes, and a documentation-freshness sweep (checklist item 13)
 
 Walked the seven files checklist item 13 names, against the 67 commits of the 4.9 cycle
@@ -217,7 +281,6 @@ Both guards originally compared flags by substring, which passes for a flag that
 another flag has it as a prefix — `--max` reads as present when only `--max-nodes` is listed. They now
 match whole tokens, and the help-function pattern tolerates reformatting rather than asserting on
 whitespace.
-
 
 #### Removed: dead code sweep (checklist item 5)
 

@@ -16,7 +16,7 @@
 import { executeWebSearchTool, formatWebSearchResults } from '@/lib/tools/handlers/web-search-handler'
 import { isWebSearchConfigured } from '@/lib/tools/handlers/web-search-handler'
 import { createLLMProvider } from '@/lib/llm'
-import { parseLLMJson } from '@/lib/services/ai-import.service'
+import { parseLLMJson } from '@/lib/llm/llm-json'
 import { getCheapLLMProvider, profileParams } from '@/lib/llm/cheap-llm'
 import { MODEL_CLASSES, isValidModelClassName } from '@/lib/llm/model-classes'
 import { getUserRepositories } from '@/lib/repositories/user-scoped'

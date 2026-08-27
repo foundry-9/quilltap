@@ -14,7 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
-import { withWardrobeArchivedParam } from '@/lib/wardrobe/wardrobe-container'
+import { wardrobeCollectionUrl, wardrobeItemUrl } from '@/lib/wardrobe/wardrobe-container'
 
 export interface CreateProjectWardrobeInput {
   title: string
@@ -65,9 +65,9 @@ export function useProjectWardrobe(projectId: string): UseProjectWardrobeReturn 
   const [error, setError] = useState<string | null>(null)
   const [showArchived, setShowArchived] = useState(false)
 
-  const collectionUrl = withWardrobeArchivedParam(
-    `/api/v1/projects/${projectId}/wardrobe`,
-    showArchived,
+  const collectionUrl = wardrobeCollectionUrl(
+    { scope: 'project', id: projectId },
+    { includeArchived: showArchived },
   )
 
   const refresh = useCallback(async () => {
@@ -119,7 +119,7 @@ export function useProjectWardrobe(projectId: string): UseProjectWardrobeReturn 
   const updateItem = useCallback<UseProjectWardrobeReturn['updateItem']>(
     async (id, patch) => {
       try {
-        const res = await fetch(`/api/v1/projects/${projectId}/wardrobe/${encodeURIComponent(id)}`, {
+        const res = await fetch(wardrobeItemUrl({ scope: 'project', id: projectId }, id), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patch),
@@ -140,7 +140,7 @@ export function useProjectWardrobe(projectId: string): UseProjectWardrobeReturn 
   const deleteItem = useCallback<UseProjectWardrobeReturn['deleteItem']>(
     async (id) => {
       try {
-        const res = await fetch(`/api/v1/projects/${projectId}/wardrobe/${encodeURIComponent(id)}`, {
+        const res = await fetch(wardrobeItemUrl({ scope: 'project', id: projectId }, id), {
           method: 'DELETE',
         })
         const body = await res.json().catch(() => ({}))

@@ -160,7 +160,7 @@ export async function executeWardrobeListTool(
       hasTypeFilter: !!type_filter,
       hasAppropriatenessFilter: !!appropriateness_filter,
       includeEquipped: include_equipped !== false,
-      compositeCount: finalItems.filter((i) => (i as WardrobeListItemResult & { is_composite?: boolean }).is_composite).length,
+      compositeCount: finalItems.filter((i) => i.is_composite).length,
     });
 
     return {
@@ -209,12 +209,8 @@ export function formatWardrobeListResults(output: WardrobeListToolOutput): strin
     const appropriatenessTag = item.appropriateness ? ` | ${item.appropriateness}` : '';
     const description = item.description ? ` - ${item.description}` : '';
     const cueTag = item.image_prompt ? ` (cue: ${item.image_prompt})` : '';
-    const composite = item as WardrobeListItemResult & {
-      is_composite?: boolean;
-      component_titles?: string[];
-    };
-    const compositeTag = composite.is_composite
-      ? ` [composite: ${(composite.component_titles ?? []).join(', ') || 'unresolved components'}]`
+    const compositeTag = item.is_composite
+      ? ` [composite: ${(item.component_titles ?? []).join(', ') || 'unresolved components'}]`
       : '';
 
     lines.push(`  ${typeTags} ${item.title}${equippedTag}${sharedTag}${appropriatenessTag}${compositeTag}${cueTag}${description}`);
