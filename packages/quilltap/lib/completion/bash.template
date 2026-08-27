@@ -263,8 +263,8 @@ _quilltap_complete() {
       fi
       ;;
     instances)
-      local inst_verbs="list ls show path where add create remove rm delete set-passphrase passphrase default rename"
-      local inst_flags="--names-only --json --clear --help"
+      local inst_verbs="list ls show path where add create remove rm delete set-passphrase passphrase default rename restore-key rebuild-key"
+      local inst_flags="--names-only --json --clear --passphrase --no-passphrase --data-dir --force --yes --help"
       if [[ -z "$subverb" ]]; then
         if [[ "$cur" == -* ]]; then
           COMPREPLY=($(compgen -W "$inst_flags" -- "$cur"))
@@ -274,7 +274,7 @@ _quilltap_complete() {
       else
         # Most instances verbs take a name as positional; offer registered names
         case "$subverb" in
-          show|remove|rm|delete|set-passphrase|passphrase|default|rename)
+          show|remove|rm|delete|set-passphrase|passphrase|default|rename|restore-key|rebuild-key)
             local instances=$(command quilltap instances list --names-only 2>/dev/null)
             if [[ "$cur" == -* ]]; then
               COMPREPLY=($(compgen -W "$inst_flags" -- "$cur"))

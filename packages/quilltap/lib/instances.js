@@ -277,41 +277,17 @@ function renameInstance(oldName, newName) {
 //   'no-dbkey'     — no .dbkey on disk yet (first-run instance)
 //   'no-encryption'— dbkey is unlocked by the internal passphrase, no user one needed
 async function verifyPassphrase(instanceRoot, passphrase) {
-  const crypto = require('crypto');
+  const { INTERNAL_PASSPHRASE, readDbKeyFile, tryDecryptDbKey } = require('./dbkey');
   const dataDir = path.join(expandPath(instanceRoot), 'data');
-  const dbkeyPath = path.join(dataDir, 'quilltap.dbkey');
-  if (!fs.existsSync(dbkeyPath)) {
+
+  const data = readDbKeyFile(dataDir);
+  if (!data) {
     return 'no-dbkey';
   }
-  const data = JSON.parse(fs.readFileSync(dbkeyPath, 'utf8'));
-  const INTERNAL = '__quilltap_no_passphrase__';
-
-  function tryDecrypt(pass) {
-    const salt = Buffer.from(data.salt, 'hex');
-    const key = crypto.pbkdf2Sync(pass, new Uint8Array(salt), data.kdfIterations, 32, data.kdfDigest);
-    const iv = Buffer.from(data.iv, 'hex');
-    const decipher = crypto.createDecipheriv(data.algorithm, new Uint8Array(key), new Uint8Array(iv));
-    decipher.setAuthTag(new Uint8Array(Buffer.from(data.authTag, 'hex')));
-    let plaintext = decipher.update(data.ciphertext, 'hex', 'utf8');
-    plaintext += decipher.final('utf8');
-    const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
-    if (hash !== data.pepperHash) throw new Error('pepperHash mismatch');
-    return plaintext;
-  }
-
-  try {
-    tryDecrypt(INTERNAL);
+  if (tryDecryptDbKey(data, INTERNAL_PASSPHRASE) !== null) {
     return 'no-encryption';
-  } catch {
-    // Falls through — dbkey needs a user passphrase.
   }
-
-  try {
-    tryDecrypt(passphrase);
-    return 'valid';
-  } catch {
-    return 'wrong';
-  }
+  return tryDecryptDbKey(data, passphrase) !== null ? 'valid' : 'wrong';
 }
 
 module.exports = {

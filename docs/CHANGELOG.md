@@ -4,6 +4,37 @@
 
 ### 4.9-dev
 
+#### Added: `quilltap instances restore-key` rebuilds a lost or locked `.dbkey`
+
+The `.dbkey` file only wraps the pepper; the pepper is the actual SQLCipher key. Anyone holding the
+pepper could therefore always rebuild the wrapper, but the only way to do it was the server's
+`POST /api/v1/system/unlock?action=store` — which reads the pepper from the environment and requires
+a running server. That covers a lost key file and nothing else: a forgotten passphrase leaves the
+server at the locked screen accepting only the passphrase it no longer has, with no offline route in.
+
+`npx quilltap instances restore-key <name>` writes the key file with the server down. The pepper
+comes from `ENCRYPTION_MASTER_PEPPER` or a hidden prompt, never a flag (a command line lands in shell
+history and in `ps`). Before writing, it opens every encrypted database in the data directory with
+the candidate pepper and refuses if any fails — a `.dbkey` holding the wrong pepper is worse than
+none, because the server unwraps it, hands SQLCipher a key that decrypts nothing, and reports an
+intact database as corrupt (or, with the env var also set, exits fatally on the hash mismatch). The
+proof cannot be waived while an encrypted database exists to check; `--force` only covers a fresh or
+still-plaintext instance. It is lock-gated like `maintenance run`, since a running server caches both
+the pepper and the effective passphrase in memory. An existing key file is backed up to
+`quilltap.dbkey.bak-<timestamp>`, and `minServerVersion` — which `version-guard.ts` patches into the
+same file for the Electron shell — is carried across the rebuild. A registered instance's stored
+passphrase is updated to match.
+
+It does not re-encrypt character ARCHIVE bundles, which are keyed on the passphrase rather than the
+pepper; only the server's Change Passphrase card rewrites those, and the command says so when the
+passphrase changes.
+
+New `packages/quilltap/lib/dbkey.js` mirrors the `.dbkey` format and the write-side PBKDF2 constants
+from `lib/startup/dbkey.ts` (the CLI is plain Node and cannot import it). `db-helpers.loadDbKey` and
+`instances.verifyPassphrase`, which each carried their own copy of the unwrap, now use it.
+`__tests__/unit/lib/startup/dbkey-cli-format.test.ts` drives real files through the CLI and server
+implementations in both directions so the mirror cannot drift.
+
 #### Removed: the Salon's hidden desktop message actions
 
 `MessageDesktopActions` rendered a hover toolbar above every message bubble and a row of text

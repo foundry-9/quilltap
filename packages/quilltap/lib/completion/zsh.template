@@ -450,12 +450,19 @@ _quilltap_instances() {
     'passphrase:Set instance passphrase'
     'default:Set/show/clear the default instance'
     'rename:Rename an instance (preserves passphrase)'
+    'restore-key:Rebuild the .dbkey from the pepper'
+    'rebuild-key:Rebuild the .dbkey from the pepper'
   )
 
   inst_opts=(
     '--names-only[Print one name per line (for completion)]'
     '--json[JSON output]'
     '--clear[Clear value (for default)]'
+    '--passphrase[Passphrase for the rebuilt .dbkey]:passphrase:'
+    '--no-passphrase[Rebuild the .dbkey with no passphrase]'
+    '(-d --data-dir)'{-d,--data-dir}'[Instance root to rebuild in]:directory:_files -/'
+    '--force[Write even with no encrypted database to prove the pepper against]'
+    '(-y --yes)'{-y,--yes}'[Skip confirmation prompts]'
     '(-h --help)'{-h,--help}'[Show help]'
   )
 
@@ -470,7 +477,7 @@ _quilltap_instances() {
       ;;
     name)
       case "$line[1]" in
-        show|remove|rm|delete|set-passphrase|passphrase|default|rename)
+        show|remove|rm|delete|set-passphrase|passphrase|default|rename|restore-key|rebuild-key)
           _quilltap_instance_names
           ;;
       esac

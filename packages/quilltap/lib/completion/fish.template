@@ -225,14 +225,23 @@ complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'set-passp
 complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'passphrase' -d 'Set passphrase'
 complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'default' -d 'Set/show/clear default instance'
 complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'rename' -d 'Rename instance'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'restore-key' -d 'Rebuild .dbkey from the pepper'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'rebuild-key' -d 'Rebuild .dbkey from the pepper'
 
 # Instance names as positional for verbs that target one
-for verb in show remove rm delete set-passphrase passphrase default rename
+for verb in show remove rm delete set-passphrase passphrase default rename restore-key rebuild-key
   complete -c quilltap -n "__quilltap_using_subverb instances $verb" -f -a '(__quilltap_instance_names)'
 end
 
 complete -c quilltap -n '__quilltap_using_subcommand instances' -l 'names-only' -d 'Print one name per line'
 complete -c quilltap -n '__quilltap_using_subverb instances default' -l 'clear' -d 'Clear default instance'
+for verb in restore-key rebuild-key
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -l 'passphrase' -d 'Passphrase for the rebuilt .dbkey'
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -l 'no-passphrase' -d 'Rebuild with no passphrase'
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -s 'd' -l 'data-dir' -r -d 'Instance root to rebuild in'
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -l 'force' -d 'Write with no database to prove against'
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -s 'y' -l 'yes' -d 'Skip confirmation prompts'
+end
 
 # ---------- memories verbs ----------
 complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'ls' -d 'List memories'
