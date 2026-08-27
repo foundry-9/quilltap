@@ -4,6 +4,25 @@
 
 ### 4.9-dev
 
+#### Added: an outfit pull-down above the slot rows, and slot pickers that list garments only
+
+The outfit composer — the chat-start Starting Outfit panel and both dressing columns of the wardrobe
+dialog — now opens with a `Wear an outfit…` pull-down above the five slot rows. It lists every
+composite in the character's wearable pool, title-sorted, with the slots each claims and whether it
+replaces them. Picking one goes through the same flag-driven equip path the slot pickers use, so an
+additive bundle layers, one marked `replace` sweeps its slots first, and either way it dissolves into
+its component garments as it lands.
+
+The per-slot `+` pickers no longer offer composites. A three-slot ensemble previously appeared once
+per slot it covered, pushing the garments actually meant for the slot down the list; it now appears
+exactly once, in the pull-down. Single-slot composites are included there too — it is their only
+route on. A multi-slot *leaf* (a dress typed `["top","bottom"]`) is not a composite and stays in the
+slot pickers.
+
+New `lib/wardrobe/composed-outfits.ts` holds the split (`selectComposedOutfits` / `selectGarments`,
+both built on the existing `isBundle`), with unit tests. New component
+`components/wardrobe/outfit-quick-pick.tsx`; it renders nothing when the pool holds no composites.
+
 #### Changed: compression gets its own cheap-LLM budget, and cheap-task failures reach the server log
 
 Every cheap LLM task shared one 45s deadline (40s handed to the provider). Compression does not fit
