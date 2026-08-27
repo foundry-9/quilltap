@@ -691,6 +691,35 @@ export const Chat: React.FC = () => {
         </div>
       </section>
 
+      {/* Answer-Confirmation Badges */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Answer-Confirmation Badges
+        </h3>
+        <p style={{ fontSize: '0.875rem', color: 'var(--color-muted-foreground)', marginBottom: '1rem' }}>
+          The fact-checker&apos;s verdict on a message, shown among the message action icons. Quiet by
+          design; the discrepancy notes live in a tooltip. Hover one to see its hover state.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button className="qt-confirmation-badge" data-confirmation-state="vouched">
+            <span className="qt-confirmation-badge-glyph">✓</span>
+            <span className="qt-confirmation-badge-label">Vouched</span>
+          </button>
+          <button className="qt-confirmation-badge" data-confirmation-state="amended">
+            <span className="qt-confirmation-badge-glyph">✎</span>
+            <span className="qt-confirmation-badge-label">Amended</span>
+          </button>
+          <button className="qt-confirmation-badge" data-confirmation-state="stood-by">
+            <span className="qt-confirmation-badge-glyph">!</span>
+            <span className="qt-confirmation-badge-label">Stood by</span>
+          </button>
+          <button className="qt-confirmation-badge" data-confirmation-state="unvetted">
+            <span className="qt-confirmation-badge-glyph">—</span>
+            <span className="qt-confirmation-badge-label">Unvetted</span>
+          </button>
+        </div>
+      </section>
+
       {/* Full Chat Layout Preview */}
       <section>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

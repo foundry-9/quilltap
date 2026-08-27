@@ -4,6 +4,30 @@
 
 ### 4.9-dev
 
+#### Fixed: message action buttons and the verdict badge now use Quilltap's own tooltips
+
+Every control at the bottom of a Salon message named itself with the HTML `title` attribute, so the
+label came from the OS tooltip widget: it needed about a second of motionless hovering, vanished at
+the smallest pointer movement, would not come back without leaving and re-entering, and truncated
+long text. Under the Electron shell that was bad enough that the answer-confirmation badge — whose
+`title` held the discrepancy notes and the pre-revision text — was effectively unreadable.
+
+New `components/ui/Tooltip.tsx` draws the bubble instead: a portal on `document.body` positioned from
+script, so it clears every stacking context and sits above dialogs. It opens after a 200 ms hover or
+immediately on keyboard focus, flips from top to bottom when the viewport is tight, clamps to the
+screen edges, follows the anchor while the page scrolls, and closes on Escape. Passing `pinnable`
+makes a click hold it open; `interactive` lets the pointer enter it to scroll or select the text.
+
+The action bar's eleven buttons now use it, each with an explicit `aria-label` (a tooltip is not an
+accessible name). The confirmation badge is pinnable and renders structured content — verdict,
+summary, "What looked off", "Originally written" — and is now a real button, so it takes keyboard
+focus and answers hover the way the icons beside it do; it was previously the only control in the row
+with no hover state at all. Its full text stays on the badge's accessible name for screen readers.
+
+New `qt-tooltip*` classes in `_surfaces.css` and the badge's hover/focus rules in `_chat.css`, both
+mirrored into `@quilltap/theme-storybook`. Unit tests cover dwell-to-open, close-on-leave,
+pin-survives-leave, Escape, and each badge state.
+
 #### Fixed: one malformed connection profile no longer aborts a whole `.qtap` import (bug 105)
 
 Importing a bundle whose `connectionProfiles` array held a record with a non-string `provider` (a

@@ -20,7 +20,7 @@ The check is deliberately narrow. A character is perfectly entitled to add colou
 
 You will see the first reply arrive live, as always. Should the re-affirmation amend it, you will watch the first answer give way to the corrected one — this visible changing of the guard is a feature, not a flicker. The status bar keeps you company throughout: **Confirming…** while the reader reads, and **Requesting affirmation of questionable results…** while the character reconsiders.
 
-Every checked reply carries a small badge — *Vouched*, *Amended*, *Stood by*, or *Unvetted* — and hovering over it reveals precisely what looked amiss (and, for an amended reply, what was originally written). It is metadata, not an alarm: kept quiet by design.
+Every checked reply carries a small badge — *Vouched*, *Amended*, *Stood by*, or *Unvetted*. Rest the pointer on it and a note unfolds above the badge, setting out precisely what looked amiss and, for an amended reply, what was originally written. Where there is something to read, a **click on the badge pins the note open**, so you may take your time over it (and select the text, should you want it elsewhere); **Esc**, or a click anywhere else, dismisses it. A badge reached by keyboard says the same thing aloud. It is metadata, not an alarm: kept quiet by design.
 
 ## Switching it on, at three levels
 

@@ -1383,6 +1383,73 @@
   border-left-color: var(--qt-alert-info-border);
 }
 
+/* --------------------------------------------------------------------------
+   ANSWER-CONFIRMATION BADGE
+   A quiet per-message verdict marker (Vouched / Amended / Stood by /
+   Unvetted). The glyph carries the state; a tooltip holds the discrepancy
+   notes. Metadata, not an alarm.
+   -------------------------------------------------------------------------- */
+
+.qt-confirmation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.375rem;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  background: transparent;
+  font: inherit;
+  line-height: 1.4;
+  cursor: help;
+  color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+  opacity: 0.8;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 150ms, background-color 150ms, border-color 150ms, opacity 150ms;
+}
+
+/* The badge sits among the message action icons and answers the pointer the
+   same way they do. */
+.qt-confirmation-badge:hover,
+.qt-confirmation-badge:focus-visible {
+  opacity: 1;
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+}
+
+/* The tinted states (stood-by, amended) keep their own colour on hover; the
+   quiet ones brighten to the foreground the way the action icons do. */
+.qt-confirmation-badge[data-confirmation-state="vouched"]:hover,
+.qt-confirmation-badge[data-confirmation-state="vouched"]:focus-visible,
+.qt-confirmation-badge[data-confirmation-state="unvetted"]:hover,
+.qt-confirmation-badge[data-confirmation-state="unvetted"]:focus-visible {
+  color: var(--color-foreground);
+}
+
+.qt-confirmation-badge:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-foreground) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.qt-chat-message-user .qt-confirmation-badge:hover,
+.qt-chat-message-user .qt-confirmation-badge:focus-visible {
+  color: var(--qt-chat-user-fg);
+  background: color-mix(in srgb, var(--qt-chat-user-fg) 15%, transparent);
+}
+
+.qt-confirmation-badge-glyph {
+  font-weight: 600;
+}
+
+.qt-confirmation-badge[data-confirmation-state="stood-by"] {
+  color: var(--qt-warning-box-fg, var(--qt-text-secondary-fg));
+  opacity: 1;
+}
+
+.qt-confirmation-badge[data-confirmation-state="amended"] {
+  opacity: 1;
+}
+
 /* ==========================================================================
    CHAT — STAFF ANNOUNCEMENTS
    Messages authored by a personified feature (the Librarian, the Host, Pascal
@@ -2099,6 +2166,81 @@
 .qt-dropdown-item:focus {
   background: var(--color-muted);
   outline: none;
+}
+
+/* ==========================================================================
+   TOOLTIP
+   ==========================================================================
+   Quilltap draws its own tooltips rather than leaning on the native `title`
+   attribute, which the Electron shell renders unreliably. The bubble is
+   portalled to `document.body` and positioned from script, so it escapes every
+   stacking context and sits above dialogs (z-index 60). */
+
+.qt-tooltip {
+  position: fixed;
+  z-index: 70;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  max-width: min(24rem, calc(100vw - 1rem));
+  border-radius: var(--qt-popover-radius);
+  background: var(--color-foreground);
+  color: var(--color-background);
+  border: 1px solid color-mix(in srgb, var(--color-background) 20%, transparent);
+  box-shadow: var(--qt-popover-shadow);
+  text-align: left;
+  white-space: pre-line;
+  /* Transparent to the pointer, so hovering never chases the bubble away —
+     until the bubble is interactive (scrollable or pinned). */
+  pointer-events: none;
+}
+
+.qt-tooltip[data-interactive="true"] {
+  pointer-events: auto;
+}
+
+.qt-tooltip[data-pinned="true"] {
+  border-color: color-mix(in srgb, var(--color-background) 45%, transparent);
+}
+
+/* Layout-neutral wrapper carrying the hover/focus listeners. */
+.qt-tooltip-anchor {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Structured tooltip contents — a heading, labelled sections, a closing hint. */
+.qt-tooltip-body {
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.qt-tooltip-title {
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+
+.qt-tooltip-section {
+  margin-top: 0.5rem;
+}
+
+.qt-tooltip-section-label {
+  text-transform: uppercase;
+  font-size: 0.625rem;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+.qt-tooltip-quote {
+  white-space: pre-wrap;
+  opacity: 0.92;
+}
+
+.qt-tooltip-hint {
+  margin-top: 0.5rem;
+  font-size: 0.625rem;
+  opacity: 0.65;
 }
 
 /* ==========================================================================
