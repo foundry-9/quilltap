@@ -56,10 +56,43 @@ export const CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS = 180_000
  */
 const PROVIDER_BUDGET_HEADROOM_MS = 5_000
 
-/** The hard per-request budget handed to the provider for a given selection. */
-function providerBudgetFor(selection: CheapLLMSelection): number {
-  const deadline = selection.isLocal ? CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS : CHEAP_LLM_TASK_TIMEOUT_MS
-  return deadline - PROVIDER_BUDGET_HEADROOM_MS
+/**
+ * Per-task deadline overrides, keyed by the granular task type.
+ *
+ * The default budget suits a cheap task whose prompt is a slice of a turn.
+ * Compression is not that shape: it carries the whole conversation history, so
+ * it is structurally the largest prompt any cheap task sends and it sits at the
+ * slow end of the distribution as a matter of course, not as a stall. Measured
+ * over three days on Friday, compression supplied 13 of the 34 calls that
+ * finished within five seconds of the old 40s provider budget — more than any
+ * other task type — and its mean (24.4s) ran roughly 2.5x the cheap-task mean.
+ * A ceiling that most of a task's healthy distribution can reach is a ceiling
+ * set for the wrong task.
+ *
+ * Kept well short of doubling on purpose. Compression is pre-computed off the
+ * turn's critical path when a cached result is available, but falls back to a
+ * synchronous inline call when it isn't — and there the operator waits out the
+ * whole budget. This buys the real distribution room without letting one
+ * uncached turn stall for minutes.
+ */
+const CHEAP_LLM_TASK_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
+  'compress-conversation-history': 75_000,
+  'compress-system-prompt': 75_000,
+  'compress-memories': 75_000,
+}
+
+/**
+ * The deadline for one attempt. Local providers keep their own (larger) budget
+ * regardless of task — a cold model load dwarfs any per-task difference.
+ */
+export function deadlineFor(selection: CheapLLMSelection, taskType?: string): number {
+  if (selection.isLocal) return CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS
+  return CHEAP_LLM_TASK_TIMEOUT_OVERRIDES_MS[taskType ?? ''] ?? CHEAP_LLM_TASK_TIMEOUT_MS
+}
+
+/** The hard per-request budget handed to the provider for a given attempt. */
+function providerBudgetFor(selection: CheapLLMSelection, taskType?: string): number {
+  return deadlineFor(selection, taskType) - PROVIDER_BUDGET_HEADROOM_MS
 }
 
 /**
@@ -225,7 +258,7 @@ async function sendToProvider(
     // deadline, so a stalled request is aborted at the socket rather than left
     // running while we walk away from it. `withDeadline` remains the backstop
     // for providers that ignore this.
-    requestTimeoutMs: providerBudgetFor(selection),
+    requestTimeoutMs: providerBudgetFor(selection, taskType),
   }
 
   // Check if we already know this profile doesn't support custom temperature
@@ -395,13 +428,11 @@ async function runCheapLLMTask<T>(
   // Each attempt gets its own budget rather than sharing one across the task:
   // the uncensored fallback below only fires after a *completed* call came back
   // empty, so it is a fresh attempt and deserves a fresh deadline.
-  const deadlineFor = (s: CheapLLMSelection) =>
-    s.isLocal ? CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS : CHEAP_LLM_TASK_TIMEOUT_MS
 
   try {
     let response = await withDeadline(
       sendToProvider(selection, messages, userId, taskType, chatId, messageId, maxTokens, characterId),
-      deadlineFor(selection),
+      deadlineFor(selection, taskType),
       taskType,
       { chatId, characterId, provider: selection.provider, model: selection.modelName }
     )
@@ -420,7 +451,7 @@ async function runCheapLLMTask<T>(
 
       const retryResponse = await withDeadline(
         sendToProvider(uncensoredSelection, messages, userId, taskType, chatId, messageId, maxTokens, characterId),
-        deadlineFor(uncensoredSelection),
+        deadlineFor(uncensoredSelection, taskType),
         taskType,
         { chatId, characterId, provider: uncensoredSelection.provider, model: uncensoredSelection.modelName }
       )
@@ -448,6 +479,20 @@ async function runCheapLLMTask<T>(
       usage: response.usage,
     }
   } catch (error) {
+    // Say so in the server log. `withDeadline` already reports the case where
+    // *our* deadline fires, but a provider giving up on its own budget arrives
+    // here as an ordinary provider error — and the plugin's own log line names
+    // the provider without naming the task, so a timed-out extraction pass was
+    // legible only in the debug logs stored on the message. One line here ties
+    // the two together.
+    logger.warn('[CheapLLM] Task failed', {
+      taskType,
+      chatId,
+      characterId,
+      provider: selection.provider,
+      model: selection.modelName,
+      error: getErrorMessage(error),
+    })
     return {
       success: false,
       error: getErrorMessage(error),

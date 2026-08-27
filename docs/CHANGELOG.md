@@ -4,6 +4,26 @@
 
 ### 4.9-dev
 
+#### Changed: compression gets its own cheap-LLM budget, and cheap-task failures reach the server log
+
+Every cheap LLM task shared one 45s deadline (40s handed to the provider). Compression does not fit
+that shape: it carries the whole conversation history, so it sends the largest prompt of any cheap
+task and sits at the slow end of the distribution normally, not as a stall. Measured over three days,
+compression supplied 13 of the 34 cheap calls that finished within five seconds of the provider
+budget — more than any other task type — with a mean around 2.5x the cheap-task mean. The three
+compression task types (`compress-conversation-history`, `compress-system-prompt`, `compress-memories`)
+now get 75s; everything else keeps 45s, and local providers keep their existing 180s regardless of
+task. Deliberately short of doubling: compression is pre-computed off the turn's critical path when a
+cached result exists but falls back to a synchronous inline call when it doesn't, and there the
+operator waits out the whole budget.
+
+A failed cheap-LLM task now logs a warning naming the task type, provider, model, chat and character.
+The deadline path already logged when Quilltap's own timer fired, but a provider giving up on its own
+budget arrived as an ordinary provider error: the plugin logged "NanoGPT API error in sendMessage"
+without saying which task died, and the loss was legible only in the per-message memory debug logs.
+Added unit tests pinning the per-task budgets, the default for every other task, and the local
+provider's exemption.
+
 #### Fixed: Z.AI dropped images for GLM 5.3 and any model without a `v` in its id (bug 104)
 
 The Z.AI plugin kept its own list of which GLM models read pictures, matching only ids with a `v`
