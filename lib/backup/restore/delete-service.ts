@@ -11,6 +11,7 @@
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
+import { deleteMemoriesWithUnlinkBatch } from '@/lib/memory/memory-gate';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
@@ -145,13 +146,18 @@ export async function deleteUserData(
       globalRepos.wardrobe.findAll(),
     ]);
 
-  // Delete memories for each character first
+  // Delete memories for each character first, through the deletion chokepoint.
+  // With the whole corpus in one doomed set the neighbour scrub is a no-op
+  // (every candidate is itself doomed), so this degrades to per-character bulk
+  // deletes instead of the old per-row loop.
+  const memoryIds: string[] = [];
   for (const character of characters) {
     const memories = await repos.memories.findByCharacterId(character.id);
     for (const memory of memories) {
-      await repos.memories.delete(memory.id);
+      memoryIds.push(memory.id);
     }
   }
+  await deleteMemoriesWithUnlinkBatch(memoryIds);
 
   // Delete all entities (including user-created templates, projects, and LLM logs)
   await Promise.all([

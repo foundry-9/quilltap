@@ -4,6 +4,15 @@
 
 ### 4.9-dev
 
+#### Changed: full-wipe memory deletion now goes through the memory-gate chokepoint
+
+The replace-mode restore / delete-all-data path (`lib/backup/restore/delete-service.ts`) deleted
+memories with per-row `repos.memories.delete` calls in a loop — the last remaining bypass of the
+`deleteMemoriesWithUnlinkBatch` deletion chokepoint. It now collects every doomed memory id and makes
+one batch call. In the full-wipe case the chokepoint's neighbour scrub is a no-op (every neighbour is
+itself in the doomed set), so the change also collapses N per-row deletes into per-character bulk
+deletes. Added a regression test asserting the direct repository delete is never hit.
+
 #### Changed: refactor sweep over everything touched since 4.8.0 (checklist item 3)
 
 Reviewed all 524 non-test TypeScript files changed since 4.8.0 for duplication, SRP, YAGNI, and
