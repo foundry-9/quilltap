@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-z-ai",
-  "version": "1.1.23",
+  "version": "1.1.24",
   "description": "Z.AI GLM provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",

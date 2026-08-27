@@ -4,6 +4,22 @@
 
 ### 4.9-dev
 
+#### Fixed: Z.AI dropped images for GLM 5.3 and any model without a `v` in its id (bug 104)
+
+The Z.AI plugin kept its own list of which GLM models read pictures, matching only ids with a `v`
+immediately after the generation number (`glm-4.6v`, `glm-5v`). Z.AI's 5.3 line reads images without
+one, so `glm-5.3-flash` failed the regex: every attachment was dropped before the wire with "Selected
+Z.AI model does not support image input" — while the connection profile's `supportsImageUpload` flag
+had already asserted the opposite and suppressed the describe-fallback. A story background or avatar
+was therefore never seen by the character, and the Salon raised a warning toast on every turn that
+followed one.
+
+Plugin 1.1.24 deletes `VISION_MODEL_PATTERNS` and `isVisionModel` and drops the vision branch from
+`buildUserContent`, leaving the MIME check and the missing-data check as the only ways an attachment
+can fail; `formatMessages` loses its now-unused `model` parameter. Whether the model reads images is
+the host's question, answered by `supportsImageUpload`; whether the transport can send them is the
+plugin's, answered by the MIME list. This matches the shape NanoGPT adopted for bug 91.
+
 #### Fixed: batch memory deletion no longer fails on very large batches
 
 `deleteMemoriesWithUnlinkBatch` resolved doomed memory ids to their characters with a single

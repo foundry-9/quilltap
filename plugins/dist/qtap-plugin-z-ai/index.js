@@ -11256,11 +11256,7 @@ var Z_AI_SUPPORTED_MIME_TYPES = [
   "image/gif",
   "image/webp"
 ];
-var VISION_MODEL_PATTERNS = [/^glm-\d+(\.\d+)?v/i, /^glm-5v/i, /^autoglm-phone/i];
 var Z_AI_PROFILE_PARAM_ALLOWLIST = ["thinking", "do_sample", "reasoning_effort"];
-function isVisionModel(model) {
-  return VISION_MODEL_PATTERNS.some((re) => re.test(model));
-}
 function supportsReasoningEffort(model) {
   const m = /^glm-(\d+)(?:\.(\d+))?/i.exec(model.trim().toLowerCase());
   if (!m) return false;
@@ -11295,8 +11291,21 @@ var ZAIProvider = class {
   /**
    * Build a user message's content array with any image attachments.
    * Returns either a plain string (no attachments) or an array of parts.
+   *
+   * The plugin deliberately does NOT keep its own list of which GLM models
+   * read pictures. It kept one until 1.1.24, matching only ids with a `v`
+   * immediately after the generation (`glm-4.6v`, `glm-5v`) — and `glm-5.3-flash`
+   * reads images without one, so every attachment sent to it was dropped with
+   * "does not support image input" while the host had already asserted the
+   * opposite. That is bug 91's shape exactly, and the fix is bug 91's fix: one
+   * question, one answer. The host has already made the call — a connection
+   * profile only carries image attachments this far when its
+   * `supportsImageUpload` flag is set, and when it isn't, the describe-fallback
+   * has replaced the bytes with text long before the request is built. So an
+   * attachment arriving here means the operator has asserted this model reads
+   * images, and the plugin's job is to send it.
    */
-  buildUserContent(msg, modelSupportsVision, sent, failed) {
+  buildUserContent(msg, sent, failed) {
     const attachments = msg.attachments ?? [];
     if (attachments.length === 0) {
       return msg.content;
@@ -11310,13 +11319,6 @@ var ZAIProvider = class {
         failed.push({
           id: attachment.id,
           error: `Unsupported file type: ${attachment.mimeType}. Z.AI supports: ${this.supportedMimeTypes.join(", ")}`
-        });
-        continue;
-      }
-      if (!modelSupportsVision) {
-        failed.push({
-          id: attachment.id,
-          error: "Selected Z.AI model does not support image input. Use a vision model such as glm-4.5v or glm-4.6v."
         });
         continue;
       }
@@ -11341,10 +11343,9 @@ var ZAIProvider = class {
     if (attachment.data) return `data:${attachment.mimeType};base64,${attachment.data}`;
     return null;
   }
-  formatMessages(messages, model) {
+  formatMessages(messages) {
     const sent = [];
     const failed = [];
-    const modelSupportsVision = isVisionModel(model);
     const out = [];
     for (const msg of messages) {
       if (msg.role === "tool") {
@@ -11391,7 +11392,7 @@ var ZAIProvider = class {
       }
       out.push({
         role: "user",
-        content: this.buildUserContent(msg, modelSupportsVision, sent, failed)
+        content: this.buildUserContent(msg, sent, failed)
       });
     }
     return { messages: out, attachmentResults: { sent, failed } };
@@ -11437,7 +11438,7 @@ var ZAIProvider = class {
       throw new Error("Z.AI provider requires an API key");
     }
     const client = this.createClient(apiKey, params);
-    const { messages, attachmentResults } = this.formatMessages(params.messages, params.model);
+    const { messages, attachmentResults } = this.formatMessages(params.messages);
     const body = {
       model: params.model,
       messages,
@@ -11519,7 +11520,7 @@ var ZAIProvider = class {
       throw new Error("Z.AI provider requires an API key");
     }
     const client = this.createClient(apiKey, params);
-    const { messages, attachmentResults } = this.formatMessages(params.messages, params.model);
+    const { messages, attachmentResults } = this.formatMessages(params.messages);
     const body = {
       model: params.model,
       messages,

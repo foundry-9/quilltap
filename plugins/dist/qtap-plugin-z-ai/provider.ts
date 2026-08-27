@@ -33,9 +33,6 @@ const Z_AI_SUPPORTED_MIME_TYPES = [
   'image/webp',
 ];
 
-// Vision-capable model prefixes (accept images in input)
-const VISION_MODEL_PATTERNS = [/^glm-\d+(\.\d+)?v/i, /^glm-5v/i, /^autoglm-phone/i];
-
 // Keys in LLMParams.profileParameters that are forwarded verbatim to the Z.AI
 // request body. Allow-listed so a misconfigured profile can't override model,
 // messages, stream, etc. See https://docs.z.ai — `thinking` toggles reasoning
@@ -43,10 +40,6 @@ const VISION_MODEL_PATTERNS = [/^glm-\d+(\.\d+)?v/i, /^glm-5v/i, /^autoglm-phone
 // `reasoning_effort` dials back thinking effort on glm-5.2-and-newer (gated
 // in applyProfileParameters — Z.AI only honors it on those models).
 const Z_AI_PROFILE_PARAM_ALLOWLIST = ['thinking', 'do_sample', 'reasoning_effort'] as const;
-
-function isVisionModel(model: string): boolean {
-  return VISION_MODEL_PATTERNS.some((re) => re.test(model));
-}
 
 // reasoning_effort is a GLM-5.2-and-newer capability. Parse the
 // major[.minor] generation from the model id and compare against 5.2.
@@ -94,10 +87,22 @@ export class ZAIProvider implements TextProvider {
   /**
    * Build a user message's content array with any image attachments.
    * Returns either a plain string (no attachments) or an array of parts.
+   *
+   * The plugin deliberately does NOT keep its own list of which GLM models
+   * read pictures. It kept one until 1.1.24, matching only ids with a `v`
+   * immediately after the generation (`glm-4.6v`, `glm-5v`) — and `glm-5.3-flash`
+   * reads images without one, so every attachment sent to it was dropped with
+   * "does not support image input" while the host had already asserted the
+   * opposite. That is bug 91's shape exactly, and the fix is bug 91's fix: one
+   * question, one answer. The host has already made the call — a connection
+   * profile only carries image attachments this far when its
+   * `supportsImageUpload` flag is set, and when it isn't, the describe-fallback
+   * has replaced the bytes with text long before the request is built. So an
+   * attachment arriving here means the operator has asserted this model reads
+   * images, and the plugin's job is to send it.
    */
   private buildUserContent(
     msg: LLMMessage,
-    modelSupportsVision: boolean,
     sent: string[],
     failed: { id: string; error: string }[]
   ): string | ChatContentPart[] {
@@ -117,14 +122,6 @@ export class ZAIProvider implements TextProvider {
         failed.push({
           id: attachment.id,
           error: `Unsupported file type: ${attachment.mimeType}. Z.AI supports: ${this.supportedMimeTypes.join(', ')}`,
-        });
-        continue;
-      }
-
-      if (!modelSupportsVision) {
-        failed.push({
-          id: attachment.id,
-          error: 'Selected Z.AI model does not support image input. Use a vision model such as glm-4.5v or glm-4.6v.',
         });
         continue;
       }
@@ -156,12 +153,10 @@ export class ZAIProvider implements TextProvider {
   }
 
   private formatMessages(
-    messages: LLMMessage[],
-    model: string
+    messages: LLMMessage[]
   ): { messages: ChatMessage[]; attachmentResults: { sent: string[]; failed: { id: string; error: string }[] } } {
     const sent: string[] = [];
     const failed: { id: string; error: string }[] = [];
-    const modelSupportsVision = isVisionModel(model);
     const out: ChatMessage[] = [];
 
     for (const msg of messages) {
@@ -220,7 +215,7 @@ export class ZAIProvider implements TextProvider {
       // user
       out.push({
         role: 'user',
-        content: this.buildUserContent(msg, modelSupportsVision, sent, failed),
+        content: this.buildUserContent(msg, sent, failed),
       });
     }
 
@@ -291,7 +286,7 @@ export class ZAIProvider implements TextProvider {
     }
 
     const client = this.createClient(apiKey, params);
-    const { messages, attachmentResults } = this.formatMessages(params.messages, params.model);
+    const { messages, attachmentResults } = this.formatMessages(params.messages);
 
     const body: Record<string, unknown> = {
       model: params.model,
@@ -393,7 +388,7 @@ export class ZAIProvider implements TextProvider {
     }
 
     const client = this.createClient(apiKey, params);
-    const { messages, attachmentResults } = this.formatMessages(params.messages, params.model);
+    const { messages, attachmentResults } = this.formatMessages(params.messages);
 
     const body: Record<string, unknown> = {
       model: params.model,
