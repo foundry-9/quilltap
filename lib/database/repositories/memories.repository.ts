@@ -13,6 +13,7 @@ import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
 import { TypedQueryFilter, DatabaseCollection } from '../interfaces';
 import { rawQuery, registerBlobColumns } from '../manager';
+import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk';
 
 /** Maximum allowed search query length to prevent ReDoS and excessive memory usage */
 const MAX_SEARCH_QUERY_LENGTH = 1000;
@@ -555,10 +556,15 @@ export class MemoriesRepository extends AbstractBaseRepository<Memory> {
           return 0;
         }
 
-        const deletedCount = await this.deleteMany({
-          characterId,
-          id: { $in: memoryIds },
-        });
+        // Chunked: the query translator expands `$in` to one bind variable
+        // per ID, and a full-wipe cascade can exceed SQLITE_MAX_VARIABLE_NUMBER.
+        let deletedCount = 0;
+        for (const chunk of chunkArray(memoryIds, SQLITE_VARIABLE_CHUNK_SIZE)) {
+          deletedCount += await this.deleteMany({
+            characterId,
+            id: { $in: chunk },
+          });
+        }
         return deletedCount;
       },
       'Error bulk deleting memories for character',

@@ -4,7 +4,15 @@
 
 ### 4.9-dev
 
-#### Changed: full-wipe memory deletion now goes through the memory-gate chokepoint
+#### Fixed: batch memory deletion no longer fails on very large batches
+
+`deleteMemoriesWithUnlinkBatch` resolved doomed memory ids to their characters with a single
+`SELECT ... WHERE id IN (...)`, binding one SQL variable per id. Past SQLite's variable limit
+(32,766 in current builds, 999 in older ones) the query throws "too many SQL variables", so a
+full-wipe restore or a large character cascade on an instance with tens of thousands of memories
+failed instead of deleting. The resolve query and the repository's `bulkDelete` (whose `$in`
+filter expands the same way) now chunk ids 900 at a time via a new shared `chunkArray` helper
+(`lib/utils/chunk.ts`). Added unit tests pinning the chunked query shapes with 2,000-id batches.
 
 The replace-mode restore / delete-all-data path (`lib/backup/restore/delete-service.ts`) deleted
 memories with per-row `repos.memories.delete` calls in a loop — the last remaining bypass of the

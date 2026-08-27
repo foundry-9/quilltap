@@ -23,6 +23,7 @@ import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { generateEmbeddingForUser, EmbeddingError } from '@/lib/embedding/embedding-service'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { rawQuery } from '@/lib/database/manager'
+import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk'
 import { logger } from '@/lib/logger'
 import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
 
@@ -591,16 +592,20 @@ export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promis
 
   // Group by character so each deletion call carries its proper scope. The
   // by-character split also means we never touch unrelated rows — the
-  // repository's bulkDelete is `characterId`-scoped.
+  // repository's bulkDelete is `characterId`-scoped. Chunked because each ID
+  // is one bind variable, and a full-wipe cascade can pass more IDs than
+  // SQLITE_MAX_VARIABLE_NUMBER allows in a single statement.
   const idsByCharacter = new Map<string, string[]>()
-  const toResolve = await rawQuery<Array<{ id: string; characterId: string }>>(
-    `SELECT id, characterId FROM memories WHERE id IN (${memoryIds.map(() => '?').join(',')})`,
-    memoryIds
-  )
-  for (const row of toResolve) {
-    const list = idsByCharacter.get(row.characterId) ?? []
-    list.push(row.id)
-    idsByCharacter.set(row.characterId, list)
+  for (const chunk of chunkArray(memoryIds, SQLITE_VARIABLE_CHUNK_SIZE)) {
+    const toResolve = await rawQuery<Array<{ id: string; characterId: string }>>(
+      `SELECT id, characterId FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`,
+      chunk
+    )
+    for (const row of toResolve) {
+      const list = idsByCharacter.get(row.characterId) ?? []
+      list.push(row.id)
+      idsByCharacter.set(row.characterId, list)
+    }
   }
 
   let deleted = 0
