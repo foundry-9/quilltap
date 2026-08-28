@@ -4,6 +4,19 @@
 
 ### 4.9-dev
 
+#### Fixed: the `restore-key` test suite failed on CI
+
+`packages/quilltap/lib/__tests__/dbkey-restore.test.js` pins the driver to the real SQLCipher
+binding (the suite's `better-sqlite3` mock would open a database under any key, which would make the
+pepper proof pass vacuously). It looked for that binding only at
+`packages/quilltap/node_modules/better-sqlite3-multiple-ciphers`, which exists in local development
+but not on CI, where only the root `npm ci` runs and the root `package.json` installs the same
+package under the alias `better-sqlite3`. The suite failed to load there.
+
+The mock factory now falls back to the root alias by absolute path — the same chain the
+`__tests__/unit/packages/quilltap/*.integration.test.js` suites already use. Absolute paths keep the
+root `moduleNameMapper` from intercepting the load and handing back the mock.
+
 #### Removed: Lima and WSL2 VM support
 
 Quilltap no longer builds, ships, or detects the managed Linux VM modes. `quilltap-shell` 4.2.0

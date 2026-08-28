@@ -23,9 +23,20 @@ const PKG_ROOT = path.join(__dirname, '..', '..');
 // The root jest config maps both driver names onto __mocks__/better-sqlite3.ts,
 // which accepts any key. Point them back at the real binding by absolute path
 // so a wrong pepper actually fails to decrypt.
-jest.mock('better-sqlite3-multiple-ciphers', () =>
-  require(path.join(PKG_ROOT, 'node_modules', 'better-sqlite3-multiple-ciphers'))
-);
+//
+// Two copies can back this: the per-package install used in local development,
+// and — in CI, where only the root `npm ci` runs — the root alias, where
+// package.json installs better-sqlite3-multiple-ciphers under the name
+// `better-sqlite3`. Same fallback chain as the __tests__/unit/packages/quilltap
+// integration suites.
+jest.mock('better-sqlite3-multiple-ciphers', () => {
+  const join = require('path').join;
+  try {
+    return require(join(PKG_ROOT, 'node_modules', 'better-sqlite3-multiple-ciphers'));
+  } catch {
+    return require(join(PKG_ROOT, '..', '..', 'node_modules', 'better-sqlite3'));
+  }
+});
 
 const Database = require('better-sqlite3-multiple-ciphers');
 const { provePepper, databaseState } = require('../dbkey-restore');
