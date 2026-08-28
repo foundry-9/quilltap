@@ -4,6 +4,38 @@
 
 ### 4.9-dev
 
+#### Removed: Lima and WSL2 VM support
+
+Quilltap no longer builds, ships, or detects the managed Linux VM modes. `quilltap-shell` 4.2.0
+removed Lima (macOS) and WSL2 (Windows) from its side; this is the server half. The strongest
+isolation Quilltap offers is now Docker, or a virtual machine you build and manage yourself.
+
+Removed: the `lima/` directory (`wsl-init.sh`), `scripts/build-rootfs.mjs`, the `wsl2` stage in
+`Dockerfile.ci`, and the four rootfs steps in the release workflow. Releases no longer attach
+`quilltap-linux-amd64.tar.gz` / `quilltap-linux-arm64.tar.gz`. The Docker images (amd64 and arm64,
+plus the multi-arch manifest) and the standalone tarball — which the `quilltap` CLI and the Electron
+shell download and run — are unchanged.
+
+In the app: `isLimaEnvironment()` is gone from `lib/paths.ts`; `getPlatform()` no longer has a Lima
+branch; `EnvironmentType` (instance lock) drops `'lima'` and `'wsl2'`; the Almanack's `runtimeType`
+drops `'lima'`; `self_inventory`'s runtime mode drops `'vm'` and `'electron-vm'`; and the footer's
+`VM` / `Electron+VM` badges and the API's `isVM` field are gone.
+
+Host URL rewriting changed shape. `isVMEnvironment()` is now `isDockerEnvironment() ||
+QUILLTAP_HOST_IP is set`, and gateway resolution is two strategies instead of five:
+`QUILLTAP_HOST_IP`, then `host.docker.internal` in Docker. The `/proc/net/route` and `/etc/hosts`
+fallbacks existed only for Lima and were actively wrong for Docker — the bridge gateway they return
+does not reach services on the host's loopback. In a self-managed VM, `QUILLTAP_HOST_IP` is the
+supported route: it both enables rewriting and supplies the address. Same change in
+`@quilltap/plugin-utils` 2.6.0, which `qtap-plugin-mcp` 1.1.37 takes up — it is the one plugin that
+bundles `host-rewrite`, because MCP servers validate the Host header and need a custom fetch rather
+than a plain URL rewrite.
+
+`docs/WINDOWS.md` (a WSL2-only troubleshooting guide) is deleted. The README and the About page now
+describe the shell's three back ends — Direct (the Node server inside Electron), Docker, and Remote
+(any Quilltap URL, including a dev server or an `npx quilltap` instance) — instead of the old
+VM/Docker toggle.
+
 #### Added: `quilltap instances restore-key` rebuilds a lost or locked `.dbkey`
 
 The `.dbkey` file only wraps the pepper; the pepper is the actual SQLCipher key. Anyone holding the

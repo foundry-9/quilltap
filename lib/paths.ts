@@ -70,18 +70,6 @@ export interface LegacyPaths {
 // ============================================================================
 
 /**
- * Check if running inside a Lima VM
- *
- * Lima VMs are provisioned with LIMA_CONTAINER=true in /etc/profile.d/quilltap.sh.
- * This check must run before isDockerEnvironment() because the rootfs exported
- * from Docker still contains /.dockerenv and /app, which would otherwise trigger
- * a Docker false-positive.
- */
-export function isLimaEnvironment(): boolean {
-  return process.env.LIMA_CONTAINER === 'true';
-}
-
-/**
  * Check if running in a Docker container
  *
  * Detects Docker by checking:
@@ -116,8 +104,7 @@ export function isDockerEnvironment(): boolean {
  *
  * The quilltap-shell app sets QUILLTAP_SHELL to its own version string
  * (e.g., "1.2.0") when it launches the Next.js server. This is true
- * regardless of whether Electron runs the server directly, via Docker,
- * or via a Lima/WSL2 VM.
+ * regardless of whether Electron runs the server directly or via Docker.
  */
 export function isElectronShell(): boolean {
   return !!process.env.QUILLTAP_SHELL;
@@ -167,11 +154,6 @@ export function hasShellCapability(capability: string): boolean {
  * @returns Platform identifier
  */
 export function getPlatform(): Platform {
-  // Lima check must come before Docker: the rootfs exported from Docker
-  // contains /.dockerenv and /app, which would trigger a false positive.
-  if (isLimaEnvironment()) {
-    return 'linux';
-  }
   if (isDockerEnvironment()) {
     return 'docker';
   }
@@ -420,19 +402,19 @@ export function getNpmPluginsDir(): string {
 /**
  * Get the host-side data directory path for display purposes
  *
- * In VM/Docker environments, QUILLTAP_HOST_DATA_DIR preserves the original
- * host path (e.g., ~/Library/Application Support/Quilltap on macOS) even
- * though the app sees /data/quilltap or /app/quilltap inside the container.
+ * In Docker, QUILLTAP_HOST_DATA_DIR preserves the original host path
+ * (e.g., ~/Library/Application Support/Quilltap on macOS) even though the
+ * app sees /app/quilltap inside the container.
  *
  * Falls back to getBaseDataDir() when not set (i.e., running locally).
  *
  * @returns Host-side data directory path
  */
 export function getHostDataDir(): string {
-  // QUILLTAP_HOST_DATA_DIR is only meaningful inside VM/Docker environments
-  // where the internal path differs from the host path. In local environments,
-  // always use getBaseDataDir() to respect QUILLTAP_DATA_DIR overrides.
-  if (isLimaEnvironment() || isDockerEnvironment()) {
+  // QUILLTAP_HOST_DATA_DIR is only meaningful inside a container where the
+  // internal path differs from the host path. In local environments, always
+  // use getBaseDataDir() to respect QUILLTAP_DATA_DIR overrides.
+  if (isDockerEnvironment()) {
     const envOverride = process.env.QUILLTAP_HOST_DATA_DIR;
     if (envOverride) {
       return envOverride;

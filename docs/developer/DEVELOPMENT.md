@@ -125,7 +125,6 @@ quilltap/
 ├── docs/                     # Documentation (API, deployment, backup guides)
 │   └── developer/features/   # Feature roadmap (with completed/ subdir)
 ├── docker/                   # Docker configuration (entrypoint script)
-├── lima/                     # Lima VM configuration (macOS desktop shell)
 ├── first-startup/            # First-startup helper assets
 ├── cicd/                     # CI/CD scripts and deploy helpers
 ├── scripts/                  # Utility scripts (migrations, cleanup, builds)
@@ -334,8 +333,6 @@ The SQLite database file location depends on platform:
 | **macOS**   | `~/Library/Application Support/Quilltap/data/quilltap.db`                  |
 | **Windows** | `%APPDATA%\Quilltap\data\quilltap.db`                                      |
 | **Docker**  | `/app/quilltap/data/quilltap.db`                                           |
-| **Lima VM** | `/data/quilltap/data/quilltap.db` (VirtioFS mount of the macOS path)       |
-| **WSL2**    | Same as Windows; the Windows path is passed through as `QUILLTAP_DATA_DIR` |
 
 Override with `QUILLTAP_DATA_DIR` (non-Docker environments).
 

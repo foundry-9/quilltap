@@ -6,7 +6,7 @@ const path = require('path');
 const { execSync } = require('child_process');
 
 const HEARTBEAT_FRESH_MS = 5 * 60 * 1000;
-const VM_ENVIRONMENTS = new Set(['docker', 'lima', 'wsl2']);
+const VM_ENVIRONMENTS = new Set(['docker']);
 
 function isPidAlive(pid) {
   try {
@@ -136,14 +136,12 @@ let exitHandlersRegistered = false;
 
 /**
  * Detect the runtime environment for lock metadata. JS port of the server's
- * detectEnvironmentType() so a CLI run inside Docker/Lima/WSL2 writes the right
+ * detectEnvironmentType() so a CLI run inside Docker writes the right
  * environment and the cross-host heartbeat semantics keep working.
  */
 function detectEnvironmentType() {
   if (process.versions && process.versions.electron) return 'electron';
   if (process.env.ELECTRON_DEV) return 'electron';
-  if (process.env.LIMA_CONTAINER === 'true') return 'lima'; // before Docker — Lima rootfs has Docker markers
-  if (process.env.WSL_DISTRO_NAME) return 'wsl2';
   if (process.env.DOCKER_CONTAINER === 'true') return 'docker';
   try {
     if (fs.existsSync('/.dockerenv')) return 'docker';

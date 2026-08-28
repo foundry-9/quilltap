@@ -5,8 +5,8 @@
  * @modelcontextprotocol/sdk. Supports both Streamable HTTP and SSE transports
  * with automatic fallback.
  *
- * In Docker/Lima/WSL2 environments, localhost URLs need to be routed to the
- * host machine. Unlike other providers where simple URL rewriting works, MCP
+ * In Docker (and in a self-managed VM with QUILLTAP_HOST_IP set), localhost
+ * URLs need to be routed to the host machine. Unlike other providers where simple URL rewriting works, MCP
  * servers validate the HTTP Host header and reject requests from non-localhost
  * origins. We solve this with a custom fetch function that routes traffic to
  * the host gateway while preserving the original Host header.
@@ -238,7 +238,7 @@ export class MCPClient {
    *
    * Tries Streamable HTTP first, then falls back to SSE if that fails.
    *
-   * In Docker/Lima environments, we provide a custom fetch function to the
+   * In container environments, we provide a custom fetch function to the
    * MCP SDK transports that routes traffic to the host gateway while
    * preserving the original Host header (which MCP servers validate).
    */
@@ -260,9 +260,9 @@ export class MCPClient {
     });
 
     // Use the ORIGINAL URL for the SDK transports — this preserves the
-    // correct Host header (e.g., "localhost:3030"). If the URL was rewritten
-    // (Docker/Lima), we provide a custom fetch that routes to the gateway
-    // while keeping the original Host header intact.
+    // correct Host header (e.g., "localhost:3030"). If the URL was rewritten,
+    // we provide a custom fetch that routes to the gateway while keeping the
+    // original Host header intact.
     const url = new URL(originalUrl);
     const headers = this.buildHeaders();
 

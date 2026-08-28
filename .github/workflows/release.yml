@@ -164,15 +164,14 @@ jobs:
           retention-days: 5
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Docker + rootfs — builds Docker image from pre-built JS via Dockerfile.ci,
-  # pushes to Docker Hub, then exports the filesystem as a rootfs tarball.
-  # Combining Docker and rootfs in one job avoids a redundant image build.
+  # Docker — builds the image from pre-built JS via Dockerfile.ci and pushes it
+  # to Docker Hub, one arch per leg.
   #
   # Native modules (better-sqlite3, sharp, node-pty) are compiled inside
   # Dockerfile.ci for Debian/glibc — on a NATIVE runner per arch, never QEMU.
   # ────────────────────────────────────────────────────────────────────────────
-  build-docker-and-rootfs:
-    name: Docker + rootfs (${{ matrix.arch }})
+  build-docker:
+    name: Docker (${{ matrix.arch }})
     needs: build-app
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -183,10 +182,8 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            platform: linux/amd64
             runner: ubuntu-latest
           - arch: arm64
-            platform: linux/arm64
             runner: ubuntu-24.04-arm
 
     steps:
@@ -202,17 +199,6 @@ jobs:
         with:
           name: app-build
           path: prebuild
-
-      # The platform → Dockerfile-target mapping lives in build-rootfs.mjs and
-      # is read back out here, rather than being restated in the matrix. It was
-      # in both places and nothing kept them honest.
-      - name: Resolve rootfs target
-        id: rootfs
-        run: |
-          set -euo pipefail
-          TARGET=$(node scripts/build-rootfs.mjs --print-target --platform '${{ matrix.platform }}')
-          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
-          echo "Rootfs target for ${{ matrix.platform }}: $TARGET"
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
@@ -241,34 +227,10 @@ jobs:
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
 
-      # Build the rootfs target locally — shares the buildx layer cache with the
-      # push above, so this is nearly instant (production layers cached; on
-      # amd64 the wsl2 target adds only a few lightweight layers, and on arm64
-      # the target IS production, so it is a pure cache hit plus a daemon load).
-      - name: Build rootfs image locally
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.ci
-          target: ${{ steps.rootfs.outputs.target }}
-          load: true
-          tags: quilltap-rootfs:local
-          cache-from: type=gha,scope=${{ matrix.arch }}
-
-      - name: Export rootfs tarball
-        run: node scripts/build-rootfs.mjs --image quilltap-rootfs:local --platform '${{ matrix.platform }}'
-
-      - name: Upload rootfs artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: rootfs-${{ matrix.arch }}
-          path: quilltap-linux-${{ matrix.arch }}.tar.gz
-          retention-days: 5
-
   push-docker-manifest:
     name: Push Docker multi-arch manifest
     runs-on: ubuntu-latest
-    needs: build-docker-and-rootfs
+    needs: build-docker
 
     steps:
       - name: Log in to Docker Hub
@@ -318,18 +280,9 @@ jobs:
         with:
           install: 'false'
 
-      # Only the release assets. A bare download-artifact with no filter drags
-      # in app-build too — the whole traced standalone tree, hundreds of MB —
-      # to use four files. Two explicit steps rather than one brace pattern:
-      # brace expansion is not guaranteed by the action's matcher, and a
-      # pattern that silently matches nothing would fail the release at the
-      # very last step.
-      - name: Download rootfs artifacts
-        uses: actions/download-artifact@v8
-        with:
-          pattern: rootfs-*
-          path: artifacts
-
+      # Named, not a bare download-artifact: with no filter that drags in
+      # app-build too — the whole traced standalone tree, hundreds of MB — to
+      # use one file.
       - name: Download standalone artifact
         uses: actions/download-artifact@v8
         with:
@@ -399,8 +352,8 @@ jobs:
           [${SHELL_LABEL}](${SHELL_URL}).
           Download the release for your platform (macOS, Windows, or Linux).
 
-          The \`quilltap-linux-arm64.tar.gz\` and \`quilltap-linux-amd64.tar.gz\` rootfs
-          tarballs attached to this release are used by the shell's Lima (macOS) and WSL2 (Windows) VM modes.
+          The \`quilltap-standalone-*.tar.gz\` attached to this release is what the
+          desktop app and the \`quilltap\` CLI download and run.
 
           ### Node.js (any platform)
 
@@ -450,8 +403,6 @@ jobs:
           fi
 
           ASSETS=(
-            artifacts/rootfs-amd64/quilltap-linux-amd64.tar.gz
-            artifacts/rootfs-arm64/quilltap-linux-arm64.tar.gz
             artifacts/standalone/quilltap-standalone-*.tar.gz
           )
 

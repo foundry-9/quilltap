@@ -30,7 +30,6 @@ All three databases live in `<data-dir>/data/`. Alongside them:
 | Linux | `~/.quilltap/` |
 | Windows | `%APPDATA%\Quilltap\` |
 | Docker | `/app/quilltap/` |
-| Lima VM | `/data/quilltap/` (VirtioFS mount) |
 
 Override with `QUILLTAP_DATA_DIR` env var, `--data-dir` CLI flag, or `SQLITE_PATH` / `SQLITE_LLM_LOGS_PATH` / `SQLITE_MOUNT_INDEX_PATH` for individual databases.
 

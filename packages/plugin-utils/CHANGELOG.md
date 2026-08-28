@@ -2,6 +2,16 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [2.6.0] - 2026-08-27
+
+### Removed
+
+- **Breaking (behavioral):** `rewriteLocalhostUrl` / `isVMEnvironment` no longer detect Lima or WSL2, and the gateway resolution no longer falls back to `/proc/net/route` or `/etc/hosts`. Quilltap has dropped its managed Lima (macOS) and WSL2 (Windows) VM modes; the supported sandbox is Docker, plus any virtual machine a user builds and manages themselves. Both of the removed fallbacks existed only to serve Lima: the `/proc/net/route` default gateway is the Docker bridge interface, which does *not* reach services on the host's loopback, and `/etc/hosts` can only report a `host.docker.internal` that strategy 2 already assumes.
+
+### Changed
+
+- `isVMEnvironment()` is now `isDockerEnvironment() || !!process.env.QUILLTAP_HOST_IP`. A hand-rolled VM cannot be auto-detected, so `QUILLTAP_HOST_IP` is what opts one in — it both enables rewriting and supplies the gateway address. Docker behavior is unchanged: `QUILLTAP_HOST_IP` first, else `host.docker.internal`.
+
 ## [2.5.0] - 2026-08-26
 
 ### Added

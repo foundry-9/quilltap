@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-mcp",
-  "version": "1.1.35",
+  "version": "1.1.37",
   "description": "MCP (Model Context Protocol) server connector for Quilltap",
   "main": "index.js",
   "scripts": {
@@ -10,7 +10,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@quilltap/plugin-types": "^2.5.6",
-    "@quilltap/plugin-utils": "^2.2.20",
+    "@quilltap/plugin-utils": "^2.6.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

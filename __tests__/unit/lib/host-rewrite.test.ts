@@ -16,12 +16,16 @@ jest.mock('@/lib/logger', () => ({
   },
 }));
 
-jest.mock('node:fs', () => ({
-  ...jest.requireActual('node:fs'),
+// isDockerEnvironment() probes /.dockerenv and /app; stub both away so the
+// "bare metal" cases are decided by env vars alone and not by the host running
+// the suite.
+jest.mock('fs', () => ({
+  ...jest.requireActual('fs'),
   existsSync: jest.fn(() => false),
-  readFileSync: jest.fn(),
+  statSync: jest.fn(() => {
+    throw new Error('ENOENT');
+  }),
 }));
-
 
 describe('lib/host-rewrite', () => {
   const originalEnv = process.env;
@@ -30,7 +34,6 @@ describe('lib/host-rewrite', () => {
     jest.resetModules();
     process.env = { ...originalEnv };
     delete process.env.DOCKER_CONTAINER;
-    delete process.env.LIMA_CONTAINER;
     delete process.env.QUILLTAP_HOST_IP;
   });
 
@@ -39,29 +42,28 @@ describe('lib/host-rewrite', () => {
   });
 
   describe('rewriteLocalhostUrl', () => {
-    it('should return URL unchanged on bare metal (no VM env)', async () => {
-      // No DOCKER_CONTAINER or LIMA_CONTAINER set
+    it('should return URL unchanged on bare metal (no container, no QUILLTAP_HOST_IP)', async () => {
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
       expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://localhost:11434');
     });
 
-    it('should return non-localhost URLs unchanged in VM environment', async () => {
-      process.env.LIMA_CONTAINER = 'true';
+    it('should return non-localhost URLs unchanged even when rewriting is active', async () => {
       process.env.QUILLTAP_HOST_IP = '192.168.5.2';
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
 
       expect(rewriteLocalhostUrl('https://api.openai.com/v1/chat')).toBe('https://api.openai.com/v1/chat');
     });
 
-    it('should rewrite http://localhost:11434 in Lima environment', async () => {
-      process.env.LIMA_CONTAINER = 'true';
+    it('should rewrite localhost using QUILLTAP_HOST_IP in a self-managed VM', async () => {
+      // A hand-rolled VM is not auto-detectable: QUILLTAP_HOST_IP both opts in
+      // and supplies the gateway.
       process.env.QUILLTAP_HOST_IP = '192.168.5.2';
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
 
       expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://192.168.5.2:11434/');
     });
 
-    it('should rewrite http://127.0.0.1:8080 in Docker environment with explicit IP', async () => {
+    it('should let QUILLTAP_HOST_IP win over host.docker.internal in Docker', async () => {
       process.env.DOCKER_CONTAINER = 'true';
       process.env.QUILLTAP_HOST_IP = '172.17.0.1';
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
@@ -69,16 +71,7 @@ describe('lib/host-rewrite', () => {
       expect(rewriteLocalhostUrl('http://127.0.0.1:8080')).toBe('http://172.17.0.1:8080/');
     });
 
-    it('should respect QUILLTAP_HOST_IP override', async () => {
-      process.env.LIMA_CONTAINER = 'true';
-      process.env.QUILLTAP_HOST_IP = '10.0.0.1';
-      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
-
-      expect(rewriteLocalhostUrl('http://localhost:3030')).toBe('http://10.0.0.1:3030/');
-    });
-
     it('should handle URLs with paths', async () => {
-      process.env.LIMA_CONTAINER = 'true';
       process.env.QUILLTAP_HOST_IP = '192.168.5.2';
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
 
@@ -87,7 +80,6 @@ describe('lib/host-rewrite', () => {
     });
 
     it('should handle URLs with query strings', async () => {
-      process.env.LIMA_CONTAINER = 'true';
       process.env.QUILLTAP_HOST_IP = '192.168.5.2';
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
 
@@ -96,7 +88,6 @@ describe('lib/host-rewrite', () => {
     });
 
     it('should return invalid URLs unchanged', async () => {
-      process.env.LIMA_CONTAINER = 'true';
       process.env.QUILLTAP_HOST_IP = '192.168.5.2';
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
 
@@ -105,7 +96,6 @@ describe('lib/host-rewrite', () => {
 
     it('should rewrite localhost to host.docker.internal in Docker (no explicit IP)', async () => {
       process.env.DOCKER_CONTAINER = 'true';
-      // No QUILLTAP_HOST_IP — Docker strategy should use host.docker.internal directly
 
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
       expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://host.docker.internal:11434/');
@@ -116,146 +106,6 @@ describe('lib/host-rewrite', () => {
 
       const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
       expect(rewriteLocalhostUrl('http://127.0.0.1:8080/v1/chat')).toBe('http://host.docker.internal:8080/v1/chat');
-    });
-
-    it('should resolve gateway from /proc/net/route in Lima', async () => {
-      process.env.LIMA_CONTAINER = 'true';
-      // No QUILLTAP_HOST_IP — should fall through to /proc/net/route
-
-      const { readFileSync } = require('node:fs');
-      (readFileSync as jest.Mock).mockImplementation((path: string) => {
-        if (path === '/proc/net/route') {
-          // Default gateway 192.168.5.2 = hex C0A80502 -> little-endian 0205A8C0
-          return [
-            'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT',
-            'eth0\t00000000\t0205A8C0\t0003\t0\t0\t0\t00000000\t0\t0\t0',
-            'eth0\t0005A8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0',
-          ].join('\n');
-        }
-        throw new Error('ENOENT');
-      });
-
-      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
-      expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://192.168.5.2:11434/');
-    });
-
-    it('should use /proc/net/route in Lima even when isDockerEnvironment() is true (has /app)', async () => {
-      // Lima VMs have /app (from Docker rootfs extraction) which triggers
-      // isDockerEnvironment(), but host.docker.internal doesn't exist in Lima.
-      // The Docker strategy (host.docker.internal) is gated on
-      // isDockerEnvironment() && !isLimaEnvironment(), so Lima falls through
-      // to /proc/net/route which works with Lima's VZ NAT networking.
-      process.env.LIMA_CONTAINER = 'true';
-      // Simulate: no explicit IP, but /proc/net/route exists
-
-      const { readFileSync } = require('node:fs');
-      (readFileSync as jest.Mock).mockImplementation((path: string) => {
-        if (path === '/proc/net/route') {
-          return [
-            'Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT',
-            'eth0\t00000000\t0205A8C0\t0003\t0\t0\t1002\t00000000\t0\t0\t0',
-            'lima0\t00000000\t0141A8C0\t0003\t0\t0\t1003\t00000000\t0\t0\t0',
-          ].join('\n');
-        }
-        throw new Error('ENOENT');
-      });
-
-      // Also simulate /app existing (which makes isDockerEnvironment() return true)
-      // The mock for fs.existsSync isn't needed here because isDockerEnvironment()
-      // checks DOCKER_CONTAINER env first, and since it's not set, it would check
-      // /.dockerenv and /app. But the key point is: with /proc/net/route available,
-      // we should NEVER reach the Docker strategy.
-
-      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
-      const result = rewriteLocalhostUrl('http://localhost:3030');
-      // Should get 192.168.5.2 from /proc/net/route, NOT host.docker.internal
-      expect(result).toBe('http://192.168.5.2:3030/');
-    });
-
-    it('should fall back to /etc/hosts for host.docker.internal in non-Docker environment', async () => {
-      process.env.LIMA_CONTAINER = 'true';
-      // No QUILLTAP_HOST_IP, /proc/net/route fails, but /etc/hosts has host.docker.internal
-
-      const { readFileSync } = require('node:fs');
-      (readFileSync as jest.Mock).mockImplementation((path: string) => {
-        if (path === '/proc/net/route') {
-          throw new Error('ENOENT');
-        }
-        if (path === '/etc/hosts') {
-          return [
-            '127.0.0.1\tlocalhost',
-            '::1\tlocalhost',
-            '192.168.65.254\thost.docker.internal',
-            '172.17.0.2\tcontainer-name',
-          ].join('\n');
-        }
-        throw new Error('ENOENT');
-      });
-
-      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
-      expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://192.168.65.254:11434/');
-    });
-
-    it('should use /etc/resolv.conf nameserver in WSL2 environment', async () => {
-      // WSL2 sets LIMA_CONTAINER=true (via wsl-init.sh) and has WSLInterop
-      process.env.LIMA_CONTAINER = 'true';
-      delete process.env.QUILLTAP_HOST_IP;
-
-      const { existsSync, readFileSync } = require('node:fs');
-      (existsSync as jest.Mock).mockImplementation((path: string) => {
-        if (path === '/proc/sys/fs/binfmt_misc/WSLInterop') return true;
-        if (path === '/.dockerenv') return false;
-        return false;
-      });
-
-      (readFileSync as jest.Mock).mockImplementation((path: string) => {
-        if (path === '/etc/resolv.conf') {
-          return '# This file was automatically generated by WSL.\nnameserver 172.28.192.1\n';
-        }
-        throw new Error('ENOENT');
-      });
-
-      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
-      const result = rewriteLocalhostUrl('http://localhost:3031');
-      expect(result).toBe('http://172.28.192.1:3031/');
-    });
-
-    it('should fall through to /proc/net/route if WSLInterop not present (Lima)', async () => {
-      // Lima VMs don't have WSLInterop — should NOT use resolv.conf
-      process.env.LIMA_CONTAINER = 'true';
-      delete process.env.QUILLTAP_HOST_IP;
-
-      const { existsSync, readFileSync } = require('node:fs');
-      (existsSync as jest.Mock).mockImplementation((path: string) => {
-        if (path === '/proc/sys/fs/binfmt_misc/WSLInterop') return false;
-        if (path === '/.dockerenv') return false;
-        return false;
-      });
-
-      (readFileSync as jest.Mock).mockImplementation((path: string) => {
-        if (path === '/proc/net/route') {
-          return 'Iface\tDestination\tGateway\n' +
-                 'eth0\t00000000\t0205A8C0\t0003\t0\t0\t0\t00000000\t0\t0\t0\n';
-        }
-        throw new Error('ENOENT');
-      });
-
-      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
-      const result = rewriteLocalhostUrl('http://localhost:11434');
-      expect(result).toBe('http://192.168.5.2:11434/');
-    });
-
-    it('should return URL unchanged when all resolution strategies fail', async () => {
-      process.env.LIMA_CONTAINER = 'true';
-      // No QUILLTAP_HOST_IP, and file reads will fail
-
-      const { readFileSync } = require('node:fs');
-      (readFileSync as jest.Mock).mockImplementation(() => {
-        throw new Error('ENOENT');
-      });
-
-      const { rewriteLocalhostUrl } = await import('@/lib/host-rewrite');
-      expect(rewriteLocalhostUrl('http://localhost:11434')).toBe('http://localhost:11434');
     });
   });
 
@@ -271,8 +121,8 @@ describe('lib/host-rewrite', () => {
       expect(isVMEnvironment()).toBe(true);
     });
 
-    it('should return true in Lima', async () => {
-      process.env.LIMA_CONTAINER = 'true';
+    it('should return true when QUILLTAP_HOST_IP opts a self-managed VM in', async () => {
+      process.env.QUILLTAP_HOST_IP = '192.168.5.2';
       const { isVMEnvironment } = await import('@/lib/host-rewrite');
       expect(isVMEnvironment()).toBe(true);
     });

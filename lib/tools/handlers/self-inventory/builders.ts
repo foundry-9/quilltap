@@ -22,7 +22,7 @@ import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types';
 import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
 import { formatSelfUri, formatScopedUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
-import { isDockerEnvironment, isElectronShell, isLimaEnvironment, getElectronShellVersion } from '@/lib/paths';
+import { isDockerEnvironment, isElectronShell, getElectronShellVersion } from '@/lib/paths';
 import { isDevelopment } from '@/lib/env';
 import type { SelfInventoryVaultSection, SelfInventoryVaultCharacterSection, SelfInventoryVaultGroupsSection, SelfInventoryVaultGroup, SelfInventoryVaultIncludedParts, SelfInventoryVaultAccessSection, SelfInventoryVaultAccessCharacterSection, SelfInventoryVaultAccessGroupsSection, SelfInventoryGroupVaultAccess, SelfInventoryGroupVaultMember, SelfInventoryVaultAccessParticipant, SelfInventoryVaultAccessLevel, SelfInventoryMemorySection, SelfInventoryLoadedMemoriesSection, SelfInventoryChatSection, SelfInventoryPromptSection, SelfInventoryLastTurnSection, SelfInventoryCarinaSection, SelfInventoryQuilltapSection, SelfInventoryQuilltapIncludedParts, SelfInventoryRuntimeMode, SelfInventoryClientShell, SelfInventoryContextSection, SelfInventoryContextIncludedParts, SelfInventoryContextChat, SelfInventoryContextProject, SelfInventoryContextGroups, SelfInventoryContextGroup, SelfInventoryContextCharacters, SelfInventoryContextCharacter, SelfInventoryContextFiles, SelfInventoryContextFile, SelfInventoryContextMount, SelfInventorySection } from '../../self-inventory-tool';
 import { getErrorMessage, roundPercent, mapVaultFiles, HIGH_IMPORTANCE_THRESHOLD, type SelfInventoryToolContext } from './helpers';
@@ -708,12 +708,9 @@ export async function buildCarinaSection(
 function resolveRuntimeMode(): SelfInventoryRuntimeMode {
   const shell = isElectronShell();
   const docker = isDockerEnvironment();
-  const vm = isLimaEnvironment();
 
-  if (shell && vm) return 'electron-vm';
   if (shell && docker) return 'electron-docker';
   if (shell) return 'electron';
-  if (vm) return 'vm';
   if (docker) return 'docker';
   if (isDevelopment) return 'local-dev';
   return 'local-production';

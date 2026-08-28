@@ -591,7 +591,7 @@ Controls whether Quilltap injects the current date and time into the system prom
 
 **Timezone:**
 
-By default, Quilltap shows timestamps in the server's timezone — which, if you're running in Docker, Lima, or WSL2, is quite likely to be UTC. This is rather like a clock permanently set to Greenwich Mean Time while you're sipping cocktails in New York.
+By default, Quilltap shows timestamps in the server's timezone — which, if you're running in Docker, is quite likely to be UTC. This is rather like a clock permanently set to Greenwich Mean Time while you're sipping cocktails in New York.
 
 To remedy this situation:
 

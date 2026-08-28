@@ -21,7 +21,7 @@
 
 import fs from 'fs/promises';
 import { createServiceLogger } from '@/lib/logging/create-logger';
-import { isDockerEnvironment, isLimaEnvironment } from '@/lib/paths';
+import { isDockerEnvironment } from '@/lib/paths';
 
 const logger = createServiceLogger('MountIndex:BasePath');
 
@@ -63,10 +63,10 @@ export class BasePathUnavailableError extends Error {
 
 /**
  * True when this process can only see host paths that were explicitly passed
- * through — i.e. a container. Lima counts: it is a VM with the same property.
+ * through — i.e. a container.
  */
 function isContainerized(): boolean {
-  return isDockerEnvironment() || isLimaEnvironment();
+  return isDockerEnvironment();
 }
 
 function explain(

@@ -18093,9 +18093,6 @@ var LOCALHOST_HOSTS = /* @__PURE__ */ new Set([
 ]);
 var cachedGatewayHost;
 var rewriteLogger = createPluginLogger("host-rewrite");
-function isLimaEnvironment() {
-  return process.env.LIMA_CONTAINER === "true";
-}
 function isDockerEnvironment() {
   if (process.env.DOCKER_CONTAINER === "true") {
     return true;
@@ -18113,7 +18110,7 @@ function isDockerEnvironment() {
   return false;
 }
 function isVMEnvironment() {
-  return isDockerEnvironment() || isLimaEnvironment();
+  return isDockerEnvironment() || !!process.env.QUILLTAP_HOST_IP;
 }
 function resolveHostGateway() {
   if (cachedGatewayHost !== void 0) {
@@ -18125,64 +18122,10 @@ function resolveHostGateway() {
     cachedGatewayHost = envIP;
     return cachedGatewayHost;
   }
-  if (isDockerEnvironment() && !isLimaEnvironment()) {
+  if (isDockerEnvironment()) {
     rewriteLogger.info("Docker environment detected \u2014 using host.docker.internal as gateway hostname");
     cachedGatewayHost = "host.docker.internal";
     return cachedGatewayHost;
-  }
-  try {
-    if ((0, import_fs.existsSync)("/proc/sys/fs/binfmt_misc/WSLInterop")) {
-      const resolv = (0, import_fs.readFileSync)("/etc/resolv.conf", "utf-8");
-      for (const line of resolv.split("\n")) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith("#") || trimmed === "") continue;
-        const match = trimmed.match(/^nameserver\s+(\S+)/);
-        if (match) {
-          const ip = match[1];
-          rewriteLogger.info("WSL2 host IP from /etc/resolv.conf nameserver", { ip });
-          cachedGatewayHost = ip;
-          return cachedGatewayHost;
-        }
-      }
-    }
-  } catch {
-    rewriteLogger.debug("Could not detect WSL2 or read /etc/resolv.conf");
-  }
-  try {
-    const routeTable = (0, import_fs.readFileSync)("/proc/net/route", "utf-8");
-    for (const line of routeTable.split("\n").slice(1)) {
-      const fields = line.trim().split("	");
-      if (fields.length >= 3 && fields[1] === "00000000") {
-        const hexGateway = fields[2];
-        const ip = [
-          parseInt(hexGateway.substring(6, 8), 16),
-          parseInt(hexGateway.substring(4, 6), 16),
-          parseInt(hexGateway.substring(2, 4), 16),
-          parseInt(hexGateway.substring(0, 2), 16)
-        ].join(".");
-        rewriteLogger.info("Host gateway IP from /proc/net/route", { ip });
-        cachedGatewayHost = ip;
-        return cachedGatewayHost;
-      }
-    }
-  } catch {
-    rewriteLogger.debug("Could not read /proc/net/route for default gateway lookup");
-  }
-  try {
-    const hosts = (0, import_fs.readFileSync)("/etc/hosts", "utf-8");
-    for (const line of hosts.split("\n")) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("#") || trimmed === "") continue;
-      const parts = trimmed.split(/\s+/);
-      if (parts.length >= 2 && parts.slice(1).includes("host.docker.internal")) {
-        const ip = parts[0];
-        rewriteLogger.info("Host gateway IP from /etc/hosts (host.docker.internal)", { ip });
-        cachedGatewayHost = ip;
-        return cachedGatewayHost;
-      }
-    }
-  } catch {
-    rewriteLogger.debug("Could not read /etc/hosts for host.docker.internal lookup");
   }
   rewriteLogger.warn("Could not resolve host gateway \u2014 localhost URLs will not be rewritten");
   cachedGatewayHost = null;
@@ -23830,7 +23773,7 @@ var MCPClient = class {
    *
    * Tries Streamable HTTP first, then falls back to SSE if that fails.
    *
-   * In Docker/Lima environments, we provide a custom fetch function to the
+   * In container environments, we provide a custom fetch function to the
    * MCP SDK transports that routes traffic to the host gateway while
    * preserving the original Host header (which MCP servers validate).
    */

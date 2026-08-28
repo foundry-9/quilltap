@@ -17,8 +17,6 @@ export function InstanceLockGate() {
   const envLabel =
     conflict.environment === 'electron' ? 'the Electron app'
     : conflict.environment === 'docker' ? 'a Docker container'
-    : conflict.environment === 'lima' ? 'a Lima VM'
-    : conflict.environment === 'wsl2' ? 'a WSL2 instance'
     : 'a local server';
 
   const startedAt = new Date(conflict.startedAt).toLocaleString();

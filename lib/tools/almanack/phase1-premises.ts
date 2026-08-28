@@ -22,7 +22,6 @@ import {
   getSQLiteDatabasePath,
   isDockerEnvironment,
   isElectronShell,
-  isLimaEnvironment,
 } from '@/lib/paths';
 import { getHasUserPassphrase } from '@/lib/startup/dbkey';
 import {
@@ -49,8 +48,6 @@ export function collectRuntimeEnvironment(): RuntimeEnvironmentInfo {
   let runtimeType: RuntimeEnvironmentInfo['runtimeType'] = 'node';
   if (isDockerEnvironment()) {
     runtimeType = 'docker';
-  } else if (isLimaEnvironment()) {
-    runtimeType = 'lima';
   } else if (isElectronShell()) {
     runtimeType = 'electron';
   }

@@ -264,10 +264,8 @@ const RUNTIME_MODE_LABELS: Record<SelfInventoryRuntimeMode, string> = {
   'local-dev': 'Local (development)',
   'local-production': 'Local (production)',
   'docker': 'Docker',
-  'vm': 'VM (Lima/WSL2)',
   'electron': 'Electron desktop app',
   'electron-docker': 'Electron + Docker',
-  'electron-vm': 'Electron + VM',
 };
 
 function formatQuilltapSection(section: SelfInventoryQuilltapSection): string {

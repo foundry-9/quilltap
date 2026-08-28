@@ -529,8 +529,8 @@ function handleLockCommand(dataDir, opts) {
     } else if (alive && !isNode) {
       status = '\x1b[33mSUSPECT\x1b[0m (PID alive but does not look like Quilltap — possible PID reuse)';
     } else if (!sameHost) {
-      // Different hostname — could be a VM/container on this machine
-      const isVMOrContainer = ['docker', 'lima', 'wsl2'].includes(lock.environment);
+      // Different hostname — could be a container on this machine
+      const isVMOrContainer = lock.environment === 'docker';
       const heartbeatAgeMs = lock.lastHeartbeat
         ? Date.now() - new Date(lock.lastHeartbeat).getTime()
         : Infinity;
@@ -613,8 +613,8 @@ function handleLockCommand(dataDir, opts) {
         console.log('This is likely a stale lock with a reused PID. Removing.');
       }
     } else if (!sameHost) {
-      // Different hostname — check if it's a VM/container with a recent heartbeat
-      const isVMOrContainer = ['docker', 'lima', 'wsl2'].includes(lock.environment);
+      // Different hostname — check if it's a container with a recent heartbeat
+      const isVMOrContainer = lock.environment === 'docker';
       const heartbeatAgeMs = lock.lastHeartbeat
         ? Date.now() - new Date(lock.lastHeartbeat).getTime()
         : Infinity;

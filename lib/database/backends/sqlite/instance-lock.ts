@@ -9,9 +9,9 @@
  * history log of all state changes (acquire, release, override, stale claims).
  *
  * Design decisions:
- * - Uses PID-in-file rather than OS-level flock() because VirtioFS (Lima)
- *   and network mounts do not reliably propagate POSIX file locks.
- * - Hostname field disambiguates PIDs across VM/container boundaries.
+ * - Uses PID-in-file rather than OS-level flock() because network mounts and
+ *   bind mounts do not reliably propagate POSIX file locks.
+ * - Hostname field disambiguates PIDs across container boundaries.
  * - All operations are synchronous because better-sqlite3's Database
  *   constructor is synchronous.
  * - Module state uses globalThis for Next.js HMR safety.
@@ -31,7 +31,7 @@ const moduleLogger = logger.child({ module: 'database:instance-lock' });
 // Types
 // ============================================================================
 
-export type EnvironmentType = 'local' | 'electron' | 'docker' | 'lima' | 'wsl2';
+export type EnvironmentType = 'local' | 'electron' | 'docker';
 
 export type LockEvent =
   | 'acquired'
@@ -212,16 +212,6 @@ export function detectEnvironmentType(): EnvironmentType {
   }
   if (process.env.ELECTRON_DEV) {
     return 'electron';
-  }
-
-  // Lima detection (must come before Docker — Lima rootfs contains Docker markers)
-  if (process.env.LIMA_CONTAINER === 'true') {
-    return 'lima';
-  }
-
-  // WSL2 detection
-  if (process.env.WSL_DISTRO_NAME) {
-    return 'wsl2';
   }
 
   // Docker detection
@@ -561,26 +551,22 @@ export function acquireInstanceLock(lockPath: string): void {
     return;
   }
 
-  // Different hostname — could be a VM/container on the same physical machine
-  // sharing the data directory via a mount (VirtioFS, bind mount, etc.).
-  // We can't check PID liveness across PID namespaces, so use the heartbeat:
+  // Different hostname — could be a container on the same physical machine
+  // sharing the data directory via a bind mount. We can't check PID liveness
+  // across PID namespaces, so use the heartbeat:
   // - Recent heartbeat (< 5 min) → treat as live, refuse access
   // - Stale or missing heartbeat → likely dead, claim it
   if (!sameHost) {
-    const isVMOrContainer = ['docker', 'lima', 'wsl2'].includes(existing.environment);
+    const isContainer = existing.environment === 'docker';
     const heartbeatAgeMs = existing.lastHeartbeat
       ? Date.now() - new Date(existing.lastHeartbeat).getTime()
       : Infinity;
     const heartbeatFreshMs = 5 * 60 * 1000; // 5 minutes
 
-    if (isVMOrContainer && heartbeatAgeMs < heartbeatFreshMs) {
-      // Lock holder is a VM/container with a recent heartbeat — treat as live
-      const envLabel = existing.environment === 'docker' ? 'Docker container'
-        : existing.environment === 'lima' ? 'Lima VM'
-        : 'WSL2 instance';
-
+    if (isContainer && heartbeatAgeMs < heartbeatFreshMs) {
+      // Lock holder is a container with a recent heartbeat — treat as live
       throw new InstanceLockError(
-        `Another Quilltap instance (${envLabel}, PID ${existing.pid} on ${existing.hostname}) ` +
+        `Another Quilltap instance (Docker container, PID ${existing.pid} on ${existing.hostname}) ` +
         `is already using this database (last heartbeat ${Math.round(heartbeatAgeMs / 1000)}s ago). ` +
         `Stop the other instance or use the lock override to force access.`,
         existing,
@@ -588,8 +574,8 @@ export function acquireInstanceLock(lockPath: string): void {
       );
     }
 
-    // No recent heartbeat or not a VM/container — treat as stale
-    const staleReason = isVMOrContainer
+    // No recent heartbeat or not a container — treat as stale
+    const staleReason = isContainer
       ? `${existing.environment} lock from ${existing.hostname} has no recent heartbeat ` +
         `(last: ${existing.lastHeartbeat || 'never'}, age: ${Math.round(heartbeatAgeMs / 1000)}s)`
       : `Different hostname (lock: ${existing.hostname}, current: ${os.hostname()})`;
@@ -601,8 +587,6 @@ export function acquireInstanceLock(lockPath: string): void {
   // Lock is held by a live, different process on the same host
   const envLabel = existing.environment === 'electron' ? 'Electron app'
     : existing.environment === 'docker' ? 'Docker container'
-    : existing.environment === 'lima' ? 'Lima VM'
-    : existing.environment === 'wsl2' ? 'WSL2 instance'
     : 'local server';
 
   throw new InstanceLockError(

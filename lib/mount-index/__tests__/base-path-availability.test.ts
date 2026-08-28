@@ -22,7 +22,7 @@ import {
   BasePathUnavailableError,
 } from '../base-path-availability';
 import fs from 'fs/promises';
-import { isDockerEnvironment, isLimaEnvironment } from '@/lib/paths';
+import { isDockerEnvironment } from '@/lib/paths';
 
 jest.mock('fs/promises', () => ({
   __esModule: true,
@@ -31,12 +31,10 @@ jest.mock('fs/promises', () => ({
 
 jest.mock('@/lib/paths', () => ({
   isDockerEnvironment: jest.fn(() => false),
-  isLimaEnvironment: jest.fn(() => false),
 }));
 
 const mockStat = fs.stat as jest.Mock;
 const mockIsDocker = isDockerEnvironment as jest.Mock;
-const mockIsLima = isLimaEnvironment as jest.Mock;
 
 /** Build an errno error the way Node's fs surfaces one. */
 function errno(code: string): NodeJS.ErrnoException {
@@ -51,7 +49,6 @@ const asFile = { isDirectory: () => false };
 beforeEach(() => {
   jest.clearAllMocks();
   mockIsDocker.mockReturnValue(false);
-  mockIsLima.mockReturnValue(false);
 });
 
 describe('checkBasePathAvailability', () => {
@@ -97,15 +94,6 @@ describe('checkBasePathAvailability', () => {
     const { message } = result as { message: string };
     expect(message).toContain('bind mounts');
     expect(message).toContain('--recreate');
-  });
-
-  it('treats Lima the same as Docker', async () => {
-    mockIsLima.mockReturnValue(true);
-    mockStat.mockRejectedValue(errno('ENOENT'));
-
-    const result = await checkBasePathAvailability('/Users/me/Vault');
-
-    expect(result).toMatchObject({ containerized: true });
   });
 
   it('does not offer the container remedy for a permissions failure', async () => {

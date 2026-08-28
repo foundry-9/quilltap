@@ -94,8 +94,7 @@ RUN ln -s /app/packages/quilltap/bin/quilltap.js /usr/local/bin/quilltap
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# --- Attack-surface reduction (must stay LAST: no apt-get or npm may follow, in
-# --- this stage OR in the wsl2 stage that extends it) ---
+# --- Attack-surface reduction (must stay LAST: no apt-get or npm may follow) ---
 # Strips npm/npx/corepack/yarn (1 CRITICAL + 6 HIGH from npm's own bundled
 # node_modules; nothing at runtime shells out to them) and Debian's perl (2
 # CRITICAL + 2 HIGH, no fix in bookworm or trixie). See Dockerfile for the full
@@ -117,25 +116,3 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["node", "server.js"]
-
-# WSL2 stage — extends production with baked-in provisioning for Windows
-FROM production AS wsl2
-
-USER root
-
-# Bake in the WSL init script
-COPY lima/wsl-init.sh /usr/local/bin/wsl-init.sh
-RUN chmod +x /usr/local/bin/wsl-init.sh
-
-# Runtime dependencies are already present: libstdc++6 / libgcc-s1 ship in
-# bookworm-slim, and the production stage above installs bash/zip/unzip. This
-# stage deliberately runs no apt-get — the production stage ends by purging perl,
-# which dpkg maintainer scripts may need, so package installs must not follow it.
-
-# Set environment defaults
-RUN printf 'export LIMA_CONTAINER=true\nexport NODE_ENV=production\nexport PORT=5050\nexport HOSTNAME=0.0.0.0\nexport NODE_OPTIONS="--max-old-space-size=4096"\n' \
-    > /etc/profile.d/quilltap.sh && chmod 644 /etc/profile.d/quilltap.sh
-
-# Remove Docker entrypoint — WSL2 uses wsl-init.sh directly
-ENTRYPOINT []
-CMD ["/usr/local/bin/wsl-init.sh"]

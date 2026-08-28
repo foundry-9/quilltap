@@ -20,7 +20,7 @@ export interface RuntimeEnvironmentInfo {
   osRelease: string;
   totalMemoryBytes: number;
   freeMemoryBytes: number;
-  runtimeType: 'docker' | 'lima' | 'electron' | 'node';
+  runtimeType: 'docker' | 'electron' | 'node';
   electronShellVersion: string | null;
   shellCapabilities: string[];
   uptimeSeconds: number;

@@ -8,7 +8,7 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.9.0--dev.93-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.9.0--dev.94-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/6enCeQxY)
@@ -57,20 +57,28 @@ Quilltap doesn't replace Claude or ChatGPT — it connects to them (and others) 
 
 There are several paths to the same destination. Which one you choose depends on two questions: **what are you willing to install?** and **how much do you trust AI running on your machine?**
 
-That second question deserves a moment of your attention. As AI models grow more capable — reading files, writing code, using tools — the question of *where* that code executes becomes important. A virtual machine is a genuine locked room: if an AI-generated script misbehaves, it misbehaves inside a contained environment with no access to your host system. Docker provides a similar boundary, though somewhat thinner. Running directly on your machine provides no boundary at all.
+That second question deserves a moment of your attention. As AI models grow more capable — reading files, writing code, using tools — the question of *where* that code executes becomes important. Docker is a genuine locked room: if an AI-generated script misbehaves, it misbehaves inside a container, with no access to your host system beyond the volumes you handed it. Running directly on your machine provides no boundary at all. If you want something stouter still, run Quilltap — or Docker itself — inside a virtual machine you build and keep yourself; Quilltap will live there quite happily, but it does not provision or manage a VM on your behalf.
 
 | | Desktop App | Docker | Node.js (`npx`) |
 | --- | --- | --- | --- |
 | **You install** | Download from GitHub | Docker Desktop or Docker Engine | Node.js 24+ |
 | **First launch** | Double-click the app | Fast — pulls the container image | Fast — downloads app files, runs directly |
-| **AI sandbox** | ✅ VM isolation (Lima/WSL2) or container | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
-| **Best for** | Most users — native window, managed updates | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
+| **AI sandbox** | ✅ in Docker mode · ❌ in Direct mode | ✅ Container isolation — the strongest option we ship | ❌ No isolation (runs with your permissions) |
+| **Best for** | A native window, managed updates, instance management — over any of the three back ends | Anyone who wants the AI kept behind a door; server deployments, Linux users | Quick evaluation, developers, the impatient |
 
-> **Our recommendation:** The Desktop App provides the best experience for most people — a native window with managed updates and optional VM isolation for AI sandboxing. If you're deploying to a server or already live in Docker, the container image is excellent. If you have Node.js and simply want to kick the tires, `npx quilltap` will have you running in under a minute.
+> **Our recommendation:** If the assistant will be touching files or running tools, put Docker underneath it — it is the strongest boundary we ship, and it is equally at home on a server. The pleasantest arrangement is the Desktop App in its **Docker** mode: a native window with managed updates, and the back end safely behind a door. If you have Node.js and simply want to kick the tires, `npx quilltap` will have you running in under a minute. And for the belt-and-braces crowd: a virtual machine of your own making, with or without Docker inside it, is entirely supported — the building of it is your affair.
 
 ### Desktop App
 
-The Quilltap desktop app (Electron) is available from the [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository. It provides a native window on macOS, Windows, and Linux, with automatic updates, instance management, and optional VM-based isolation (Lima on macOS, WSL2 on Windows) for sandboxed AI execution.
+The Quilltap desktop app (Electron) is available from the [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository. It provides a native window on macOS, Windows, and Linux, with automatic updates and instance management. The window is only ever a front end; you choose what sits behind it:
+
+| Mode | What it does | Sandboxed? |
+| --- | --- | --- |
+| **Direct** | Runs the Node server inside Electron itself. Nothing else to install. | No — runs with your permissions |
+| **Docker** | Native window in front, the Docker image behind. The recommended arrangement. | Yes — container isolation |
+| **Remote** | Points the window at a Quilltap URL — `http://127.0.0.1:3000`, a dev server, an `npx quilltap` instance, or any machine on your network that is listening. | Whatever the far end is |
+
+Remote mode takes a little effort to set up, but it means one app window can front a development server, a production server, or a box in the basement, as the mood takes you.
 
 ### Docker
 
