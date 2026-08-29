@@ -167,6 +167,8 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
       maxContext = null,
       supportsImageUpload,
       multiCharacterPrefill,
+      fallbackProfileId = null,
+      allowTierFallback = false,
     } = body;
 
     if (transport !== 'api' && transport !== 'courier') {
@@ -176,6 +178,31 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
 
     if (multiCharacterPrefill !== undefined && typeof multiCharacterPrefill !== 'boolean') {
       return badRequest('multiCharacterPrefill must be a boolean');
+    }
+
+    if (typeof allowTierFallback !== 'boolean') {
+      return badRequest('allowTierFallback must be a boolean');
+    }
+
+    // The fallback chain's named understudy. A brand-new profile has no id
+    // yet, so the self-reference rule can't bite here; what can is a target
+    // that isn't the user's, or one whose transport is Courier — a request a
+    // human carries by hand is no kind of automatic failover.
+    let resolvedFallbackProfileId: string | null = null;
+    if (fallbackProfileId !== null && fallbackProfileId !== '') {
+      if (typeof fallbackProfileId !== 'string') {
+        return badRequest('fallbackProfileId must be a profile id or null');
+      }
+      const fallbackTarget = await repos.connections.findById(fallbackProfileId);
+      if (!fallbackTarget || fallbackTarget.userId !== user.id) {
+        return badRequest('Fallback profile not found');
+      }
+      if (fallbackTarget.transport === 'courier') {
+        return badRequest(
+          'A Courier profile cannot be used as a fallback — its requests are carried by hand, so it cannot stand in automatically'
+        );
+      }
+      resolvedFallbackProfileId = fallbackProfileId;
     }
     // Clients that don't send the field get the resolved default — off for
     // Anthropic (4.6+ rejects an assistant tail) and off for a profile that
@@ -295,6 +322,8 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
           : 'auto'
       ),
       multiCharacterPrefill: resolvedMultiCharacterPrefill,
+      fallbackProfileId: resolvedFallbackProfileId,
+      allowTierFallback,
       modelClass: modelClass || null,
       maxContext: maxContext ? (typeof maxContext === 'string' ? parseInt(maxContext, 10) : maxContext) : null,
       supportsImageUpload: isCourier ? false : resolvedSupportsImageUpload,

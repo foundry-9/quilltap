@@ -153,6 +153,8 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
         allowWebSearch: profile.allowWebSearch ?? false,
         useNativeWebSearch: profile.useNativeWebSearch ?? false,
         modelClass: profile.modelClass ?? '',
+        fallbackProfileId: profile.fallbackProfileId ?? '',
+        allowTierFallback: profile.allowTierFallback ?? false,
         maxContext: profile.maxContext ? String(profile.maxContext) : '',
         parameters: rawParams,
       })
@@ -186,6 +188,11 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
         allowWebSearch: false,
         useNativeWebSearch: false,
         modelClass: null,
+        // A Courier request is carried by hand. Nothing about that route can
+        // fail over automatically, so it neither names an understudy nor
+        // accepts a drafted one.
+        fallbackProfileId: null,
+        allowTierFallback: false,
         maxContext: null,
         parameters: {},
       }
@@ -216,6 +223,8 @@ export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = 
       allowWebSearch: form.formData.allowWebSearch,
       useNativeWebSearch: form.formData.useNativeWebSearch,
       modelClass: form.formData.modelClass || null,
+      fallbackProfileId: form.formData.fallbackProfileId || null,
+      allowTierFallback: form.formData.allowTierFallback,
       maxContext: form.formData.maxContext ? parseInt(form.formData.maxContext, 10) : null,
       parameters,
     }

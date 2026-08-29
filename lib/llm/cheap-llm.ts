@@ -109,7 +109,7 @@ export function profileParams(
  * `isCheap` profile. Ollama-forced and uncensored paths substitute a localhost
  * base URL and are intentionally NOT routed through here.
  */
-function selectionFromProfile(profile: ConnectionProfile): CheapLLMSelection {
+export function selectionFromProfile(profile: ConnectionProfile): CheapLLMSelection {
   return {
     provider: profile.provider,
     modelName: profile.modelName,

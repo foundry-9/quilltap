@@ -24,6 +24,15 @@
  *   documented "never chosen" state — so `profileUsesNamePrefill()` resolves
  *   the provider default instead of a table default nobody picked.
  *
+ * The 4.10 fallback-chain columns — **`fallbackProfileId`** and
+ * **`allowTierFallback`** — are named here too, but for a different reason.
+ * Their table DEFAULTs (NULL and 0) *are* the neutral answer: a profile from
+ * an archive that predates them simply has no understudy, which is exactly
+ * how it behaved before the columns existed. What they need instead is a
+ * sanity check, because `fallbackProfileId` is the module's first column
+ * holding a *reference*: a hand-edited bundle can name the profile itself,
+ * and a self-referential chain is the one shape config validation forbids.
+ *
  * Both restore and import call this, so the two paths cannot drift: a `.qtap`
  * bundle and a backup ZIP carrying the same profile land the same row.
  *
@@ -69,6 +78,23 @@ export function seedLegacyConnectionProfileFields<T extends Partial<ConnectionPr
   // an explicit null reads back as "never chosen".
   if (seeded.multiCharacterPrefill === undefined) {
     seeded.multiCharacterPrefill = null;
+  }
+
+  // Fallback chain (4.10). Absent means "no understudy named", which is both
+  // the table DEFAULT and the pre-column behaviour — stated explicitly so a
+  // later change to either DEFAULT can't quietly rewrite a restored profile.
+  if (seeded.fallbackProfileId === undefined) {
+    seeded.fallbackProfileId = null;
+  }
+  if (seeded.allowTierFallback === undefined) {
+    seeded.allowTierFallback = false;
+  }
+
+  // A profile can't understudy itself: the chain would be one attempt wearing
+  // two names. Config validation refuses it on the way in; an archive is data,
+  // not a contract, so it gets refused on the way back too.
+  if (seeded.fallbackProfileId && seeded.fallbackProfileId === seeded.id) {
+    seeded.fallbackProfileId = null;
   }
 
   return seeded;

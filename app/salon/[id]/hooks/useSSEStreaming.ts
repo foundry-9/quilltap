@@ -508,8 +508,12 @@ export function useSSEStreaming({
         // Handle status updates
         if (data.status) {
           setResponseStatus(data.status)
-          // Show warning toast when retrying due to empty response
-          if (data.status.stage === 'retrying') {
+          // Show a warning toast when the turn is being rescued: `retrying`
+          // is the same provider having another go after an empty response,
+          // `failing-over` is an understudy from the profile's fallback chain
+          // taking the turn. Both are moments where the reply the user gets is
+          // not the one they configured, so both are worth saying out loud.
+          if (data.status.stage === 'retrying' || data.status.stage === 'failing-over') {
             showWarningToast(data.status.message)
           }
         }

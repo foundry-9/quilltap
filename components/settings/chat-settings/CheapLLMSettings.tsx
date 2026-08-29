@@ -136,6 +136,27 @@ export function CheapLLMSettings({
           </div>
         </label>
 
+        {/* Allow a drafted stand-in for profile-less cheap routes */}
+        <label className="flex items-center gap-3 p-3 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors">
+          <input
+            type="checkbox"
+            checked={settings?.cheapLLMSettings.allowCheapFallback ?? false}
+            onChange={(e) => onUpdate({ allowCheapFallback: e.target.checked })}
+            disabled={saving}
+            className="rounded"
+          />
+          <div className="flex-1">
+            <div className="font-medium text-sm">Allow a Similar-Tier Stand-In</div>
+            <div className="qt-text-xs">
+              When the cheap route fails and no connection profile stands behind it — a
+              local model, or a route assembled on the spot — permit one understudy to be
+              drafted from your inexpensive connections. Routes that <em>do</em> have a
+              profile take their understudy from that profile&rsquo;s own Fallback
+              section instead.
+            </div>
+          </div>
+        </label>
+
         {/* Embedding Provider */}
         <div>
           <label className="block qt-text-label mb-2">

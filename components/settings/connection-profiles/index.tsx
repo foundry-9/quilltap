@@ -191,6 +191,7 @@ export default function ConnectionProfilesTab() {
         apiKeys={apiKeys}
         providers={providers}
         takenNames={takenNames}
+        allProfiles={profiles}
         form={{
           formData: form.formData,
           setField: form.setField,

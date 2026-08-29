@@ -744,7 +744,9 @@ Create a connection profile.
   "isCheap": false,
   "allowWebSearch": false,
   "useNativeWebSearch": false,
-  "multiCharacterPrefill": false
+  "multiCharacterPrefill": false,
+  "fallbackProfileId": null,
+  "allowTierFallback": false
 }
 ```
 
@@ -758,6 +760,29 @@ will run a thinking turn, `true` otherwise.** A stored `null` — a row older
 than `add-profile-multi-character-prefill-field-v1`, or a profile imported from
 a pre-4.9 bundle — resolves to that same default at use time. A stored boolean
 always outranks it.
+
+**`fallbackProfileId`** — the understudy: another connection profile to try when
+a call through this one fails outright (auth, rate limit, network, missing
+model, 5xx, empty response, moderation refusal). `null` means none named.
+
+Validated on write against exactly two structural rules — the target must exist
+and belong to the caller, and it must not be `transport: 'courier'` (a request
+carried by hand cannot stand in automatically) — plus, on `PUT`, it may not be
+the profile's own id. A **cycle is legal config**: chains never recurse, so when
+A falls back to B, B's own `fallbackProfileId` is not followed and an A→B, B→A
+pair simply stops after two attempts. Deleting a profile nulls this column on
+every profile that named it.
+
+**`allowTierFallback`** — whether, once the profile and its named understudy have
+both failed, the server may make ONE further attempt with an automatically
+chosen profile of the same or better `modelClass` quality, preferring a
+different provider than the one that just failed. Defaults to `false`. In a
+dangerous-routed context an auto-picked candidate must also be
+`isDangerousCompatible`.
+
+Together these cap any single call at three attempts. Failure is surfaced on the
+chat SSE stream as `stage: 'failing-over'` per attempt, and the final error
+names each profile that was asked and how it declined.
 
 "Will run a thinking turn" is answered per profile, not per provider, by
 `evaluateThinkingTurn` (`lib/llm/thinking-turn.ts`): the provider plugin's

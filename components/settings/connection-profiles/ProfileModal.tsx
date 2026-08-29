@@ -24,6 +24,12 @@ interface ProfileModalProps {
   providers: ProviderConfig[]
   /** Normalized names already taken by other profiles (duplicate-name guard). */
   takenNames: Set<string>
+  /**
+   * Every profile the user owns — the candidate pool for the Fallback
+   * dropdown. Optional: a modal rendered without it simply offers no
+   * understudies, which is the right answer rather than a crash.
+   */
+  allProfiles?: ConnectionProfile[]
   form: {
     formData: ProfileFormData
     setField: (name: keyof ProfileFormData, value: any) => void
@@ -54,6 +60,7 @@ export function ProfileModal({
   apiKeys,
   providers,
   takenNames,
+  allProfiles = [],
   form,
   operations,
 }: ProfileModalProps) {
@@ -218,6 +225,24 @@ export function ProfileModal({
     form.formData.name.trim().length > 0 &&
     takenNames.has(normalizeProfileName(form.formData.name))
   const isValid = form.formData.name.trim() && form.formData.modelName.trim() && !nameTaken
+
+  // Eligible understudies: anyone but this profile and the Courier profiles.
+  // A cycle (A names B, B names A) is deliberately allowed — chains never
+  // recurse, so B's own understudy is not followed and the cycle simply stops.
+  const fallbackCandidates = allProfiles.filter(
+    (p) => p.id !== profile?.id && p.transport !== 'courier'
+  )
+  const selectedFallbackProfile = form.formData.fallbackProfileId
+    ? allProfiles.find((p) => p.id === form.formData.fallbackProfileId) ?? null
+    : null
+  // A soft warning, never a block: keys can arrive later, and a provider that
+  // takes none at all is perfectly ready as it stands.
+  const fallbackTargetHasKey = selectedFallbackProfile
+    ? !!selectedFallbackProfile.apiKeyId ||
+      !providerAcceptsApiKey(
+        providers.find((p) => p.name === selectedFallbackProfile.provider)?.configRequirements
+      )
+    : true
 
   // Active provider's options schema (if the plugin exposes one)
   const activeProviderConfig = providers.find((p) => p.name === form.formData.provider)
@@ -999,6 +1024,75 @@ export function ProfileModal({
                   Override context window size. Leave blank to use provider default.
                 </p>
               </div>
+            </div>
+            )}
+
+            {/* Fallback — the understudies. API transport only: a Courier
+                request is carried by hand, so nothing about it can stand in
+                automatically. Sits next to Model Class because the tier
+                toggle below is only as good as that field. */}
+            {!isCourier && (
+            <div className="qt-card p-4 space-y-3">
+              <div>
+                <h4 className="qt-text-label">Fallback</h4>
+                <p className="qt-text-xs mt-1">
+                  Should this connection be indisposed — a refused key, a rate limit, a
+                  provider gone dark — the show need not come down. Name an understudy and
+                  the call is passed along without a word to anyone.
+                </p>
+              </div>
+
+              <div>
+                <label htmlFor="fallbackProfileId" className="block qt-text-label mb-2">
+                  Understudy
+                </label>
+                <select
+                  id="fallbackProfileId"
+                  name="fallbackProfileId"
+                  value={form.formData.fallbackProfileId}
+                  onChange={(e) => form.setField('fallbackProfileId', e.target.value)}
+                  className="qt-select"
+                >
+                  <option value="">(None — the call simply fails)</option>
+                  {fallbackCandidates.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — {p.provider} {p.modelName}
+                    </option>
+                  ))}
+                </select>
+                {selectedFallbackProfile && !fallbackTargetHasKey && (
+                  <p className="qt-text-xs qt-text-warning mt-1">
+                    {selectedFallbackProfile.name} has no API key attached yet. The
+                    understudy will be skipped until one arrives.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="allowTierFallback"
+                  name="allowTierFallback"
+                  checked={form.formData.allowTierFallback}
+                  onChange={(e) => form.setField('allowTierFallback', e.target.checked)}
+                  className="qt-checkbox"
+                />
+                <label htmlFor="allowTierFallback" className="text-sm">
+                  Draft a stand-in from the company when both named players are indisposed
+                </label>
+              </div>
+              <p className="qt-text-xs">
+                One further attempt, and one only: a connection of the same standing or
+                better, preferring a different provider than the one that just failed.
+                {!form.formData.modelClass && (
+                  <>
+                    {' '}
+                    Set a Model Class above and the choice will be a great deal better
+                    informed — without one, only your other unclassified connections are
+                    eligible.
+                  </>
+                )}
+              </p>
             </div>
             )}
 

@@ -852,7 +852,20 @@ CREATE TABLE "connection_profiles" (
   -- bundle) and resolves to the provider default — off for Anthropic, on
   -- elsewhere. Read it only through profileUsesNamePrefill()
   -- (lib/llm/multi-character-prefill.ts).
-  "multiCharacterPrefill" INTEGER DEFAULT 1
+  "multiCharacterPrefill" INTEGER DEFAULT 1,
+  -- The understudy: another connection_profiles.id to try when a call through
+  -- this profile fails outright (auth, rate limit, network, missing model,
+  -- 5xx, empty response, moderation refusal). NULL = none named. Deliberately
+  -- NOT a foreign key: the reference is nulled by the repository delete path,
+  -- and buildFallbackChain() drops a target that has since vanished or turned
+  -- Courier anyway. Chains never recurse — the understudy's own understudy is
+  -- not followed, which is what makes an A->B, B->A cycle harmless.
+  "fallbackProfileId" TEXT,
+  -- Whether, once both this profile and its named understudy have failed,
+  -- Quilltap may draft ONE further candidate of the same or better modelClass
+  -- quality. Off by default (an auto-pick spends money at a provider the user
+  -- did not choose for this call). See lib/llm/fallback/tier-picker.ts.
+  "allowTierFallback" INTEGER DEFAULT 0
 );
 
 CREATE INDEX "idx_connection_profiles_createdAt" ON "connection_profiles" ("createdAt" DESC);

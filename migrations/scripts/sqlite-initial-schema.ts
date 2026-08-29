@@ -348,6 +348,8 @@ export const SQLITE_TABLES = [
       "allowToolUse" INTEGER DEFAULT 1,
       "pseudoToolMode" TEXT DEFAULT 'auto',
       "multiCharacterPrefill" INTEGER DEFAULT 1,
+      "fallbackProfileId" TEXT,
+      "allowTierFallback" INTEGER DEFAULT 0,
       "supportsImageUpload" INTEGER DEFAULT 0,
       "tags" TEXT DEFAULT '[]',
       "totalTokens" INTEGER DEFAULT 0,

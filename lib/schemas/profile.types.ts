@@ -118,6 +118,32 @@ export const ConnectionProfileSchema = z.object({
   multiCharacterPrefill: z.boolean().nullable().optional(),
   /** Optional model class name for capability tier classification (e.g., 'Compact', 'Standard', 'Extended', 'Deep') */
   modelClass: z.string().nullable().optional(),
+  /**
+   * The understudy: another connection profile to try when a call through this
+   * one fails outright (auth, rate limit, network, missing model, 5xx, empty
+   * response, moderation refusal).
+   *
+   * Chains do NOT recurse — when A falls back to B, B's own
+   * `fallbackProfileId` is not followed. That keeps a cycle (A->B, B->A)
+   * harmless and caps any call at three attempts. The only config-time rules
+   * are "not yourself" and "not a Courier profile" (a Courier transport needs
+   * a human to carry the request by hand, which is no kind of failover).
+   *
+   * Never read this field directly to build a chain: go through
+   * `buildFallbackChain()` in `lib/llm/fallback/engine.ts`, which drops a
+   * target that has since been deleted or switched to Courier.
+   */
+  fallbackProfileId: UUIDSchema.nullable().optional(),
+  /**
+   * Whether, after both this profile and its named understudy have failed,
+   * Quilltap may draft ONE more candidate from the rest of the company —
+   * a profile of the same or better `modelClass` quality, preferring a
+   * different provider than the one that just failed.
+   *
+   * Off by default: an auto-picked replacement spends money at a provider the
+   * user did not choose for this call.
+   */
+  allowTierFallback: z.boolean().default(false),
   /** Optional override for the context window size in tokens (caps how much input the model accepts) */
   maxContext: z.number().int().positive().nullable().optional(),
   /** Optional override for the maximum output/completion tokens the model can generate */

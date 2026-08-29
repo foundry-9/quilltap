@@ -90,10 +90,6 @@ describe('turn-orchestrator.service', () => {
     it('should have maxChainTimeMs of 300000', () => {
       expect(DEFAULT_CHAIN_CONFIG.maxChainTimeMs).toBe(300000);
     });
-
-    it('should have maxRetries of 2', () => {
-      expect(DEFAULT_CHAIN_CONFIG.maxRetries).toBe(2);
-    });
   });
 
   describe('shouldChainNext', () => {

@@ -59,6 +59,18 @@ export const CheapLLMSettingsSchema = z.object({
   embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
   /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
   imagePromptProfileId: UUIDSchema.nullable().optional(),
+  /**
+   * Whether a cheap-LLM route with no connection profile behind it — a
+   * pure-local Ollama pick, or a provider-cheapest synthesis — may have a
+   * stand-in drafted when it fails.
+   *
+   * Fallback normally hangs off the profile (`fallbackProfileId` /
+   * `allowTierFallback`), and these selections have no profile to hang it on.
+   * This is the one place the setting lives off-profile, and the stand-in is
+   * drawn from the user's `isCheap` profiles. Off by default, like every other
+   * automatic provider choice.
+   */
+  allowCheapFallback: z.boolean().default(false),
 });
 
 export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;
@@ -541,6 +553,7 @@ export const ChatSettingsSchema = z.object({
   cheapLLMSettings: CheapLLMSettingsSchema.default({
     strategy: 'PROVIDER_CHEAPEST',
     fallbackToLocal: true,
+    allowCheapFallback: false,
     embeddingProvider: 'OPENAI',
   }),
   /** Profile ID to use for image description fallback (when provider doesn't support images) */

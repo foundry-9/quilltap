@@ -126,6 +126,8 @@ const NEW_CHAT_SETTINGS_FIELDS = {
 /** Columns added to connection_profiles in 4.9. */
 const NEW_CONNECTION_PROFILE_FIELDS = {
   multiCharacterPrefill: false,
+  fallbackProfileId: 'profile-2',
+  allowTierFallback: true,
 }
 
 /** The 4.9 `chats.equippedOutfit` slot bag, with the hair slot added this cycle. */
@@ -239,6 +241,37 @@ describe('restore field fidelity — 4.9 data-model additions', () => {
 
     expect(connectionsCreate).toHaveBeenCalledTimes(1)
     expect(connectionsCreate.mock.calls[0][0]).toHaveProperty('multiCharacterPrefill', null)
+  })
+
+  it('restores an archive older than the fallback columns with no understudy named', async () => {
+    const { connectionsCreate } = buildRepoMocks()
+    // Unlike multiCharacterPrefill, the table DEFAULTs here (NULL / 0) *are*
+    // the neutral answer — a pre-4.10 profile simply had no understudy. Pinned
+    // explicitly so a later change to either DEFAULT can't quietly hand a
+    // restored profile a fallback its owner never configured.
+    profileArchive({ provider: 'OPENAI', supportsImageUpload: true })
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(connectionsCreate).toHaveBeenCalledTimes(1)
+    expect(connectionsCreate.mock.calls[0][0]).toMatchObject({
+      fallbackProfileId: null,
+      allowTierFallback: false,
+    })
+  })
+
+  it('refuses a self-referential understudy from a hand-edited archive', async () => {
+    const { connectionsCreate } = buildRepoMocks()
+    // fallbackProfileId is the first restore-path column holding a *reference*.
+    // A profile that understudies itself is one attempt wearing two names, and
+    // config validation refuses it on the way in; an archive is data, not a
+    // contract, so it gets refused on the way back too.
+    profileArchive({ provider: 'OPENAI', fallbackProfileId: 'profile-1' })
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(connectionsCreate).toHaveBeenCalledTimes(1)
+    expect(connectionsCreate.mock.calls[0][0]).toHaveProperty('fallbackProfileId', null)
   })
 
   it('seeds supportsImageUpload from the provider map for an archive older than the flag', async () => {

@@ -1099,6 +1099,14 @@
           "type": ["boolean", "null"],
           "description": "How a multi-character chat anchors a reply to the character whose turn it is. true prefills an assistant message containing '[Character Name]'; false appends a prose instruction to the system prompt instead, leaving the request ending on a user message. null means never chosen, and resolves to the provider default whenever the profile is used (off for Anthropic, on elsewhere)."
         },
+        "fallbackProfileId": {
+          "type": ["string", "null"],
+          "description": "The understudy: the id of another connection profile to try when a call through this one fails outright (auth, rate limit, network, missing model, 5xx, empty response, moderation refusal). null means none named. Chains never recurse, so the understudy's own understudy is not followed. On import the id is remapped through the bundle's profile id map; a reference that still cannot be resolved is skipped at call time."
+        },
+        "allowTierFallback": {
+          "type": "boolean",
+          "description": "Whether, once this profile and its named understudy have both failed, one further candidate of the same or better modelClass quality may be drafted automatically. Defaults to false."
+        },
         "sortIndex": { "type": "integer", "minimum": 0 },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "totalTokens": { "type": "integer", "minimum": 0 },

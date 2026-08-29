@@ -8,6 +8,7 @@
 
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { providerCanTransportImages } from '@/lib/llm/image-transport'
+import { buildFallbackChain } from '@/lib/llm/fallback'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { createLLMProvider } from '@/lib/llm'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
@@ -156,6 +157,12 @@ export interface FallbackResult {
     usedImageDescriptionLLM?: boolean
     /** True when the uncensored fallback profile produced the description. */
     usedUncensoredFallback?: boolean
+    /**
+     * Who was asked and how each one failed, in order, when the primary
+     * describer did not answer. Present only when at least one stand-in was
+     * tried; the first entry is always the primary itself.
+     */
+    fallbackAttemptTrail?: string[]
     /** True when a persisted description/generation-prompt was reused (no vision call). */
     reusedPersistedDescription?: boolean
     descriptionProfileId?: string
@@ -610,17 +617,40 @@ async function runGenerateImageDescription(
     return primaryResult
   }
 
-  // Primary failed/refused. If an uncensored fallback is configured and it's
-  // a *different* profile, give it a shot.
+  // The describer failed. Three escapes, in this order:
+  //
+  //   1. the primary's own fallback chain — an *availability* answer;
+  //   2. the configured uncensored describer — a *content* answer, and the
+  //      long-standing escape hatch for a refusal;
+  //   3. that profile's own chain, run dangerous so a tier pick stays cleared.
+  //
+  // The chain comes first because it is cheaper to be right about: a describer
+  // that is rate-limited or misconfigured is not a content problem, and
+  // spending the uncensored profile on it wastes the one escape that can
+  // actually answer a refusal.
+  const attemptTrail: string[] = [
+    `${imageDescProfile.name}: ${primaryResult.error ?? 'failed'}`,
+  ]
+
+  const chainResult = await describeViaFallbackChain(
+    file, imageDescProfile, repos, userId,
+    { dangerous: false, alreadyTried: [imageDescProfile.id] },
+    attemptTrail
+  )
+  if (chainResult) return chainResult
+
+  // Primary and its understudies failed/refused. If an uncensored fallback is
+  // configured and it's a *different* profile, give it a shot.
   const fallbackProfile = await getUncensoredImageDescriptionProfile(repos, userId)
   if (!fallbackProfile || fallbackProfile.id === imageDescProfile.id) {
-    return primaryResult
+    return withAttemptTrail(primaryResult, attemptTrail)
   }
 
   logger.info('[Image Fallback] Primary profile failed, retrying with uncensored fallback', {
     primaryProfileId: imageDescProfile.id,
     fallbackProfileId: fallbackProfile.id,
     primaryError: primaryResult.error,
+    chainAttempts: attemptTrail.length - 1,
   })
 
   const fallbackResult = await describeImageWithProfile(file, fallbackProfile, repos, userId)
@@ -628,17 +658,121 @@ async function runGenerateImageDescription(
     return {
       ...fallbackResult,
       processingMetadata: fallbackResult.processingMetadata
-        ? { ...fallbackResult.processingMetadata, usedUncensoredFallback: true }
+        ? {
+            ...fallbackResult.processingMetadata,
+            usedUncensoredFallback: true,
+            fallbackAttemptTrail: attemptTrail,
+          }
         : undefined,
     }
   }
 
-  // Both failed — return the primary's error since that's what the user
-  // configured first, but annotate that the fallback was tried.
+  attemptTrail.push(`${fallbackProfile.name}: ${fallbackResult.error ?? 'failed'}`)
+
+  // The uncensored describer is a connection profile like any other and
+  // carries its own understudy. Its chain runs dangerous — whatever refused
+  // the primary would refuse a mainstream stand-in too.
+  const uncensoredChainResult = await describeViaFallbackChain(
+    file, fallbackProfile, repos, userId,
+    { dangerous: true, alreadyTried: [imageDescProfile.id, fallbackProfile.id] },
+    attemptTrail
+  )
+  if (uncensoredChainResult) {
+    return {
+      ...uncensoredChainResult,
+      processingMetadata: uncensoredChainResult.processingMetadata
+        ? { ...uncensoredChainResult.processingMetadata, usedUncensoredFallback: true }
+        : undefined,
+    }
+  }
+
+  // Everything failed — return the primary's error since that's what the user
+  // configured first, but annotate what else was tried.
   return {
     ...primaryResult,
     error: `${primaryResult.error ?? 'Primary failed'} (uncensored fallback also failed: ${fallbackResult.error ?? 'unknown'})`,
+    processingMetadata: primaryResult.processingMetadata
+      ? { ...primaryResult.processingMetadata, fallbackAttemptTrail: attemptTrail }
+      : undefined,
   }
+}
+
+/** Attach the attempt trail to a result without disturbing anything else on it. */
+function withAttemptTrail(result: FallbackResult, attemptTrail: string[]): FallbackResult {
+  if (attemptTrail.length <= 1 || !result.processingMetadata) return result
+  return {
+    ...result,
+    processingMetadata: { ...result.processingMetadata, fallbackAttemptTrail: attemptTrail },
+  }
+}
+
+/**
+ * Walk a describer profile's fallback chain, returning the first description
+ * that comes back — or null when nobody could produce one.
+ *
+ * `needsVision: true` is the load-bearing flag: a stand-in must both accept
+ * image uploads (`supportsImageUpload`) and have a plugin that actually puts
+ * the bytes on the wire (`providerCanTransportImages`). A describer that
+ * silently drops the image would answer from the prompt alone and invent a
+ * picture — which is worse than failing.
+ */
+async function describeViaFallbackChain(
+  file: FileAttachment,
+  primary: ConnectionProfile,
+  repos: any,
+  userId: string,
+  opts: { dangerous: boolean; alreadyTried: string[] },
+  attemptTrail: string[]
+): Promise<FallbackResult | null> {
+  let chain
+  try {
+    chain = await buildFallbackChain(primary, repos, {
+      userId,
+      purpose: 'vision',
+      dangerous: opts.dangerous,
+      needsVision: true,
+      needsTools: false,
+      alreadyTried: opts.alreadyTried,
+    })
+  } catch (err) {
+    logger.warn('[Image Fallback] Could not build a fallback chain for the describer', {
+      primaryProfileId: primary.id,
+      error: getErrorMessage(err),
+    })
+    return null
+  }
+
+  for (const candidate of chain) {
+    if (candidate.profile.id === primary.id) continue
+
+    logger.info('[Image Fallback] Trying a describer stand-in', {
+      primaryProfileId: primary.id,
+      standInProfileId: candidate.profile.id,
+      standInName: candidate.profile.name,
+      standInProvider: candidate.profile.provider,
+      kind: candidate.kind,
+      dangerous: opts.dangerous,
+    })
+
+    const result = await describeImageWithProfile(file, candidate.profile, repos, userId)
+    if (result.type === 'image_description') {
+      logger.info('[Image Fallback] Describer stand-in answered', {
+        standInProfileId: candidate.profile.id,
+        standInName: candidate.profile.name,
+        kind: candidate.kind,
+      })
+      return {
+        ...result,
+        processingMetadata: result.processingMetadata
+          ? { ...result.processingMetadata, fallbackAttemptTrail: attemptTrail }
+          : undefined,
+      }
+    }
+
+    attemptTrail.push(`${candidate.profile.name}: ${result.error ?? 'failed'}`)
+  }
+
+  return null
 }
 
 /**

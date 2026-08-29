@@ -1412,6 +1412,12 @@ async function processMessage(
     attachedFiles: fileProcessing.attachedFiles,
     originalMessage: options.content,
     connectionProfile,
+    // Dangerous-routed context: the Concierge either flagged this content or
+    // swapped the profile out for an uncensored one. Either way an auto-picked
+    // stand-in must be cleared for it, or the fallback would hand the content
+    // straight back to the moderation that refused it.
+    isDangerousRouted:
+      (dangerFlags?.length ?? 0) > 0 || streamingState.effectiveProfile.id !== connectionProfile.id,
     streaming: streamingState,
     controller,
     encoder,
@@ -1546,23 +1552,31 @@ async function processMessage(
   }
 
   const contentWasFlaggedDangerous = !!(dangerFlags && dangerFlags.length > 0)
-  const { uncensoredRetryAttempted, sameProviderRetryAttempted } = await attemptEmptyResponseRecovery({
-    state: streamingState,
-    toolMessagesLength: toolMessages.length,
-    contentWasFlaggedDangerous,
-    dangerSettings,
-    connectionProfile,
-    formattedMessages,
-    modelParams,
-    actualTools,
-    useNativeWebSearch,
-    userId,
-    chatId,
-    character,
-    controller,
-    encoder,
-    preGeneratedAssistantMessageId,
-  })
+  const { uncensoredRetryAttempted, sameProviderRetryAttempted, chainAttempts } =
+    await attemptEmptyResponseRecovery({
+      state: streamingState,
+      toolMessagesLength: toolMessages.length,
+      contentWasFlaggedDangerous,
+      dangerSettings,
+      connectionProfile,
+      formattedMessages,
+      modelParams,
+      actualTools,
+      useNativeWebSearch,
+      userId,
+      chatId,
+      character,
+      controller,
+      encoder,
+      preGeneratedAssistantMessageId,
+      repos,
+      stop: initialStopSequences,
+      fallbackContext: {
+        dangerous: contentWasFlaggedDangerous,
+        needsVision: fileProcessing.attachedFiles.some((f) => f.mimeType?.startsWith('image/')),
+        needsTools: actualTools.length > 0,
+      },
+    })
 
   // Save assistant message
   let assistantMessageId: string | null = null
@@ -1702,6 +1716,7 @@ async function processMessage(
       uncensoredRetryAttempted,
       sameProviderRetryAttempted,
       contentWasFlaggedDangerous,
+      chainAttempts,
       finishReason: emptyFinishReason,
       provider: streamingState.effectiveProfile.provider,
       modelName: streamingState.effectiveProfile.modelName,
@@ -1710,6 +1725,11 @@ async function processMessage(
       uncensoredRetryAttempted,
       sameProviderRetryAttempted,
       contentWasFlaggedDangerous,
+      chainAttempts: chainAttempts.map((a) => ({
+        profileName: a.profileName,
+        provider: a.provider,
+        trigger: a.trigger,
+      })),
       finishReason: emptyFinishReason,
       moderationRefusal: isModerationFinishReason(emptyFinishReason),
       dangerMode: dangerSettings.mode,

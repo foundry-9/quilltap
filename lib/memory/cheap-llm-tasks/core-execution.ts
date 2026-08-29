@@ -13,6 +13,8 @@ import { withTimeout } from '@/lib/promise-timeout'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import type { LLMLogType } from '@/lib/schemas/llm-log.types'
 import type { CheapLLMTaskResult, UncensoredFallbackOptions } from './types'
+import { classifyFallbackTrigger } from '@/lib/llm/fallback'
+import { buildCheapFallbackSelections } from './fallback'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import type { ActivityKind } from '@/lib/background-jobs/activity-kinds'
 
@@ -493,9 +495,146 @@ async function runCheapLLMTask<T>(
       model: selection.modelName,
       error: getErrorMessage(error),
     })
+
+    const fallbackResult = await attemptCheapFallbackChain(
+      selection, messages, userId, parseResponse, error,
+      { taskType, chatId, messageId, maxTokens, characterId, uncensoredFallback }
+    )
+    if (fallbackResult) return fallbackResult
+
     return {
       success: false,
       error: getErrorMessage(error),
     }
   }
+}
+
+/**
+ * Walk the failed route's fallback chain, re-issuing the task against each
+ * stand-in with a **fresh deadline**.
+ *
+ * A fresh budget per attempt, not a shared one: the whole reason we are here
+ * is that the previous route spent its budget without answering, and charging
+ * the understudy for that would guarantee it fails too. This mirrors what the
+ * uncensored empty-response fallback above already does.
+ *
+ * Returns null when nothing was attempted or nothing worked, leaving the
+ * caller to fail exactly as it did before this feature existed. Background
+ * work never toasts — the job logs its attempt trail and moves on.
+ */
+async function attemptCheapFallbackChain<T>(
+  selection: CheapLLMSelection,
+  messages: LLMMessage[],
+  userId: string,
+  parseResponse: (content: string) => T,
+  error: unknown,
+  meta: {
+    taskType?: string
+    chatId?: string
+    messageId?: string
+    maxTokens?: number
+    characterId?: string
+    uncensoredFallback?: UncensoredFallbackOptions
+  }
+): Promise<CheapLLMTaskResult<T> | null> {
+  const { taskType, chatId, messageId, maxTokens, characterId, uncensoredFallback } = meta
+
+  const trigger = classifyFallbackTrigger(error)
+  if (!trigger) {
+    logger.debug('[CheapLLM] Failure is not fallback-eligible', {
+      taskType,
+      chatId,
+      error: getErrorMessage(error),
+    })
+    return null
+  }
+
+  let standIns: CheapLLMSelection[]
+  try {
+    standIns = await buildCheapFallbackSelections({
+      selection,
+      userId,
+      // A stand-in for an uncensored route must itself be cleared for the
+      // content, or the fallback hands it back to the moderation that refused.
+      dangerous:
+        uncensoredFallback?.isDangerousChat === true ||
+        uncensoredFallback?.availableProfiles.find(
+          (p) => p.id === selection.connectionProfileId
+        )?.isDangerousCompatible === true,
+      alreadyTried: selection.connectionProfileId ? [selection.connectionProfileId] : [],
+      taskType,
+    })
+  } catch (chainError) {
+    logger.warn('[CheapLLM] Could not build a fallback chain', {
+      taskType,
+      chatId,
+      error: getErrorMessage(chainError),
+    })
+    return null
+  }
+
+  if (standIns.length === 0) return null
+
+  for (const standIn of standIns) {
+    logger.info('[CheapLLM] Retrying task with a stand-in', {
+      taskType,
+      chatId,
+      trigger,
+      failedProvider: selection.provider,
+      failedModel: selection.modelName,
+      standInProvider: standIn.provider,
+      standInModel: standIn.modelName,
+      standInProfileId: standIn.connectionProfileId,
+    })
+
+    try {
+      const response = await withDeadline(
+        sendToProvider(standIn, messages, userId, taskType, chatId, messageId, maxTokens, characterId),
+        deadlineFor(standIn, taskType),
+        taskType,
+        { chatId, characterId, provider: standIn.provider, model: standIn.modelName }
+      )
+
+      if (response.content.trim() === '') {
+        logger.warn('[CheapLLM] Stand-in returned an empty response', {
+          taskType,
+          chatId,
+          standInProvider: standIn.provider,
+          standInModel: standIn.modelName,
+        })
+        continue
+      }
+
+      const result = parseResponse(response.content)
+
+      logger.info('[CheapLLM] Stand-in answered', {
+        taskType,
+        chatId,
+        standInProvider: standIn.provider,
+        standInModel: standIn.modelName,
+        responseLength: response.content.length,
+      })
+
+      return { success: true, result, usage: response.usage }
+    } catch (standInError) {
+      logger.warn('[CheapLLM] Stand-in also failed', {
+        taskType,
+        chatId,
+        standInProvider: standIn.provider,
+        standInModel: standIn.modelName,
+        error: getErrorMessage(standInError),
+      })
+    }
+  }
+
+  logger.warn('[CheapLLM] Fallback chain exhausted', {
+    taskType,
+    chatId,
+    trigger,
+    failedProvider: selection.provider,
+    failedModel: selection.modelName,
+    standInsTried: standIns.length,
+  })
+
+  return null
 }

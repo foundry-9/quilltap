@@ -589,6 +589,7 @@ async function triggerTitleGenerationAsync(
     userDefinedProfileId: null,
     defaultCheapProfileId: null,
     fallbackToLocal: true,
+    allowCheapFallback: false,
     embeddingProvider: 'SAME_PROVIDER' as const,
   }
 

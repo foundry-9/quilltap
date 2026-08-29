@@ -100,6 +100,10 @@ export interface ConnectionProfile {
   multiCharacterPrefill?: boolean | null
   supportsImageUpload?: boolean
   modelClass?: string | null
+  /** The understudy: another profile to try when this one's provider fails. */
+  fallbackProfileId?: string | null
+  /** Whether a same-or-better-tier stand-in may be drafted automatically. */
+  allowTierFallback?: boolean
   maxContext?: number | null
   sortIndex?: number
   apiKey?: ApiKey | null
@@ -151,6 +155,16 @@ export interface ProfileFormData {
   allowWebSearch: boolean
   useNativeWebSearch: boolean
   modelClass: string
+  /**
+   * The understudy: the id of another profile to try when a call through this
+   * one fails outright. Empty string means none named.
+   */
+  fallbackProfileId: string
+  /**
+   * Whether, once this profile and its understudy have both failed, Quilltap
+   * may draft one further stand-in of the same or better model class.
+   */
+  allowTierFallback: boolean
   maxContext: string
   /**
    * Provider-specific options written by the schema-driven options panel.
@@ -181,6 +195,8 @@ export const initialFormState: ProfileFormData = {
   allowWebSearch: false,
   useNativeWebSearch: false,
   modelClass: '',
+  fallbackProfileId: '',
+  allowTierFallback: false,
   maxContext: '',
   parameters: {},
 }

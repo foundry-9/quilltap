@@ -212,12 +212,18 @@ jest.mock('@/lib/llm/plugin-factory', () => ({
   isProviderFromPlugin: jest.fn(() => true),
 }))
 
-// Mock provider validation - default to valid
+// Mock provider validation - default to valid.
+// `acceptsApiKey` / `requiresApiKey` default to true, matching the real
+// module's own safe fallback for a provider the plugin registry doesn't know.
+// Without them here, any code under test that asks about key requirements gets
+// `undefined` and dies on the call rather than on an assertion.
 jest.mock('@/lib/plugins/provider-validation', () => ({
   validateProviderConfig: jest.fn().mockReturnValue({
     valid: true,
     errors: [],
   }),
+  acceptsApiKey: jest.fn(() => true),
+  requiresApiKey: jest.fn(() => true),
 }))
 
 // Mock LLM module (re-exports from plugin-factory)

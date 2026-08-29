@@ -405,11 +405,31 @@ export async function reconcileRelationships(
       const profile = await repos.connections.findById(newId);
       if (!profile) continue;
 
+      const updates: Record<string, unknown> = {};
+
       if (profile.tags && profile.tags.length > 0) {
         const remappedTags = remapIdArray(profile.tags, idMaps.tags);
         if (remappedTags.length > 0) {
-          await repos.connections.update(newId, { tags: remappedTags });
+          updates.tags = remappedTags;
         }
+      }
+
+      // Remap fallbackProfileId (the understudy). This has to happen in the
+      // reconcile pass rather than at insert time: a profile may name an
+      // understudy that appears *later* in the bundle, so the map is only
+      // complete once every profile has landed. A reference the map cannot
+      // resolve is left alone — buildFallbackChain() drops a target that
+      // isn't there, and clearing it would throw away a chain that a
+      // preserve-ids import got right.
+      if (profile.fallbackProfileId) {
+        const newFallbackId = remapId(profile.fallbackProfileId, idMaps.connectionProfiles);
+        if (newFallbackId && newFallbackId !== profile.fallbackProfileId) {
+          updates.fallbackProfileId = newFallbackId;
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await repos.connections.update(newId, updates);
       }
     } catch (error) {
       warnings.push(

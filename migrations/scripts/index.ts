@@ -376,6 +376,8 @@ import { createHelpDocChunksTableMigration } from './create-help-doc-chunks-tabl
 import { addProfileMultiCharacterPrefillFieldMigration } from './add-profile-multi-character-prefill-field';
 // Turn that anchor off on profiles that run a thinking turn (bugs 68, 85)
 import { retirePrefillOnThinkingProfilesMigration } from './retire-prefill-on-thinking-profiles';
+// Provider fallback chains: fallbackProfileId + allowTierFallback on connection_profiles
+import { addProfileFallbackFieldsMigration } from './add-profile-fallback-fields';
 
 /**
  * All available migrations.
@@ -752,6 +754,8 @@ export const migrations: Migration[] = [
   addProfileMultiCharacterPrefillFieldMigration,
   // Turn that anchor off on profiles that run a thinking turn (bugs 68, 85)
   retirePrefillOnThinkingProfilesMigration,
+  // Provider fallback chains: every profile can name an understudy
+  addProfileFallbackFieldsMigration,
 ];
 
 export {
@@ -1107,5 +1111,7 @@ export {
   addProfileMultiCharacterPrefillFieldMigration,
   // Turn that anchor off on profiles that run a thinking turn (bugs 68, 85)
   retirePrefillOnThinkingProfilesMigration,
+  // Provider fallback chains: every profile can name an understudy
+  addProfileFallbackFieldsMigration,
 };
 

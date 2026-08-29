@@ -149,6 +149,8 @@ export const PUT = createContextParamsHandler<{ id: string }>(
         sortIndex,
         supportsImageUpload,
         multiCharacterPrefill,
+        fallbackProfileId,
+        allowTierFallback,
       } = body;
 
       // Build update data
@@ -317,6 +319,41 @@ export const PUT = createContextParamsHandler<{ id: string }>(
           return badRequest('multiCharacterPrefill must be a boolean');
         }
         updateData.multiCharacterPrefill = multiCharacterPrefill;
+      }
+
+      // The fallback chain's named understudy. Two rules, both structural:
+      // a profile cannot understudy itself (the chain would be one attempt
+      // wearing two names), and a Courier profile cannot stand in for anyone
+      // (its "transport" is a human carrying the request by hand, which is no
+      // kind of automatic failover). Everything else — a target with no API
+      // key yet, a cycle A->B/B->A — is legal; chains never recurse, so a
+      // cycle simply stops.
+      if (fallbackProfileId !== undefined) {
+        if (fallbackProfileId === null || fallbackProfileId === '') {
+          updateData.fallbackProfileId = null;
+        } else if (typeof fallbackProfileId !== 'string') {
+          return badRequest('fallbackProfileId must be a profile id or null');
+        } else if (fallbackProfileId === id) {
+          return badRequest('A connection profile cannot be its own fallback');
+        } else {
+          const target = await repos.connections.findById(fallbackProfileId);
+          if (!target || target.userId !== user.id) {
+            return badRequest('Fallback profile not found');
+          }
+          if (target.transport === 'courier') {
+            return badRequest(
+              'A Courier profile cannot be used as a fallback — its requests are carried by hand, so it cannot stand in automatically'
+            );
+          }
+          updateData.fallbackProfileId = fallbackProfileId;
+        }
+      }
+
+      if (allowTierFallback !== undefined) {
+        if (typeof allowTierFallback !== 'boolean') {
+          return badRequest('allowTierFallback must be a boolean');
+        }
+        updateData.allowTierFallback = allowTierFallback;
       }
 
       if (modelClass !== undefined) {

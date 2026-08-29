@@ -4,6 +4,76 @@
 
 ### 4.9-dev
 
+#### Added: provider/model fallback chains
+
+A connection profile can now name an understudy. When a call through a profile fails outright —
+rejected key, rate limit, network error, missing model, 5xx, empty response, moderation refusal —
+Quilltap tries the next candidate instead of failing the call. Before this, `runPrimaryStream`'s
+catch-all rethrew unconditionally, and every existing cross-provider fallback in the codebase keyed
+on content refusal rather than call failure.
+
+Two new columns on `connection_profiles` (migration `add-profile-fallback-fields-v1`):
+
+- `fallbackProfileId` — another profile to try. NULL = none.
+- `allowTierFallback` — permit ONE further auto-picked candidate of the same or better `modelClass`
+  quality. Defaults off; an auto-pick spends money at a provider the user did not choose.
+
+Each call is capped at three attempts: the profile, its understudy, one tier pick. Chains do not
+recurse — when A falls back to B, B's own `fallbackProfileId` is not followed — so an A→B, B→A cycle
+is legal config that simply stops. No stickiness: a successful fallback applies to that call only,
+so the next message tries the primary again.
+
+New engine at `lib/llm/fallback/` (`engine.ts`, `tier-picker.ts`, `types.ts`).
+A chain swaps the model but reuses the message array built against the primary, so on a turn carrying
+an image the raw bytes are already embedded in it. Handing that to a text-only stand-in is a
+guaranteed 400 — bug 106's shape, in the Concierge's uncensored reroute. Both chain steps therefore
+filter on vision when the turn has images: the tier picker requires `supportsImageUpload` plus
+`providerCanTransportImages`, and so, uniquely among the checks, does the *named* understudy. Every
+other user choice is honoured as made, danger-compatibility included; this one is an incompatibility
+rather than a preference. Re-running the attachment fallback for the substitute, which would let a
+text-only understudy take the turn with a description instead, is bug 106's fix and is not here.
+
+`classifyFallbackTrigger` maps a failure onto one of seven trigger classes and returns null for the
+non-triggers: token/content limits (own recovery path, and they would fail identically anywhere),
+tool-unsupported (already retried same-profile with tools stripped), Zod errors, and unattributed
+4xx. `pickTierCandidate` returns at most one candidate, excluding Courier profiles, profiles with no
+usable key, and anything below the failed profile's tier; it requires `isDangerousCompatible` in a
+dangerous-routed context and both `supportsImageUpload` and `providerCanTransportImages` for a vision
+call, and prefers a different provider (case-normalized) over a same-provider sibling of higher tier.
+
+Integrated at four call sites:
+
+- **Salon hard errors** — `runPrimaryStream`'s catch walks the chain via `restreamInto`, emitting SSE
+  `stage: 'failing-over'` per attempt. Only before the first content chunk: once prose has reached
+  the user, the partial is preserved as before rather than substituted. On exhaustion the error names
+  every profile that was asked and how each declined.
+- **Salon empty responses** — the chain runs third, after the existing same-profile retry and the
+  uncensored reroute, both of which answer their own cases better. The uncensored profile carries its
+  own chain, which runs with `dangerous: true`.
+- **Cheap LLM** — `executeCheapLLMTask` re-issues against each stand-in with a fresh deadline. A
+  selection with a `connectionProfileId` uses that profile's chain; one without (local pick,
+  provider-cheapest synth) is governed by the new instance setting
+  `cheapLLMSettings.allowCheapFallback` and draws from `isCheap` profiles. Background work does not
+  toast — it logs the attempt trail and fails as before.
+- **Image description** — the describer's chain runs before the uncensored describer, then that
+  profile's own chain. Stand-ins must pass both vision checks. The attempt trail rides in
+  `processingMetadata.fallbackAttemptTrail`.
+
+UI: a **Fallback** section in the connection-profile editor (understudy dropdown excluding self and
+Courier profiles, tier-fallback checkbox, a soft warning when the target has no key yet, a nudge to
+set Model Class), and an **Allow a Similar-Tier Stand-In** checkbox in Cheap LLM settings.
+
+Also: `ChainConfig.maxRetries` / `retryDelayMs` in `turn-orchestrator.service.ts` were declared and
+never read; removed. Deleting a connection profile now nulls `fallbackProfileId` on every profile
+that named it.
+
+Both new fields ride through export, import, backup and restore. `fallbackProfileId` points at
+another row in the same table, so both id-rewriting paths remap it: `.qtap` import does so in the
+reconcile pass (a profile may name an understudy that appears later in the bundle), and
+new-account backup restore adds it to the `remapFields` list alongside `id` — without which every
+restored chain would point at a uuid the new account does not have. `seedLegacyConnectionProfileFields`
+drops a self-referential `fallbackProfileId` from a hand-edited archive.
+
 #### Fixed: the `restore-key` test suite failed on CI
 
 `packages/quilltap/lib/__tests__/dbkey-restore.test.js` pins the driver to the real SQLCipher

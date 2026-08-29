@@ -308,6 +308,23 @@ Image description is *not* among them, though it is thrifty by disposition: it n
 3. The selected profile is used for cost-saving operations
 4. Your main profile is used for actual chat interactions
 
+**Allow a Similar-Tier Stand-In**
+
+Background work goes wrong quietly. A cheap route that stops answering takes your
+chat titles, memory extraction and summaries down with it, and says nothing about
+it in the Salon.
+
+When a cheap task runs through a connection profile, that profile's own
+**Fallback** arrangement applies — see
+[Connection Profiles](connection-profiles.md#the-understudies-fallback). But
+some cheap routes have no profile behind them at all: a local model picked up
+directly, or a cheapest-available route Quilltap assembled on the spot. There is
+nothing there to hang an understudy on.
+
+Tick **Allow a Similar-Tier Stand-In** and those routes may have one drafted
+from your profiles marked *Cheap*. One attempt, and one only. Off by default,
+since a drafted stand-in may spend money where a local model spent none.
+
 **Benefits:**
 
 - Save on API costs

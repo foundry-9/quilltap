@@ -430,6 +430,96 @@ The same care is taken over the *Image Description Profile* itself: a profile wh
 
 You need do nothing about any of this. Tick the box when the model can see; Quilltap will decline to be reckless with it.
 
+## The Understudies: Fallback
+
+Every performer, however reliable, is occasionally indisposed. A key is refused,
+a rate limit descends without warning, a provider goes dark on a Tuesday
+afternoon for reasons it declines to share. Before this, that was the end of the
+matter: the call failed, and you were left staring at an error where a reply
+ought to have been.
+
+Now each connection profile may name an **understudy**, and the show goes on.
+
+### How the chain is walked
+
+Should a call through a profile fail outright, Quilltap tries, in order:
+
+1. **The profile itself** — the performer you cast.
+2. **Its understudy** — the profile named in the *Fallback* section.
+3. **One stand-in drafted from the company**, if you have permitted it.
+
+Three attempts, and no more. If none of them can produce a reply, the call fails
+in earnest and the Salon says who was asked and how each one declined.
+
+Chains do not go on forever. When profile A falls back to profile B, *B's own
+understudy is not consulted* — so you may cheerfully have A name B and B name A
+without setting anything spinning. It simply stops.
+
+Nor is the arrangement sticky. A successful fallback applies to that one call and
+no other: your next message tries the profile you actually chose, so a passing
+outage heals itself without you having to go and undo anything.
+
+### Naming an understudy
+
+Open a profile for editing and find the **Fallback** section, just below Model
+Class.
+
+- **Understudy** — any of your other profiles. Courier profiles are not offered,
+  for the obvious reason that a request you carry across the room by hand cannot
+  step in at a moment's notice.
+- **Draft a stand-in from the company** — when ticked, and when both named
+  players have failed, Quilltap may make one further attempt with a profile of
+  the same standing or better, preferring a different provider than the one that
+  just failed. Off by default: a drafted stand-in spends money at a provider you
+  did not choose for that call.
+
+The stand-in is chosen by **Model Class**, so a profile with none set is rather
+harder to cast for — only your other unclassified profiles are eligible. Setting
+Model Class on your profiles makes the choice a great deal better informed.
+
+If you name an understudy that has no API key yet, you'll see a gentle note
+rather than a refusal. Keys may arrive later; the understudy is simply skipped
+until one does.
+
+One further courtesy: on a turn carrying an image, an understudy that cannot
+see is passed over. The picture has already been packed into the request, and
+handing it to a model with no eyes would be refused at the door — so the turn
+goes to the next candidate rather than being spent on a certainty.
+
+### What counts as an indisposition
+
+A fallback fires for problems of *availability*: a rejected key, a rate limit, a
+network failure, a model that no longer exists, a provider returning a 500, an
+empty reply, a moderation refusal.
+
+It pointedly does **not** fire for problems that would recur identically
+elsewhere:
+
+- **A prompt too long for the model** — this has its own recovery, and a
+  second provider would refuse the same prompt for the same reason.
+- **A model that does not support tools** — already retried on the same profile
+  with the tools set aside, which is the better answer.
+
+### In dangerous territory
+
+If the Concierge has flagged the content, or has already rerouted the call to an
+uncensored profile, any stand-in *drafted automatically* must itself be marked
+suitable for dangerous content. There would be little sense in routing around one
+refusal straight into another.
+
+An understudy you name yourself is always honoured — that choice is yours to
+make.
+
+### Background work
+
+The same arrangement covers the cheap-LLM tasks that run out of sight: titling,
+memory extraction, summarising, scene tracking and the rest. When those run
+through a connection profile, that profile's chain applies. When they don't —
+a local model, or a route Quilltap assembled on the spot — see the *Allow a
+Similar-Tier Stand-In* option in [Chat Settings](chat-settings.md).
+
+Background work fails quietly, as it always has. Only chats speak up.
+
 ## Connection Profile Limitations
 
 ### What affects availability
