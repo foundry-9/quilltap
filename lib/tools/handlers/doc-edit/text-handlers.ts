@@ -346,6 +346,28 @@ export async function handleStrReplace(
   if (typeof input.path !== 'string') {
     return { success: false, error: 'A `path` or a `uri` is required.' };
   }
+
+  // The arguments themselves, before the file is opened. The dispatcher hands
+  // a handler its RAW input when the schema parse fails (see doc-edit-handler),
+  // so a call that simply omitted `find` arrives here with it undefined — and
+  // an undefined needle matches nothing, which the matcher would report as
+  // "text not found" and the model would read as *its text* being stale. It
+  // then re-reads and repeats the identical malformed call. Say what is
+  // actually wrong instead (bug 108).
+  if (typeof input.find !== 'string' || input.find.length === 0) {
+    const what = typeof input.find === 'string' ? 'empty' : 'missing';
+    return {
+      success: false,
+      error: `The \`find\` argument was ${what}. doc_str_replace needs \`find\` (the exact existing text) and \`replace\` (what to put in its place); nothing in ${input.path} was changed. This is a problem with the call, not with the file — re-issue it with both arguments.`,
+    };
+  }
+  if (typeof input.replace !== 'string') {
+    return {
+      success: false,
+      error: `The \`replace\` argument was missing. doc_str_replace needs \`replace\` (use an empty string to delete the found text); nothing in ${input.path} was changed.`,
+    };
+  }
+
   const scope = (input.scope || 'document_store') as DocEditScope;
   const resolved = await resolveDocEditPath(scope, input.path, await buildWriteResolutionContext(input, context));
   await assertCharacterMayWrite(resolved, context);
@@ -359,6 +381,10 @@ export async function handleStrReplace(
   const matchResult = findUniqueMatch(content, input.find, {
     caseSensitive: input.case_sensitive !== false,
     normalizeDiacritics: input.normalize_diacritics !== false,
+    // Curly quotes, dashes and ellipses in the file — written there by a model
+    // in the first place — are matched by their ASCII spellings on a total
+    // miss, never in preference to an exact hit (bug 109).
+    foldTypography: true,
   });
 
   if (!matchResult.found) {
@@ -369,14 +395,28 @@ export async function handleStrReplace(
         formattedText: `Error: Text not found in ${input.path}. No matches for the find text. Re-read the file and use the exact text.`,
       };
     }
+    const nearly = matchResult.tier === 'typographic'
+      ? ' (no passage matches your find text exactly; these differ from it only in punctuation — curly quotes, dashes or an ellipsis)'
+      : '';
     return {
       success: false,
-      error: `Multiple matches (${matchResult.count}) found in file. Include more surrounding context in the find text to make it unique.`,
-      formattedText: `Error: ${matchResult.count} matches found in ${input.path}. Include more surrounding context to make the match unique.`,
+      error: `Multiple matches (${matchResult.count}) found in file${nearly}. Include more surrounding context in the find text to make it unique.`,
+      formattedText: `Error: ${matchResult.count} matches found in ${input.path}${nearly}. Include more surrounding context to make the match unique.`,
     };
   }
 
-  // Perform the replacement
+  if (matchResult.tier === 'typographic') {
+    logger.debug('str_replace matched only after folding typographic variants', {
+      path: input.path,
+      index: matchResult.index,
+      length: matchResult.length,
+    });
+  }
+
+  // Perform the replacement. The replacement text is spliced over the ORIGINAL
+  // span, so a typographic-tier match rewrites the file's punctuation in that
+  // span to whatever the caller supplied — which is what str_replace means:
+  // the caller dictates the new bytes of the passage it named.
   const newContent =
     content.substring(0, matchResult.index) +
     input.replace +
@@ -409,10 +449,14 @@ export async function handleStrReplace(
     line_number: lineNumber,
   };
 
+  const typographyNote = matchResult.tier === 'typographic'
+    ? ' Your find text matched only once punctuation was set aside: the file spells some of it with curly quotes, a dash character or an ellipsis where you used the plain ASCII form. The passage now reads exactly as you wrote it.'
+    : '';
+
   return {
     success: true,
     result,
-    formattedText: `Replaced text at line ${lineNumber} in ${input.path} (mtime: ${mtime}). Note: your previous read of this file is now stale — re-read before making further edits.`,
+    formattedText: `Replaced text at line ${lineNumber} in ${input.path} (mtime: ${mtime}).${typographyNote} Note: your previous read of this file is now stale — re-read before making further edits.`,
   };
 }
 
@@ -432,6 +476,22 @@ export async function handleInsertText(
 
   if (!isTextFile(resolved.relativePath)) {
     return { success: false, error: `File is not a supported text format: ${input.path}` };
+  }
+
+  // Same raw-input fallback as doc_str_replace: an omitted `position` reaches
+  // this handler as undefined and would throw a TypeError reading `.at`, which
+  // the dispatcher reports as a file error rather than a call error (bug 108).
+  if (!input.position || typeof input.position !== 'object') {
+    return {
+      success: false,
+      error: `The \`position\` argument was missing. doc_insert_text needs \`position\` — {"at": "start"}, {"at": "end"}, {"before": "…"} or {"after": "…"}; nothing in ${input.path} was changed.`,
+    };
+  }
+  if (typeof input.content !== 'string') {
+    return {
+      success: false,
+      error: `The \`content\` argument was missing. doc_insert_text needs the text to insert; nothing in ${input.path} was changed.`,
+    };
   }
 
   const { content } = await readFileWithMtime(resolved);
@@ -455,6 +515,9 @@ export async function handleInsertText(
     const matchResult = findUniqueMatch(content, anchor, {
       caseSensitive: true,
       normalizeDiacritics: input.normalize_diacritics !== false,
+      // As for doc_str_replace: an anchor whose only difference from the file
+      // is a curly quote or a dash still names the passage the caller meant.
+      foldTypography: true,
     });
 
     if (!matchResult.found) {
@@ -566,6 +629,11 @@ export async function handleGrep(
         const normalizedMatches = findAllMatches(content, input.query, {
           caseSensitive: input.case_sensitive ?? false,
           normalizeDiacritics: true,
+          // A literal search is a search for the words, not for the file's
+          // punctuation: `Veyra-5's` finds `Veyra-5’s` (bug 109). The
+          // regex path is deliberately left alone — there the caller is
+          // spelling the pattern themselves.
+          foldTypography: true,
         });
 
         const lines = content.split('\n');
@@ -673,6 +741,7 @@ export async function handleGrep(
       const normalizedMatches = findAllMatches(content, input.query, {
         caseSensitive: input.case_sensitive ?? false,
         normalizeDiacritics: true,
+        foldTypography: true, // see searchFile above
       });
       const lines = content.split('\n');
       for (const match of normalizedMatches) {

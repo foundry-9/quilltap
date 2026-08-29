@@ -259,6 +259,7 @@ Nothing in the second group fires inside code fences or `inline code`, nor in th
 - Turning the quote setting on or off does not alter a single stored message, does not disturb any model's input, does not shift a prompt cache, and does not change what an export contains. It is the one setting in this house that can be flipped with no consequence whatever beyond the visible.
 - Exports and backups always carry the straight quotes you actually typed.
 - Dashes and ellipsis, by contrast, *do* become part of the message and travel with it everywhere.
+- Neither group has any bearing on your characters' documents. Curly punctuation does find its way into files all the same — your characters write like authors and Quilltap records them faithfully — and the [document editing tools](document-editing-tools.md) now read past a difference of punctuation when hunting for a passage to amend, so an edit is never refused over the shape of an apostrophe.
 
 ### Avatar Settings
 

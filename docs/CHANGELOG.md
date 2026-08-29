@@ -4,6 +4,42 @@
 
 ### 4.9-dev
 
+#### Fixed: a document edit missing its `find` argument was reported as "Text not found in file" (bug 108)
+
+`doc_str_replace` opened the file, handed an undefined `find` to the matcher, got zero matches back,
+and told the character its text was stale — advice that cannot help, because the fault was in the
+call. The character re-read the file, exactly as instructed, and repeated the same malformed call.
+
+The handler now checks its own arguments before opening the file and says which one is missing.
+`replace` is checked by type rather than truthiness, since an empty string is a legitimate deletion;
+without that check, an omitted `replace` wrote the literal string `undefined` into the document.
+`doc_insert_text` got the same treatment for `position` and `content`, where a missing argument threw
+a `TypeError` that surfaced as a file error.
+
+The dispatcher still passes unvalidated input through when a tool's schema parse fails. That behavior
+is deliberate — it is what lets a `qtap://` URI stand in for scope, mount point and path — and it is
+not the defect. The defect was that nothing downstream of it checked whether the arguments arrived.
+
+#### Fixed: curly punctuation in a document blocked edits that spelled it straight (bug 109)
+
+Models write curly quotes and em dashes when they write prose, and Quilltap stores what they write.
+A later turn would retype a sentence from that file with a straight apostrophe — models routinely
+normalize while retyping — and the exact-match edit would fail. Re-reading did not help, because the
+retyping came out the same way. Five valid edits were refused this way on one instance.
+
+The document tools now fall back to a typographic fold when the exact reading matches nothing at all:
+the quote family folds onto `'` and `"`, the dash family onto `-`, `…` onto `...`, and non-breaking
+and wide spaces onto a normal space. Exact matching still wins whenever it finds something, so a file
+holding both spellings resolves to the one the caller actually typed rather than becoming ambiguous.
+The replacement is written over the original span, so the passage ends up spelled the way the caller
+wrote it — and only that passage. When a match needed the fold, the tool now says so, so the model
+learns the file's punctuation differs from its own. `doc_grep`'s literal search folds unconditionally
+(a search for words is not a search for punctuation); its regex path is unchanged.
+
+Quilltap's own typography rules were not involved and did not change: quote curling runs only in the
+two markdown render pipelines, and the keystroke engine writes only dashes and ellipses, only into
+what a person is typing. No tool, export, or LLM-facing string is curled on its way past.
+
 #### Fixed: the uncensored reroute handed a vision model's message array to a text-only fallback (bug 106)
 
 When the Concierge is in Auto-Route mode and a provider refuses a turn, Quilltap retries the same
