@@ -194,6 +194,17 @@ What does work:
 
 Note that a refusal may concern an *image* you have attached quite as readily as anything written. If a vision model has been declining a picture, its reason will now say so rather than leaving you to guess at a blank reply.
 
+### When the Turn Is Carrying a Picture
+
+A reroute swaps the model but keeps the conversation already assembled — and if the profile you began the turn with reads pictures, that assembly has a picture *in* it, in the raw. Hand that bundle to a substitute that reads only words and the gateway will not even trouble the model with it: it returns a flat refusal of its own, the character says nothing at all, and the whole rescue is spent before it starts. This was, for a time, precisely what happened, and with a faultlessly configured pair of profiles on either side of the swap.
+
+The Concierge now asks the substitute what it can read before handing anything over.
+
+- **Choosing the understudy.** When no uncensored profile has been named and the Concierge is scanning your profiles for one, it now puts the profiles that can take the turn's attachments at the front of the queue. It does not strike the others out — a described picture is worth a great deal more than a silent character — but it will not reach past a capable model for an incapable one.
+- **Preparing the payload.** Whichever profile is called, uncensored or not, named by you or found by the scan, the attachment question is asked again on its behalf. A picture the substitute cannot see is replaced by a written description of it — the same courtesy Quilltap extends to any text-only model you attach a photograph to — and the retry proceeds with the words instead of the bytes. A substitute that *can* see receives the picture untouched, exactly as before.
+
+The practical upshot is that an image-bearing turn is no longer the one turn the Concierge's last line of defence cannot cover. You may still prefer to name a vision-capable profile as your uncensored fallback, and there is every reason to: a described picture is a summary, and the model that reads the original will always have more to go on.
+
 ## The Per-Chat Concierge Switch
 
 Every chat keeps a small brass switch in the sidebar — found under the **Chat** section of the Chat Sidebar — bearing three positions: **Safe**, **Flagged**, and **Off-duty**. It is the only place a chat's relationship with the Concierge may be set, adjusted, or — should the operator so insist — dispensed with entirely.

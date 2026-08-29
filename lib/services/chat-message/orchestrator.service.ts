@@ -18,6 +18,7 @@ import {
   isUserDrivenSeat,
   selectNextSpeakerAfterUserMessage,
 } from '@/lib/chat/turn-manager'
+import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
 import { isParticipantPresent } from '@/lib/schemas/chat.types'
 import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
@@ -1573,7 +1574,11 @@ async function processMessage(
       stop: initialStopSequences,
       fallbackContext: {
         dangerous: contentWasFlaggedDangerous,
-        needsVision: fileProcessing.attachedFiles.some((f) => f.mimeType?.startsWith('image/')),
+        // Read from the array, not from what the user uploaded: an image the
+        // primary could not take was already replaced by its description
+        // upstream, and a chain that still called the turn vision-bearing
+        // would skip understudies that are perfectly able to answer it.
+        needsVision: collectAttachmentMimeTypes(formattedMessages).some((m) => m.startsWith('image/')),
         needsTools: actualTools.length > 0,
       },
     })

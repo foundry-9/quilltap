@@ -14,6 +14,7 @@ import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { generateContextSummary } from '@/lib/chat/context-summary';
+import { throwIfLostToTimeout } from '@/lib/memory/cheap-llm-tasks';
 import { enqueueChatDangerClassification } from '../queue-service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import type { ContextSummaryPayload } from '../queue-service';
@@ -56,7 +57,11 @@ export async function handleContextSummary(job: BackgroundJob): Promise<void> {
       jobId: job.id,
       chatId: payload.chatId,
       error: result.error,
+      timedOut: result.timedOut === true,
     });
+    // The summary was never produced — not produced and found wanting. Fail
+    // the job so it is retried and, failing that, visible (bug 107).
+    throwIfLostToTimeout(result, 'update-context-summary');
     return;
   }
 

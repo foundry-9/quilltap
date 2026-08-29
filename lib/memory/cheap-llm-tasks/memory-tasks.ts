@@ -1498,6 +1498,11 @@ export async function summarizeMemoryRecap(
     undefined,
     uncensoredFallback,
     undefined,
-    characterId
+    characterId,
+    // The recap is assembled inline while a visible turn waits on
+    // "Recalling…", and it is optional context — losing it costs the character
+    // some remembered flavour, not the turn. So it takes the tighter of the
+    // two budgets and forgoes the retry a background pass would get (bug 107).
+    { latency: 'interactive' },
   )
 }

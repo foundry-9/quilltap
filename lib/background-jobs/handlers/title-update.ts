@@ -19,6 +19,7 @@ import {
   considerTitleUpdate,
   considerHelpChatTitleUpdate,
   extractVisibleConversation,
+  throwIfLostToTimeout,
 } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
@@ -150,6 +151,10 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
 
   if (!result.success) {
     logger.warn(`[Title Update] Failed for chat ${payload.chatId}: ${result.error}`);
+    // Before the cursor is burned: a timeout means the check never ran, and
+    // burning the checkpoint over it would skip the rename entirely rather
+    // than defer it (bug 107).
+    throwIfLostToTimeout(result, 'title-update');
     // Advance the cursor so a persistently-failing cheap LLM (e.g., an
     // exhausted OpenAI quota) doesn't re-fire this same job every following
     // turn — `shouldCheckTitleAtInterchange` keeps crossing checkpoint 2 as

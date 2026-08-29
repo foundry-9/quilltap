@@ -2,14 +2,69 @@
 
 | | |
 |---|---|
-| **Status** | OPEN |
+| **Status** | FIXED in v4 (2026-08-29) |
 | **Found** | 2026-08-29 |
+| **Fixed** | 2026-08-29 |
 | **Severity** | **High** (the Concierge's last line of defence is guaranteed to fail on any turn carrying an image — the character says nothing and the chain stops) |
 | **Who it bites** | anyone on `AUTO_ROUTE` whose `uncensoredTextProfileId` names a model that does not read images, the moment a moderation refusal lands on a turn whose history carries an attachment |
 | **Provenance** | Live (Friday, 2026-08-29), chat `f77a332e-1abc-4180-8bc9-97d031d93005` — two consecutive turns for the character **Abigail** produced nothing at all, reported as "some failures the last two turns" |
 | **Defect site** | `lib/services/chat-message/provider-failover.service.ts:174` (the reroute re-sends `formattedMessages` verbatim) × `lib/services/dangerous-content/provider-routing.service.ts:82` (the substitute is chosen without asking what it can read) |
+| **Fix site** | `lib/chat/message-attachment-adapter.ts` (new — re-decides the attachment question for the profile actually being called) × `lib/services/chat-message/provider-failover.service.ts` (the reroute adapts before it streams, and tells the router what the turn carries) × `lib/services/dangerous-content/provider-routing.service.ts` (the scan orders candidates by what they can receive) × `lib/llm/image-transport.ts` (`profileCanReceiveAttachment`, now the one predicate all three read) |
 | **v5 status** | **Applies.** Any port that swaps the model mid-turn without re-deciding the attachment question inherits it — the message array is shaped for the model it was built for. |
 | **Index** | [../bugs.md](../bugs.md) |
+
+---
+
+**FIXED in v4 (2026-08-29).** Both halves named in *The fix* were taken, in the
+order the write-up argued for, and the pair turned out to need a third thing
+neither half asked for: **one predicate.** The question "can this profile
+receive this attachment?" was being answered in three places — the router
+(not at all), the describe-fallback (`profileSupportsMimeType` ∧
+`providerCanTransportImages`), and the fallback chain (`supportsImageUpload` ∧
+`providerCanTransportImages`, spelled differently). Those last two agreed by
+coincidence rather than by construction, which is the shape that produced bugs
+91, 97 and 104. They now all call `profileCanReceiveAttachment`
+(`lib/llm/image-transport.ts`), and the two old spellings are one-line
+delegations to it.
+
+**(1) The router no longer offers a model the payload rules out.**
+`resolveProviderForDangerousContent` takes the turn's attachment MIME types and
+*orders* its scan by them: candidates that can carry the payload first, the
+rest behind. Ordered rather than filtered, deliberately — filtering outright
+would trade a degraded-but-delivered turn for no reroute at all on an instance
+whose only uncensored route happens to be text-only, and (2) makes that turn
+deliverable. The explicit `uncensoredTextProfileId` is still honoured ahead of
+the scan: the operator's named choice is theirs to make, and (2) is what keeps
+it from being fatal.
+
+**(2) The reroute re-decides for the profile it actually calls.** The new
+`adaptMessagesForProfile` (`lib/chat/message-attachment-adapter.ts`) walks the
+message array against the substituted profile and re-runs
+`processFileAttachmentFallback` on anything it cannot read — an image becomes
+its description, exactly as it would have if that profile had been the primary,
+and the retry proceeds. A profile that *can* take the bytes gets the same array
+reference back: no copy, no describer spent, no behaviour change. That is the
+common case, and it is why this costs nothing on the 99% of turns carrying
+nothing.
+
+**A third thing the diagnosis surfaced.** `needsVision` on the fallback chain's
+context was being computed from `fileProcessing.attachedFiles` — what the *user
+uploaded* — rather than from what the array ends up carrying. An image the
+primary could not take was already replaced by its description upstream, so the
+chain was calling such a turn vision-bearing and skipping understudies perfectly
+able to answer it. Both call sites (`orchestrator.service.ts`,
+`primary-stream.service.ts`) now read `collectAttachmentMimeTypes` off the array
+itself. The chain's own `needsVision` guard, added when this bug was filed,
+needed no change — it was already right, it was being handed the wrong answer.
+
+**Regression guard.** `provider-failover.service.test.ts` gains three cases
+whose `formattedMessages` carry an `attachments` array — the shape the whole
+suite lacked, and the reason a green suite meant nothing here. One asserts the
+bytes become a description for a text-only substitute, one asserts the router is
+told what the turn carries, one asserts a vision-capable substitute gets the
+array untouched (with the describer never called). `provider-routing.test.ts`
+gains three more for the scan's ordering, including the case where the only
+uncensored route is text-only and the reroute must still happen.
 
 ---
 

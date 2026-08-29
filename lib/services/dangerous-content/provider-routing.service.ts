@@ -11,6 +11,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger'
 import { getRepositories } from '@/lib/repositories/factory'
 
 import { getErrorMessage } from '@/lib/error-utils'
+import { profileCanReceiveAttachment } from '@/lib/llm/image-transport'
 import type { ConnectionProfile, ImageProfile } from '@/lib/schemas/types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 
@@ -45,25 +46,48 @@ export interface DangerousImageProviderRouteResult {
 }
 
 /**
+ * Whether a profile can take every attachment this turn is carrying.
+ *
+ * A reroute swaps the model but inherits the message array the *original*
+ * profile's call was built against, bytes and all. A substitute that cannot
+ * receive those bytes is not a slightly worse choice, it is a guaranteed 400
+ * from the gateway (bug 106). An empty list means the turn carries nothing and
+ * every profile qualifies.
+ */
+function profileCanCarryTurn(profile: ConnectionProfile, mimeTypes: string[]): boolean {
+  return mimeTypes.every(m => profileCanReceiveAttachment(profile, m))
+}
+
+/**
  * Resolve the appropriate text LLM provider for dangerous content
  *
  * Logic:
  * 1. If mode !== AUTO_ROUTE, return original profile
  * 2. If uncensoredTextProfileId is set, load that profile
- * 3. Otherwise scan user's profiles for isDangerousCompatible === true
+ * 3. Otherwise scan user's profiles for isDangerousCompatible === true,
+ *    preferring one that can carry this turn's attachments
  * 4. If nothing found, return original with warning
  *
  * @param originalProfile - The original connection profile
  * @param originalApiKey - The decrypted API key for the original profile
  * @param settings - The dangerous content settings
  * @param userId - The user ID
+ * @param turnAttachmentMimeTypes - MIME types riding along in this turn's
+ *   message array, if any. The scan prefers a substitute that can receive
+ *   them; without this the scan answers a question the payload has already
+ *   settled (bug 106). Note this is a *preference*, not a filter: an
+ *   explicitly configured uncensored profile is still honoured, and a
+ *   text-only stand-in is still better than no reroute at all — the caller
+ *   re-runs the attachment decision against whichever profile comes back, so
+ *   an image becomes a description rather than a 400.
  * @returns Route result with effective profile and API key
  */
 export async function resolveProviderForDangerousContent(
   originalProfile: ConnectionProfile,
   originalApiKey: string,
   settings: DangerousContentSettings,
-  userId: string
+  userId: string,
+  turnAttachmentMimeTypes: string[] = []
 ): Promise<DangerousProviderRouteResult> {
   // If mode is not AUTO_ROUTE, don't reroute
   if (settings.mode !== 'AUTO_ROUTE') {
@@ -107,11 +131,28 @@ export async function resolveProviderForDangerousContent(
       }
     }
 
-    // Scan for any isDangerousCompatible profile
+    // Scan for any isDangerousCompatible profile.
+    //
+    // Ordered, not filtered: profiles that can carry this turn's attachments
+    // come first, and the rest follow behind them. Filtering outright would
+    // trade a degraded-but-delivered turn for no reroute at all when the only
+    // uncensored route on the instance happens to be text-only.
     const allProfiles = await repos.connections.findAll()
-    const compatibleProfiles = allProfiles.filter(
+    const eligible = allProfiles.filter(
       p => p.userId === userId && p.isDangerousCompatible === true
     )
+    const canCarry = eligible.filter(p => profileCanCarryTurn(p, turnAttachmentMimeTypes))
+    const cannotCarry = eligible.filter(p => !profileCanCarryTurn(p, turnAttachmentMimeTypes))
+
+    if (turnAttachmentMimeTypes.length > 0 && cannotCarry.length > 0) {
+      logger.info('[DangerousContent] Deprioritising uncensored candidates that cannot carry this turn', {
+        turnAttachmentMimeTypes,
+        canCarry: canCarry.map(p => p.name),
+        cannotCarry: cannotCarry.map(p => p.name),
+      })
+    }
+
+    const compatibleProfiles = [...canCarry, ...cannotCarry]
 
     for (const profile of compatibleProfiles) {
       const apiKey = await decryptProfileApiKey(profile, userId)

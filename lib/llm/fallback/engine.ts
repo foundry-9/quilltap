@@ -31,7 +31,7 @@ import {
   isTokenLimitError,
   isToolUnsupportedError,
 } from '@/lib/llm/errors'
-import { providerCanTransportImages } from '@/lib/llm/image-transport'
+import { profileCanReceiveAttachment } from '@/lib/llm/image-transport'
 import { pickTierCandidate } from './tier-picker'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type {
@@ -145,7 +145,7 @@ export function classifyFallbackTrigger(error: unknown): FallbackTrigger | null 
  * be refused outright by the gateway.
  */
 function canReceiveThisTurnsImages(profile: ConnectionProfile): boolean {
-  return profile.supportsImageUpload === true && providerCanTransportImages(profile.provider)
+  return profileCanReceiveAttachment(profile, 'image/jpeg')
 }
 
 /**

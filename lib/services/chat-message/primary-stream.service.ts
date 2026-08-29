@@ -41,6 +41,7 @@ import {
 import { saveAssistantMessage } from './message-finalizer.service'
 import { attemptRequestLimitRecovery } from './recovery.service'
 import { attemptHardErrorFailover } from './provider-failover.service'
+import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
 import { summarizeFallbackAttempts } from '@/lib/llm/fallback'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
@@ -369,7 +370,9 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
         userId,
         purpose: 'chat',
         dangerous: isDangerousRouted === true,
-        needsVision: attachedFiles.some((f) => f.mimeType?.startsWith('image/')),
+        // What the array carries, not what the user uploaded — see the same
+        // note in the orchestrator's empty-response call.
+        needsVision: collectAttachmentMimeTypes(formattedMessages).some((m) => m.startsWith('image/')),
         needsTools: actualTools.length > 0,
         alreadyTried: [],
       },

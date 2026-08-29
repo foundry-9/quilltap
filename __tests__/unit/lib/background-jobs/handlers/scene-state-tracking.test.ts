@@ -31,6 +31,9 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   updateSceneState: jest.fn(),
   extractVisibleConversation: jest.fn().mockReturnValue([]),
+  // The real predicate: the handler must only fail the job for a *timeout*,
+  // and these suites' failures are ordinary ones (bug 107).
+  throwIfLostToTimeout: jest.requireActual('@/lib/memory/cheap-llm-tasks/core-execution').throwIfLostToTimeout,
 }))
 
 jest.mock('@/lib/services/system-events.service', () => ({
@@ -366,6 +369,20 @@ describe('handleSceneStateTracking', () => {
 
     await handleSceneStateTracking(job as any)
 
+    expect(repos.chats.update).not.toHaveBeenCalled()
+  })
+
+  it('fails the job when the pass was lost to a timeout rather than refused', async () => {
+    // Bug 107: returning here marked the job COMPLETED over a scene state that
+    // was never derived. Throwing hands it to `markFailed` — backed-off retry,
+    // then DEAD with the reason — which is the only way the loss is visible.
+    mockUpdateSceneState.mockResolvedValue({
+      success: false,
+      error: 'Request timed out.',
+      timedOut: true,
+    } as any)
+
+    await expect(handleSceneStateTracking(buildJob() as any)).rejects.toThrow(/scene-state-tracking/)
     expect(repos.chats.update).not.toHaveBeenCalled()
   })
 

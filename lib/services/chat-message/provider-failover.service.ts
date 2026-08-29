@@ -19,6 +19,10 @@ import { describeModerationRefusal } from '@/lib/llm/moderation-finish-reason'
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
 import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import {
+  adaptMessagesForProfile,
+  collectAttachmentMimeTypes,
+} from '@/lib/chat/message-attachment-adapter'
+import {
   buildFallbackChain,
   classifyFallbackTrigger,
   recordAttempt,
@@ -206,7 +210,10 @@ export async function attemptEmptyResponseRecovery({
         state.effectiveProfile,
         state.effectiveApiKey,
         dangerSettings,
-        userId
+        userId,
+        // What the array is actually carrying, so the scan does not offer a
+        // substitute the payload rules out (bug 106).
+        collectAttachmentMimeTypes(formattedMessages)
       )
 
       if (routeResult.rerouted && routeResult.connectionProfile.id === state.effectiveProfile.id) {
@@ -220,10 +227,25 @@ export async function attemptEmptyResponseRecovery({
           characterId: character.id,
         }))
 
+        // The array was built for the profile that just refused. An explicitly
+        // configured uncensored profile is honoured ahead of the scan, so it
+        // may still be one that cannot read this turn's images — re-decide
+        // before spending the attempt, or the gateway 400s and the last line
+        // of defence never runs (bug 106).
+        const reroutedMessages = repos
+          ? await adaptMessagesForProfile(
+              formattedMessages,
+              routeResult.connectionProfile,
+              repos,
+              userId,
+              { chatId },
+            )
+          : formattedMessages
+
         await restreamInto(state, {
           connectionProfile: routeResult.connectionProfile,
           apiKey: routeResult.apiKey,
-          formattedMessages,
+          formattedMessages: reroutedMessages,
           modelParams,
           actualTools,
           useNativeWebSearch,

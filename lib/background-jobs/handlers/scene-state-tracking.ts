@@ -10,7 +10,7 @@ import { BackgroundJob, MessageEvent, isParticipantPresent } from '@/lib/schemas
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
-import { updateSceneState, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
+import { updateSceneState, extractVisibleConversation, throwIfLostToTimeout } from '@/lib/memory/cheap-llm-tasks';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
@@ -285,8 +285,15 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
 
   if (!result.success || !result.result) {
     logger.warn('[SceneStateTracking] Failed to derive scene state', {
-      jobId: job.id, chatId: payload.chatId, error: result.error,
+      jobId: job.id, chatId: payload.chatId, error: result.error, timedOut: result.timedOut === true,
     });
+    // A pass lost to a timeout is not a finished pass. Returning here would
+    // mark the job COMPLETED over a scene state that was never derived, which
+    // is how 99 SCENE_STATE_TRACKING jobs came back clean over 12 losses
+    // (bug 107). Throwing hands it to `markFailed`: backed-off retry, then
+    // DEAD with the reason attached. The job writes nothing until it succeeds,
+    // so the re-run starts from the same place this one did.
+    throwIfLostToTimeout(result, 'scene-state-tracking');
     return;
   }
 

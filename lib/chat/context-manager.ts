@@ -92,12 +92,17 @@ async function collectFoldWhisperConversationIds(
 /**
  * Wall-clock ceiling on the whole memory-recap phase.
  *
- * Set above `CHEAP_LLM_TASK_TIMEOUT_MS` on purpose: the recap makes an
- * embedding call and a cheap-LLM call in sequence, each already deadlined, and
- * a recap that is merely slow in both places is still doing useful work. This
- * is the backstop that keeps a visible turn from sitting on "Recalling…" no
- * matter which leg misbehaves. The recap is optional context — losing it costs
- * the character some remembered flavour, not the turn.
+ * Set above `CHEAP_LLM_TASK_TIMEOUT_INTERACTIVE_MS` on purpose: the recap makes
+ * an embedding call and a cheap-LLM call in sequence, each already deadlined,
+ * and a recap that is merely slow in both places is still doing useful work.
+ * This is the backstop that keeps a visible turn from sitting on "Recalling…"
+ * no matter which leg misbehaves. The recap is optional context — losing it
+ * costs the character some remembered flavour, not the turn.
+ *
+ * The comparison is against the *interactive* budget deliberately: the recap
+ * declares itself interactive precisely so this phase ceiling stays above its
+ * legs rather than underneath them. Raising the background budget (bug 107)
+ * would otherwise have inverted the two and made this the binding constraint.
  */
 const MEMORY_RECAP_PHASE_TIMEOUT_MS = 60_000
 import { getMemoryRecallSettings, getTabooSettings } from '@/lib/instance-settings'
@@ -1131,6 +1136,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
               chatId: chat.id,
               characterName: character.name,
               userName,
+              // The operator is waiting on this one: no cached result was
+              // ready, so the turn is blocked behind the call. Tight budget
+              // (bug 107).
+              latency: 'interactive',
             }
           )
 
@@ -1831,7 +1840,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             cheapLLMSelection,
             userId,
             uncensoredFallback,
-            chat.id
+            chat.id,
+            // Inline on a visible turn, like the recap above — the tighter
+            // budget, and no retry (bug 107).
+            'interactive',
           )
 
           if (memCompResult.success && memCompResult.result) {
@@ -1861,7 +1873,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             cheapLLMSelection,
             userId,
             uncensoredFallback,
-            chat.id
+            chat.id,
+            'interactive',
           )
 
           if (interCompResult.success && interCompResult.result) {

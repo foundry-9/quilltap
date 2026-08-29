@@ -24,6 +24,7 @@
 
 import { getAttachmentSupport, isProviderRegistryInitialized } from '@/lib/plugins/provider-registry';
 import { staticProviderCanTransportImages } from '@/lib/llm/attachment-support';
+import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils';
 
 /**
  * True when the provider's plugin can serialise image attachments into its
@@ -47,4 +48,30 @@ export function providerCanTransportImages(provider: string): boolean {
     }
   }
   return staticProviderCanTransportImages(provider);
+}
+
+/**
+ * Can this profile actually *receive* an attachment of this MIME type?
+ *
+ * The single predicate behind every "should we send the bytes, or describe
+ * them?" decision in the codebase. Two questions, and both have to answer yes:
+ *
+ *  1. **Does the model read this?** — `profileSupportsMimeType`, which for
+ *     images is the operator's per-profile `supportsImageUpload` tick and for
+ *     everything else is the provider's capability map.
+ *  2. **Can the plugin put it on the wire?** — `providerCanTransportImages`,
+ *     for images only. See the module note above for why these are different
+ *     questions (bug 91).
+ *
+ * Callers who ask the *negative* — "does this need the describe-fallback?" —
+ * want `needsFallbackProcessing` in `lib/chat/file-attachment-fallback.ts`,
+ * which delegates here and logs the disagreement case.
+ */
+export function profileCanReceiveAttachment(
+  profile: { provider: string; supportsImageUpload?: boolean | null; baseUrl?: string | null },
+  mimeType: string
+): boolean {
+  if (!profileSupportsMimeType(profile as never, mimeType)) return false
+  if (mimeType.startsWith('image/') && !providerCanTransportImages(profile.provider)) return false
+  return true
 }

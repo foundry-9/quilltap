@@ -434,6 +434,14 @@ Context compression applies only to **conversation history** — the message log
 
 In multi-character chats, each character maintains their own compression cache. This is necessary because different characters may have different views of the conversation — a character who joined late only sees messages after their arrival, whispers are filtered per-recipient, and absent characters don't see messages that occurred while they were away.
 
+**Two clocks, and why:**
+
+Compression is ordinarily done in the quiet after a turn has already been delivered, so that a tidy history is waiting when you next press send. Nobody is standing about while that happens, and it is allowed a generous interval to finish in — long conversations make for long prompts, and a compression that runs slowly is not a compression that has gone wrong.
+
+Occasionally there is no result waiting: you have sent two messages in quick succession, or the conversation has grown since the last pass. Quilltap then compresses on the spot, and here you *are* standing about, so the interval is deliberately the shorter one. If it runs out, the turn simply goes out with its history uncompressed and a note to that effect in the warnings — which costs tokens, but costs them promptly.
+
+The same principle governs everything the cheap LLM is asked to do: the interval follows whoever is waiting on it. Work done in the quiet after a turn — memory extraction, the scene tracker, titling — is given a long rope, since a slow pass there costs nobody anything and a short rope turns it into a lost one. Work done while a turn is assembling, such as the memory recap and its compressions, keeps the shorter interval, and forgoes the second attempt a background pass would be granted. The background intervals were widened considerably after it emerged that they had been set inside the range of ordinary healthy work.
+
 **How to configure:**
 
 1. Enable compression if dealing with long conversations

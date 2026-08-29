@@ -39,8 +39,40 @@ interface ProviderResponse {
  * accepts the connection and then never answers wedges the whole turn behind it
  * with no log output. This budget abandons the attempt instead: the task fails
  * soft, its caller drops the optional content, and the turn moves on.
+ *
+ * **Set from the observed distribution, not from a round number** (bug 107).
+ * The old 45s — a 40s provider budget after headroom — looked generous until
+ * the `[CheapLLM] Task failed` counter made the losses visible. Across 1,971
+ * completed non-compression calls on a live instance, not one had ever taken
+ * more than 40,000 ms, and three separate task types peaked within 600 ms of
+ * the wall: `MEMORY_EXTRACTION` at 39,936, `ANSWER_CONFIRMATION` at 39,789,
+ * `SCENE_STATE_TRACKING` at 39,461. That is not a distribution, it is a
+ * censored one — the maxima were the budget, not the work, and 61 of the 81
+ * losses in the counter's first 60 hours landed under this tier.
+ *
+ * The true tail is therefore unknown, so this is deliberately set well clear
+ * of it rather than just past the old wall: the point is to stop cutting the
+ * curve so the histogram can be re-read honestly. It stays a real ceiling —
+ * a provider that accepts and never answers is still abandoned, just not one
+ * that is merely slow.
  */
-export const CHEAP_LLM_TASK_TIMEOUT_MS = 45_000
+export const CHEAP_LLM_TASK_TIMEOUT_MS = 90_000
+
+/**
+ * The same tier's budget when a human is waiting on the call.
+ *
+ * A handful of cheap tasks are awaited *inline* while a turn is being
+ * assembled — the memory recap, the two memory compressions, the
+ * cache-miss context compression — and there the budget is not protecting the
+ * work, it is protecting the person watching "Recalling…". All of them produce
+ * optional context: losing one costs the character some remembered flavour,
+ * not the turn. So the generous background ceiling above would be spent in
+ * exactly the place it should not be, and these keep the old 45s instead.
+ *
+ * This is the same asymmetry the compression override draws, generalised: the
+ * ceiling should follow *who is waiting*, not only *which task it is*.
+ */
+export const CHEAP_LLM_TASK_TIMEOUT_INTERACTIVE_MS = 45_000
 
 /**
  * Longer budget for local providers (Ollama and friends), where a cold model
@@ -59,42 +91,100 @@ export const CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS = 180_000
 const PROVIDER_BUDGET_HEADROOM_MS = 5_000
 
 /**
- * Per-task deadline overrides, keyed by the granular task type.
+ * Whether a human is waiting on this call.
+ *
+ * The two are budgeted differently on purpose (bug 107). Almost every cheap
+ * task runs off the turn's critical path, where a generous ceiling costs
+ * nothing but a slow background pass — and a stingy one permanently loses the
+ * work, because there is no downstream retry. Compression is the exception:
+ * it is pre-computed when a cached result is available and falls back to a
+ * *synchronous inline* call when it isn't, and there the whole budget is
+ * latency the operator sits through. One number cannot serve both.
+ *
+ * Callers that don't say default to `background`, which is what the great
+ * majority of them are. Only the inline compression path declares `interactive`.
+ */
+export type CheapLLMLatencyClass = 'background' | 'interactive'
+
+/**
+ * Options bag for the trailing, rarely-set knobs on a cheap-LLM task.
+ * Positional parameters ran out long ago; anything new goes here.
+ */
+export interface CheapLLMTaskOptions {
+  /** Whether a human is waiting on this call. Defaults to `background`. */
+  latency?: CheapLLMLatencyClass
+}
+
+/**
+ * Per-task deadline overrides, keyed by the granular task type, then by
+ * whether anyone is waiting.
  *
  * The default budget suits a cheap task whose prompt is a slice of a turn.
  * Compression is not that shape: it carries the whole conversation history, so
  * it is structurally the largest prompt any cheap task sends and it sits at the
- * slow end of the distribution as a matter of course, not as a stall. Measured
- * over three days on Friday, compression supplied 13 of the 34 calls that
- * finished within five seconds of the old 40s provider budget — more than any
- * other task type — and its mean (24.4s) ran roughly 2.5x the cheap-task mean.
- * A ceiling that most of a task's healthy distribution can reach is a ceiling
- * set for the wrong task.
+ * slow end of the distribution as a matter of course, not as a stall.
  *
- * Kept well short of doubling on purpose. Compression is pre-computed off the
- * turn's critical path when a cached result is available, but falls back to a
- * synchronous inline call when it isn't — and there the operator waits out the
- * whole budget. This buys the real distribution room without letting one
- * uncached turn stall for minutes.
+ * The numbers come from the measured curve rather than from round figures.
+ * Over 256 `CONTEXT_COMPRESSION` calls on a live instance: p50 24.3s, p95
+ * 49.6s, **p99 61.1s, max 67,733 ms** — against a 70s ceiling. A budget set
+ * below its own task's p99 converts slow-but-healthy calls into permanent
+ * losses at exactly the rate the tail crosses it, which is what the 20
+ * `compress-conversation-history` failures in the counter's first 60 hours
+ * were.
+ *
+ * `background` therefore clears that p99 with room to spare. `interactive`
+ * keeps the old 75s, because there the ceiling is not protecting the work, it
+ * is protecting the person watching an empty composer — and an uncompressed
+ * history still produces a turn.
  */
-const CHEAP_LLM_TASK_TIMEOUT_OVERRIDES_MS: Record<string, number> = {
-  'compress-conversation-history': 75_000,
-  'compress-system-prompt': 75_000,
-  'compress-memories': 75_000,
+const CHEAP_LLM_TASK_TIMEOUT_OVERRIDES_MS: Record<string, Record<CheapLLMLatencyClass, number>> = {
+  'compress-conversation-history': { background: 120_000, interactive: 75_000 },
+  'compress-system-prompt': { background: 120_000, interactive: 75_000 },
+  'compress-memories': { background: 120_000, interactive: 75_000 },
 }
 
 /**
  * The deadline for one attempt. Local providers keep their own (larger) budget
  * regardless of task — a cold model load dwarfs any per-task difference.
  */
-export function deadlineFor(selection: CheapLLMSelection, taskType?: string): number {
+export function deadlineFor(
+  selection: CheapLLMSelection,
+  taskType?: string,
+  latency: CheapLLMLatencyClass = 'background'
+): number {
   if (selection.isLocal) return CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS
-  return CHEAP_LLM_TASK_TIMEOUT_OVERRIDES_MS[taskType ?? ''] ?? CHEAP_LLM_TASK_TIMEOUT_MS
+  const override = CHEAP_LLM_TASK_TIMEOUT_OVERRIDES_MS[taskType ?? '']
+  if (override) return override[latency]
+  return latency === 'interactive'
+    ? CHEAP_LLM_TASK_TIMEOUT_INTERACTIVE_MS
+    : CHEAP_LLM_TASK_TIMEOUT_MS
 }
 
 /** The hard per-request budget handed to the provider for a given attempt. */
-function providerBudgetFor(selection: CheapLLMSelection, taskType?: string): number {
-  return deadlineFor(selection, taskType) - PROVIDER_BUDGET_HEADROOM_MS
+function providerBudgetFor(
+  selection: CheapLLMSelection,
+  taskType?: string,
+  latency: CheapLLMLatencyClass = 'background'
+): number {
+  return deadlineFor(selection, taskType, latency) - PROVIDER_BUDGET_HEADROOM_MS
+}
+
+/**
+ * Did this attempt end because nobody answered in time?
+ *
+ * Two shapes mean the same thing and must be told apart from "the provider
+ * said no": our own deadline firing, and the provider abandoning the socket on
+ * the budget we handed it. The second is by far the more common — the
+ * `withDeadline` backstop fired zero times across the whole window that
+ * produced bug 107, because `requestTimeoutMs` always gives up first, by
+ * design. Both are transient and worth one more attempt; a refusal, a parse
+ * failure or a bad key is neither.
+ */
+export function isTimeoutFailure(error: unknown): boolean {
+  if (error instanceof CheapLLMTimeoutError) return true
+  const name = error instanceof Error ? error.name : ''
+  if (name === 'CheapLLMTimeoutError' || name === 'AbortError' || name === 'TimeoutError') return true
+  return /timed?\s?out|timeout|ETIMEDOUT|ESOCKETTIMEDOUT/i.test(getErrorMessage(error, ''))
 }
 
 /**
@@ -196,7 +286,8 @@ async function sendToProvider(
   chatId?: string,
   messageId?: string,
   maxTokens?: number,
-  characterId?: string
+  characterId?: string,
+  latency: CheapLLMLatencyClass = 'background'
 ): Promise<ProviderResponse> {
   const apiKey = await getApiKeyForCheapLLMSelection(selection, userId)
   if (apiKey === null) {
@@ -260,7 +351,7 @@ async function sendToProvider(
     // deadline, so a stalled request is aborted at the socket rather than left
     // running while we walk away from it. `withDeadline` remains the backstop
     // for providers that ignore this.
-    requestTimeoutMs: providerBudgetFor(selection, taskType),
+    requestTimeoutMs: providerBudgetFor(selection, taskType, latency),
   }
 
   // Check if we already know this profile doesn't support custom temperature
@@ -397,7 +488,8 @@ export async function executeCheapLLMTask<T>(
   messageId?: string,
   uncensoredFallback?: UncensoredFallbackOptions,
   maxTokens?: number,
-  characterId?: string
+  characterId?: string,
+  options?: CheapLLMTaskOptions
 ): Promise<CheapLLMTaskResult<T>> {
   return trackActivity(activityKindForTask(taskType), () =>
     runCheapLLMTask(
@@ -410,7 +502,8 @@ export async function executeCheapLLMTask<T>(
       messageId,
       uncensoredFallback,
       maxTokens,
-      characterId
+      characterId,
+      options
     )
   )
 }
@@ -425,19 +518,51 @@ async function runCheapLLMTask<T>(
   messageId?: string,
   uncensoredFallback?: UncensoredFallbackOptions,
   maxTokens?: number,
-  characterId?: string
+  characterId?: string,
+  options?: CheapLLMTaskOptions
 ): Promise<CheapLLMTaskResult<T>> {
   // Each attempt gets its own budget rather than sharing one across the task:
   // the uncensored fallback below only fires after a *completed* call came back
   // empty, so it is a fresh attempt and deserves a fresh deadline.
+  const latency: CheapLLMLatencyClass = options?.latency ?? 'background'
+
+  const attempt = (route: CheapLLMSelection) =>
+    withDeadline(
+      sendToProvider(route, messages, userId, taskType, chatId, messageId, maxTokens, characterId, latency),
+      deadlineFor(route, taskType, latency),
+      taskType,
+      { chatId, characterId, provider: route.provider, model: route.modelName }
+    )
 
   try {
-    let response = await withDeadline(
-      sendToProvider(selection, messages, userId, taskType, chatId, messageId, maxTokens, characterId),
-      deadlineFor(selection, taskType),
-      taskType,
-      { chatId, characterId, provider: selection.provider, model: selection.modelName }
-    )
+    let response: ProviderResponse
+    try {
+      response = await attempt(selection)
+    } catch (firstError) {
+      // One more go at a fresh socket, and only for a timeout.
+      //
+      // A timed-out cheap pass is permanently lost otherwise: the SDK is given
+      // `maxRetries: 0`, nothing downstream re-queues the work, and the job
+      // that asked for it goes on to report a clean finish. A second attempt
+      // costs one call and recovers most of a fat-tail miss, which is the
+      // cheapest half of bug 107's fix.
+      //
+      // Not on the interactive path: there the operator is already waiting out
+      // the budget, and doubling it to rescue an optimisation they would never
+      // have noticed missing is the wrong trade.
+      if (!isTimeoutFailure(firstError) || latency === 'interactive') throw firstError
+
+      logger.warn('[CheapLLM] Attempt timed out; retrying the same route once', {
+        taskType,
+        chatId,
+        characterId,
+        provider: selection.provider,
+        model: selection.modelName,
+        budgetMs: deadlineFor(selection, taskType, latency),
+        error: getErrorMessage(firstError),
+      })
+      response = await attempt(selection)
+    }
 
     // Check if we should retry with an uncensored provider
     const uncensoredSelection = shouldAttemptUncensoredFallback(response.content, selection, uncensoredFallback)
@@ -451,12 +576,7 @@ async function runCheapLLMTask<T>(
         uncensoredModel: uncensoredSelection.modelName,
       })
 
-      const retryResponse = await withDeadline(
-        sendToProvider(uncensoredSelection, messages, userId, taskType, chatId, messageId, maxTokens, characterId),
-        deadlineFor(uncensoredSelection, taskType),
-        taskType,
-        { chatId, characterId, provider: uncensoredSelection.provider, model: uncensoredSelection.modelName }
-      )
+      const retryResponse = await attempt(uncensoredSelection)
 
       if (retryResponse.content.trim() === '') {
         throw new Error(`Empty response from both safe provider (${selection.provider}/${selection.modelName}) and uncensored provider (${uncensoredSelection.provider}/${uncensoredSelection.modelName})`)
@@ -498,13 +618,18 @@ async function runCheapLLMTask<T>(
 
     const fallbackResult = await attemptCheapFallbackChain(
       selection, messages, userId, parseResponse, error,
-      { taskType, chatId, messageId, maxTokens, characterId, uncensoredFallback }
+      { taskType, chatId, messageId, maxTokens, characterId, uncensoredFallback, latency }
     )
     if (fallbackResult) return fallbackResult
 
+    // Say *how* it was lost, not just that it was. A refusal or a parse
+    // failure is a finished pass with a disappointing answer; a timeout is
+    // work that never happened, and a caller that treats the two alike reports
+    // a clean finish over a hole in the data (bug 107).
     return {
       success: false,
       error: getErrorMessage(error),
+      timedOut: isTimeoutFailure(error),
     }
   }
 }
@@ -535,9 +660,10 @@ async function attemptCheapFallbackChain<T>(
     maxTokens?: number
     characterId?: string
     uncensoredFallback?: UncensoredFallbackOptions
+    latency: CheapLLMLatencyClass
   }
 ): Promise<CheapLLMTaskResult<T> | null> {
-  const { taskType, chatId, messageId, maxTokens, characterId, uncensoredFallback } = meta
+  const { taskType, chatId, messageId, maxTokens, characterId, uncensoredFallback, latency } = meta
 
   const trigger = classifyFallbackTrigger(error)
   if (!trigger) {
@@ -589,8 +715,8 @@ async function attemptCheapFallbackChain<T>(
 
     try {
       const response = await withDeadline(
-        sendToProvider(standIn, messages, userId, taskType, chatId, messageId, maxTokens, characterId),
-        deadlineFor(standIn, taskType),
+        sendToProvider(standIn, messages, userId, taskType, chatId, messageId, maxTokens, characterId, latency),
+        deadlineFor(standIn, taskType, latency),
         taskType,
         { chatId, characterId, provider: standIn.provider, model: standIn.modelName }
       )
@@ -637,4 +763,46 @@ async function attemptCheapFallbackChain<T>(
   })
 
   return null
+}
+
+/**
+ * Raised when a cheap-LLM pass was lost to a timeout and its caller cannot do
+ * its job without it. Carries the task type so the job's `lastError` names the
+ * pass rather than the provider.
+ */
+export class CheapLLMTaskLostError extends Error {
+  constructor(taskType: string, providerError?: string) {
+    super(
+      `Cheap LLM task "${taskType}" timed out and was not retried successfully${providerError ? `: ${providerError}` : ''}`
+    )
+    this.name = 'CheapLLMTaskLostError'
+  }
+}
+
+/**
+ * Throw when a background job's cheap-LLM pass was lost to a timeout.
+ *
+ * The half of bug 107 that makes the other half measurable. A cheap task that
+ * times out returns an unsuccessful result, and every job handler treated that
+ * the same way it treats a refusal: log a warning, return, and be marked
+ * COMPLETED. So the memory that was never extracted and the scene state that
+ * was never derived looked, from every counter the operator has, exactly like
+ * work that finished — 83 `MEMORY_EXTRACTION` and 99 `SCENE_STATE_TRACKING`
+ * jobs COMPLETED in a window that lost 33 extraction passes and 12 scene ones.
+ *
+ * Throwing hands the job to `markFailed`, which already does the right thing:
+ * exponential backoff, a retry, and DEAD with the reason attached once the
+ * attempts run out. That is a third attempt at the pass on top of the
+ * same-route retry, at no new machinery.
+ *
+ * **Only for timeouts.** A refusal, an unparseable answer or a missing key
+ * would fail identically on every retry, and re-queuing those would spend the
+ * backoff learning nothing. Those keep the old behaviour: log, return, done.
+ */
+export function throwIfLostToTimeout(
+  result: Pick<CheapLLMTaskResult<unknown>, 'success' | 'timedOut' | 'error'>,
+  taskType: string
+): void {
+  if (result.success || !result.timedOut) return
+  throw new CheapLLMTaskLostError(taskType, result.error)
 }

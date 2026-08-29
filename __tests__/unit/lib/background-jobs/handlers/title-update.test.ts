@@ -22,6 +22,9 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   considerTitleUpdate: jest.fn(),
   considerHelpChatTitleUpdate: jest.fn(),
   extractVisibleConversation: jest.fn(),
+  // The real predicate: the handler must only fail the job for a *timeout*,
+  // and these suites' failures are ordinary ones (bug 107).
+  throwIfLostToTimeout: jest.requireActual('@/lib/memory/cheap-llm-tasks/core-execution').throwIfLostToTimeout,
 }))
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
@@ -143,6 +146,28 @@ describe('handleTitleUpdate — cursor advancement on failure', () => {
       ([, patch]) => 'title' in (patch as Record<string, unknown>),
     )
     expect(titleUpdates).toHaveLength(0)
+  })
+
+  it('does not burn the checkpoint when the check never ran', async () => {
+    // Bug 107: burning the cursor is right for a quota error — it will still be
+    // exhausted at the next checkpoint — and wrong for a timeout, which would
+    // skip the rename entirely rather than defer it. Failing the job instead
+    // leaves the cursor where it was for the retry.
+    const repos = createMockRepos()
+    mockGetRepositories.mockReturnValue(repos as never)
+    mockConsiderTitleUpdate.mockResolvedValue({
+      success: false,
+      error: 'Request timed out.',
+      timedOut: true,
+    } as never)
+
+    await expect(handleTitleUpdate(baseJob({ currentInterchange: 2 }) as never))
+      .rejects.toThrow(/title-update/)
+
+    const cursorUpdates = repos.chats.update.mock.calls.filter(
+      ([, patch]) => (patch as { lastRenameCheckInterchange?: number }).lastRenameCheckInterchange === 2,
+    )
+    expect(cursorUpdates).toHaveLength(0)
   })
 
   it('advances lastRenameCheckInterchange when no cheap LLM is configured', async () => {

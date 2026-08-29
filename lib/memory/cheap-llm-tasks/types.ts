@@ -69,6 +69,19 @@ export interface CheapLLMTaskResult<T> {
   success: boolean
   result?: T
   error?: string
+  /**
+   * True when the failure was a timeout rather than an answer — our own
+   * deadline, or the provider abandoning the socket on the budget we handed
+   * it — and every retry the task had was spent.
+   *
+   * The distinction is what separates "the model produced a disappointing
+   * answer" from "this pass never happened". A caller that swallows the second
+   * reports a clean finish over work that is permanently lost, which is how
+   * 81 timed-out passes in 60 hours left every background job in the window
+   * marked COMPLETED (bug 107). Jobs whose whole purpose is the lost pass
+   * should surface it — see `throwIfLostToTimeout`.
+   */
+  timedOut?: boolean
   /** Token usage for cost tracking */
   usage?: {
     promptTokens: number

@@ -17,6 +17,7 @@ import {
   type ChatMessage,
   type CompressionResult,
   type UncensoredFallbackOptions,
+  type CheapLLMLatencyClass,
 } from '@/lib/memory/cheap-llm-tasks'
 import { logger } from '@/lib/logger'
 
@@ -46,6 +47,17 @@ export interface ContextCompressionOptions {
   dangerSettings?: DangerousContentSettings
   /** Available connection profiles for uncensored fallback */
   availableProfiles?: ConnectionProfile[]
+  /**
+   * Whether a human is waiting on this compression.
+   *
+   * `background` (the default) is the pre-computation the finalizer kicks off
+   * after a turn: nobody is watching, and a generous budget costs nothing but
+   * a slow pass — while a tight one permanently loses it, because there is no
+   * downstream retry and the turn simply goes out uncompressed. `interactive`
+   * is the synchronous fallback on a cache miss, where the whole budget is
+   * latency the operator sits through. See bug 107.
+   */
+  latency?: CheapLLMLatencyClass
 }
 
 /**
@@ -242,7 +254,8 @@ export async function applyContextCompression(
       options.selection,
       options.userId,
       uncensoredFallback,
-      options.chatId
+      options.chatId,
+      options.latency
     )
 
     if (historyResult.success && historyResult.result) {

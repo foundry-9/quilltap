@@ -7,7 +7,7 @@
  */
 
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
-import { providerCanTransportImages } from '@/lib/llm/image-transport'
+import { providerCanTransportImages, profileCanReceiveAttachment } from '@/lib/llm/image-transport'
 import { buildFallbackChain } from '@/lib/llm/fallback'
 import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { createLLMProvider } from '@/lib/llm'
@@ -118,16 +118,16 @@ export function needsFallbackProcessing(
   profile: ConnectionProfile,
   mimeType: string
 ): boolean {
-  if (!profileSupportsMimeType(profile, mimeType)) return true
+  if (profileCanReceiveAttachment(profile, mimeType)) return false
   if (mimeType.startsWith('image/') && !providerCanTransportImages(profile.provider)) {
-    logger.info('[Attachment] Profile claims image support but its plugin cannot transport images; routing to describe-fallback', {
+    logger.info('[Attachment] Plugin cannot transport images; routing to describe-fallback', {
       profileId: profile.id,
       provider: profile.provider,
       modelName: profile.modelName,
+      supportsImageUpload: profile.supportsImageUpload,
     })
-    return true
   }
-  return false
+  return true
 }
 
 /**

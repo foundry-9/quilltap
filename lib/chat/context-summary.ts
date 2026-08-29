@@ -213,6 +213,13 @@ export interface SummaryGenerationResult {
   error?: string
   /** Whether the summary was newly generated or already existed */
   wasGenerated: boolean
+  /**
+   * True when the fold was lost to a cheap-LLM timeout rather than answered.
+   * Propagated from the task so the background handler can fail the job
+   * instead of reporting a clean finish over a summary that never ran
+   * (bug 107).
+   */
+  timedOut?: boolean
   /** Token usage for the generation */
   usage?: {
     promptTokens: number
@@ -396,6 +403,7 @@ export async function generateContextSummary(
         success: false,
         error: foldResult.error || 'Failed to fold summary',
         wasGenerated: false,
+        timedOut: foldResult.timedOut,
       }
     }
 

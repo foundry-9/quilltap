@@ -60,11 +60,33 @@ it('abandons a remote provider that never answers, instead of waiting on the SDK
 
   const task = executeCheapLLMTask(REMOTE, MESSAGES, 'user-1', (c) => c, 'memory-recap-summarization')
 
+  // Two budgets, because a timeout now buys one more attempt at a fresh socket
+  // before the pass is given up as lost (bug 107). Both are abandoned here.
+  await jest.advanceTimersByTimeAsync(CHEAP_LLM_TASK_TIMEOUT_MS + 1)
   await jest.advanceTimersByTimeAsync(CHEAP_LLM_TASK_TIMEOUT_MS + 1)
   const result = await task
 
+  expect(sendMessage).toHaveBeenCalledTimes(2)
   expect(result.success).toBe(false)
   expect(result.error).toContain('budget')
+  // Named as a pass that never happened, so the job that asked for it can fail
+  // rather than report a clean finish over the hole.
+  expect(result.timedOut).toBe(true)
+})
+
+it('recovers when the retry at a fresh socket answers', async () => {
+  sendMessage
+    .mockReturnValueOnce(new Promise(() => {}))
+    .mockResolvedValueOnce({ content: 'a recap', usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 } })
+
+  const task = executeCheapLLMTask(REMOTE, MESSAGES, 'user-1', (c) => c, 'memory-recap-summarization')
+
+  await jest.advanceTimersByTimeAsync(CHEAP_LLM_TASK_TIMEOUT_MS + 1)
+  const result = await task
+
+  expect(sendMessage).toHaveBeenCalledTimes(2)
+  expect(result.success).toBe(true)
+  expect(result.result).toBe('a recap')
 })
 
 it('does not abandon a call that finishes inside the budget', async () => {
@@ -124,6 +146,7 @@ it('eventually abandons a local provider too', async () => {
 
   const task = executeCheapLLMTask(LOCAL, MESSAGES, 'user-1', (c) => c, 'summarize-chat')
 
+  await jest.advanceTimersByTimeAsync(CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS + 1)
   await jest.advanceTimersByTimeAsync(CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS + 1)
   const result = await task
 

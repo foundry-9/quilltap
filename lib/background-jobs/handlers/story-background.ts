@@ -14,7 +14,7 @@ import {
 } from '@/lib/file-storage/lantern-store-bridge';
 
 import { createImageProvider } from '@/lib/llm/plugin-factory';
-import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
+import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
@@ -500,7 +500,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
       context: 'background-jobs.story-background',
       jobId: job.id,
       error: craftResult.error,
+      timedOut: craftResult.timedOut === true,
     });
+    // Nothing has been generated yet, so a timed-out prompt-craft is a pass
+    // that never ran rather than an image that came out wrong. Fail the job so
+    // it is retried and, failing that, visible (bug 107).
+    throwIfLostToTimeout(craftResult, 'craft-story-background-prompt');
     return;
   }
 

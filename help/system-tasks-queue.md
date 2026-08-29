@@ -144,6 +144,22 @@ Click on a task to see more information:
 - Can be resumed
 - Progress saved
 
+### A Task That Never Heard Back
+
+Several of Quilltap's quieter offices — memory extraction, the scene-state tracker, chat titling, the running summary, story backgrounds — do their work by putting a short question to your cheap LLM and waiting a fixed interval for a reply. If no reply arrives inside that interval, the question is abandoned.
+
+There was a time when such a task simply shrugged and reported itself **Completed**, on the reasoning that nothing had gone *wrong* exactly. The reasoning was poor. No memory was formed, no scene was tracked, nothing was queued to try again, and the ledger showed a tidy green line where a hole in the record ought to have been. Ninety-nine scene-state passes came back complete over twelve that had never happened, and the operator had not a single indication of it.
+
+A pass that runs out of time now says so.
+
+- **It tries again first, at once.** A fresh connection is opened and the question put a second time. Most of the time this is the end of the matter and you will never know it happened.
+- **If the second attempt also runs out, the task is marked Failed**, with the office named in the error — *Cheap LLM task "scene-state-tracking" timed out* — and re-queued on the usual backing-off schedule. Should it exhaust its attempts it goes Dead, still carrying the reason.
+- **A model that merely declines is not treated this way.** A refusal, an unreadable answer, or a rejected key would arrive identically on every retry, and re-queuing them would spend the schedule learning nothing. Those still finish quietly, as before.
+
+The intervals themselves have been widened considerably — they were, it turns out, set inside the range of perfectly healthy work — so a Failed task of this kind now means something. Several in a row means your cheap-LLM provider is not keeping up, and is worth a look at the **Connection Profiles** page rather than a shrug.
+
+One note on memory extraction in particular: a turn is extracted as a single piece of work. If one character's pass runs out of time, the whole turn is re-run rather than patched, which is why you will not find duplicate memories after a retry.
+
 ## Controlling Tasks
 
 ### Pause a Task

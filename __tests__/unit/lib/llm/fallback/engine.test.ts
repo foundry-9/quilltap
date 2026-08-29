@@ -10,6 +10,12 @@ import { describe, it, expect, beforeEach } from '@jest/globals'
 // by `require` below rather than by a static import.
 jest.mock('@/lib/llm/image-transport', () => ({
   providerCanTransportImages: () => mockCanTransportImages(),
+  // The chain asks the shared predicate, which is both halves of bug 91's
+  // question at once — the operator's `supportsImageUpload` tick and whether
+  // the plugin can put bytes on the wire. Mirrored here so a test can move
+  // either half independently.
+  profileCanReceiveAttachment: (profile: { supportsImageUpload?: boolean | null }) =>
+    profile.supportsImageUpload === true && mockCanTransportImages(),
 }))
 
 const mockCanTransportImages = jest.fn<() => boolean>(() => true)

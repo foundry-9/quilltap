@@ -4,7 +4,7 @@
 
 import type { LLMMessage } from '@/lib/llm/base'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { executeCheapLLMTask } from './core-execution'
+import { executeCheapLLMTask, type CheapLLMLatencyClass } from './core-execution'
 import type {
   ChatMessage,
   CheapLLMTaskResult,
@@ -123,6 +123,13 @@ interface RunCompressionArgs {
   userId: string
   chatId?: string
   uncensoredFallback?: UncensoredFallbackOptions
+  /**
+   * Whether a human is waiting on this compression. Pre-computation off the
+   * turn's critical path gets the generous budget; the synchronous inline call
+   * on a cache miss gets the tight one, because there the budget *is* the
+   * latency the operator sits through (bug 107).
+   */
+  latency?: CheapLLMLatencyClass
 }
 
 /**
@@ -145,7 +152,9 @@ function runCompression(args: RunCompressionArgs): Promise<CheapLLMTaskResult<Co
     args.chatId,
     undefined,
     args.uncensoredFallback,
-    4000
+    4000,
+    undefined,
+    { latency: args.latency },
   )
 }
 
@@ -172,7 +181,8 @@ export async function compressConversationHistory(
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
-  chatId?: string
+  chatId?: string,
+  latency?: CheapLLMLatencyClass
 ): Promise<CheapLLMTaskResult<CompressionResult>> {
   // Format messages for compression
   const conversationText = messages
@@ -196,6 +206,7 @@ export async function compressConversationHistory(
     userId,
     chatId,
     uncensoredFallback,
+    latency,
   })
 }
 
@@ -250,7 +261,8 @@ export async function compressMemories(
   selection: CheapLLMSelection,
   userId: string,
   uncensoredFallback?: UncensoredFallbackOptions,
-  chatId?: string
+  chatId?: string,
+  latency?: CheapLLMLatencyClass
 ): Promise<CheapLLMTaskResult<CompressionResult>> {
   const systemPrompt = MEMORY_COMPRESSION_PROMPT
     .replace(/\{\{characterName\}\}/g, characterName)
@@ -264,6 +276,7 @@ export async function compressMemories(
     selection,
     userId,
     chatId,
+    latency,
     uncensoredFallback,
   })
 }

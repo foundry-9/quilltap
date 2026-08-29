@@ -4,6 +4,74 @@
 
 ### 4.9-dev
 
+#### Fixed: the uncensored reroute handed a vision model's message array to a text-only fallback (bug 106)
+
+When the Concierge is in Auto-Route mode and a provider refuses a turn, Quilltap retries the same
+provider and then reroutes to the configured uncensored profile. The reroute changed the model and
+kept the message array — and that array was built once, against the original profile, with the
+attachment question already answered for it. On a turn carrying an image, a vision-capable primary
+had correctly embedded the raw bytes, and the text-only substitute got them: `400 does not support
+image inputs`, then `Chain stopped: empty response`. The character said nothing at all. The
+configuration was correct on both sides; nothing had asked the substitute what it could read.
+
+Two changes. `resolveProviderForDangerousContent` now takes the turn's attachment MIME types and
+orders its scan by them — profiles that can carry the payload first, the rest behind. Ordered rather
+than filtered, because a described image beats no reroute at all when the only uncensored route on
+the instance is text-only. And the reroute now re-runs the attachment decision against the profile it
+actually calls (`adaptMessagesForProfile`, `lib/chat/message-attachment-adapter.ts`): an image a
+text-only substitute cannot read becomes its description, exactly as it would have if that profile
+had been the primary. A profile that can take the bytes gets the same array back untouched, so the
+common case costs nothing.
+
+Two things fell out of the diagnosis. The fallback chain's `needsVision` flag was computed from what
+the user *uploaded* rather than from what the message array ends up carrying, so a turn whose image
+had already been replaced by a description was still treated as vision-bearing and skipped
+understudies that could have answered it. And the question "can this profile receive this
+attachment?" had three independent spellings — the router asked it not at all, the describe-fallback
+and the fallback chain asked it differently — which is the drift that produced bugs 91, 97 and 104.
+All three now call `profileCanReceiveAttachment` in `lib/llm/image-transport.ts`.
+
+The failover suite built every history as `content: 'Hello'` with no attachments, which is the one
+shape that cannot expose this. It now has three cases that carry an `attachments` array.
+
+#### Changed: cheap-LLM budgets set from the measured distribution, and a lost pass no longer reports success (bug 107)
+
+The per-task cheap-LLM ceilings were round numbers sitting inside the distribution they were meant to
+bound. Across 1,971 completed non-compression cheap calls on a live instance, not one had ever taken
+more than 40,000 ms against a 40,000 ms provider budget, and three task types peaked within 600 ms of
+the wall. That is not a distribution, it is a censored one: the maxima were the budget, not the work.
+Compression showed the same against its own higher ceiling — p99 61.1s, max 67,733 ms, against
+70,000. In the first 60 hours after the `[CheapLLM] Task failed` log line existed, 81 passes were
+lost, every one of them `Request timed out.`
+
+Four changes:
+
+- The shared remote budget goes 45s → 90s, and compression's goes 75s → 120s. The shared tier's true
+  tail is unknown *because* it was censored, so the new number is set well clear of it rather than
+  just past the old wall — the point is to stop cutting the curve so the histogram can be re-read.
+- The ceiling now follows *who is waiting*, not only which task it is. A `CheapLLMLatencyClass`
+  (`background` or `interactive`) threads from the call site; everything that does not say is
+  `background`, which is what the great majority of cheap tasks are. Compression pre-computed after
+  the turn is delivered gets the 120s, while the synchronous inline call on a cache miss keeps 75s.
+  The same split applies to the shared tier: the memory recap and the two memory compressions are
+  awaited inline while a turn assembles, so they keep 45s rather than taking the new 90s. All of
+  these produce optional context — losing one costs the character some remembered flavour, not the
+  turn — so the generous budget would be spent in exactly the place it should not be.
+- A timed-out attempt gets one more go at a fresh socket. Only a timeout: a rejected key or a refusal
+  would fail identically the second time. Not on the interactive path either.
+- A cheap task lost to a timeout no longer looks like one that finished. `CheapLLMTaskResult` gains
+  `timedOut`, and six job handlers now fail rather than return on it — scene-state tracking, title
+  update, context summary, story background, and both memory extractors. Before this every job in the
+  window came back COMPLETED: 83 memory extractions and 99 scene-state passes, zero failures, over 45
+  passes that never happened. A failed job gets the existing backed-off retry and then goes DEAD with
+  the reason attached, which is a third attempt at the work and the first time the loss is visible.
+
+One consequence worth knowing: a memory-extraction job that throws discards the whole turn's buffered
+writes, so the retry re-runs it atomically with no duplicate memories — but the passes that did
+succeed are discarded along with the one that didn't. That is the right trade when the retry works,
+and worse data with better information when it doesn't. A provider timing out three times against a
+90s ceiling with a retry in front of it is a configuration worth seeing rather than absorbing.
+
 #### Added: provider/model fallback chains
 
 A connection profile can now name an understudy. When a call through a profile fails outright —

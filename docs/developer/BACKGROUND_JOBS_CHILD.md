@@ -94,6 +94,44 @@ The fix is the **deferred-file-write pattern**: the child stages files in `<data
 
 ## Handler audit
 
+### A cheap-LLM pass lost to a timeout fails the job
+
+Several handlers exist to do one thing: put a short question to the cheap LLM
+and record the answer. When that question times out, the answer never arrives,
+nothing re-queues it, and the handler used to log a warning and return — which
+the dispatcher reads as a clean finish and marks COMPLETED. That is a hole in
+the data reported as work done, and it was invisible from every counter the
+operator has (bug 107).
+
+Six handlers now call `throwIfLostToTimeout(result, taskType)` from
+`lib/memory/cheap-llm-tasks` instead: **scene-state-tracking**,
+**title-update**, **context-summary**, **story-background**,
+**memory-extraction** and **carina-memory-extraction**. The helper throws a
+`CheapLLMTaskLostError` only when `CheapLLMTaskResult.timedOut` is set — a
+refusal, an unparseable answer or a rejected key would fail identically on every
+retry, so those keep the old log-and-return behaviour.
+
+Throwing is the right lever *because of* the write model above: a handler that
+throws in the child has its buffered writes discarded rather than applied
+(`handleChildJobResult` only calls `applyWritesAtomically` when `msg.ok`), so
+the backed-off retry re-runs the handler from the state this attempt started in.
+Three consequences worth knowing before adding a seventh:
+
+- **The retry is atomic, not incremental.** The multi-pass extractors are the
+  case that matters: a turn that lost one character's pass and completed the
+  others discards the others too. That keeps the re-run duplicate-free, at the
+  cost of redoing successful work. It is the right trade when the retry
+  succeeds and worse data with better information when it does not.
+- **Anything the handler wanted to persist about the failure is lost with it.**
+  The extraction debug logs describing the timeout never reach the message,
+  because they are child writes. What survives is the server log and the job's
+  own `lastError`, which the *parent* writes on `markFailed`.
+- **Order matters where a handler writes a cursor on failure.** `title-update`
+  advances `lastRenameCheckInterchange` when the cheap call fails, so a
+  persistently-broken provider does not re-fire the job every turn. That is
+  right for a quota error and wrong for a pass that never ran, which is why the
+  throw sits *before* the cursor write.
+
 | Handler | Read-your-writes? | Idempotent under retry? | External side effects | Expected RPC writes |
 |---------|-------------------|-------------------------|-----------------------|---------------------|
 | memory-extraction | No | Yes (memories upserted by content hash) | LLM extraction call (before-batch) | `memories.create`, `memories.upsert`, `chats.updateMessage` |
