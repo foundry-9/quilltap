@@ -4,6 +4,23 @@
 
 ### 4.9-dev
 
+#### Fixed: a NanoGPT LoRA preset set without an adapter was silently ignored (bug 110)
+
+On an image profile in the `flux-lora` family, a value in the **LoRA Preset** field was dropped
+unless the LoRA adapter editor was also filled in. The generation still succeeded and was still
+billed; it just came back with none of the requested style, and nothing in the logs said so. The
+preset is now sent whenever the model's family understands it, adapter or no adapter. The
+HuggingFace token field keeps the old behaviour on purpose — it authorises fetching adapter weights,
+so it is only sent when there are weights to fetch.
+
+#### Fixed: failed image generations now log what was actually requested (bug 111)
+
+NanoGPT returns the same generic 400 for a bad LoRA source, an unreachable repository, an
+unsupported size and a filtered prompt. The plugin already recorded the composed request, but only
+at `debug`, which packaged instances do not keep — so all four looked identical in the logs. A
+failed image request now logs the model, size, LoRA dialect and the request keys it sent alongside
+the provider's message, at `error`. Key names only; no values, so credentials stay out of the log.
+
 #### Fixed: sliders now follow the theme
 
 Every `<input type="range">` in the app now uses one new `.qt-range` class. Previously the 15 sliders

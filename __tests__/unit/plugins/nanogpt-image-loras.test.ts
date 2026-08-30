@@ -175,6 +175,50 @@ describe('applyLoras — refusals', () => {
   });
 });
 
+/**
+ * Bug 110. A preset and a credential look alike in the options panel — both
+ * are loose strings sitting beside the adapter editor — but they answer to
+ * different rules, and the bug was applying one rule to both.
+ */
+describe('applyLoras — scoped keys without an adapter (bug 110)', () => {
+  it('forwards a preset when no adapter is configured', () => {
+    const body: Record<string, unknown> = {};
+    const result = applyLoras(body, 'flux-lora', [], { lora_preset: 'anime' });
+    expect(body).toEqual({ lora_preset: 'anime' });
+    expect(result.keys).toEqual(['lora_preset']);
+    // A known family reports its spelling even when it wrote no adapter keys.
+    expect(result.dialect).toBe('url');
+  });
+
+  it('forwards a preset when the adapter list is absent entirely', () => {
+    const body: Record<string, unknown> = {};
+    applyLoras(body, 'flux-lora', undefined, { lora_preset: 'anime' });
+    expect(body.lora_preset).toBe('anime');
+  });
+
+  it('withholds the credential when there are no weights to fetch', () => {
+    const body: Record<string, unknown> = {};
+    const result = applyLoras(body, 'pruna-ai/p-image/text-to-image-lora', [], {
+      hf_api_token: 'hf_secret',
+    });
+    expect(body).toEqual({});
+    expect(result.keys).toEqual([]);
+  });
+
+  it('still writes nothing for a family it cannot spell', () => {
+    const body: Record<string, unknown> = {};
+    const result = applyLoras(body, 'hidream', [], { lora_preset: 'anime' });
+    expect(body).toEqual({});
+    expect(result.dialect).toBeNull();
+  });
+
+  it('leaves a blank preset off the wire', () => {
+    const body: Record<string, unknown> = {};
+    applyLoras(body, 'flux-lora', [], { lora_preset: '' });
+    expect(body).toEqual({});
+  });
+});
+
 describe('applyPassthroughParameters', () => {
   it('forwards only the allow-listed keys', () => {
     const body: Record<string, unknown> = {};

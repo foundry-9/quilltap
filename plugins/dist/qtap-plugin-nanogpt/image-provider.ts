@@ -171,7 +171,30 @@ export class NanoGPTImageProvider implements ImageProviderBase {
       passthroughKeys,
     });
 
-    const response = await client.images.generate(requestParams);
+    let response: Awaited<ReturnType<typeof client.images.generate>>;
+    try {
+      response = await client.images.generate(requestParams);
+    } catch (error) {
+      // The failure path needs this more than the success path does. NanoGPT
+      // answers a rejected adapter, an unreachable weights repo and a filtered
+      // prompt with the same generic 400 — "try a different prompt or image" —
+      // so the body that was posted is the only thing separating those causes,
+      // and at `info` the debug line above is not there to consult. Key
+      // *names* only: `keys` never carries a value, which is what keeps
+      // `hf_api_token` out of the log.
+      logger.error('NanoGPT image request failed', {
+        context: 'NanoGPTImageProvider.generateImage',
+        model,
+        size: params.size,
+        n: requestParams.n,
+        loraDialect: applied.dialect,
+        loraKeys: applied.keys,
+        loraDropped: applied.dropped,
+        passthroughKeys,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
 
     if (!('data' in response) || !response.data || !Array.isArray(response.data)) {
       logger.error('Invalid response from NanoGPT Images API', {

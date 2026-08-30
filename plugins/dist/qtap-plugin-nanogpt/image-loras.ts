@@ -192,12 +192,17 @@ export interface AppliedLoras {
   keys: string[];
   /** Sources that did not fit the model's cap, named for the log. */
   dropped: string[];
-  /** The family that decided the spelling, or null when none is known. */
+  /**
+   * The family that decided the spelling, or null when none is known. A known
+   * family reports its dialect even when it wrote no keys, since "nothing was
+   * configured" and "nothing could be spelled" are different diagnoses.
+   */
   dialect: NanoGPTLoraDialect | null;
 }
 
 /**
- * Translate the host's canonical `loras` list into NanoGPT's wire dialect for
+ * Translate the host's canonical `loras` list — and the two LoRA-scoped
+ * profile parameters that travel beside it — into NanoGPT's wire dialect for
  * `model`, mutating `body`.
  *
  * The host has already capped the list against whatever `loraSupport` this
@@ -206,6 +211,15 @@ export interface AppliedLoras {
  * the live catalog's `lora` tag alone, and then there is no cap and no
  * spelling. That case drops the whole list loudly rather than posting a body
  * the model will ignore.
+ *
+ * **An empty adapter list is not an early exit.** `lora_preset` names a style
+ * the host already hosts and is valid on its own, so it is applied whenever
+ * the family is known — the alternative, and the original shape of bug 110,
+ * was to discard a configured preset in silence because no adapter happened
+ * to sit next to it. `hf_api_token` keeps the opposite rule for the opposite
+ * reason: it authorises the fetch of caller-supplied weights, so with no
+ * weights there is nothing for it to authorise, and a credential with no
+ * errand should not go on the wire.
  */
 export function applyLoras(
   body: Record<string, unknown>,
@@ -213,23 +227,27 @@ export function applyLoras(
   loras: ImageLoraSpec[] | undefined,
   profileParameters: Record<string, unknown> | undefined,
 ): AppliedLoras {
-  if (!loras || loras.length === 0) {
+  const family = matchLoraFamily(model);
+  const requested = loras ?? [];
+
+  // An unknown family has no spelling for anything — adapters or preset — so
+  // it writes nothing at all. Guessing posts a body the model silently
+  // ignores, which is the one failure mode nobody can see.
+  if (!family) {
+    if (requested.length > 0) {
+      logger.warn('LoRA family unknown for this model; dropping the adapters rather than guessing a dialect', {
+        context: 'NanoGPTImageProvider.applyLoras',
+        model,
+        dropped: requested.map((l) => l.source),
+      });
+      return { keys: [], dropped: requested.map((l) => l.source), dialect: null };
+    }
     return { keys: [], dropped: [], dialect: null };
   }
 
-  const family = matchLoraFamily(model);
-  if (!family) {
-    logger.warn('LoRA family unknown for this model; dropping the adapters rather than guessing a dialect', {
-      context: 'NanoGPTImageProvider.applyLoras',
-      model,
-      dropped: loras.map((l) => l.source),
-    });
-    return { keys: [], dropped: loras.map((l) => l.source), dialect: null };
-  }
-
   const max = family.support.maxLoras;
-  const kept = loras.slice(0, max);
-  const dropped = loras.slice(max).map((l) => l.source);
+  const kept = requested.slice(0, max);
+  const dropped = requested.slice(max).map((l) => l.source);
   if (dropped.length > 0) {
     logger.warn('Capping the LoRA list to this model\'s limit', {
       context: 'NanoGPTImageProvider.applyLoras',
@@ -255,27 +273,40 @@ export function applyLoras(
       }
     });
   } else if (family.dialect === 'weights') {
-    body.lora_weights = kept[0].source;
-    keys.push('lora_weights');
-    if (kept[0].scale !== undefined) {
-      body.lora_scale = kept[0].scale;
-      keys.push('lora_scale');
-    }
-    // Private / gated HuggingFace weights need a token, which rides the
-    // options panel as an ordinary parameter rather than living on the LoRA
-    // row — one token serves whatever weights the profile points at.
-    const token = profileParameters?.hf_api_token;
-    if (typeof token === 'string' && token.length > 0) {
-      body.hf_api_token = token;
-      keys.push('hf_api_token');
+    if (kept.length > 0) {
+      body.lora_weights = kept[0].source;
+      keys.push('lora_weights');
+      if (kept[0].scale !== undefined) {
+        body.lora_scale = kept[0].scale;
+        keys.push('lora_scale');
+      }
+      // Private / gated HuggingFace weights need a token, which rides the
+      // options panel as an ordinary parameter rather than living on the LoRA
+      // row — one token serves whatever weights the profile points at. It
+      // stays gated on there being weights: it is a credential for *fetching
+      // them*, and means nothing without a source to fetch. Unlike the preset
+      // below, an unsent token is not a silent loss — there is nothing it
+      // could have authorised.
+      const token = profileParameters?.hf_api_token;
+      if (typeof token === 'string' && token.length > 0) {
+        body.hf_api_token = token;
+        keys.push('hf_api_token');
+      }
     }
   } else {
-    body.lora_url = kept[0].source;
-    keys.push('lora_url');
-    if (kept[0].scale !== undefined) {
-      body.lora_strength = kept[0].scale;
-      keys.push('lora_strength');
+    if (kept.length > 0) {
+      body.lora_url = kept[0].source;
+      keys.push('lora_url');
+      if (kept[0].scale !== undefined) {
+        body.lora_strength = kept[0].scale;
+        keys.push('lora_strength');
+      }
     }
+    // A preset is a named style the *host* offers, not an adapter the caller
+    // supplies, so it stands on its own — with or without a LoRA row beside
+    // it. Gating it on the adapter list is how bug 110 discarded a configured
+    // preset in silence: the request succeeded, and the only evidence that
+    // anything was dropped was a plain image.
     const preset = profileParameters?.lora_preset;
     if (typeof preset === 'string' && preset.length > 0) {
       body.lora_preset = preset;

@@ -12800,21 +12800,22 @@ function applyPassthroughParameters(body, profileParameters) {
   return attached;
 }
 function applyLoras(body, model, loras, profileParameters) {
-  if (!loras || loras.length === 0) {
+  const family = matchLoraFamily(model);
+  const requested = loras ?? [];
+  if (!family) {
+    if (requested.length > 0) {
+      logger.warn("LoRA family unknown for this model; dropping the adapters rather than guessing a dialect", {
+        context: "NanoGPTImageProvider.applyLoras",
+        model,
+        dropped: requested.map((l) => l.source)
+      });
+      return { keys: [], dropped: requested.map((l) => l.source), dialect: null };
+    }
     return { keys: [], dropped: [], dialect: null };
   }
-  const family = matchLoraFamily(model);
-  if (!family) {
-    logger.warn("LoRA family unknown for this model; dropping the adapters rather than guessing a dialect", {
-      context: "NanoGPTImageProvider.applyLoras",
-      model,
-      dropped: loras.map((l) => l.source)
-    });
-    return { keys: [], dropped: loras.map((l) => l.source), dialect: null };
-  }
   const max = family.support.maxLoras;
-  const kept = loras.slice(0, max);
-  const dropped = loras.slice(max).map((l) => l.source);
+  const kept = requested.slice(0, max);
+  const dropped = requested.slice(max).map((l) => l.source);
   if (dropped.length > 0) {
     logger.warn("Capping the LoRA list to this model's limit", {
       context: "NanoGPTImageProvider.applyLoras",
@@ -12838,23 +12839,27 @@ function applyLoras(body, model, loras, profileParameters) {
       }
     });
   } else if (family.dialect === "weights") {
-    body.lora_weights = kept[0].source;
-    keys.push("lora_weights");
-    if (kept[0].scale !== void 0) {
-      body.lora_scale = kept[0].scale;
-      keys.push("lora_scale");
-    }
-    const token = profileParameters?.hf_api_token;
-    if (typeof token === "string" && token.length > 0) {
-      body.hf_api_token = token;
-      keys.push("hf_api_token");
+    if (kept.length > 0) {
+      body.lora_weights = kept[0].source;
+      keys.push("lora_weights");
+      if (kept[0].scale !== void 0) {
+        body.lora_scale = kept[0].scale;
+        keys.push("lora_scale");
+      }
+      const token = profileParameters?.hf_api_token;
+      if (typeof token === "string" && token.length > 0) {
+        body.hf_api_token = token;
+        keys.push("hf_api_token");
+      }
     }
   } else {
-    body.lora_url = kept[0].source;
-    keys.push("lora_url");
-    if (kept[0].scale !== void 0) {
-      body.lora_strength = kept[0].scale;
-      keys.push("lora_strength");
+    if (kept.length > 0) {
+      body.lora_url = kept[0].source;
+      keys.push("lora_url");
+      if (kept[0].scale !== void 0) {
+        body.lora_strength = kept[0].scale;
+        keys.push("lora_strength");
+      }
     }
     const preset = profileParameters?.lora_preset;
     if (typeof preset === "string" && preset.length > 0) {
@@ -13444,7 +13449,23 @@ var NanoGPTImageProvider = class {
       loraDropped: applied.dropped,
       passthroughKeys
     });
-    const response = await client.images.generate(requestParams);
+    let response;
+    try {
+      response = await client.images.generate(requestParams);
+    } catch (error) {
+      logger2.error("NanoGPT image request failed", {
+        context: "NanoGPTImageProvider.generateImage",
+        model,
+        size: params.size,
+        n: requestParams.n,
+        loraDialect: applied.dialect,
+        loraKeys: applied.keys,
+        loraDropped: applied.dropped,
+        passthroughKeys,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
     if (!("data" in response) || !response.data || !Array.isArray(response.data)) {
       logger2.error("Invalid response from NanoGPT Images API", {
         context: "NanoGPTImageProvider.generateImage"
