@@ -18,6 +18,7 @@ import type {
   ProviderOptionsSchema,
   ProviderOptionDirective,
 } from '@quilltap/plugin-types'
+import { fieldAppliesToModel } from '@/lib/plugins/model-matchers'
 
 interface ProviderOptionsPanelProps {
   schema: ProviderOptionsSchema | null | undefined
@@ -35,8 +36,14 @@ interface ProviderOptionsPanelProps {
 
 function shouldRenderField(
   field: ProviderOptionField,
-  parameters: Record<string, unknown>
+  parameters: Record<string, unknown>,
+  modelName: string | undefined
 ): boolean {
+  // Model gating first: a field this model has no use for is not offered at
+  // all, whatever its sibling fields say. `appliesToModels` is advisory in the
+  // sense that a field without it renders everywhere — but once a plugin has
+  // named the models, an unnamed one is a deliberate no.
+  if (!fieldAppliesToModel(field.appliesToModels, modelName)) return false
   if (!field.showIf) return true
   return parameters[field.showIf.field] === field.showIf.equals
 }
@@ -89,7 +96,7 @@ export function ProviderOptionsPanel({
           )}
           <div className="space-y-3">
             {group.fields
-              .filter((field) => shouldRenderField(field, parameters))
+              .filter((field) => shouldRenderField(field, parameters, modelName))
               .map((field) => (
                 <FieldRenderer
                   key={field.key}

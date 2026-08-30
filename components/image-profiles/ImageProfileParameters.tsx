@@ -1,5 +1,15 @@
 'use client'
 
+/**
+ * The legacy hand-written per-provider parameter panel.
+ *
+ * `ImageProfileForm` prefers the schema-driven `ProviderOptionsPanel` whenever
+ * the provider's plugin implements `getImageProviderOptionsSchema`. This
+ * remains the fallback for the plugins that have not adopted the hook yet, and
+ * for the case where the schema fetch itself fails — a provider whose editor
+ * offers nothing at all would be worse than a slightly stale size list.
+ */
+
 interface ImageProfileParametersProps {
   provider: string
   parameters: Record<string, any>

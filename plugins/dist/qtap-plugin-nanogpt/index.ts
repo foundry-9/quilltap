@@ -11,15 +11,27 @@
  * - Prompt caching: implicit on OpenAI/Gemini routes; explicit opt-in for
  *   Anthropic-routed models via the per-profile Prompt Caching options
  * - Image generation via the OpenAI-compatible images route (Flux, HiDream,
- *   Recraft, and 200+ others)
+ *   Recraft, and 200+ others), with LoRA adapters on the families that take
+ *   them and per-model options drawn from NanoGPT's own catalog
  * - Text embeddings via the OpenAI-compatible embeddings route
  *
  * One NanoGPT API key covers all three capabilities.
  */
 
-import type { TextProviderPlugin, ImageProviderConstraints, EmbeddingModelInfo, ProviderOptionsSchema } from './types';
+import type {
+  TextProviderPlugin,
+  ImageGenerationModelInfo,
+  ImageProviderConstraints,
+  EmbeddingModelInfo,
+  ProviderOptionsSchema,
+  ProviderOptionsSchemaContext,
+} from './types';
 import { NanoGPTProvider, NANOGPT_SUPPORTED_IMAGE_MIME_TYPES } from './provider';
-import { NanoGPTImageProvider } from './image-provider';
+import {
+  NanoGPTImageProvider,
+  getNanoGPTImageModels,
+  getNanoGPTImageOptionsSchema,
+} from './image-provider';
 import { NanoGPTEmbeddingProvider } from './embedding-provider';
 import { STATIC_MODELS, STATIC_MODEL_IDS, STATIC_IMAGE_MODEL_IDS, STATIC_EMBEDDING_MODELS } from './models';
 import {
@@ -279,6 +291,27 @@ export const plugin: TextProviderPlugin = {
   getEmbeddingModels: (): EmbeddingModelInfo[] => STATIC_EMBEDDING_MODELS,
 
   getImageProviderConstraints: (): ImageProviderConstraints => NANOGPT_IMAGE_CONSTRAINTS,
+
+  /**
+   * Image models with their LoRA capabilities. The curated families carry a
+   * real `loraSupport` because their wire dialect is known statically —
+   * NanoGPT's listing advertises a `lora` tag but leaves
+   * `allowed_passthrough_parameters` empty, so the tag can say a model takes
+   * adapters and never which spelling it wants. Models the live catalog tags
+   * but the dialect table does not know are surfaced with the capability and
+   * no mapping, and the request builder refuses to guess for them.
+   */
+  getImageGenerationModels: (): ImageGenerationModelInfo[] => getNanoGPTImageModels(),
+
+  /**
+   * Image-profile options, built per model from the cached detailed catalog:
+   * the size list is the model's own advertised resolutions, the image count
+   * its own `max_images`, and the diffusion dials appear only for the
+   * open-weight families that read them.
+   */
+  getImageProviderOptionsSchema: (
+    context?: ProviderOptionsSchemaContext
+  ): ProviderOptionsSchema => getNanoGPTImageOptionsSchema(context?.modelName),
 
   /**
    * NanoGPT's API is OpenAI-compatible, so tools are passed through verbatim.

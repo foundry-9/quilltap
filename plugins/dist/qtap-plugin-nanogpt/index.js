@@ -531,11 +531,11 @@ var parseLogLevel = (maybeLevel, sourceName, client) => {
 };
 function noop() {
 }
-function makeLogFn(fnLevel, logger4, logLevel) {
-  if (!logger4 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
+function makeLogFn(fnLevel, logger5, logLevel) {
+  if (!logger5 || levelNumbers[fnLevel] > levelNumbers[logLevel]) {
     return noop;
   } else {
-    return logger4[fnLevel].bind(logger4);
+    return logger5[fnLevel].bind(logger5);
   }
 }
 var noopLogger = {
@@ -546,22 +546,22 @@ var noopLogger = {
 };
 var cachedLoggers = /* @__PURE__ */ new WeakMap();
 function loggerFor(client) {
-  const logger4 = client.logger;
+  const logger5 = client.logger;
   const logLevel = client.logLevel ?? "off";
-  if (!logger4) {
+  if (!logger5) {
     return noopLogger;
   }
-  const cachedLogger = cachedLoggers.get(logger4);
+  const cachedLogger = cachedLoggers.get(logger5);
   if (cachedLogger && cachedLogger[0] === logLevel) {
     return cachedLogger[1];
   }
   const levelLogger = {
-    error: makeLogFn("error", logger4, logLevel),
-    warn: makeLogFn("warn", logger4, logLevel),
-    info: makeLogFn("info", logger4, logLevel),
-    debug: makeLogFn("debug", logger4, logLevel)
+    error: makeLogFn("error", logger5, logLevel),
+    warn: makeLogFn("warn", logger5, logLevel),
+    info: makeLogFn("info", logger5, logLevel),
+    debug: makeLogFn("debug", logger5, logLevel)
   };
-  cachedLoggers.set(logger4, [logLevel, levelLogger]);
+  cachedLoggers.set(logger5, [logLevel, levelLogger]);
   return levelLogger;
 }
 var formatRequestDetails = (details) => {
@@ -603,7 +603,7 @@ var Stream = class _Stream {
    */
   static fromSSEResponse(response, controller, client, synthesizeEventData) {
     let consumed = false;
-    const logger4 = client ? loggerFor(client) : console;
+    const logger5 = client ? loggerFor(client) : console;
     async function* iterator() {
       if (consumed) {
         throw new OpenAIError("Cannot iterate over a consumed stream, use `.tee()` to split the stream.");
@@ -622,8 +622,8 @@ var Stream = class _Stream {
             try {
               data = JSON.parse(sse.data);
             } catch (e) {
-              logger4.error(`Could not parse message into JSON:`, sse.data);
-              logger4.error(`From chunk:`, sse.raw);
+              logger5.error(`Could not parse message into JSON:`, sse.data);
+              logger5.error(`From chunk:`, sse.raw);
               throw e;
             }
             if (data && data.error) {
@@ -12205,7 +12205,7 @@ function createConsoleLoggerWithChild(prefix, minLevel = "debug", baseContext = 
     const entries = Object.entries(merged).filter(([key]) => key !== "context").map(([key, value]) => `${key}=${JSON.stringify(value)}`).join(" ");
     return entries ? ` ${entries}` : "";
   };
-  const logger4 = {
+  const logger5 = {
     debug: (message, context) => {
       if (shouldLog("debug")) {
         console.debug(`[${prefix}] ${message}${formatContext(context)}`);
@@ -12237,7 +12237,7 @@ ${error.stack || error.message}` : ""
       });
     }
   };
-  return logger4;
+  return logger5;
 }
 function createPluginLogger(pluginName, minLevel = "debug") {
   const coreFactory = getCoreLoggerFactory();
@@ -12704,6 +12704,167 @@ var OpenAICompatibleProvider = class {
 };
 var rewriteLogger = createPluginLogger("host-rewrite");
 
+// image-loras.ts
+var logger = createPluginLogger("qtap-plugin-nanogpt");
+var INDEXED_SCALE = { min: 0, max: 4, default: 1, step: 0.1 };
+var NANOGPT_LORA_FAMILIES = [
+  // ---- indexed: lora_url_N / lora_scale_N ---------------------------------
+  {
+    prefix: "flux-2-dev-lora",
+    dialect: "indexed",
+    support: { maxLoras: 4, scale: INDEXED_SCALE, sourceKinds: ["url", "hf-repo"] }
+  },
+  {
+    prefix: "flux-2-klein-4b",
+    dialect: "indexed",
+    support: { maxLoras: 3, scale: INDEXED_SCALE, sourceKinds: ["url", "hf-repo"] }
+  },
+  {
+    prefix: "flux-2-klein-9b",
+    dialect: "indexed",
+    support: { maxLoras: 3, scale: INDEXED_SCALE, sourceKinds: ["url", "hf-repo"] }
+  },
+  {
+    prefix: "wavespeed-ai/flux-2-klein-base-4b",
+    dialect: "indexed",
+    support: { maxLoras: 3, scale: INDEXED_SCALE, sourceKinds: ["url", "hf-repo"] }
+  },
+  {
+    prefix: "wavespeed-ai/flux-2-klein-base-9b",
+    dialect: "indexed",
+    support: { maxLoras: 3, scale: INDEXED_SCALE, sourceKinds: ["url", "hf-repo"] }
+  },
+  {
+    prefix: "z-image-turbo-lora",
+    dialect: "indexed",
+    support: { maxLoras: 3, scale: INDEXED_SCALE, sourceKinds: ["url", "hf-repo"] }
+  },
+  {
+    prefix: "wavespeed-ai/krea-v2/turbo-lora",
+    dialect: "indexed",
+    support: { maxLoras: 3, scale: INDEXED_SCALE, sourceKinds: ["url", "hf-repo"] }
+  },
+  // ---- weights: lora_weights / lora_scale / hf_api_token ------------------
+  {
+    prefix: "pruna-ai/p-image/text-to-image-lora",
+    dialect: "weights",
+    support: {
+      maxLoras: 1,
+      scale: { min: 0, max: 4, default: 0.5, step: 0.05 },
+      sourceKinds: ["url", "hf-repo"],
+      supportsPrivateWeightsToken: true
+    }
+  },
+  {
+    prefix: "pruna-ai/p-image/edit-lora",
+    dialect: "weights",
+    support: {
+      maxLoras: 1,
+      scale: { min: 0, max: 4, default: 1, step: 0.05 },
+      sourceKinds: ["url", "hf-repo"],
+      supportsPrivateWeightsToken: true
+    }
+  },
+  // ---- url: lora_url / lora_strength / lora_preset ------------------------
+  {
+    prefix: "flux-lora",
+    dialect: "url",
+    support: {
+      maxLoras: 1,
+      // fal's lora_strength floor is 0.1, not 0 — a zero would be rejected
+      // rather than read as "no adapter".
+      scale: { min: 0.1, max: 4, default: 1, step: 0.1 },
+      sourceKinds: ["url", "hf-repo"]
+    }
+  }
+];
+function matchLoraFamily(model) {
+  if (!model) return void 0;
+  return NANOGPT_LORA_FAMILIES.filter((family) => model === family.prefix || model.startsWith(family.prefix)).sort((a, b) => b.prefix.length - a.prefix.length)[0];
+}
+var NANOGPT_PASSTHROUGH_KEYS = [
+  "num_inference_steps",
+  "guidance_scale",
+  "steps",
+  "strength"
+];
+function applyPassthroughParameters(body, profileParameters) {
+  if (!profileParameters) return [];
+  const attached = [];
+  for (const key of NANOGPT_PASSTHROUGH_KEYS) {
+    const value = profileParameters[key];
+    if (value === void 0 || value === null || value === "") continue;
+    body[key] = value;
+    attached.push(key);
+  }
+  return attached;
+}
+function applyLoras(body, model, loras, profileParameters) {
+  if (!loras || loras.length === 0) {
+    return { keys: [], dropped: [], dialect: null };
+  }
+  const family = matchLoraFamily(model);
+  if (!family) {
+    logger.warn("LoRA family unknown for this model; dropping the adapters rather than guessing a dialect", {
+      context: "NanoGPTImageProvider.applyLoras",
+      model,
+      dropped: loras.map((l) => l.source)
+    });
+    return { keys: [], dropped: loras.map((l) => l.source), dialect: null };
+  }
+  const max = family.support.maxLoras;
+  const kept = loras.slice(0, max);
+  const dropped = loras.slice(max).map((l) => l.source);
+  if (dropped.length > 0) {
+    logger.warn("Capping the LoRA list to this model's limit", {
+      context: "NanoGPTImageProvider.applyLoras",
+      model,
+      dialect: family.dialect,
+      maxLoras: max,
+      kept: kept.map((l) => l.source),
+      dropped
+    });
+  }
+  const keys = [];
+  if (family.dialect === "indexed") {
+    kept.forEach((lora, index) => {
+      const urlKey = `lora_url_${index + 1}`;
+      body[urlKey] = lora.source;
+      keys.push(urlKey);
+      if (lora.scale !== void 0) {
+        const scaleKey = `lora_scale_${index + 1}`;
+        body[scaleKey] = lora.scale;
+        keys.push(scaleKey);
+      }
+    });
+  } else if (family.dialect === "weights") {
+    body.lora_weights = kept[0].source;
+    keys.push("lora_weights");
+    if (kept[0].scale !== void 0) {
+      body.lora_scale = kept[0].scale;
+      keys.push("lora_scale");
+    }
+    const token = profileParameters?.hf_api_token;
+    if (typeof token === "string" && token.length > 0) {
+      body.hf_api_token = token;
+      keys.push("hf_api_token");
+    }
+  } else {
+    body.lora_url = kept[0].source;
+    keys.push("lora_url");
+    if (kept[0].scale !== void 0) {
+      body.lora_strength = kept[0].scale;
+      keys.push("lora_strength");
+    }
+    const preset = profileParameters?.lora_preset;
+    if (typeof preset === "string" && preset.length > 0) {
+      body.lora_preset = preset;
+      keys.push("lora_preset");
+    }
+  }
+  return { keys, dropped, dialect: family.dialect };
+}
+
 // models.ts
 var NANOGPT_BASE_URL = "https://nano-gpt.com/api/v1";
 var STATIC_MODELS = [
@@ -12797,14 +12958,36 @@ var STATIC_MODELS = [
   }
 ];
 var STATIC_MODEL_IDS = STATIC_MODELS.map((m) => m.id);
-var STATIC_IMAGE_MODEL_IDS = [
-  "hidream",
-  "flux-2-flash",
-  "flux-2-dev",
-  "flux-2-pro",
-  "recraft-v3",
-  "gpt-image-1.5"
+var FLAGSHIP_IMAGE_MODELS = [
+  { id: "hidream", name: "HiDream (NanoGPT default)" },
+  { id: "flux-2-flash", name: "FLUX.2 Flash" },
+  { id: "flux-2-dev", name: "FLUX.2 Dev" },
+  { id: "flux-2-pro", name: "FLUX.2 Pro" },
+  { id: "recraft-v3", name: "Recraft V3" },
+  { id: "gpt-image-1.5", name: "GPT Image 1.5" }
 ];
+var LORA_FAMILY_NAMES = {
+  "flux-2-dev-lora": "FLUX.2 Dev LoRA",
+  "flux-2-klein-4b": "FLUX.2 Klein 4B",
+  "flux-2-klein-9b": "FLUX.2 Klein 9B",
+  "wavespeed-ai/flux-2-klein-base-4b": "FLUX.2 Klein Base 4B (WaveSpeed)",
+  "wavespeed-ai/flux-2-klein-base-9b": "FLUX.2 Klein Base 9B (WaveSpeed)",
+  "z-image-turbo-lora": "Z-Image Turbo LoRA",
+  "wavespeed-ai/krea-v2/turbo-lora": "Krea V2 Turbo LoRA (WaveSpeed)",
+  "pruna-ai/p-image/text-to-image-lora": "Pruna P-Image LoRA (text to image)",
+  "pruna-ai/p-image/edit-lora": "Pruna P-Image LoRA (edit)",
+  "flux-lora": "FLUX LoRA (fal)"
+};
+var STATIC_IMAGE_MODELS = [
+  ...FLAGSHIP_IMAGE_MODELS,
+  ...NANOGPT_LORA_FAMILIES.map((family) => ({
+    id: family.prefix,
+    name: LORA_FAMILY_NAMES[family.prefix] ?? family.prefix,
+    description: `Takes up to ${family.support.maxLoras} LoRA ${family.support.maxLoras === 1 ? "adapter" : "adapters"}.`,
+    loraSupport: family.support
+  }))
+];
+var STATIC_IMAGE_MODEL_IDS = STATIC_IMAGE_MODELS.map((m) => m.id);
 var STATIC_EMBEDDING_MODELS = [
   {
     id: "text-embedding-3-small",
@@ -13177,7 +13360,38 @@ var NanoGPTProvider = class extends OpenAICompatibleProvider {
 };
 
 // image-provider.ts
-var logger = createPluginLogger("qtap-plugin-nanogpt");
+var logger2 = createPluginLogger("qtap-plugin-nanogpt");
+var CATALOG_TTL_MS = 60 * 60 * 1e3;
+var detailedCatalog = null;
+var detailedCatalogFetchedAt = 0;
+function catalogIsFresh() {
+  return detailedCatalog !== null && Date.now() - detailedCatalogFetchedAt < CATALOG_TTL_MS;
+}
+function catalogEntry(model) {
+  if (!model || !catalogIsFresh()) return void 0;
+  return detailedCatalog.get(model);
+}
+var FALLBACK_SIZES = [
+  "1024x1024",
+  "768x1360",
+  "1360x768",
+  "880x1168",
+  "1168x880",
+  "1248x832",
+  "832x1248",
+  "1536x1024",
+  "1024x1536"
+];
+function labelForSize(size) {
+  const match = /^(\d+)\s*[x×]\s*(\d+)$/.exec(size.trim());
+  if (!match) return size;
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (width === height) return `Square (${size})`;
+  const ratio = width / height;
+  if (ratio > 1) return ratio >= 1.6 ? `Wide (${size})` : `Landscape (${size})`;
+  return ratio <= 0.625 ? `Tall (${size})` : `Portrait (${size})`;
+}
 var NanoGPTImageProvider = class {
   constructor() {
     this.provider = "NANOGPT";
@@ -13205,12 +13419,34 @@ var NanoGPTImageProvider = class {
     if (params.size) {
       requestParams.size = params.size;
     }
+    const extraBody = requestParams;
     if (params.seed !== void 0) {
-      requestParams.seed = params.seed;
+      extraBody.seed = params.seed;
     }
+    if (params.guidanceScale !== void 0) {
+      extraBody.guidance_scale = params.guidanceScale;
+    }
+    if (params.steps !== void 0) {
+      extraBody.num_inference_steps = params.steps;
+    }
+    if (params.negativePrompt) {
+      extraBody.negative_prompt = params.negativePrompt;
+    }
+    const passthroughKeys = applyPassthroughParameters(extraBody, params.profileParameters);
+    const applied = applyLoras(extraBody, model, params.loras, params.profileParameters);
+    logger2.debug("Posting NanoGPT image request", {
+      context: "NanoGPTImageProvider.generateImage",
+      model,
+      size: params.size,
+      n: requestParams.n,
+      loraDialect: applied.dialect,
+      loraKeys: applied.keys,
+      loraDropped: applied.dropped,
+      passthroughKeys
+    });
     const response = await client.images.generate(requestParams);
     if (!("data" in response) || !response.data || !Array.isArray(response.data)) {
-      logger.error("Invalid response from NanoGPT Images API", {
+      logger2.error("Invalid response from NanoGPT Images API", {
         context: "NanoGPTImageProvider.generateImage"
       });
       throw new Error("Invalid response from NanoGPT Images API");
@@ -13254,18 +13490,39 @@ var NanoGPTImageProvider = class {
    * List image-generation models.
    *
    * Without an API key this is the curated static list. With a key, NanoGPT's
-   * dedicated /image-models listing is queried and filtered to entries whose
-   * capability flags say they generate images (the listing also carries
-   * edit-only and upscale-only entries). The curated ids are unioned in so
-   * the documented flagships always appear. Throws on transport failure so
-   * the caller can fall back to `supportedModels` and label the list as
-   * built-in.
+   * dedicated /image-models listing is queried (in its `?detailed=true` form,
+   * which also feeds the options-schema cache) and filtered to entries whose
+   * capability flags say they generate images — the listing also carries
+   * edit-only and upscale-only entries. The curated ids are unioned in so the
+   * documented flagships and the LoRA families always appear. Throws on
+   * transport failure so the caller can fall back to `supportedModels` and
+   * label the list as built-in.
    */
   async getAvailableModels(apiKey) {
     if (!apiKey) {
       return [...this.supportedModels];
     }
-    const response = await fetch(`${this.baseUrl}/image-models`, {
+    const entries = await this.fetchDetailedCatalog(apiKey);
+    const merged = new Set(
+      entries.filter((m) => m.capabilities?.image_generation === true).map((m) => m.id)
+    );
+    for (const id of STATIC_IMAGE_MODEL_IDS) merged.add(id);
+    const imageModels = Array.from(merged).sort();
+    logger2.debug("Discovered NanoGPT image-generation models", {
+      context: "NanoGPTImageProvider.getAvailableModels",
+      count: imageModels.length
+    });
+    return imageModels;
+  }
+  /**
+   * Fetch the detailed catalog and refresh the module cache.
+   *
+   * `?detailed=true` is the same endpoint the plugin already called, so this
+   * costs no extra round trip — it just asks for the per-model tags,
+   * resolutions and `max_images` alongside the ids.
+   */
+  async fetchDetailedCatalog(apiKey) {
+    const response = await fetch(`${this.baseUrl}/image-models?detailed=true`, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         "User-Agent": getQuilltapUserAgent()
@@ -13276,21 +13533,117 @@ var NanoGPTImageProvider = class {
     }
     const payload = await response.json();
     const entries = Array.isArray(payload.data) ? payload.data : [];
-    const merged = new Set(
-      entries.filter((m) => m.capabilities?.image_generation === true).map((m) => m.id)
-    );
-    for (const id of STATIC_IMAGE_MODEL_IDS) merged.add(id);
-    const imageModels = Array.from(merged).sort();
-    logger.debug("Discovered NanoGPT image-generation models", {
-      context: "NanoGPTImageProvider.getAvailableModels",
-      count: imageModels.length
+    detailedCatalog = new Map(entries.map((entry) => [entry.id, entry]));
+    detailedCatalogFetchedAt = Date.now();
+    logger2.debug("Cached the detailed NanoGPT image catalog", {
+      context: "NanoGPTImageProvider.fetchDetailedCatalog",
+      count: entries.length,
+      loraTagged: entries.filter((e) => e.tags?.includes("lora")).length
     });
-    return imageModels;
+    return entries;
   }
 };
+function getNanoGPTImageModels() {
+  const models = STATIC_IMAGE_MODELS.map((model) => ({ ...model }));
+  if (!catalogIsFresh()) {
+    return models;
+  }
+  const known = new Set(models.map((m) => m.id));
+  for (const entry of detailedCatalog.values()) {
+    if (known.has(entry.id)) continue;
+    if (entry.capabilities?.image_generation !== true) continue;
+    if (!entry.tags?.includes("lora")) continue;
+    if (matchLoraFamily(entry.id)) continue;
+    models.push({
+      id: entry.id,
+      name: entry.name ?? entry.id,
+      description: entry.description,
+      supportedSizes: entry.supported_parameters?.resolutions,
+      loraSupport: {
+        maxLoras: 1,
+        sourceKinds: ["url", "hf-repo"]
+      }
+    });
+  }
+  return models;
+}
+function getNanoGPTImageOptionsSchema(model) {
+  const entry = catalogEntry(model);
+  const sizes = entry?.supported_parameters?.resolutions?.length ? entry.supported_parameters.resolutions : FALLBACK_SIZES;
+  const maxImages = entry?.max_images && entry.max_images > 0 ? entry.max_images : 1;
+  const fields = [
+    {
+      key: "size",
+      label: "Default Size",
+      type: "enum",
+      default: sizes.includes("1024x1024") ? "1024x1024" : sizes[0],
+      helpText: entry ? "The resolutions this model advertises. Requests that name no size take the first." : "Common sizes across NanoGPT's image models; each model maps to its nearest native resolution.",
+      enumValues: sizes.map((size) => ({ value: size, label: labelForSize(size) }))
+    }
+  ];
+  if (maxImages > 1) {
+    fields.push({
+      key: "n",
+      label: "Images per Request",
+      type: "number",
+      default: 1,
+      helpText: `This model returns up to ${maxImages} per request. Leave blank for one.`
+    });
+  }
+  const diffusionModels = [
+    "flux-lora",
+    "flux-2-dev",
+    "flux-2-klein-4b",
+    "flux-2-klein-9b",
+    "z-image-turbo-lora",
+    "hidream",
+    "wavespeed-ai/*",
+    "pruna-ai/*"
+  ];
+  fields.push(
+    {
+      key: "num_inference_steps",
+      label: "Inference Steps",
+      type: "number",
+      helpText: "More steps, more refinement, more time and money. Blank leaves it to the model.",
+      appliesToModels: diffusionModels
+    },
+    {
+      key: "guidance_scale",
+      label: "Guidance Scale",
+      type: "number",
+      helpText: "How closely the model is held to the prompt. Low wanders and invents; high obeys and stiffens. Blank leaves it to the model.",
+      appliesToModels: diffusionModels
+    }
+  );
+  fields.push({
+    key: "lora_preset",
+    label: "LoRA Preset",
+    type: "string",
+    helpText: "A named preset offered by this model's host, applied alongside whatever adapter you list below. Leave blank unless you have been given one.",
+    appliesToModels: ["flux-lora"]
+  });
+  const tokenModels = NANOGPT_LORA_FAMILIES.filter((family) => family.support.supportsPrivateWeightsToken).map((family) => `${family.prefix}*`);
+  fields.push({
+    key: "hf_api_token",
+    label: "HuggingFace Token (private weights)",
+    type: "string",
+    helpText: "Only needed when your LoRA lives behind a gated or private HuggingFace repository. It is sent to NanoGPT with the request, and only for the models that can use it.",
+    appliesToModels: tokenModels
+  });
+  return {
+    groups: [
+      {
+        title: "NanoGPT Image Options",
+        helpText: "NanoGPT routes each request to the named model's own atelier, so these controls mean whatever that establishment takes them to mean \u2014 and the ones it has no use for are simply not offered. Sizes and the image count come from the model's own advertised capabilities where NanoGPT publishes them.",
+        fields
+      }
+    ]
+  };
+}
 
 // embedding-provider.ts
-var logger2 = createPluginLogger("qtap-plugin-nanogpt");
+var logger3 = createPluginLogger("qtap-plugin-nanogpt");
 var NanoGPTEmbeddingProvider = class {
   constructor(baseUrl) {
     this.baseUrl = baseUrl || NANOGPT_BASE_URL;
@@ -13324,7 +13677,7 @@ var NanoGPTEmbeddingProvider = class {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const errorMessage = error.error?.message || response.statusText;
-      logger2.error("NanoGPT embedding failed", {
+      logger3.error("NanoGPT embedding failed", {
         context: "NanoGPTEmbeddingProvider.generateEmbedding",
         status: response.status,
         error: errorMessage
@@ -13372,7 +13725,7 @@ var NanoGPTEmbeddingProvider = class {
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
       const errorMessage = error.error?.message || response.statusText;
-      logger2.error("NanoGPT batch embedding failed", {
+      logger3.error("NanoGPT batch embedding failed", {
         context: "NanoGPTEmbeddingProvider.generateBatchEmbeddings",
         status: response.status,
         error: errorMessage
@@ -13416,7 +13769,7 @@ var NanoGPTEmbeddingProvider = class {
       const models = Array.isArray(data.data) ? data.data.map((m) => m.id) : [];
       return models.length > 0 ? models : STATIC_EMBEDDING_MODELS.map((m) => m.id);
     } catch (error) {
-      logger2.error("Failed to fetch NanoGPT embedding models", {
+      logger3.error("Failed to fetch NanoGPT embedding models", {
         context: "NanoGPTEmbeddingProvider.getAvailableModels"
       }, error instanceof Error ? error : void 0);
       return STATIC_EMBEDDING_MODELS.map((m) => m.id);
@@ -13767,7 +14120,7 @@ function stripAllXMLToolMarkers(response) {
 }
 
 // index.ts
-var logger3 = createPluginLogger("qtap-plugin-nanogpt");
+var logger4 = createPluginLogger("qtap-plugin-nanogpt");
 var NANOGPT_IMAGE_CONSTRAINTS = {
   maxImagesPerRequest: 1,
   supportedSizes: [
@@ -13936,7 +14289,7 @@ var plugin = {
       for (const id of STATIC_IMAGE_MODEL_IDS) merged.delete(id);
       return Array.from(merged).sort();
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Failed to fetch NanoGPT models",
         { context: "plugin.getAvailableModels" },
         error instanceof Error ? error : void 0
@@ -13949,7 +14302,7 @@ var plugin = {
       const provider = new NanoGPTProvider();
       return await provider.validateApiKey(apiKey);
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error validating NanoGPT API key",
         { context: "plugin.validateApiKey" },
         error instanceof Error ? error : void 0
@@ -13961,6 +14314,23 @@ var plugin = {
   getEmbeddingModels: () => STATIC_EMBEDDING_MODELS,
   getImageProviderConstraints: () => NANOGPT_IMAGE_CONSTRAINTS,
   /**
+   * Image models with their LoRA capabilities. The curated families carry a
+   * real `loraSupport` because their wire dialect is known statically —
+   * NanoGPT's listing advertises a `lora` tag but leaves
+   * `allowed_passthrough_parameters` empty, so the tag can say a model takes
+   * adapters and never which spelling it wants. Models the live catalog tags
+   * but the dialect table does not know are surfaced with the capability and
+   * no mapping, and the request builder refuses to guess for them.
+   */
+  getImageGenerationModels: () => getNanoGPTImageModels(),
+  /**
+   * Image-profile options, built per model from the cached detailed catalog:
+   * the size list is the model's own advertised resolutions, the image count
+   * its own `max_images`, and the diffusion dials appear only for the
+   * open-weight families that read them.
+   */
+  getImageProviderOptionsSchema: (context) => getNanoGPTImageOptionsSchema(context?.modelName),
+  /**
    * NanoGPT's API is OpenAI-compatible, so tools are passed through verbatim.
    */
   formatTools: (tools) => {
@@ -13968,14 +14338,14 @@ var plugin = {
       const formatted = [];
       for (const tool of tools) {
         if (!("function" in tool)) {
-          logger3.warn("Skipping tool with invalid format", { context: "plugin.formatTools" });
+          logger4.warn("Skipping tool with invalid format", { context: "plugin.formatTools" });
           continue;
         }
         formatted.push(tool);
       }
       return formatted;
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error formatting tools for NanoGPT",
         { context: "plugin.formatTools" },
         error instanceof Error ? error : void 0
@@ -13987,7 +14357,7 @@ var plugin = {
     try {
       return parseOpenAIToolCalls(response);
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing tool calls from NanoGPT response",
         { context: "plugin.parseToolCalls" },
         error instanceof Error ? error : void 0
@@ -14002,7 +14372,7 @@ var plugin = {
     try {
       return parseAllXMLAsToolCalls(text);
     } catch (error) {
-      logger3.error(
+      logger4.error(
         "Error parsing text tool calls",
         { context: "nanogpt.parseTextToolCalls" },
         error instanceof Error ? error : void 0

@@ -4,6 +4,47 @@
 
 ### 4.9-dev
 
+#### Added: LoRA adapters on image profiles, and per-model image options
+
+Image profiles can now carry LoRA adapters — a `loras` list of `{ source, scale, triggerPhrase }`
+stored in the profile's existing `parameters` bag. No schema change, no migration.
+
+A provider opts in by declaring `loraSupport` (per model on `getImageGenerationModels()`, or
+provider-wide on `getImageProviderConstraints()`); the host then shows the editor, caps the list, and
+passes it to `generateImage` as `ImageGenParams.loras`. A plugin that declares nothing never sees the
+key, so no other provider plugin changed. NanoGPT is the first consumer: it maps the canonical list
+onto whichever of three wire dialects the selected model family uses — indexed `lora_url_N`/
+`lora_scale_N` pairs, a single `lora_weights`/`lora_scale`, or `lora_url`/`lora_strength`. A
+LoRA-capable model whose dialect the static family table does not know gets the capability but no
+wire mapping, and logs a "family unknown" warning rather than posting a body the model would ignore.
+
+The image-profile editor's hand-written per-provider switch is replaced, for providers that implement
+the new `getImageProviderOptionsSchema` hook, by the same schema-driven `ProviderOptionsPanel` the
+connection-profile editor uses. The schema is fetched per model and refetched when the model changes,
+so NanoGPT's size list and image-count ceiling now come from that model's own advertised
+capabilities. `ProviderOptionField.appliesToModels` is now honoured by that renderer (exact id, `*`
+glob, or family prefix), which also gates fields on the LLM side. Providers without the hook keep the
+legacy panel.
+
+#### Fixed: image parameters reached chat generations and vanished everywhere else
+
+Five call sites built image-generation parameters independently, and three of them read exactly one
+key off the profile (`quality`). Anything configured on a profile therefore worked for `generate_image`
+in the Salon and was silently dropped for character avatars, story backgrounds, `POST /api/v1/images`,
+and the wardrobe's preview portrait.
+
+All five now go through one builder, `lib/image-gen/params-builder.ts`, which merges overrides over
+the profile's stored defaults (the previous merge semantics preserved key for key), resolves
+orientation, attaches the capped LoRA list, and forwards the residual parameter bag to the plugin as
+`profileParameters`. Side effects: those four paths now honour the profile's `negativePrompt`, `seed`,
+`guidanceScale` and `steps`, and the wardrobe preview resolves portrait through the provider's own
+mechanism instead of a hardcoded `1024x1792` that only OpenAI ever accepted.
+
+Malformed `parameters.loras` is now rejected with a 400 by the image-profile POST and PUT handlers
+before anything is written. A stored list that is over the selected model's cap is kept on the profile
+and flagged in the editor rather than deleted, so narrowing the model and widening it again loses
+nothing; capping happens at request time, and every capped or stripped adapter is named in the log.
+
 #### Fixed: a document edit missing its `find` argument was reported as "Text not found in file" (bug 108)
 
 `doc_str_replace` opened the file, handed an undefined `find` to the matcher, got zero matches back,

@@ -6,15 +6,19 @@
  * POST /api/v1/image-profiles?action=validate-key - Validate an API key
  * GET /api/v1/image-profiles?action=list-models - List available image models
  * GET /api/v1/image-profiles?action=list-providers - List available image providers
+ * GET /api/v1/image-profiles?action=options-schema - Per-provider (and per-model) image options schema
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, RequestContext, enrichWithApiKey, enrichWithTags } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
-import { successResponse, created, conflict, notFound, badRequest, serverError } from '@/lib/api/responses';
+import { successResponse, created, conflict, notFound, badRequest, serverError, validationError } from '@/lib/api/responses';
 import { logger } from '@/lib/logger';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
+import { validateProfileLoras } from '@/lib/image-gen/lora-validation';
+import { resolveLoraSupport } from '@/lib/image-gen/lora-support';
+import type { ImageLoraSupport, ProviderOptionsSchema } from '@quilltap/plugin-types';
 
 /**
  * GET /api/v1/image-profiles
@@ -32,6 +36,11 @@ export const GET = createContextHandler(async (req, context) => {
   // Handle list-models action
   if (action === 'list-models') {
     return handleListModels(req, context);
+  }
+
+  // Handle options-schema action
+  if (action === 'options-schema') {
+    return handleOptionsSchema(req);
   }
 
   try {
@@ -185,17 +194,95 @@ async function handleListModels(req: NextRequest, context: RequestContext) {
       }
     }
 
+    // Resolve LoRA support here rather than in the browser: the resolution
+    // order (exact id -> longest-prefix family -> provider constraint) lives
+    // in one host module, and the plugin registry it reads is server-side
+    // only. Models that resolve nothing are simply absent from the map, which
+    // is the editor's signal to offer no LoRA rows at all.
+    const loraSupport: Record<string, ImageLoraSupport> = {};
+    for (const modelId of models) {
+      const support = resolveLoraSupport(provider, modelId);
+      if (support) {
+        loraSupport[modelId] = support;
+      }
+    }
+
+    logger.debug('[Image Profiles v1] Resolved LoRA support for the model list', {
+      provider,
+      modelCount: models.length,
+      loraCapableCount: Object.keys(loraSupport).length,
+    });
+
     return NextResponse.json({
       provider,
       models,
       supportedModels: imageProvider.supportedModels,
       source,
+      loraSupport,
       ...(fetchError ? { fetchError } : {}),
     });
   } catch (error) {
     logger.error('[Image Profiles v1] Error in list-models', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to fetch models');
   }
+}
+
+/**
+ * Handle options-schema action
+ *
+ * Asks the provider's plugin for the fields the image-profile editor should
+ * render, for the selected model. The model matters here in a way it does not
+ * on the LLM side: a gateway routing to hundreds of image models legitimately
+ * answers with different legal sizes and a different `n` ceiling per model,
+ * so the editor refetches whenever the model changes.
+ *
+ * A provider without the hook answers `null` and the editor falls back to its
+ * legacy hand-written panel — same try/catch discipline as
+ * `/api/v1/providers`, so a plugin that throws costs the user a warning line,
+ * not a broken form.
+ */
+function handleOptionsSchema(req: NextRequest) {
+  const { searchParams } = req.nextUrl;
+  const provider = searchParams.get('provider');
+  const model = searchParams.get('model') ?? undefined;
+
+  if (!provider) {
+    return badRequest('Provider is required');
+  }
+
+  const plugin = providerRegistry.getProvider(provider);
+  if (!plugin) {
+    return badRequest(`Provider ${provider} is not available`);
+  }
+
+  let optionsSchema: ProviderOptionsSchema | null = null;
+  try {
+    optionsSchema = plugin.getImageProviderOptionsSchema?.({ modelName: model }) ?? null;
+  } catch (err) {
+    logger.warn('[Image Profiles v1] getImageProviderOptionsSchema threw', {
+      provider,
+      model,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    optionsSchema = null;
+  }
+
+  const support = resolveLoraSupport(provider, model);
+
+  logger.debug('[Image Profiles v1] Served image options schema', {
+    provider,
+    model,
+    hasSchema: optionsSchema !== null,
+    groupCount: optionsSchema?.groups.length ?? 0,
+    loraSupport: support ? { maxLoras: support.maxLoras } : null,
+  });
+
+  return successResponse({
+    provider,
+    model: model ?? null,
+    optionsSchema,
+    loraSupport: support,
+  });
 }
 
 /**
@@ -347,6 +434,17 @@ export const POST = createContextHandler(async (req, context) => {
 
     if (typeof parameters !== 'object' || Array.isArray(parameters)) {
       return badRequest('Parameters must be an object');
+    }
+
+    // Validate the reserved `loras` key before anything is written — a
+    // malformed adapter list must not save cleanly and fail at generation.
+    const loraError = validateProfileLoras(parameters);
+    if (loraError) {
+      logger.warn('[Image Profiles v1] Rejected a profile with a malformed LoRA list', {
+        provider,
+        issues: loraError.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+      });
+      return validationError(loraError);
     }
 
     // Validate apiKeyId if provided

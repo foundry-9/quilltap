@@ -303,6 +303,34 @@ export interface ImageOrientationSupport {
 }
 
 /**
+ * What a provider (or one of its models) can do with LoRA adapters.
+ *
+ * Declaring this is the whole opt-in: the host shows the LoRA editor, stores
+ * the list on the profile, caps it, and hands it to `generateImage` as
+ * `ImageGenParams.loras`. A plugin that declares nothing never sees the key,
+ * so adding LoRA support to one provider costs every other provider zero
+ * lines.
+ */
+export interface ImageLoraSupport {
+  /** How many adapters this model accepts in one request. */
+  maxLoras: number;
+  /**
+   * Bounds for `ImageLoraSpec.scale`, used by the editor's slider. Omitted
+   * means the host offers a permissive 0–2 range and the provider's own
+   * default applies when the user leaves it alone.
+   */
+  scale?: { min: number; max: number; default: number; step?: number };
+  /** What the plugin accepts in `ImageLoraSpec.source`. */
+  sourceKinds: Array<'url' | 'hf-repo' | 'provider-id'>;
+  /**
+   * Whether this model can take a token for private or gated weights (e.g.
+   * NanoGPT's pruna family and its `hf_api_token`). The token itself travels
+   * as an ordinary options-schema field in `profileParameters`, not here.
+   */
+  supportsPrivateWeightsToken?: boolean;
+}
+
+/**
  * Information about an image generation model
  */
 export interface ImageGenerationModelInfo {
@@ -321,6 +349,12 @@ export interface ImageGenerationModelInfo {
    * Required for providers (OpenAI, Z.AI) whose legal sizes differ by model.
    */
   orientationSupport?: ImageOrientationSupport;
+  /**
+   * Per-model LoRA support, overriding any provider-level default. Resolution
+   * mirrors orientation: exact id, then longest-prefix family match, then the
+   * provider-level `ImageProviderConstraints.loraSupport`, then none.
+   */
+  loraSupport?: ImageLoraSupport;
 }
 
 /**
@@ -376,6 +410,14 @@ export interface ImageProviderConstraints {
    * (e.g. Grok, Z.AI).
    */
   orientationSupport?: ImageOrientationSupport;
+  /**
+   * Default LoRA support when no per-model override applies. Declare it only
+   * for providers where *every* image model takes adapters — otherwise leave
+   * it off and put `loraSupport` on the individual
+   * `ImageGenerationModelInfo` entries, so models that can't take a LoRA
+   * never offer the editor.
+   */
+  loraSupport?: ImageLoraSupport;
 }
 
 /**
@@ -672,6 +714,33 @@ export interface TextProviderPlugin {
    * @returns A schema, or undefined when this provider has no extra options
    */
   getProviderOptionsSchema?: (
+    context?: ProviderOptionsSchemaContext
+  ) => ProviderOptionsSchema | undefined;
+
+  /**
+   * Describe provider-specific fields the *image*-profile editor should
+   * render (optional). The sibling of `getProviderOptionsSchema`, sharing its
+   * schema type and its renderer — the difference is only which profile's
+   * `parameters` bag the values land in.
+   *
+   * Field keys must match what the plugin reads off
+   * `ImageGenParams.profileParameters` at call time, with two exceptions the
+   * host owns outright: `size` and `aspectRatio` keep their existing storage
+   * keys so profiles written by the old hand-rolled panel keep working.
+   *
+   * Unlike the text hook, `context.modelName` here is *not* advisory: image
+   * providers routing to hundreds of models legitimately return a different
+   * schema per model (different legal sizes, different `n` ceiling), and the
+   * host refetches whenever the selected model changes.
+   *
+   * LoRA adapters are deliberately not options-schema fields — they are a
+   * structured repeating pair with their own editor, declared through
+   * `ImageLoraSupport`.
+   *
+   * @param context Optional render context (the selected model, etc.)
+   * @returns A schema, or undefined when this provider has no extra options
+   */
+  getImageProviderOptionsSchema?: (
     context?: ProviderOptionsSchemaContext
   ) => ProviderOptionsSchema | undefined;
 }

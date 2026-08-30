@@ -187,6 +187,32 @@ export type ConnectionProfilesFile = z.infer<typeof ConnectionProfilesFileSchema
 // IMAGE PROFILES
 // ============================================================================
 
+/**
+ * One LoRA adapter stored on an image profile, under the reserved
+ * `parameters.loras` key.
+ *
+ * Deliberately permissive about `scale`: per-model bounds are the editor's
+ * and the plugin's business, and a profile may legitimately be edited before
+ * a model is chosen. Storage only refuses what no provider could mean — an
+ * empty source, or a scale that is not a finite number in a sane global range.
+ */
+export const ImageLoraSpecSchema = z.object({
+  source: z.string().trim().min(1, 'LoRA source is required'),
+  scale: z
+    .number()
+    .finite('LoRA scale must be a finite number')
+    .min(0, 'LoRA scale cannot be negative')
+    .max(10, 'LoRA scale cannot exceed 10')
+    .optional(),
+  triggerPhrase: z.string().optional(),
+  label: z.string().optional(),
+});
+
+export type ImageLoraSpecStored = z.infer<typeof ImageLoraSpecSchema>;
+
+/** The reserved key under which `ImageLoraSpecSchema[]` lives in `parameters`. */
+export const IMAGE_PROFILE_LORAS_KEY = 'loras';
+
 export const ImageProfileSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,

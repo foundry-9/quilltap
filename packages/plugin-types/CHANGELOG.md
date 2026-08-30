@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-08-29
+
+### Added
+
+- `ImageLoraSpec` — the provider-neutral shape for one LoRA adapter (`source`, optional `scale`, `triggerPhrase`, `label`). The host stores and edits this shape; each plugin translates it into its own wire dialect (NanoGPT's indexed `lora_url_N`/`lora_scale_N` pairs, fal's `loras: [{path, scale}]`, a ComfyUI `LoraLoader` chain, a `<lora:name:weight>` prompt tag).
+- `ImageLoraSupport` — the capability declaration (`maxLoras`, optional `scale` bounds, `sourceKinds`, `supportsPrivateWeightsToken`). Declaring it is the whole opt-in: the host then shows the LoRA editor, caps the list, and passes it through. It is readable per-model on `ImageGenerationModelInfo.loraSupport` and provider-wide on `ImageProviderConstraints.loraSupport`, resolved exact id → longest-prefix family → provider → none, mirroring `orientationSupport`.
+- `ImageGenParams.loras?: ImageLoraSpec[]` — the canonical adapter list, already capped by the host. A plugin that declares no `loraSupport` never receives the key, so no existing plugin changes behaviour.
+- `ImageGenParams.profileParameters?: Record<string, unknown>` — the image profile's residual parameters bag, mirroring `LLMParams.profileParameters`. The plugin decides which keys reach the wire, so per-model options (`num_inference_steps`, `guidance_scale`, `hf_api_token`, …) travel without the host enumerating them.
+- `getImageProviderOptionsSchema?` optional method on `TextProviderPlugin` — the sibling of `getProviderOptionsSchema` for the *image*-profile editor, sharing the same `ProviderOptionsSchema` type and renderer. Unlike the text hook, `context.modelName` is authoritative here: image gateways legitimately return a different schema per model, and the host refetches on every model change.
+
+### Changed
+
+- `ProviderOptionField.appliesToModels` is no longer reserved — the host renderer now honours it, gating a field to the listed model ids (exact match, `*` glob, or longest-prefix family). Renderers that ignore it still render unconditionally, so the field remains backwards-compatible.
+- `PLUGIN_TYPES_VERSION` re-synced to the package version.
+
 ## [2.5.7] - 2026-08-19
 
 ### Added

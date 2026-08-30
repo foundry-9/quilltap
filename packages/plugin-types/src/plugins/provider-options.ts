@@ -107,12 +107,14 @@ export interface ProviderOptionField {
   affects?: ProviderOptionDirective;
 
   /**
-   * Reserved for the model-keyed gating follow-up: a list of model
-   * matchers (exact IDs or simple `*` globs) restricting which models
-   * the field applies to. Renderers that don't understand this field
-   * should render unconditionally.
+   * Restrict this field to a subset of models: a list of matchers, each an
+   * exact model id, a `*` glob (`flux-2-*`), or a family prefix (the longest
+   * matching prefix wins, so `flux-lora` also covers `flux-lora/inpainting`).
+   * The field renders when *any* matcher hits, and unconditionally when the
+   * list is omitted or the host does not know the selected model.
    *
-   * Intentionally not consumed by the current renderer.
+   * Renderers that don't understand this field render unconditionally, so
+   * declaring it never breaks an older host.
    */
   appliesToModels?: string[];
 }
@@ -139,10 +141,14 @@ export interface ProviderOptionsSchema {
 }
 
 /**
- * Options passed to `getProviderOptionsSchema`. The current renderer
- * does not pass `modelName`; plugins should treat it as advisory and
- * return the same schema regardless. The argument is the seam reserved
- * for a follow-up that will gate fields per model.
+ * Options passed to `getProviderOptionsSchema` and
+ * `getImageProviderOptionsSchema`.
+ *
+ * The text hook's renderer still does not pass `modelName`, so text plugins
+ * should treat it as advisory and return the same schema regardless. The
+ * *image* hook does pass it, and refetches whenever the selected model
+ * changes — image gateways routing to hundreds of models legitimately answer
+ * differently per model.
  */
 export interface ProviderOptionsSchemaContext {
   modelName?: string;

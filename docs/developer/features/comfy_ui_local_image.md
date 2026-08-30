@@ -2,6 +2,21 @@
 
 **Status:** Proposal / Not Implemented
 
+> **The LoRA half of this proposal now has a host-side home.**
+> [complete/nanogpt-lora.md](./complete/nanogpt-lora.md) shipped the
+> provider-generic seam this document sketched: the canonical
+> `loras: [{ source, scale, triggerPhrase }]` list stored on the image profile,
+> the `ImageLoraSupport` capability declaration a plugin uses to opt in, the
+> dedicated list editor, and one shared params builder that carries the list to
+> every image call site. This proposal's `{ name, weight }` request shape *is*
+> `{ source, scale }`; a ComfyUI plugin implements only the mapping onto a
+> `LoraLoader` node chain and declares `loraSupport`. Nothing else in the host
+> changes. Its `listLoras()` idea becomes an optional future hook
+> (`listImageLoras?()`) letting the editor offer a picker instead of a bare URL
+> field — additive, and not required for a first ComfyUI plugin. The
+> `ImageGenPlugin` / `profileFields` vocabulary below predates the real plugin
+> API and should be read as requirements, not as an interface.
+
 ## Summary
 
 Add ComfyUI as an image generation provider via a new plugin (`qtap-plugin-imagegen-comfyui`), enabling locally-hosted Stable Diffusion image generation with full LoRA support.

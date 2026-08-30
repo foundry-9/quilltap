@@ -950,6 +950,33 @@ Create an image profile.
 }
 ```
 
+`parameters` is an open bag. Host-owned keys (`size`, `aspectRatio`, `quality`,
+`style`, `n`, `seed`, `guidanceScale`, `steps`, `negativePrompt`) map onto named
+`ImageGenParams` fields; everything else is forwarded to the plugin verbatim as
+`ImageGenParams.profileParameters`, and the plugin decides what reaches the wire.
+
+One key is reserved: **`loras`**, a list of LoRA adapters in the canonical
+provider-neutral shape. It is validated on POST and PUT (`ImageLoraSpecSchema`,
+`lib/schemas/profile.types.ts`) — a malformed list is a `400` with nothing
+written. `source` must be non-empty; `scale` must be a finite number in `0..10`
+(per-model bounds are the editor's and the plugin's business, not storage's).
+
+```json
+{
+  "parameters": {
+    "size": "1024x1024",
+    "loras": [
+      { "source": "owner/style-name", "scale": 0.8, "triggerPhrase": "ohwx", "label": "House style" },
+      { "source": "https://example.com/weights.safetensors", "scale": 1.2 }
+    ]
+  }
+}
+```
+
+A list longer than the selected model's cap is stored as given and flagged in the
+editor rather than truncated — the cap is applied at request time by
+`lib/image-gen/params-builder.ts`, which names every adapter it drops.
+
 #### `GET /api/v1/image-profiles?action=list-providers`
 
 List available image generation providers from the plugin registry.
@@ -994,12 +1021,78 @@ reason). Only live-fetched lists are cached in `provider_models`.
 
 ```json
 {
-  "provider": "OPENAI",
-  "models": ["gpt-image-1", "gpt-image-2"],
-  "supportedModels": ["gpt-image-2", "gpt-image-1.5", "gpt-image-1", "gpt-image-1-mini", "dall-e-3", "dall-e-2"],
-  "source": "provider"
+  "provider": "NANOGPT",
+  "models": ["flux-lora", "hidream", "z-image-turbo-lora"],
+  "supportedModels": ["hidream", "flux-2-flash", "flux-lora"],
+  "source": "provider",
+  "loraSupport": {
+    "flux-lora": {
+      "maxLoras": 1,
+      "scale": { "min": 0.1, "max": 4, "default": 1, "step": 0.1 },
+      "sourceKinds": ["url", "hf-repo"]
+    },
+    "z-image-turbo-lora": {
+      "maxLoras": 3,
+      "scale": { "min": 0, "max": 4, "default": 1, "step": 0.1 },
+      "sourceKinds": ["url", "hf-repo"]
+    }
+  }
 }
 ```
+
+`loraSupport` is keyed by model id and carries only the models that resolve
+support (exact id -> longest-prefix family -> provider constraint). A model
+absent from the map takes no adapters, which is the editor's signal to offer no
+LoRA rows. Resolution happens server-side so the browser never re-implements it.
+
+#### `GET /api/v1/image-profiles?action=options-schema`
+
+The fields the image-profile editor should render for a provider, and optionally
+for a specific model. Answered by the provider plugin's
+`getImageProviderOptionsSchema` hook — the image sibling of
+`getProviderOptionsSchema`, sharing the same `ProviderOptionsSchema` type and the
+same `ProviderOptionsPanel` renderer.
+
+Unlike the LLM hook, `model` is authoritative here: a gateway routing to hundreds
+of image models legitimately answers with different legal sizes and a different
+`n` ceiling per model, so the editor refetches whenever the selected model
+changes. A provider without the hook answers `optionsSchema: null` and the editor
+falls back to its legacy hand-written panel; a hook that throws is caught and
+logged, never surfaced as a broken form.
+
+**Query Parameters**:
+- `provider` (required) - Provider name
+- `model` (optional) - Selected model id
+
+**Response**:
+
+```json
+{
+  "provider": "NANOGPT",
+  "model": "flux-lora",
+  "optionsSchema": {
+    "groups": [
+      {
+        "title": "NanoGPT Image Options",
+        "fields": [
+          { "key": "size", "label": "Default Size", "type": "enum", "enumValues": [] },
+          { "key": "guidance_scale", "label": "Guidance Scale", "type": "number", "appliesToModels": ["flux-lora"] }
+        ]
+      }
+    ]
+  },
+  "loraSupport": {
+    "maxLoras": 1,
+    "scale": { "min": 0.1, "max": 4, "default": 1, "step": 0.1 },
+    "sourceKinds": ["url", "hf-repo"]
+  }
+}
+```
+
+`ProviderOptionField.appliesToModels` gates a field to the listed models — an
+exact id, a `*` glob, or a family prefix. The renderer honours it on both the
+image and the LLM side; a field without it renders unconditionally, as does any
+field when the host does not know the selected model.
 
 #### `POST /api/v1/image-profiles?action=validate-key`
 

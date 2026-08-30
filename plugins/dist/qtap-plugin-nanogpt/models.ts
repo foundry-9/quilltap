@@ -14,7 +14,8 @@
  * upstream releases.
  */
 
-import type { ModelInfo, EmbeddingModelInfo } from './types';
+import type { ModelInfo, EmbeddingModelInfo, ImageGenerationModelInfo } from './types';
+import { NANOGPT_LORA_FAMILIES } from './image-loras';
 
 /**
  * NanoGPT's OpenAI-compatible gateway root. The single source of truth: the
@@ -117,18 +118,60 @@ export const STATIC_MODELS: ModelInfo[] = [
 export const STATIC_MODEL_IDS: string[] = STATIC_MODELS.map((m) => m.id);
 
 /**
+ * Curated image-generation models: the documented flagships, plus one entry
+ * per LoRA-capable family so the profile editor can offer adapters before the
+ * live catalog has ever been fetched.
+ *
+ * The LoRA entries are generated from the dialect table rather than repeated
+ * here — the table is already the single source of truth for which families
+ * take adapters and how many, and a second hand-maintained copy would drift
+ * the first time a family's cap changed.
+ */
+const FLAGSHIP_IMAGE_MODELS: ImageGenerationModelInfo[] = [
+  { id: 'hidream', name: 'HiDream (NanoGPT default)' },
+  { id: 'flux-2-flash', name: 'FLUX.2 Flash' },
+  { id: 'flux-2-dev', name: 'FLUX.2 Dev' },
+  { id: 'flux-2-pro', name: 'FLUX.2 Pro' },
+  { id: 'recraft-v3', name: 'Recraft V3' },
+  { id: 'gpt-image-1.5', name: 'GPT Image 1.5' },
+];
+
+/**
+ * Human-readable names for the LoRA families. Keyed by the same prefix the
+ * dialect table uses, so a family added there without a name here still
+ * appears — labelled by its id rather than silently missing.
+ */
+const LORA_FAMILY_NAMES: Record<string, string> = {
+  'flux-2-dev-lora': 'FLUX.2 Dev LoRA',
+  'flux-2-klein-4b': 'FLUX.2 Klein 4B',
+  'flux-2-klein-9b': 'FLUX.2 Klein 9B',
+  'wavespeed-ai/flux-2-klein-base-4b': 'FLUX.2 Klein Base 4B (WaveSpeed)',
+  'wavespeed-ai/flux-2-klein-base-9b': 'FLUX.2 Klein Base 9B (WaveSpeed)',
+  'z-image-turbo-lora': 'Z-Image Turbo LoRA',
+  'wavespeed-ai/krea-v2/turbo-lora': 'Krea V2 Turbo LoRA (WaveSpeed)',
+  'pruna-ai/p-image/text-to-image-lora': 'Pruna P-Image LoRA (text to image)',
+  'pruna-ai/p-image/edit-lora': 'Pruna P-Image LoRA (edit)',
+  'flux-lora': 'FLUX LoRA (fal)',
+};
+
+export const STATIC_IMAGE_MODELS: ImageGenerationModelInfo[] = [
+  ...FLAGSHIP_IMAGE_MODELS,
+  ...NANOGPT_LORA_FAMILIES.map((family) => ({
+    id: family.prefix,
+    name: LORA_FAMILY_NAMES[family.prefix] ?? family.prefix,
+    description: `Takes up to ${family.support.maxLoras} LoRA ${
+      family.support.maxLoras === 1 ? 'adapter' : 'adapters'
+    }.`,
+    loraSupport: family.support,
+  })),
+];
+
+/**
  * Curated image-generation model ids. The image provider unions these with
  * the live `/api/v1/image-models` listing; `hidream` is also NanoGPT's own
  * server-side default when a request omits the model.
  */
-export const STATIC_IMAGE_MODEL_IDS: string[] = [
-  'hidream',
-  'flux-2-flash',
-  'flux-2-dev',
-  'flux-2-pro',
-  'recraft-v3',
-  'gpt-image-1.5',
-];
+export const STATIC_IMAGE_MODEL_IDS: string[] = STATIC_IMAGE_MODELS.map((m) => m.id);
 
 /**
  * Curated embedding models with their published dimensions, mirrored from

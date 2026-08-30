@@ -39,7 +39,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { resolveAesthetic, getProjectOfficialMountPointId } from '@/lib/image-gen/aesthetic';
-import { resolveOrientation } from '@/lib/image-gen/orientation';
+import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
 
 /**
@@ -226,18 +226,19 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   const genStartTime = Date.now();
   try {
     const provider = createImageProvider(effectiveImageProfile.provider);
-    // Avatars default to portrait; the resolver maps that onto the provider's
-    // own size / aspect ratio / prompt wording.
-    const resolved = resolveOrientation(effectiveImageProfile.provider, effectiveImageProfile.modelName, 'portrait');
-    const genPrompt = resolved.promptHint ? `${prompt}\n\n${resolved.promptHint}` : prompt;
-    generationResponse = await provider.generateImage({
-      prompt: genPrompt,
-      model: effectiveImageProfile.modelName,
-      n: 1,
-      ...resolved.params,
-      quality: (effectiveImageProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
-      style: 'natural',
-    }, effectiveApiKey);
+    // Avatars default to portrait; the shared builder maps that onto the
+    // provider's own size / aspect ratio / prompt wording and attaches the
+    // profile's LoRAs and residual options — the same params the Salon's
+    // `generate_image` gets, so a LoRA configured for a profile does not work
+    // in chat and quietly vanish here.
+    const { params: avatarParams } = buildImageGenParams({
+      profile: effectiveImageProfile,
+      prompt,
+      overrides: { n: 1, style: 'natural' },
+      orientation: 'portrait',
+      logContext: { context: 'background-jobs.character-avatar', jobId: job.id },
+    });
+    generationResponse = await provider.generateImage(avatarParams, effectiveApiKey);
 
     const genDurationMs = Date.now() - genStartTime;
     const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
@@ -309,19 +310,20 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
 
     const rerouteProvider = createImageProvider(reroute.profile.provider);
     const rerouteStartTime = Date.now();
-    // Re-resolve for the reroute provider/model — its shape mechanism may differ
-    // from the original profile's.
-    const rerouteResolved = resolveOrientation(reroute.profile.provider, reroute.profile.modelName, 'portrait');
-    const reroutePrompt = rerouteResolved.promptHint ? `${prompt}\n\n${rerouteResolved.promptHint}` : prompt;
+    // Rebuild for the reroute provider/model — its shape mechanism, its LoRA
+    // support, and its stored options are all its own.
+    const { params: rerouteParams } = buildImageGenParams({
+      profile: reroute.profile,
+      prompt,
+      overrides: { n: 1, style: 'natural' },
+      orientation: 'portrait',
+      logContext: {
+        context: 'background-jobs.character-avatar.concierge-reroute',
+        jobId: job.id,
+      },
+    });
     try {
-      generationResponse = await rerouteProvider.generateImage({
-        prompt: reroutePrompt,
-        model: reroute.profile.modelName,
-        n: 1,
-        ...rerouteResolved.params,
-        quality: (reroute.profile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
-        style: 'natural',
-      }, reroute.apiKey);
+      generationResponse = await rerouteProvider.generateImage(rerouteParams, reroute.apiKey);
 
       const rerouteDurationMs = Date.now() - rerouteStartTime;
       const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';

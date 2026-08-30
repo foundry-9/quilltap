@@ -58,13 +58,16 @@ const HOST_FALLBACK_HINTS: Record<ImageOrientation, string> = {
 };
 
 /**
- * Find the model-info entry whose orientation support applies to `model`.
+ * Find the model-info entry whose declarations apply to `model`.
  *
  * Exact id match wins; otherwise the longest-prefix family match (so a plugin
  * can list just `gpt-image-1` / `dall-e-3` / `dall-e-2` and still match dated
  * SKUs like `gpt-image-1-mini`). Returns undefined when nothing matches.
+ *
+ * Exported because LoRA support resolves the same way orientation does — one
+ * matcher, two capabilities, no second implementation to drift.
  */
-function matchModel(
+export function matchModel(
   models: ImageGenerationModelInfo[] | null,
   model: string | undefined,
 ): ImageGenerationModelInfo | undefined {

@@ -14,6 +14,7 @@ export type {
   ThinkingTurnRule,
   EmbeddingModelInfo,
   ImageGenerationModelInfo,
+  ImageLoraSupport,
   ImageProviderConstraints,
   OrientationStrategy,
   OrientationMapping,

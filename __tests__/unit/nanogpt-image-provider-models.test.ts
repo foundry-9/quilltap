@@ -50,8 +50,11 @@ describe('NanoGPTImageProvider.getAvailableModels', () => {
 
     const models = await provider.getAvailableModels(mockApiKey);
 
+    // `?detailed=true` on the same endpoint: the listing that already had to
+    // happen also carries the per-model tags, resolutions and image caps the
+    // options schema is built from, so the schema costs no extra round trip.
     expect(global.fetch).toHaveBeenCalledWith(
-      'https://nano-gpt.com/api/v1/image-models',
+      'https://nano-gpt.com/api/v1/image-models?detailed=true',
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: `Bearer ${mockApiKey}` }),
       })

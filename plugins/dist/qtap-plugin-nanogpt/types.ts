@@ -6,6 +6,8 @@
 export type {
   FileAttachment,
   ImageGenParams,
+  ImageLoraSpec,
+  ImageLoraSupport,
   GeneratedImage,
   ImageGenResponse,
   LLMMessage,
@@ -23,9 +25,13 @@ export type {
   AttachmentSupport,
   ModelInfo,
   EmbeddingModelInfo,
+  ImageGenerationModelInfo,
   ImageProviderConstraints,
   EmbeddingProvider,
   EmbeddingResult,
   EmbeddingOptions,
   ProviderOptionsSchema,
+  ProviderOptionsSchemaContext,
+  ProviderOptionField,
+  ProviderOptionEnumValue,
 } from '@quilltap/plugin-types';

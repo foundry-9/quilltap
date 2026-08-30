@@ -18,6 +18,36 @@
 export type ImageOrientation = 'portrait' | 'landscape' | 'square';
 
 /**
+ * One LoRA (low-rank adaptation) adapter riding an image request.
+ *
+ * Provider-neutral by design: the host stores and edits this shape, and each
+ * plugin translates it into whatever its own API calls the same idea —
+ * NanoGPT's indexed `lora_url_N`/`lora_scale_N` pairs, fal's
+ * `loras: [{path, scale}]` array, a ComfyUI `LoraLoader` chain, or a
+ * `<lora:name:weight>` prompt tag. A plugin that declares no
+ * {@link ImageLoraSupport} never receives this shape at all.
+ */
+export interface ImageLoraSpec {
+  /**
+   * URL to weights (typically `.safetensors`), an `owner/repo` reference, or
+   * a provider-scoped identifier — the plugin decides what it accepts, and
+   * says so through `ImageLoraSupport.sourceKinds`.
+   */
+  source: string;
+  /** Strength/scale. Omitted means "the provider's own default". */
+  scale?: number;
+  /**
+   * Optional trigger phrase injected into the prompt when this LoRA rides a
+   * request. Reuses the host's existing style-trigger-phrase plumbing, so a
+   * LoRA that needs its magic word gets it without the plugin touching the
+   * prompt.
+   */
+  triggerPhrase?: string;
+  /** Display label for the editor UI; never sent on the wire. */
+  label?: string;
+}
+
+/**
  * Image generation parameters
  */
 export interface ImageGenParams {
@@ -51,6 +81,22 @@ export interface ImageGenParams {
   guidanceScale?: number;
   /** Inference steps for diffusion models */
   steps?: number;
+  /**
+   * LoRA adapters to apply, in the order the user arranged them. The host only
+   * sets this for providers that declared `loraSupport` for the selected
+   * model, and has already capped the list at the declared `maxLoras`; a
+   * plugin that declares nothing never sees the key.
+   */
+  loras?: ImageLoraSpec[];
+  /**
+   * The profile's residual `parameters` bag, minus the keys the host owns
+   * (`size`, `quality`, `loras`, …). Mirrors `LLMParams.profileParameters`:
+   * the plugin — not the host — decides which of these keys reach the wire,
+   * so schema-driven per-model options (`num_inference_steps`,
+   * `guidance_scale`, `hf_api_token`, …) travel without the host enumerating
+   * them.
+   */
+  profileParameters?: Record<string, unknown>;
 }
 
 /**

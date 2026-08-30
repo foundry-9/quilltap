@@ -32,6 +32,37 @@ The establishment then translates that wish into whatever each provider actually
 
 Sensible defaults are already in place: **avatars arrive in portrait**, **story backgrounds in cinematic landscape**. And because providers have a habit of returning a different shape than was requested, Quilltap now measures every finished picture and records its *true* dimensions, rather than trusting the order it placed.
 
+## The Model's Own Dials — Per-Model Options
+
+Time was, the profile form offered every provider one fixed little tray of settings, whether or not the chosen model had any use for them — a size list assembled by hand, and precious little else. That arrangement has been retired.
+
+Each provider's plugin is now asked, freshly and for **the very model you have selected**, what it would like to be asked. The gateways that route to two hundred ateliers answer differently for each one: sizes drawn from that model's own advertised canvases, an images-per-request ceiling it will actually honour, and whatever dials it genuinely reads — inference steps, guidance scale, and so forth — with the dials it has no use for simply not offered. Change the model and the form changes with it.
+
+Two courtesies worth knowing:
+
+- **Your settings are not thrown away when you change models.** A value the new model has no use for is merely not shown; return to the old model and it is waiting where you left it.
+- **A blank box means "as the model pleases."** The greyed-out number you see is the default that will apply, not a value you have chosen.
+
+Providers whose plugins have not yet adopted the arrangement carry on with the old fixed tray, and nothing about their profiles changes.
+
+## Adapters, or the Borrowing of Another Hand — LoRAs
+
+A **LoRA** is a small parcel of learned style — a look, a face, a manner of drawing — that rides along with a model and bends its hand toward some particular result. Not every atelier will accept one, and those that do disagree, as ateliers will, about how many they will entertain at once and how they wish to be told.
+
+Quilltap conducts that negotiation on your behalf. Choose a model that accepts adapters and a **LoRA Adapters** panel appears beneath the options; choose one that does not and the panel is simply absent — no empty boxes, no invitation to configure something that will be quietly ignored.
+
+Each row asks for three things, of which only the first is compulsory:
+
+- **Source** — where the weights live: a HuggingFace `owner/model-name`, or a direct URL to a `.safetensors` file. The panel says which kinds the chosen model accepts.
+- **Strength** — how firmly the adapter's hand is on the pen. The slider's range and its resting position are the model's own, not one universal guess; leave it alone and the model's default applies.
+- **Trigger Phrase** — many adapters answer only to a magic word, and sulk without it. Whatever you write here is woven into the prompt on every picture this profile paints, so you need never remember to say it yourself.
+
+**On the matter of the cap.** Each model states how many adapters it will take, and the panel keeps the tally for you ("2 of 3"), refusing to add a fourth where three is the limit. Should you point a well-stocked profile at a stingier model, the surplus rows are **flagged, not discarded** — they sit there in amber, explaining that they will be left behind on every request until you either remove one of their elders or return to a model of more generous habits. Nothing is deleted behind your back, and switching back restores the full arrangement intact.
+
+**Where the adapters apply.** Everywhere that profile paints: pictures asked for in the Salon, character avatars, story backgrounds, and the wardrobe's preview portrait alike. A LoRA configured once is not a Salon-only affectation.
+
+**On the subject of NanoGPT**, whose arcade is the first to be wired for this: the `flux-2-dev-lora` pair will take four adapters, the wider Flux 2 Klein, Z-Image and Krea families three, and the `flux-lora` and Pruna families one apiece. Should NanoGPT advertise a LoRA-capable model whose particular dialect Quilltap does not yet know, the panel will still offer you a single adapter — but the establishment declines to guess at the wording and will say so in the logs rather than post an order the model would silently ignore.
+
 ## Accessing Image Generation Profiles
 
 1. Click **Settings** (gear icon) in the left sidebar
@@ -115,10 +146,13 @@ First, obtain an API key from one of the image generation providers Quilltap act
      - NanoGPT: hidream, the flux-2 family, recraft-v3, gpt-image-1.5 — Fetch Models reveals the full two-hundred-strong gallery
    - **Fetch Models** — Once an API key is chosen, press this to ask the provider itself which image models your key can reach. A green tally confirms the list came straight from the establishment; otherwise you're looking at the plugin's built-in list, and the note beneath says so plainly — no pretence either way. Only models that genuinely produce images are shown; the chat, embedding, and video sorts are firmly shooed away.
 
-   **Configuration:**
-   - **Default Size** — Image dimensions (1024x1024, 512x512, etc.)
-   - **Quality** — Level of detail (Standard, HD, Premium)
-   - **Style** — Art style options (Photorealistic, Artistic, Cartoon, etc.)
+   **Configuration:** whatever the chosen model actually reads — see *The Model's Own Dials* above. Commonly:
+   - **Default Size** — image dimensions, drawn from the model's own advertised canvases where the provider publishes them
+   - **Quality** — level of detail (Standard, HD)
+   - **Style** — art direction (Vivid, Natural), where the provider offers the choice
+   - **Inference Steps / Guidance Scale** — the diffusion dials, offered only to the open-weight models that read them
+
+   **LoRA Adapters:** present only when the chosen model accepts them — see *Adapters, or the Borrowing of Another Hand* above.
 
 4. Click **Save** to create the profile
 
@@ -131,8 +165,9 @@ To modify an existing profile:
 3. Update any settings:
    - Profile name
    - API key (switch to different key)
-   - Model (switch to different model)
+   - Model (switch to different model — the options below rearrange themselves to suit it, keeping what you had set)
    - Size, quality, or style defaults
+   - LoRA adapters, where the model accepts them
 4. Click **Save Changes**
 
 ## Setting a Default Profile
@@ -232,6 +267,7 @@ These are the establishments Quilltap can actually commission a picture from —
 
 - **Models:** hidream by default, with the flux-2 family, recraft-v3, gpt-image-1.5, and some two hundred more behind Fetch Models
 - **Strengths:** One pay-as-you-go key admits you to every atelier in the arcade — and the same key serves chat and embeddings
+- **LoRAs:** the Flux 2 Dev, Flux 2 Klein, Z-Image, Krea, Pruna P-Image and `flux-lora` families all accept adapters — see *Adapters, or the Borrowing of Another Hand* above
 - **Note:** Each model keeps its own native canvas sizes; hand NanoGPT one of the common sizes from the profile and it seats your request at the nearest native resolution without complaint
 
 ## Configuration Tips

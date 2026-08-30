@@ -42,7 +42,7 @@ import {
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
 import { convertToWebP } from '@/lib/files/webp-conversion';
-import { resolveOrientation } from '@/lib/image-gen/orientation';
+import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
@@ -624,19 +624,24 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
   let generationResponse;
   const genStartTime = Date.now();
-  // Backgrounds default to landscape; the resolver maps that onto the provider's
-  // own size / aspect ratio / prompt wording.
-  const resolved = resolveOrientation(imageProfile.provider, imageProfile.modelName, 'landscape');
-  const genPrompt = resolved.promptHint ? `${finalPrompt}\n\n${resolved.promptHint}` : finalPrompt;
+  // Backgrounds default to landscape; the shared builder maps that onto the
+  // provider's own size / aspect ratio / prompt wording and attaches the
+  // profile's LoRAs and residual options, so a profile configured in the
+  // Lantern's settings behaves the same here as it does in the Salon.
+  // Natural style works better for ambient backgrounds, so it is fixed.
+  const { params: backgroundParams } = buildImageGenParams({
+    profile: imageProfile,
+    prompt: finalPrompt!,
+    overrides: { n: 1, style: 'natural' },
+    orientation: 'landscape',
+    logContext: {
+      context: 'background-jobs.story-background',
+      jobId: job.id,
+      chatId: payload.chatId,
+    },
+  });
   try {
-    generationResponse = await provider.generateImage({
-      prompt: genPrompt,
-      model: imageProfile.modelName,
-      n: 1,
-      ...resolved.params,
-      quality: (imageProfile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
-      style: 'natural', // Natural style works better for ambient backgrounds
-    }, decryptedKey);
+    generationResponse = await provider.generateImage(backgroundParams, decryptedKey);
 
     const genDurationMs = Date.now() - genStartTime;
     const revisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';
@@ -761,18 +766,21 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
     const rerouteProvider = createImageProvider(reroute.profile.provider);
     const rerouteStartTime = Date.now();
-    // Re-resolve for the reroute provider/model — its shape mechanism may differ.
-    const rerouteResolved = resolveOrientation(reroute.profile.provider, reroute.profile.modelName, 'landscape');
-    const reroutePrompt = rerouteResolved.promptHint ? `${rerouteBasePrompt}\n\n${rerouteResolved.promptHint}` : rerouteBasePrompt;
+    // Rebuild for the reroute provider/model — its shape mechanism, its LoRA
+    // support, and its stored options are all its own.
+    const { params: rerouteParams } = buildImageGenParams({
+      profile: reroute.profile,
+      prompt: rerouteBasePrompt,
+      overrides: { n: 1, style: 'natural' },
+      orientation: 'landscape',
+      logContext: {
+        context: 'background-jobs.story-background.concierge-reroute',
+        jobId: job.id,
+        chatId: payload.chatId,
+      },
+    });
     try {
-      generationResponse = await rerouteProvider.generateImage({
-        prompt: reroutePrompt,
-        model: reroute.profile.modelName,
-        n: 1,
-        ...rerouteResolved.params,
-        quality: (reroute.profile.parameters as Record<string, unknown>)?.quality as 'standard' | 'hd' | undefined,
-        style: 'natural',
-      }, reroute.apiKey);
+      generationResponse = await rerouteProvider.generateImage(rerouteParams, reroute.apiKey);
 
       const rerouteDurationMs = Date.now() - rerouteStartTime;
       const rerouteRevisedPrompt = generationResponse.images?.[0]?.revisedPrompt || '';

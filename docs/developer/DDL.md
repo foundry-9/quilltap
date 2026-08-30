@@ -1288,6 +1288,21 @@ CREATE INDEX "idx_image_profiles_createdAt" ON "image_profiles" ("createdAt" DES
 CREATE INDEX "idx_image_profiles_userId" ON "image_profiles" ("userId");
 ```
 
+> **`parameters` JSON shape:** an open bag, deliberately. Host-owned keys
+> (`size`, `aspectRatio`, `quality`, `style`, `n`, `seed`, `guidanceScale`,
+> `steps`, `negativePrompt`) map onto named `ImageGenParams` fields; every other
+> key is forwarded to the provider plugin verbatim as
+> `ImageGenParams.profileParameters`, and the plugin decides what reaches the
+> wire. One key is reserved and structured: **`loras`**, an array of
+> `{ source, scale?, triggerPhrase?, label? }` LoRA adapters (since 4.9). It is
+> validated on write by `ImageLoraSpecSchema` (`lib/schemas/profile.types.ts`) —
+> `source` non-empty, `scale` finite within `0..10` — so a malformed list is a
+> 400 rather than a row that fails at generation time. Per-model caps are *not*
+> enforced here: an over-cap list is stored as given and capped at request time
+> by `lib/image-gen/params-builder.ts`, so narrowing the model and widening it
+> again loses nothing. No column change was needed for any of this; the bag
+> absorbed it.
+
 ### provider_models
 
 ```sql

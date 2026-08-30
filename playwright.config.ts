@@ -87,6 +87,18 @@ export default defineConfig({
   /* Run a production build for stable e2e tests */
   webServer: {
     command: `npm run build && QUILLTAP_DATA_DIR="${testDataDir}" PORT=${serverPort} npm run start`,
+    env: {
+      // The e2e data directory is a fresh mkdtemp with no `.dbkey`, so the
+      // instance provisions to `needs-setup` and every /api/v1 route answers
+      // 503 "Setup required" before a single spec runs. Supplying a pepper
+      // puts it in `needs-vault-storage` instead, which the API gate counts as
+      // resolved — the first-run setup wizard is its own thing to test, not a
+      // toll every other spec has to pay. The value is a throwaway because the
+      // database it encrypts is thrown away with the directory; it is set
+      // explicitly rather than inherited so a real instance's pepper never
+      // travels into a test run.
+      ENCRYPTION_MASTER_PEPPER: 'e2e-throwaway-pepper',
+    },
     url: baseURL,
     reuseExistingServer: false,
     timeout: 300000, // 5 minutes for build + start

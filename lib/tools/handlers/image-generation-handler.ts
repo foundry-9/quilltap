@@ -14,8 +14,8 @@ import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import { getImageProviderConstraints } from '@/lib/plugins/provider-registry';
-import { resolveOrientation } from '@/lib/image-gen/orientation';
-import type { ImageOrientation } from '@quilltap/plugin-types';
+import { buildImageGenParams, resolveProfileLoras } from '@/lib/image-gen/params-builder';
+import type { ImageGenParams } from '@quilltap/plugin-types';
 import {
   ImageGenerationToolInput,
   ImageGenerationToolOutput,
@@ -241,62 +241,23 @@ async function saveGeneratedImage(
 }
 
 /**
- * Merge tool input with profile defaults
+ * Turn the tool's own input into the override slice the shared builder takes.
+ *
+ * The builder owns the merge semantics; this only translates vocabulary
+ * (`count` -> `n`) so the tool's schema and `ImageGenParams` can keep their
+ * own names.
  */
-function mergeParameters(
+function toolInputOverrides(
   input: ImageGenerationToolInput,
-  profileDefaults: Record<string, unknown> = {},
-  model?: string // Model should be passed separately from profile
-): {
-  prompt: string;
-  negativePrompt?: string;
-  model: string;
-  n?: number;
-  size?: string;
-  aspectRatio?: string;
-  quality?: 'standard' | 'hd';
-  style?: 'vivid' | 'natural';
-  seed?: number;
-  guidanceScale?: number;
-  steps?: number;
-} {
+): Partial<Omit<ImageGenParams, 'prompt' | 'loras' | 'profileParameters'>> {
   return {
-    prompt: input.prompt,
-    negativePrompt: input.negativePrompt || (profileDefaults.negativePrompt as string | undefined),
-    model: model || (profileDefaults.model as string) || 'dall-e-3', // Model from parameter, profile defaults, or default to dall-e-3
-    n: input.count ?? (profileDefaults.n as number | undefined) ?? 1,
-    size: input.size || (profileDefaults.size as string | undefined),
-    aspectRatio: input.aspectRatio || (profileDefaults.aspectRatio as string | undefined),
-    quality: input.quality ||
-      (profileDefaults.quality as 'standard' | 'hd' | undefined),
-    style: input.style ||
-      (profileDefaults.style as 'vivid' | 'natural' | undefined),
-    seed: profileDefaults.seed as number | undefined,
-    guidanceScale: profileDefaults.guidanceScale as number | undefined,
-    steps: profileDefaults.steps as number | undefined,
+    negativePrompt: input.negativePrompt,
+    n: input.count,
+    size: input.size,
+    aspectRatio: input.aspectRatio,
+    quality: input.quality,
+    style: input.style,
   };
-}
-
-/**
- * Mutate merged params in place to satisfy the requested orientation for a
- * given provider/model. Sets `size` or `aspectRatio` (overriding any raw value
- * the LLM supplied) and/or appends a prompt hint, per the host resolver.
- */
-function applyOrientation(
-  params: { prompt: string; model: string; size?: string; aspectRatio?: string },
-  provider: string,
-  orientation: ImageOrientation,
-): void {
-  const resolved = resolveOrientation(provider, params.model, orientation);
-  if (resolved.params.size) {
-    params.size = resolved.params.size;
-  }
-  if (resolved.params.aspectRatio) {
-    params.aspectRatio = resolved.params.aspectRatio;
-  }
-  if (resolved.promptHint) {
-    params.prompt = `${params.prompt}\n\n${resolved.promptHint}`;
-  }
 }
 
 /**
@@ -364,18 +325,19 @@ async function generateImagesWithProvider(
   // Get the API key
   const decryptedKey: string = imageProfile.apiKey.key_value;
 
-  // Merge parameters (profile defaults + user input)
-  const mergedParams = mergeParameters(
-    toolInput,
-    imageProfile.parameters as Record<string, unknown>,
-    imageProfile.modelName
-  );
-
-  // Resolve the requested orientation onto this provider/model's own mechanism.
-  // Orientation takes precedence over any raw size/aspectRatio the LLM passed.
-  // `mergedParams.prompt` is already the expanded prompt, so appending the hint
-  // here is the intended final form.
-  applyOrientation(mergedParams, imageProfile.provider, toolInput.orientation ?? 'square');
+  // One builder for every image call site: merges the profile's defaults under
+  // the tool's input, resolves the orientation onto this provider/model's own
+  // mechanism (orientation outranks any raw size the LLM passed), and attaches
+  // the profile's capped LoRA list plus its residual parameter bag.
+  // `toolInput.prompt` is already the expanded prompt, so whatever the builder
+  // appends lands in the intended final form.
+  const { params: mergedParams } = buildImageGenParams({
+    profile: imageProfile,
+    prompt: toolInput.prompt,
+    overrides: toolInputOverrides(toolInput),
+    orientation: toolInput.orientation ?? 'square',
+    logContext: { context: 'tools.generate_image', chatId, profileId: imageProfile.id },
+  });
 
   // Generate images. Tracks the profile that actually produced the final
   // response — updated if the Concierge swaps in the uncensored profile
@@ -460,13 +422,21 @@ async function generateImagesWithProvider(
     });
 
     const rerouteProvider = createImageProvider(reroute.profile.provider);
-    const rerouteMergedParams = mergeParameters(
-      toolInput,
-      reroute.profile.parameters as Record<string, unknown>,
-      reroute.profile.modelName
-    );
-    // Re-resolve for the reroute provider/model — its shape mechanism may differ.
-    applyOrientation(rerouteMergedParams, reroute.profile.provider, toolInput.orientation ?? 'square');
+    // Rebuild from scratch for the reroute target: its shape mechanism, its
+    // LoRA support, and its stored parameters are all its own. The prompt was
+    // crafted against the original profile, so any trigger phrases the
+    // fallback's adapters want get appended here.
+    const { params: rerouteMergedParams } = buildImageGenParams({
+      profile: reroute.profile,
+      prompt: toolInput.prompt,
+      overrides: toolInputOverrides(toolInput),
+      orientation: toolInput.orientation ?? 'square',
+      logContext: {
+        context: 'tools.generate_image.concierge-reroute',
+        chatId,
+        profileId: reroute.profile.id,
+      },
+    });
     const rerouteStartTime = Date.now();
     try {
       generationResponse = await rerouteProvider.generateImage(rerouteMergedParams, reroute.apiKey);
@@ -887,6 +857,28 @@ async function classifyAndRouteForDangerousContent(
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  // 5c. Fold in the trigger phrases of the effective profile's LoRAs, so the
+  // prompt crafter weaves each adapter's magic word into the prompt it writes
+  // rather than having it bolted on afterwards. Resolved against the profile
+  // that will actually generate — the reroute above may have swapped it. The
+  // params builder appends anything the crafter fails to say, so a skipped or
+  // fallen-back expansion still delivers the phrase.
+  const { triggerPhrase: loraTriggerPhrase } = resolveProfileLoras(effectiveImageProfile, {
+    context: 'tools.generate_image.style-options',
+    chatId: context.chatId,
+  });
+  if (loraTriggerPhrase) {
+    const combined = styleOptions?.styleTriggerPhrase
+      ? `${styleOptions.styleTriggerPhrase}, ${loraTriggerPhrase}`
+      : loraTriggerPhrase;
+    styleOptions = { ...styleOptions, styleTriggerPhrase: combined };
+    logger.debug('[Image Generation] LoRA trigger phrases routed into prompt expansion', {
+      chatId: context.chatId,
+      profileId: effectiveImageProfile.id,
+      loraTriggerPhrase,
+    });
   }
 
   return { imagePromptDangerous, effectiveImageProfile, styleOptions };

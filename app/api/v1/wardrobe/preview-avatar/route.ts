@@ -21,6 +21,7 @@ import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
 import { resolveAesthetic } from '@/lib/image-gen/aesthetic';
+import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import {
@@ -102,20 +103,19 @@ const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestCon
   // operator chose the model and the outfit, and the in-chat regen path is
   // where the classifier guards against character-driven generations.
   const provider = createImageProvider(imageProfile.provider);
-  const generationResponse = await provider.generateImage(
-    {
-      prompt,
-      model: imageProfile.modelName,
-      n: 1,
-      size: '1024x1792',
-      quality: (imageProfile.parameters as Record<string, unknown>)?.quality as
-        | 'standard'
-        | 'hd'
-        | undefined,
-      style: 'natural',
-    },
-    apiKey.key_value,
-  );
+  // Through the shared builder, so the preview shows what the profile actually
+  // produces — LoRAs, residual options and all — rather than a hand-rolled
+  // subset that would make the preview lie about the real avatar. Portrait is
+  // resolved onto the provider's own mechanism instead of the hardcoded
+  // 1024x1792 that only OpenAI ever accepted.
+  const { params: previewParams } = buildImageGenParams({
+    profile: imageProfile,
+    prompt,
+    overrides: { n: 1, style: 'natural' },
+    orientation: 'portrait',
+    logContext: { context: 'api.v1.wardrobe.preview-avatar', profileId: imageProfile.id },
+  });
+  const generationResponse = await provider.generateImage(previewParams, apiKey.key_value);
 
   const imageData = generationResponse.images?.[0];
   const rawData = imageData?.data || imageData?.b64Json;

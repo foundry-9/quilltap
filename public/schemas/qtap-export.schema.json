@@ -1150,7 +1150,10 @@
         "provider": { "type": "string", "minLength": 1 },
         "modelName": { "type": "string" },
         "baseUrl": { "type": ["string", "null"] },
-        "parameters": { "type": "object" },
+        "parameters": {
+          "type": "object",
+          "description": "Open bag of generation defaults. Host-owned keys (size, aspectRatio, quality, style, n, seed, guidanceScale, steps, negativePrompt) map onto named ImageGenParams fields; everything else is forwarded to the provider plugin verbatim as ImageGenParams.profileParameters. One key is reserved: `loras`, an array of { source, scale?, triggerPhrase?, label? } LoRA adapters. Deliberately unconstrained so a profile round-trips whatever its provider plugin understands."
+        },
         "isDefault": { "type": "boolean" },
         "isDangerousCompatible": { "type": "boolean" },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
