@@ -21,6 +21,7 @@ import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
+import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
 
 const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags', 'stats', 'depiction-guidelines'] as const;
 type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
@@ -118,20 +119,18 @@ export async function handleGet(
         const allChats = await repos.chats.findByCharacterId(id);
         const userChats = allChats.filter((chat) => chat.userId === user.id);
 
+        // Activity is the stored `lastMessageAt` — when a character last posted
+        // — not "the newest row of any kind". This used to re-derive it from
+        // `msg.type === 'message'`, which counted every Staff announcement and
+        // floated dead conversations to the top. See `lib/chat/chat-activity.ts`.
         const chatsWithMessages = await Promise.all(
           userChats.map(async (chat) => {
             const allMessages = await repos.chats.getMessages(chat.id);
-            const messageTimestamps = allMessages
-              .filter((msg) => msg.type === 'message')
-              .map((msg) => new Date(msg.createdAt).getTime());
-            const lastMessageAt = messageTimestamps.length > 0
-              ? new Date(Math.max(...messageTimestamps)).toISOString()
-              : chat.updatedAt;
-            return { chat, messages: allMessages, lastMessageAt };
+            return { chat, messages: allMessages, lastMessageAt: chatActivityAt(chat) };
           })
         );
 
-        chatsWithMessages.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+        chatsWithMessages.sort((a, b) => byChatActivityDesc(a.chat, b.chat));
 
         let filteredChats = chatsWithMessages;
         if (search) {

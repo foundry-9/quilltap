@@ -26,6 +26,7 @@ import { isDockerEnvironment, isElectronShell, getElectronShellVersion } from '@
 import { isDevelopment } from '@/lib/env';
 import type { SelfInventoryVaultSection, SelfInventoryVaultCharacterSection, SelfInventoryVaultGroupsSection, SelfInventoryVaultGroup, SelfInventoryVaultIncludedParts, SelfInventoryVaultAccessSection, SelfInventoryVaultAccessCharacterSection, SelfInventoryVaultAccessGroupsSection, SelfInventoryGroupVaultAccess, SelfInventoryGroupVaultMember, SelfInventoryVaultAccessParticipant, SelfInventoryVaultAccessLevel, SelfInventoryMemorySection, SelfInventoryLoadedMemoriesSection, SelfInventoryChatSection, SelfInventoryPromptSection, SelfInventoryLastTurnSection, SelfInventoryCarinaSection, SelfInventoryQuilltapSection, SelfInventoryQuilltapIncludedParts, SelfInventoryRuntimeMode, SelfInventoryClientShell, SelfInventoryContextSection, SelfInventoryContextIncludedParts, SelfInventoryContextChat, SelfInventoryContextProject, SelfInventoryContextGroups, SelfInventoryContextGroup, SelfInventoryContextCharacters, SelfInventoryContextCharacter, SelfInventoryContextFiles, SelfInventoryContextFile, SelfInventoryContextMount, SelfInventorySection } from '../../self-inventory-tool';
 import { getErrorMessage, roundPercent, mapVaultFiles, HIGH_IMPORTANCE_THRESHOLD, type SelfInventoryToolContext } from './helpers';
+import { chatActivityAt } from '@/lib/chat/chat-activity';
 
 async function buildVaultCharacterSection(
   character: Character,
@@ -379,8 +380,7 @@ export async function buildChatsSection(
       earliestIso = chat.createdAt;
     }
 
-    const activityIso =
-      chat.lastMessageAt ?? chat.updatedAt ?? chat.createdAt;
+    const activityIso = chatActivityAt(chat);
     const activityMs = Date.parse(activityIso);
     if (Number.isFinite(activityMs) && activityMs > latestMs) {
       latestMs = activityMs;

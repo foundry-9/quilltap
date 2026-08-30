@@ -534,10 +534,10 @@ describe('chat-enrichment.service', () => {
   })
 
   describe('enrichChatsForList', () => {
-    it('should enrich and sort multiple chats by updatedAt descending', async () => {
-      const chat1 = createMockChat({ id: 'chat-1', updatedAt: '2024-01-01T00:00:00Z', participants: [], tags: [] })
-      const chat2 = createMockChat({ id: 'chat-2', updatedAt: '2024-01-03T00:00:00Z', participants: [], tags: [] })
-      const chat3 = createMockChat({ id: 'chat-3', updatedAt: '2024-01-02T00:00:00Z', participants: [], tags: [] })
+    it('should enrich and sort multiple chats by lastMessageAt descending', async () => {
+      const chat1 = createMockChat({ id: 'chat-1', lastMessageAt: '2024-01-01T00:00:00Z', participants: [], tags: [] })
+      const chat2 = createMockChat({ id: 'chat-2', lastMessageAt: '2024-01-03T00:00:00Z', participants: [], tags: [] })
+      const chat3 = createMockChat({ id: 'chat-3', lastMessageAt: '2024-01-02T00:00:00Z', participants: [], tags: [] })
 
       mockRepos.tags.findByIds.mockResolvedValue([])
       mockRepos.chats.getMessageCount.mockResolvedValue(0)
@@ -548,6 +548,62 @@ describe('chat-enrichment.service', () => {
       expect(result[0].id).toBe('chat-2') // Most recent
       expect(result[1].id).toBe('chat-3')
       expect(result[2].id).toBe('chat-1') // Oldest
+    })
+
+    it('should ignore updatedAt — a background image or summary must not reorder the list', async () => {
+      // chat-quiet was touched a year later than anything else (a story
+      // background finishing its render, a summary folded, a cost tally), but
+      // no character has spoken in it since 2024. It must stay at the bottom.
+      const quiet = createMockChat({
+        id: 'chat-quiet',
+        lastMessageAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2025-12-31T00:00:00Z',
+        participants: [],
+        tags: [],
+      })
+      const spoken = createMockChat({
+        id: 'chat-spoken',
+        lastMessageAt: '2024-06-01T00:00:00Z',
+        updatedAt: '2024-06-01T00:00:00Z',
+        participants: [],
+        tags: [],
+      })
+
+      mockRepos.tags.findByIds.mockResolvedValue([])
+      mockRepos.chats.getMessageCount.mockResolvedValue(0)
+
+      const result = await enrichChatsForList([quiet, spoken], mockRepos)
+
+      expect(result.map((c) => c.id)).toEqual(['chat-spoken', 'chat-quiet'])
+    })
+
+    it('should fall back to createdAt — never updatedAt — when nobody has spoken', async () => {
+      // No character has ever posted in either chat, so they sort by creation.
+      // `never` carries a late updatedAt; if the fallback were updatedAt it
+      // would sort first, which is the whole bug.
+      const never = createMockChat({
+        id: 'chat-never',
+        lastMessageAt: null,
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2025-12-31T00:00:00Z',
+        participants: [],
+        tags: [],
+      })
+      const newer = createMockChat({
+        id: 'chat-newer',
+        lastMessageAt: null,
+        createdAt: '2024-02-01T00:00:00Z',
+        updatedAt: '2024-02-01T00:00:00Z',
+        participants: [],
+        tags: [],
+      })
+
+      mockRepos.tags.findByIds.mockResolvedValue([])
+      mockRepos.chats.getMessageCount.mockResolvedValue(0)
+
+      const result = await enrichChatsForList([never, newer], mockRepos)
+
+      expect(result.map((c) => c.id)).toEqual(['chat-newer', 'chat-never'])
     })
   })
 

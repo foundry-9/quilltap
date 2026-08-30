@@ -36,6 +36,8 @@ import packageJson from '@/package.json';
 import type { ConnectionProfile } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { QuilltapExport } from '@/lib/export/types';
+import { isCharacterAuthoredMessage } from '@/lib/chat/chat-activity';
+import type { ChatEvent } from '@/lib/schemas/types';
 
 // ============================================================================
 // Types
@@ -597,9 +599,13 @@ export function assembleQtapExport(
       timestampConfig: null,
       lastTurnParticipantId: null,
       messageCount: chatMessages.length,
-      lastMessageAt: chatMessages.length > 0
-        ? chatMessages[chatMessages.length - 1].createdAt
-        : now,
+      // Only character-authored content dates the chat. An import is normally
+      // all USER/ASSISTANT, but route it through the one predicate rather than
+      // trusting "the last row" — see `lib/chat/chat-activity.ts`. Null when
+      // nothing qualifies, where readers fall back to `createdAt`.
+      lastMessageAt:
+        chatMessages.filter((m) => isCharacterAuthoredMessage(m as unknown as ChatEvent)).pop()
+          ?.createdAt ?? null,
       lastRenameCheckInterchange: 0,
       isPaused: false,
       isManuallyRenamed: false,

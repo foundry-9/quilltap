@@ -21,6 +21,7 @@ import { formatChatListDate } from '@/lib/format-time'
 import { DAY_GRANULARITY_MS, useNow } from '@/hooks/useNow'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
+import { chatActivityAt } from '@/lib/chat/chat-activity'
 
 // ============================================================================
 // Types
@@ -66,6 +67,7 @@ export interface ChatCardData {
   memoryCount?: number
   participants: ChatCardParticipant[]
   tags?: ChatCardTag[]
+  createdAt: string
   updatedAt: string
   lastMessageAt?: string
   project?: ChatCardProject | null
@@ -155,7 +157,7 @@ export function ChatCard({
 
   const participantNames = formatParticipantNames(chat.participants)
   const dateStr = formatChatListDate(
-    chat.lastMessageAt || chat.updatedAt,
+    chatActivityAt(chat),
     useRelativeDates,
     nowMs,
   )

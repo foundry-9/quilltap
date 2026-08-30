@@ -11,6 +11,7 @@ import AvatarStack from '@/components/ui/AvatarStack'
 import { formatMessageTime } from '@/lib/format-time'
 import { useWorkspaceLink } from '@/components/workspace/useWorkspaceLink'
 import type { RecentChat } from './types'
+import { chatActivityAt } from '@/lib/chat/chat-activity'
 
 interface RecentChatItemProps {
   chat: RecentChat
@@ -65,7 +66,7 @@ export function RecentChatItem({ chat }: RecentChatItemProps) {
       </div>
       <div className="flex flex-col items-end shrink-0">
         <span className="qt-meta">
-          {formatMessageTime(chat.lastMessageAt ?? chat.updatedAt)}
+          {formatMessageTime(chatActivityAt(chat))}
         </span>
         <span className="qt-meta text-primary">
           {chat._count.messages} msgs{chat.isDangerousChat && <span className="qt-text-destructive" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>}

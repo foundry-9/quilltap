@@ -188,6 +188,21 @@ export async function restore(
             warnings.push(`Failed to restore message in chat "${chat.title}": ${msgError instanceof Error ? msgError.message : String(msgError)}`);
           }
         }
+
+        // `addMessage` stamps `lastMessageAt` with the wall clock, so replaying
+        // a transcript dates every restored chat to the instant of the restore
+        // — which is the timestamp every list sorts and displays by, so the
+        // whole history would land in one flat heap. Re-derive it from the
+        // transcript we just wrote, under the one predicate that defines it
+        // (`lib/chat/chat-activity.ts`). Null when no character ever posted,
+        // where readers fall back to `createdAt`.
+        try {
+          await repos.chats.update(createdChat.id, {
+            lastMessageAt: await repos.chats.getLastPlayedMessageAt(createdChat.id),
+          });
+        } catch (stampError) {
+          warnings.push(`Failed to restore last-activity date for chat "${chat.title}": ${stampError instanceof Error ? stampError.message : String(stampError)}`);
+        }
       } catch (error) {
         warnings.push(`Failed to restore chat "${chat.title}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore chat', { chatId: chat.id, error });

@@ -4,6 +4,37 @@
 
 ### 4.9-dev
 
+#### Changed: a chat is now dated by when a character last spoke in it (bug 112)
+
+Every list, sort and card that shows a chat's date — the home dashboard, the Salon list, a
+project's conversations, a character's conversations, the merge picker, the Brahma Console —
+now shows the last time the user or an LLM posted content in it.
+
+Previously the date moved whenever anything about the chat changed. Because story backgrounds,
+context summaries, and every Staff announcement (Lantern, Aurora, Librarian, Concierge, Prospero,
+Host, Commonplace Book, Ariel, Carina, Suparṇā, Pascal) are stored as messages, a chat nobody had
+touched in months could jump to the top of the list dated moments ago, with nothing said in it.
+
+What counts as a character speaking:
+
+- **Counts:** messages from the user or an LLM character, including whispers to specific
+  participants.
+- **Does not count:** Staff announcements, announcement bubbles posted under a custom name, tool
+  results, and system events.
+
+Deleting the most recent message now moves the date back to the message before it. A chat where
+no character has ever posted is dated by when it was created.
+
+Existing chats are recalculated once on startup; the loading screen names the step. No data is
+changed other than this timestamp.
+
+#### Fixed: restoring a backup no longer dates every chat to the moment of the restore
+
+Restoring replays each chat's messages, and doing so stamped every chat with the current time. The
+whole restored history therefore arrived with the same date, in no meaningful order. Restore now
+recalculates each chat's date from the transcript it just wrote, so a restored instance sorts the
+way the original did.
+
 #### Fixed: a NanoGPT LoRA preset set without an adapter was silently ignored (bug 110)
 
 On an image profile in the `flux-lora` family, a value in the **LoRA Preset** field was dropped

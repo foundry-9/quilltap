@@ -28,6 +28,7 @@ import { useNow } from '@/hooks/useNow'
 import { Icon } from '@/components/ui/icon'
 import { OutfitSelector } from '@/components/wardrobe'
 import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
+import { chatActivityAt } from '@/lib/chat/chat-activity'
 
 interface MergeChatParticipant {
   id: string
@@ -40,6 +41,7 @@ interface MergeChatParticipant {
 interface MergeChatRow {
   id: string
   title: string
+  createdAt: string
   updatedAt: string
   lastMessageAt: string | null
   participants: MergeChatParticipant[]
@@ -251,7 +253,7 @@ export function MergeConversationModal({
                 <div className="space-y-2">
                   {candidateChats.map((chat) => {
                     const company = presentCharacters(chat)
-                    const when = chat.lastMessageAt ?? chat.updatedAt
+                    const when = chatActivityAt(chat)
                     return (
                       <button
                         key={chat.id}

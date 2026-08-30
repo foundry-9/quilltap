@@ -37,6 +37,7 @@ function transformProjectChatToCardData(chat: ProjectChat): ChatCardData {
     participants: chat.participants,
     tags: chat.tags,
     lastMessageAt: chat.lastMessageAt || undefined,
+    createdAt: chat.createdAt,
     updatedAt: chat.updatedAt,
     // Project is null since we're already in project context
     project: null,

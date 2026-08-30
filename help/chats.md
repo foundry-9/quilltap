@@ -230,6 +230,28 @@ Each chat can have its own configuration:
 - **Filter** — Show chats by character, project, or date
 - **Sort** — Organize by recent, alphabetical, or other criteria
 
+#### How a Chat Is Dated
+
+The date beside a conversation — in this list, on the home dashboard, in a project's or a
+character's roster of chats, and in the merge picker — records **the last time somebody actually
+said something**. That means you, or one of your characters. Nothing else disturbs it.
+
+This distinction is less pedantic than it sounds. A great many things happen in a chat without
+anyone uttering a word: the Lantern completes a story background at leisure, the Librarian folds
+a summary, the Concierge posts a notice, the Commonplace Book murmurs a recollection, Pascal
+announces the fall of the dice. Each of these is a message of sorts, and were they to count, a
+conversation abandoned since March would present itself at the head of your list, freshly dated,
+with nothing whatever new in it. The house tidying up is not the same as the company talking.
+
+- **Counts as talk** — anything you post, anything a character posts, whispers included. A
+  remark made quietly to one guest is still a remark.
+- **Does not count** — announcements from the staff (the Lantern, Aurora, the Librarian, the
+  Concierge, Prospero, the Host, the Commonplace Book, Ariel, Carina, Suparṇā, and Pascal),
+  bubbles posted under a custom announcer's name, tool results, and system events.
+
+Delete the most recent message and the date obligingly steps back to the one before it. A chat in
+which no one has yet spoken is dated from its creation, and stays put.
+
 ### Renaming Chats
 
 1. Open the chat

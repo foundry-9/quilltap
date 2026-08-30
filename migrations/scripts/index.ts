@@ -378,6 +378,7 @@ import { addProfileMultiCharacterPrefillFieldMigration } from './add-profile-mul
 import { retirePrefillOnThinkingProfilesMigration } from './retire-prefill-on-thinking-profiles';
 // Provider fallback chains: fallbackProfileId + allowTierFallback on connection_profiles
 import { addProfileFallbackFieldsMigration } from './add-profile-fallback-fields';
+import { recomputeChatLastMessageAtMigration } from './recompute-chat-last-message-at';
 
 /**
  * All available migrations.
@@ -756,6 +757,8 @@ export const migrations: Migration[] = [
   retirePrefillOnThinkingProfilesMigration,
   // Provider fallback chains: every profile can name an understudy
   addProfileFallbackFieldsMigration,
+  // Chat activity: recompute lastMessageAt from character-authored messages only (bug 112)
+  recomputeChatLastMessageAtMigration,
 ];
 
 export {
@@ -1113,5 +1116,7 @@ export {
   retirePrefillOnThinkingProfilesMigration,
   // Provider fallback chains: every profile can name an understudy
   addProfileFallbackFieldsMigration,
+  // Chat activity: recompute lastMessageAt from character-authored messages only (bug 112)
+  recomputeChatLastMessageAtMigration,
 };
 

@@ -10,6 +10,7 @@ import type { FileEntry } from '@/lib/schemas/types'
 export interface RecentChat {
   id: string
   title: string
+  createdAt: string
   updatedAt: string
   lastMessageAt: string | null
   /** Whether this chat has been classified as dangerous */

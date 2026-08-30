@@ -156,6 +156,10 @@ function buildRepoMocks() {
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-chat-id' })
   )
   const addMessage = jest.fn().mockResolvedValue(undefined)
+  // Re-derived after the transcript is replayed — `addMessage` stamps the
+  // wall clock, which would date every restored chat to the restore itself.
+  const getLastPlayedMessageAt = jest.fn().mockResolvedValue('2026-05-05T00:00:00.000Z')
+  const chatsUpdate = jest.fn().mockResolvedValue({})
   const memoriesCreate = jest.fn().mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-memory-id' })
   )
@@ -166,7 +170,8 @@ function buildRepoMocks() {
 
   const userRepos = new Proxy({} as Record<string, unknown>, {
     get(_t, prop: string) {
-      if (prop === 'chats') return repoStub({ create: chatsCreate, addMessage })
+      if (prop === 'chats')
+        return repoStub({ create: chatsCreate, addMessage, getLastPlayedMessageAt, update: chatsUpdate })
       if (prop === 'memories') return repoStub({ create: memoriesCreate })
       if (prop === 'connections') return repoStub({ create: connectionsCreate, findAll: jest.fn().mockResolvedValue([]) })
       return repoStub()
@@ -183,7 +188,15 @@ function buildRepoMocks() {
   mockedGetUserRepositories.mockReturnValue(userRepos as never)
   mockedGetRepositories.mockReturnValue(globalRepos as never)
 
-  return { chatsCreate, addMessage, memoriesCreate, chatSettingsCreate, connectionsCreate }
+  return {
+    chatsCreate,
+    addMessage,
+    getLastPlayedMessageAt,
+    chatsUpdate,
+    memoriesCreate,
+    chatSettingsCreate,
+    connectionsCreate,
+  }
 }
 
 function primeArchive(data: Record<string, unknown>) {
@@ -358,6 +371,34 @@ describe('restore field fidelity — 4.8 data-model additions', () => {
 
     expect(addMessage).toHaveBeenCalledTimes(1)
     expect(addMessage.mock.calls[0][1]).toMatchObject(NEW_MESSAGE_FIELDS)
+  })
+
+  it('re-derives lastMessageAt after the transcript is replayed, so a restore does not date every chat to itself', async () => {
+    // `addMessage` stamps `lastMessageAt` with the wall clock. Replaying a
+    // transcript would therefore date every restored chat to the instant of the
+    // restore — and that column is what every list sorts and displays by, so an
+    // entire history would land in one flat heap at the top. Restore must put
+    // the real activity date back, read from the transcript it just wrote.
+    const { getLastPlayedMessageAt, chatsUpdate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chats: [
+          {
+            id: 'chat-1',
+            userId: 'user-1',
+            title: 'A conversation from last spring',
+            participants: [],
+            tags: [],
+            messages: [{ id: 'msg-1', type: 'message', role: 'assistant', content: 'hello' }],
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    expect(getLastPlayedMessageAt).toHaveBeenCalledWith('chat-1')
+    expect(chatsUpdate).toHaveBeenCalledWith('chat-1', { lastMessageAt: '2026-05-05T00:00:00.000Z' })
   })
 
   it('carries every new memories column through restore', async () => {

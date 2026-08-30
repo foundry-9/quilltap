@@ -44,6 +44,7 @@ export interface ProjectChat {
   participants: ProjectChatParticipant[]
   tags?: ProjectChatTag[]
   lastMessageAt?: string | null
+  createdAt: string
   updatedAt: string
   storyBackground?: {
     id: string

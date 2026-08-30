@@ -24,6 +24,7 @@ import {
   buildLegacyFileUrl,
 } from '@/lib/photos/resolve-character-avatar'
 import { logger } from '@/lib/logger'
+import { byChatActivityDesc } from '@/lib/chat/chat-activity'
 
 type Repos = RepositoryContainer
 
@@ -621,11 +622,9 @@ export async function enrichChatsForList(
   chats: ChatMetadata[],
   repos: Repos
 ): Promise<EnrichedChatSummary[]> {
-  const sortedChats = [...chats].sort((a, b) => {
-    const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.updatedAt).getTime()
-    const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.updatedAt).getTime()
-    return bTime - aTime
-  })
+  // Newest conversational activity first — when a character last posted, NOT
+  // when the row last changed. See `lib/chat/chat-activity.ts`.
+  const sortedChats = [...chats].sort(byChatActivityDesc)
 
   const characterIds = new Set<string>()
   const projectIds = new Set<string>()

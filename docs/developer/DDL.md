@@ -460,7 +460,7 @@ CREATE TABLE "chats" (
   "timestampConfig" TEXT,
   "lastTurnParticipantId" TEXT,
   "messageCount" INTEGER DEFAULT 0,
-  "lastMessageAt" TEXT,
+  "lastMessageAt" TEXT,                       -- When a CHARACTER last posted content: type='message', role IN ('USER','ASSISTANT'), systemSender IS NULL, customAnnouncer IS NULL. Whispers count; Staff announcements (Lantern/Host/Prospero/…), announcement bubbles, and raw TOOL rows do NOT — they are message rows but not conversational activity. THE definition lives in `isCharacterAuthoredMessage` (lib/chat/chat-activity.ts); this column is its mirror. NULL when no character has ever posted, where readers fall back to `createdAt` via `chatActivityAt` — NOT to `updatedAt`. Every chat list, sort, and card dates a chat by this, not by `updatedAt`. Recomputed for existing rows by recompute-chat-last-message-at-v1.
   "lastRenameCheckInterchange" INTEGER DEFAULT 0,
   "compactionGeneration" INTEGER DEFAULT 0,
   "lastSummaryTurn" INTEGER DEFAULT 0,
@@ -481,7 +481,7 @@ CREATE TABLE "chats" (
   "showSystemEventsOverride" INTEGER,
   "requestFullContextOnNextMessage" INTEGER DEFAULT 0,
   "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL,                  -- "Anything about this row changed" — a background image landing, a summary folded, a cost tally. Deliberately NOT what the reader is shown; use `lastMessageAt` for that.
   "disabledTools" TEXT DEFAULT '[]',
   "disabledToolGroups" TEXT DEFAULT '[]',
   "forceToolsOnNextMessage" INTEGER DEFAULT 0,

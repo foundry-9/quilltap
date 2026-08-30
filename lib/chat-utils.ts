@@ -66,6 +66,7 @@ export function transformSalonChatToCardData(chat: SalonChatShape): ChatCardData
     memoryCount: chat._count.memories ?? 0,
     participants: characters,
     tags: chat.tags,
+    createdAt: chat.createdAt,
     updatedAt: chat.updatedAt,
     project: chat.project,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
@@ -89,6 +90,7 @@ interface CharacterChatMessageShape {
 export interface CharacterChatShape {
   id: string
   title: string | null
+  createdAt: string
   updatedAt: string
   lastMessageAt?: string
   userCharacter?: { id: string; name: string; title?: string | null } | null
@@ -117,6 +119,7 @@ export function transformCharacterChatToCardData(chat: CharacterChatShape): Chat
     // No participants for character view — avatars not shown
     participants: [],
     tags: chat.tags,
+    createdAt: chat.createdAt,
     updatedAt: chat.updatedAt,
     lastMessageAt: chat.lastMessageAt,
     project: chat.project || null,
