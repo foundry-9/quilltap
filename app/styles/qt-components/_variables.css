@@ -170,6 +170,21 @@
   --qt-radio-focus-ring: var(--color-ring);
 
   /* ==========================================================================
+     RANGE (SLIDER) VARIABLES
+     Sliders stay natively rendered on purpose. accent-color is what paints the
+     filled portion of the track *and* the thumb, in every engine we target, so
+     it is the whole theming story for the default look. Do NOT "improve" this
+     into `appearance: none` with a custom ::-webkit-slider-runnable-track /
+     ::-webkit-slider-thumb pair: appearance:none discards the filled bar in
+     Chrome and Safari (Firefox alone keeps it, via ::-moz-range-progress), so
+     a hand-built track trades the value affordance for styling reach and looks
+     different per browser. A theme that genuinely wants a bespoke slider can
+     still opt in by overriding .qt-range itself.
+     ========================================================================== */
+  --qt-range-accent: var(--color-primary);
+  --qt-range-focus-ring: var(--color-ring);
+
+  /* ==========================================================================
      NAVBAR VARIABLES
      ========================================================================== */
   --qt-navbar-height: 3.5rem;

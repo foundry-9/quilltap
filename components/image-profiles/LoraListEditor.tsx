@@ -142,7 +142,7 @@ export function LoraListEditor({ support, loras, onChange }: LoraListEditorProps
                 step={bounds.step}
                 value={scale}
                 onChange={e => update(index, { scale: Number(e.target.value) })}
-                className="w-full accent-primary"
+                className="qt-range w-full"
               />
               <p className="qt-text-xs">
                 {bounds.min} to {bounds.max}; this model&apos;s own default is {bounds.default}.

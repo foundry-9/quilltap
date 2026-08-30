@@ -492,7 +492,7 @@ export function ParticipantCard({
                 step="0.1"
                 value={localTalkativeness}
                 onChange={handleTalkativenessChange}
-                className="qt-input w-full h-1 rounded-lg appearance-none cursor-pointer accent-primary"
+                className="qt-range w-full"
               />
             </div>
           )}
@@ -511,7 +511,7 @@ export function ParticipantCard({
                 step="0.1"
                 value={0.5}
                 disabled
-                className="qt-input w-full h-1 rounded-lg appearance-none cursor-not-allowed"
+                className="qt-range w-full"
               />
             </div>
           )}

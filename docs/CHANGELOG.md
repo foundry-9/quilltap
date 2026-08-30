@@ -4,6 +4,32 @@
 
 ### 4.9-dev
 
+#### Fixed: sliders now follow the theme
+
+Every `<input type="range">` in the app now uses one new `.qt-range` class. Previously the 15 sliders
+carried five different ad-hoc idioms, and the differences were visible:
+
+- Six sliders (both connection-profile sliders, all three context-compression sliders, and the
+  background-jobs concurrency slider) set no accent at all, so they rendered in the browser's default
+  system blue regardless of the active theme.
+- Two (`memory-editor`, memory housekeeping) set `appearance-none` with no replacement track or thumb
+  styling, which discards the filled portion of the track — the slider showed a flat grey bar with no
+  indication of its value relative to the range.
+- Both participant-card talkativeness sliders applied `qt-input`, a text-field style, wrapping the
+  control in an input border and padding box.
+
+`.qt-range` is token-driven (`--qt-range-accent`, `--qt-range-focus-ring`) and keeps sliders natively
+rendered on purpose: `accent-color` is what paints both the filled track and the thumb. Sliders also
+get a themed focus ring, which none of them had before. The class sets no disabled opacity — browsers
+already drop the accent on a disabled range, and several sliders sit inside `opacity-50` wrappers
+where a second 50% would compound to 25%.
+
+The class name was already in the tree: `CharacterOptimizerModal` referenced `qt-range` even though
+nothing defined it, so it silently resolved to nothing. `scripts/check-qt-classes.mjs` does not catch
+this, by design — it validates only the `qt-bg-`/`qt-text-`/`qt-border-`/`qt-shadow-` families, and
+bare component names are out of its scope because most are legitimate theme hooks.
+
+
 #### Added: LoRA adapters on image profiles, and per-model image options
 
 Image profiles can now carry LoRA adapters — a `loras` list of `{ source, scale, triggerPhrase }`

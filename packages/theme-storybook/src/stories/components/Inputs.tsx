@@ -102,6 +102,29 @@ export const Inputs: React.FC = () => {
         </div>
       </section>
 
+      {/* Range sliders */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
+          Range Sliders
+        </h3>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxWidth: '24rem' }}>
+          <div>
+            <label className="qt-label" htmlFor="range1">Temperature</label>
+            <input type="range" id="range1" className="qt-range" style={{ width: '100%' }} min={0} max={100} defaultValue={65} />
+          </div>
+          <div>
+            <label className="qt-label" htmlFor="range2" style={{ color: 'var(--color-muted-foreground)' }}>Disabled slider</label>
+            <input type="range" id="range2" className="qt-range" style={{ width: '100%' }} min={0} max={100} defaultValue={35} disabled />
+          </div>
+        </div>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-muted-foreground)', marginTop: '0.75rem', maxWidth: '32rem' }}>
+          Sliders render natively; <code>--qt-range-accent</code> colours both the filled
+          portion of the track and the thumb. Overriding <code>.qt-range</code> with
+          <code> appearance: none</code> gives a theme full control of the track, but drops
+          the filled bar in Chrome and Safari.
+        </p>
+      </section>
+
       {/* Links */}
       <section style={{ marginBottom: '2rem' }}>
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>

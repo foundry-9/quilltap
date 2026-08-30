@@ -216,7 +216,7 @@ export function CharacterOptimizerModal({
                     step={5}
                     value={maxMemories}
                     onChange={(e) => setMaxMemories(Number(e.target.value))}
-                    className="qt-range w-full accent-primary"
+                    className="qt-range w-full"
                   />
                   <div className="flex justify-between text-[10px] qt-text-secondary">
                     <span>5</span>

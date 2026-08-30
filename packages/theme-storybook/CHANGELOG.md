@@ -2,6 +2,14 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.67] - 2026-08-30
+
+### Added
+- `.qt-range` and its two tokens (`--qt-range-accent`, `--qt-range-focus-ring`), mirroring the app's new slider class, plus a "Range Sliders" section in the `Inputs` story so a theme can be previewed against an enabled and a disabled slider.
+
+### Notes
+- Sliders stay natively rendered. `accent-color` is what paints the filled portion of the track *and* the thumb, so it is the whole default theming story; the class sets no disabled opacity, because browsers already drop the accent on a disabled range and app call sites nest sliders inside dimmed wrappers. A theme wanting a bespoke track can override `.qt-range` with `appearance: none`, at the cost of the filled bar in Chrome and Safari.
+
 ## [1.0.63] - 2026-08-25
 
 ### Added

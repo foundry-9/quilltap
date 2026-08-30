@@ -763,7 +763,7 @@ export function ProfileModal({
                     step="0.1"
                     value={form.formData.temperature}
                     onChange={(e) => form.setField('temperature', parseFloat(e.target.value))}
-                    className="w-full"
+                    className="qt-range w-full"
                   />
                   <p className="qt-text-xs mt-1">0 = deterministic, 2 = creative</p>
                 </div>
@@ -800,7 +800,7 @@ export function ProfileModal({
                     step="0.05"
                     value={form.formData.topP}
                     onChange={(e) => form.setField('topP', parseFloat(e.target.value))}
-                    className="w-full"
+                    className="qt-range w-full"
                   />
                   <p className="qt-text-xs mt-1">Nucleus sampling (0-1)</p>
                 </div>

@@ -83,6 +83,12 @@
   --qt-radio-accent: var(--color-primary);
   --qt-radio-focus-ring: var(--color-ring);
 
+  /* Range slider variables. Sliders stay natively rendered: accent-color paints
+     the filled track and the thumb, which `appearance: none` would discard in
+     Chrome and Safari. */
+  --qt-range-accent: var(--color-primary);
+  --qt-range-focus-ring: var(--color-ring);
+
   /* Navbar variables */
   --qt-navbar-height: 3.5rem;
   --qt-navbar-bg: var(--color-background);
@@ -871,6 +877,31 @@
 .qt-radio:focus {
   outline: none;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--qt-radio-focus-ring) 35%, transparent);
+}
+
+/* ==========================================================================
+   RANGE (SLIDER) COMPONENT
+   Natively rendered on purpose — accent-color paints the filled portion of the
+   track and the thumb. Do not reimplement with appearance:none plus custom
+   ::-webkit-slider-thumb / ::-moz-range-thumb rules: that discards the filled
+   bar in Chrome and Safari. Call sites own width/layout.
+   ========================================================================== */
+
+.qt-range {
+  cursor: pointer;
+  accent-color: var(--qt-range-accent);
+}
+
+.qt-range:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--qt-range-focus-ring) 35%, transparent);
+}
+
+/* No disabled opacity on purpose: browsers already drop the accent on a
+   disabled range, and app call sites nest these inside dimmed wrappers where a
+   second 50% would compound to 25%. */
+.qt-range:disabled {
+  cursor: not-allowed;
 }
 
 /* ==========================================================================

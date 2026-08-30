@@ -96,7 +96,7 @@ export function TasksQueueCard() {
           onChange={(e) => setDragConcurrency(parseInt(e.target.value, 10))}
           onMouseUp={handleConcurrencyCommit}
           onTouchEnd={handleConcurrencyCommit}
-          className="w-full cursor-pointer mt-2"
+          className="qt-range w-full mt-2"
         />
         <p className="qt-text-small qt-text-muted mt-1">
           How many background errands the engine may undertake at once. Four suits most
