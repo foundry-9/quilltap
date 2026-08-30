@@ -4939,7 +4939,7 @@ Bugfix flow: new Step 5 merges the bugfix release into `main` with explicit conf
 
 #### About page: correct Node version, add Ariel, fix Discord link
 
-`app/about/page.tsx`: tech-stack Runtime line now reads "Node.js 24+" to match the `engines` field in `package.json` and the install instructions in the README. Added Ariel (live PTY terminal sessions in the Salon) to both the subsystem prose paragraph and the Key Features bullet list — previously omitted despite being a shipping `systemSender` with its own avatar and help page. Swapped the Discord badge URL from the channel-deep-link form (`discord.com/channels/<guildId>/<channelId>`, which only resolves for existing members) to the public invite `https://discord.gg/6enCeQxY`. Same swap applied to the three Discord links in `README.md` so the badge, intro line, and Community section all point at the joinable invite.
+`app/about/page.tsx`: tech-stack Runtime line now reads "Node.js 24+" to match the `engines` field in `package.json` and the install instructions in the README. Added Ariel (live PTY terminal sessions in the Salon) to both the subsystem prose paragraph and the Key Features bullet list — previously omitted despite being a shipping `systemSender` with its own avatar and help page. Swapped the Discord badge URL from the channel-deep-link form (`discord.com/channels/<guildId>/<channelId>`, which only resolves for existing members) to the public invite `https://discord.gg/fnTPEZDE4`. Same swap applied to the three Discord links in `README.md` so the badge, intro line, and Community section all point at the joinable invite.
 
 #### Add 4.4.0 release notes; fix manifesto migration version tag
 

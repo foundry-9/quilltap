@@ -84,7 +84,7 @@ export function AboutView() {
             />
           </a>
           <a
-            href="https://discord.gg/6enCeQxY"
+            href="https://discord.gg/fnTPEZDE4"
             target="_blank"
             rel="noopener noreferrer"
           >
