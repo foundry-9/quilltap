@@ -145,6 +145,16 @@ The same holds on a reroute: if a standard provider rejects a finished image for
 
 If no uncensored image profile is configured, concealment applies as before — the character appearance descriptions are additionally sanitized in that case, since there is nowhere else for the image to go.
 
+### Both conditions, and how they are commonly missed
+
+The candid draft requires **two** things at once, and a picture that comes back unexpectedly demure has almost always lost one of them.
+
+**The chat must actually be Flagged, not merely flaggable.** Auto-Route flags a chat when the classifier's score clears your **Detection Threshold**, and a chat can be thoroughly undressed while scoring well under it — the classifier weighs the whole compressed summary, not the state of anybody's wardrobe. A scene may therefore sit at a score of 0.3 against a threshold of 0.8, be marked Safe, and receive the concealed draft for as long as it likes. If a chat ought to be candid and the classifier disagrees, flip it yourself with the per-chat Concierge switch described below; a manual flag is sticky, and the classifier will not quietly overturn it later.
+
+**The adapter must sit on the profile the Concierge actually routes to.** The **Image Generation Profile** named under *Uncensored Providers* is a distinct setting from whichever profile a given chat happens to use. Configure a LoRA on one profile while the Concierge points at another and a reroute will hand your scene to the other profile — correctly, obediently, and without the adapter. When you retire an uncensored profile in favour of a new one, move this setting across with it.
+
+A useful way to tell the two failures apart after the fact: read the prompt on the finished image. If it drapes the scene ("modestly concealed", "silhouetted", "a sheet arranged just so") the crafter was working from the concealed instructions and the first condition failed. If it says plainly what the scene is and the picture is still demure, the prompt reached a provider or an adapter that declined it — see *The adapter seems to have made no difference* in [Image Generation Profiles](image-generation-profiles.md).
+
 ## Chat-Level Classification
 
 In addition to per-message scanning, Quilltap can classify entire chats as dangerous based on the compressed context summary. This happens automatically in the background after messages are exchanged and a context summary has been generated.

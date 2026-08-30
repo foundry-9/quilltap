@@ -383,6 +383,16 @@ These are the establishments Quilltap can actually commission a picture from —
 - Use more detailed image descriptions
 - Try different provider
 
+### The adapter seems to have made no difference
+
+The most expensive failure a LoRA can suffer is the one that wears the costume of success: the order goes out, the picture comes back, the account is debited, and the result is precisely what the bare model would have painted anyway. No error is raised, because from the provider's side nothing whatever went wrong. Three causes account for very nearly all of it.
+
+**The adapter and the model are not of the same lineage.** Weights are trained against one particular base and do not transfer to its cousins on the strength of a shared surname. An adapter raised on Flux 2 Klein, pointed at Flux 2 Dev, is not a fainter version of itself — it is simply not speaking. Consult the adapter's own page for the base it was trained on and set the profile's **Model** to that, rather than to its nearest-sounding neighbour. Quilltap will post faithfully whatever you configure; it has no means of knowing the parcel was addressed to a different house.
+
+**The magic word was never said.** Most adapters answer to a trigger, and their page names it — sometimes as a single phrase, sometimes as a short list of words, in which case a phrase containing all of them will do. Write it into the row's **Trigger Phrase** and Quilltap weaves it into every prompt this profile paints. Leave it blank and the adapter may attend the sitting without ever once picking up the pen.
+
+**Nobody asked for the thing the adapter was engaged to do.** This is the quiet one, and it catches the careful. An adapter hired to unlock candid depiction cannot exercise that talent upon a prompt that never requests it — and for story backgrounds the prompt crafter drapes the scene by default, however uncensored the destination. Fitting the adapter is therefore only half the arrangement. The other half is the Concierge's, and is set out under *Story Background Prompts* in [Dangerous Content Handling](dangerous-content.md).
+
 ### Generation is very slow
 
 **Causes:**
@@ -426,6 +436,7 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Settings
 
 - [API Keys](api-keys-settings.md) — Store credentials for image providers
+- [Dangerous Content Handling](dangerous-content.md) — Governs whether story-background prompts are drafted candidly
 - **Chat Settings** — Configure image description provider (different from generation)
 - **Connection Profiles** — For LLM that interprets image requests
 - **Chat Memory** — Stores generated images in history

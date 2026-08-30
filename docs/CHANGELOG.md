@@ -4,6 +4,19 @@
 
 ### 4.9-dev
 
+#### Documentation: why a working LoRA can still produce a tame story background
+
+Two help entries for a failure that raises no error. `help/image-generation-profiles.md` gains a
+troubleshooting section covering the three ways an adapter can be configured correctly and still
+do nothing: an adapter trained for a different base model than the profile points at, a missing
+trigger phrase, and a prompt that never asked for what the adapter was added to provide.
+
+`help/dangerous-content.md` spells out the two conditions the candid story-background draft
+requires. A chat must actually be flagged, which an Auto-Route score below the detection threshold
+will not do on its own, and the LoRA must be on the profile named under Uncensored Providers
+rather than on whichever profile the chat happens to use. It also describes how to tell the two
+failures apart afterward by reading the prompt stored on the finished image.
+
 #### Changed: a chat is now dated by when a character last spoke in it (bug 112)
 
 Every list, sort and card that shows a chat's date — the home dashboard, the Salon list, a
