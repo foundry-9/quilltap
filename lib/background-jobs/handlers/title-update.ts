@@ -25,7 +25,7 @@ import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection
 import { logger } from '@/lib/logger';
 import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { createTitleGenerationEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import type { TitleUpdatePayload } from '../queue-service';
@@ -105,7 +105,7 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   // For dangerous chats, use uncensored provider to avoid content refusals.
   // Off-duty chats are explicitly opted out of uncensored routing.
   const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
-  if (isChatActiveDangerous(chat)) {
+  if (shouldUseUncensoredRoute(chat)) {
     cheapLLMSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection,
       true,

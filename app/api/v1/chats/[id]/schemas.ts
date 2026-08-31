@@ -115,13 +115,14 @@ export const chatUpdateRequestSchema = z.object({
   roleplayTemplateId: z.string().nullish(),
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shortcut, same as chat.imageProfileId)
   /**
-   * Tri-state per-chat Concierge mode set from the sidebar:
-   *   - 'safe'    : moderation runs as usual, classifier may auto-flip → 'flagged'
-   *   - 'flagged' : the chat is treated as dangerous (uncensored routing, etc.)
-   *   - 'off'     : the Concierge is off-duty for this chat (no moderation)
+   * Four-state per-chat Concierge mode set from the sidebar:
+   *   - 'monitored'  : moderation runs as usual, classifier may auto-flip → 'flagged'
+   *   - 'flagged'    : the Concierge's verdict — dangerous (uncensored routing, etc.)
+   *   - 'vouched'    : the operator vouches the chat safe (no moderation, ordinary providers)
+   *   - 'uncensored' : the operator asserts the chat spicy (uncensored routing, no moderation)
    * The handler maps this onto chats.conciergeOverride + chats.isDangerousChat.
    */
-  conciergeState: z.enum(['safe', 'flagged', 'off']).optional(),
+  conciergeState: z.enum(['monitored', 'flagged', 'vouched', 'uncensored']).optional(),
 });
 
 export const addTagSchema = z.object({

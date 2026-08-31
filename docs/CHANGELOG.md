@@ -4,6 +4,36 @@
 
 ### 4.9-dev
 
+#### Changed: The per-chat Concierge control is now a four-state
+
+The sidebar's per-chat Concierge switch grew from three states to four, separating who decided
+(the Concierge's classifier vs. the operator) from which route the chat takes (ordinary vs.
+uncensored providers). The select now groups its options under "The Concierge decides"
+(Monitored, Flagged) and "You decide" (Vouched Safe, Uncensored):
+
+- **Monitored** (formerly "Safe"): the classifier keeps watch and may auto-flip to Flagged.
+- **Flagged**: unchanged — the classifier's verdict, uncensored routing, danger styling.
+- **Vouched Safe** (formerly "Off-duty"): the operator vouches the chat safe. No classification,
+  no scanning, ordinary providers. Stored value unchanged (`conciergeOverride = 'OFF'`).
+- **Uncensored** (new): the operator asserts the chat is spicy without invoking the classifier.
+  Takes every uncensored route Flagged takes — uncensored text/image profiles, candid
+  story-background prompts, uncensored cheap-LLM tasks — with zero classification, zero scans,
+  zero announcements, and no danger styling. Works even when the global Concierge mode is Off.
+  Previously this corner of the 2x2 was unreachable: Off-duty dropped the uncensored profile IDs
+  entirely, so an operator-asserted spicy chat got concealed prompts on the default image profile.
+
+Under the hood, the overloaded `isChatActiveDangerous` predicate was deleted and its ~20 call
+sites split between three purpose-named predicates (`shouldUseUncensoredRoute`,
+`shouldShowDangerStyling`, `isClassifierOnDuty`); the two classifier gates that read the raw
+`conciergeOverride` column now go through the helper, so the new state cannot be reclassified out
+from under the operator. The API enum changed wholesale to
+`monitored | flagged | vouched | uncensored` (no wire value was reused with a new meaning). The
+Salon header pill now renders per state (red Flagged, grey Vouched Safe, blue Uncensored, nothing
+for Monitored), and every manual transition posts its own Concierge announcement, including the
+two new kinds. `scripts/concierge-tristate-test.sh` was renamed to
+`scripts/concierge-four-state-test.sh` and extended to walk all four states. Existing chats keep
+their exact behavior; a ledger-only migration records the widened column domain.
+
 #### Added: Query a LoRA against HuggingFace from the image-profile editor
 
 Each row in the LoRA Adapters panel now has a **Query** button beside its Source field. It fetches

@@ -34,7 +34,7 @@ jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
 }))
 
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
-  isChatActiveDangerous: jest.fn(() => false),
+  shouldUseUncensoredRoute: jest.fn(() => false),
 }))
 
 import { buildCustomToolLlmInvoker, CONSULT_TIMEOUT_MS } from '@/lib/pascal/llm-consult'
@@ -42,14 +42,14 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 
 const mockRepos = getRepositories as jest.Mock
 const mockGetCheap = getCheapLLMProvider as jest.Mock
 const mockUncensored = resolveUncensoredCheapLLMSelection as jest.Mock
 const mockExecute = executeCheapLLMTask as jest.Mock
 const mockResolveDanger = resolveDangerousContentSettings as jest.Mock
-const mockIsDangerous = isChatActiveDangerous as jest.Mock
+const mockShouldUseUncensoredRoute = shouldUseUncensoredRoute as jest.Mock
 
 type AnyRecord = Record<string, unknown>
 
@@ -74,7 +74,7 @@ beforeEach(() => {
   mockGetCheap.mockReturnValue(SAFE_SELECTION)
   mockUncensored.mockReturnValue(UNCENSORED_SELECTION)
   mockResolveDanger.mockReturnValue({ settings: { mode: 'reroute' } })
-  mockIsDangerous.mockReturnValue(false)
+  mockShouldUseUncensoredRoute.mockReturnValue(false)
   mockExecute.mockResolvedValue({ success: true, result: 'The oracle speaks.' })
 })
 
@@ -133,7 +133,7 @@ describe('buildCustomToolLlmInvoker — the happy path', () => {
 
 describe('buildCustomToolLlmInvoker — Concierge rerouting', () => {
   it('reroutes a dangerous chat to the uncensored selection', async () => {
-    mockIsDangerous.mockReturnValue(true)
+    mockShouldUseUncensoredRoute.mockReturnValue(true)
     const invoke = buildCustomToolLlmInvoker({ userId: 'u1', chatId: 'chat-1' })
 
     const result = await invoke('prompt')

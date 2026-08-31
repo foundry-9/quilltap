@@ -24,7 +24,7 @@ import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { triggerUrlDownload } from '@/lib/download-utils'
-import { getConciergeState, isChatActiveDangerous, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { getConciergeState, shouldShowDangerStyling, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
 import type { TurnOrderEntry, TurnOrderStatus } from '@/lib/chat/turn-manager'
@@ -181,8 +181,8 @@ export interface ChatSidebarProps {
   avatarGenerationEnabled?: boolean | null
   /** Which clock the chat's story keeps for episodic memory (null = realtime default). */
   timelineMode?: 'realtime' | 'narrative' | null
-  /** Per-chat Concierge override ('OFF' = off-duty, null = follow global). */
-  conciergeOverride?: 'OFF' | null
+  /** Per-chat Concierge override ('OFF' = vouched safe, 'UNCENSORED' = operator-asserted uncensored, null = follow global). */
+  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
   onToolSettingsClick?: () => void
   onRunToolClick?: () => void
   storyBackgroundsEnabled?: boolean
@@ -844,7 +844,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               onWhisper={activeParticipantCount >= 3 ? p.onWhisper : undefined}
               chatId={p.chatId}
               onRegenerateAvatar={p.onRegenerateAvatar}
-              isDangerousChat={isChatActiveDangerous({ isDangerousChat: p.isDangerousChat, conciergeOverride: p.conciergeOverride })}
+              isDangerousChat={shouldShowDangerStyling({ isDangerousChat: p.isDangerousChat, conciergeOverride: p.conciergeOverride })}
             />
           )
         })}
@@ -888,7 +888,7 @@ interface ChatSectionProps {
   avatarGenerationEnabled?: boolean | null
   timelineMode?: 'realtime' | 'narrative' | null
   isDangerousChat?: boolean
-  conciergeOverride?: 'OFF' | null
+  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
   onToolSettingsClick?: () => void
   onRunToolClick?: () => void
   storyBackgroundsEnabled?: boolean
@@ -1078,11 +1078,13 @@ function ChatSection({
         throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
       }
       showSuccessToast(
-        next === 'safe'
+        next === 'monitored'
           ? 'The Concierge is on watch'
           : next === 'flagged'
             ? 'Marked as flagged'
-            : 'The Concierge is off-duty'
+            : next === 'vouched'
+              ? 'You have vouched for this chat'
+              : 'The uncensored door stands open'
       )
       onChatUpdated?.()
     } catch (error) {
@@ -1119,27 +1121,49 @@ function ChatSection({
     : alertCharactersOfLanternImages ? 'enabled' : 'disabled'
 
   const conciergeState = getConciergeState({ isDangerousChat, conciergeOverride })
+  // Four states, one 2×2: rows are the route (ordinary vs uncensored),
+  // columns are the provenance (the Concierge's classifier vs the operator).
+  // The optgroups carry the provenance structurally; the helper text names
+  // the actor; the icon/color pair gives a third, colorblind-safe channel.
   const conciergeHelperText =
-    conciergeState === 'off'
-      ? "Off-duty gives the Concierge the afternoon off. Censored providers may refuse the conversation, and image prompts go out unaltered — the risk is yours."
+    conciergeState === 'monitored'
+      ? 'The Concierge keeps watch, and will flip the switch himself if the conversation calls for it.'
       : conciergeState === 'flagged'
-        ? 'Flagged routes this chat through the Concierge\'s uncensored providers.'
-        : 'Safe lets the Concierge keep watch; he\'ll flip the switch if the conversation calls for it.'
+        ? 'The Concierge has this chat down as dangerous, and routes it through the uncensored providers.'
+        : conciergeState === 'vouched'
+          ? 'You have vouched for this chat. The Concierge stops watching; the ordinary providers still apply, and may still refuse.'
+          : 'You have sent the Concierge away and opened the uncensored door yourself. Nothing is scanned, nothing is softened — the risk is yours.'
+  const conciergeStateIcon =
+    conciergeState === 'monitored'
+      ? { name: 'eye' as const, className: 'qt-text-success' }
+      : conciergeState === 'flagged'
+        ? { name: 'alert-triangle' as const, className: 'qt-text-danger' }
+        : conciergeState === 'vouched'
+          ? { name: 'check-circle' as const, className: 'qt-text-muted' }
+          : { name: 'eye-off' as const, className: 'qt-text-info' }
 
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-chat flex flex-col gap-3">
-      {/* The Concierge — per-chat tri-state */}
+      {/* The Concierge — per-chat four-state */}
       <label className="qt-label">
-        <span className="block mb-1">The Concierge</span>
+        <span className="mb-1 flex items-center gap-1.5">
+          The Concierge
+          <Icon name={conciergeStateIcon.name} className={`w-3.5 h-3.5 ${conciergeStateIcon.className}`} />
+        </span>
         <select
           value={conciergeState}
           onChange={(e) => handleConciergeStateChange(e.target.value as ConciergeState)}
           disabled={conciergeSaving}
           className="qt-select text-sm"
         >
-          <option value="safe">Safe</option>
-          <option value="flagged">Flagged</option>
-          <option value="off">Off-duty</option>
+          <optgroup label="The Concierge decides">
+            <option value="monitored">Monitored</option>
+            <option value="flagged">Flagged</option>
+          </optgroup>
+          <optgroup label="You decide">
+            <option value="vouched">Vouched Safe</option>
+            <option value="uncensored">Uncensored</option>
+          </optgroup>
         </select>
         <span className="block mt-1 qt-text-secondary text-xs">{conciergeHelperText}</span>
       </label>

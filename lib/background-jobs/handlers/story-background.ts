@@ -40,7 +40,7 @@ import {
   isImageModerationError as isImageModerationErrorShared,
   resolveUncensoredImageProfileForReroute,
 } from '@/lib/services/dangerous-content/provider-routing.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 import { sha256OfBuffer } from '@/lib/utils/sha256';
@@ -222,7 +222,7 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // Resolve the Concierge settings early (needed for uncensored routing and appearance sanitization)
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
   const dangerSettings = dangerousContentResolved.settings;
-  const isDangerousChat = isChatActiveDangerous(chat);
+  const isDangerousChat = shouldUseUncensoredRoute(chat);
   const hasUncensoredImageProvider = Boolean(dangerSettings.uncensoredImageProfileId);
   // A dangerous-marked chat with an uncensored image profile configured is
   // already headed for a provider that accepts adult content — appearance

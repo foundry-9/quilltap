@@ -19,7 +19,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { convertToWebP } from '@/lib/files/webp-conversion'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
 import {
   craftStoryBackgroundPrompt,
@@ -46,7 +46,9 @@ jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
   resolveDangerousContentSettings: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
-  isChatActiveDangerous: jest.fn(),
+  shouldUseUncensoredRoute: jest.fn(),
+  // The real derivation, for tests that wire the real resolver through.
+  getConciergeState: jest.requireActual('@/lib/services/dangerous-content/chat-override').getConciergeState,
 }))
 jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
   isImageModerationError: jest.fn(),
@@ -85,7 +87,7 @@ const mockGetRepositories = jest.mocked(getRepositories)
 const mockCreateImageProvider = jest.mocked(createImageProvider)
 const mockConvertToWebP = jest.mocked(convertToWebP)
 const mockResolveDanger = jest.mocked(resolveDangerousContentSettings)
-const mockIsDangerous = jest.mocked(isChatActiveDangerous)
+const mockShouldUseUncensoredRoute = jest.mocked(shouldUseUncensoredRoute)
 const mockGetCheapLLM = jest.mocked(getCheapLLMProvider)
 const mockResolveUncensoredCheap = jest.mocked(resolveUncensoredCheapLLMSelection)
 const mockCraftPrompt = jest.mocked(craftStoryBackgroundPrompt)
@@ -121,7 +123,7 @@ function craftTargetFlag(call = 0): boolean | undefined {
 
 /** Wire the Concierge to a dangerous chat, with or without an uncensored image profile. */
 function markDangerous(withUncensoredImageProfile: boolean) {
-  mockIsDangerous.mockReturnValue(true)
+  mockShouldUseUncensoredRoute.mockReturnValue(true)
   mockResolveDanger.mockReturnValue({
     settings: {
       mode: 'AUTO_ROUTE',
@@ -173,7 +175,7 @@ beforeEach(() => {
   } as never)
 
   mockResolveDanger.mockReturnValue({ settings: { mode: 'OFF', scanImagePrompts: false } } as never)
-  mockIsDangerous.mockReturnValue(false)
+  mockShouldUseUncensoredRoute.mockReturnValue(false)
   mockGetCheapLLM.mockReturnValue(SELECTION)
   mockResolveUncensoredCheap.mockReturnValue(SELECTION)
   mockExtractConversation.mockReturnValue([])
@@ -222,6 +224,52 @@ describe('story-background handler — uncensoredImageTarget', () => {
     await handleStoryBackgroundGeneration(makeJob())
 
     expect(craftTargetFlag()).toBe(true)
+  })
+
+  it('crafts candidly for an operator-Uncensored chat even under a global OFF (real predicate + resolver)', async () => {
+    // The regression that motivated the four-state control: the operator
+    // asserts the chat spicy, the global Concierge mode is OFF, and the
+    // prompt must still go out candid and bound for the uncensored profile —
+    // with every scan disabled (nothing left to classify).
+    const actualOverride = jest.requireActual('@/lib/services/dangerous-content/chat-override')
+    const actualResolver = jest.requireActual('@/lib/services/dangerous-content/resolver.service')
+    mockShouldUseUncensoredRoute.mockImplementation(actualOverride.shouldUseUncensoredRoute)
+    mockResolveDanger.mockImplementation(actualResolver.resolveDangerousContentSettings)
+
+    const repos = mockGetRepositories() as never as {
+      chats: { findById: jest.Mock }
+      chatSettings: { findByUserId: jest.Mock }
+    }
+    repos.chats.findById.mockResolvedValue({
+      id: CHAT_ID, projectId: null, title: 'The Morning After',
+      sceneState: null, messageCount: 0, contextSummary: null,
+      conciergeOverride: 'UNCENSORED', isDangerousChat: false,
+    })
+    repos.chatSettings.findByUserId.mockResolvedValue({
+      dangerousContentSettings: {
+        mode: 'OFF',
+        threshold: 0.7,
+        scanTextChat: true,
+        scanImagePrompts: true,
+        scanImageGeneration: false,
+        displayMode: 'SHOW',
+        showWarningBadges: true,
+        uncensoredImageProfileId: 'uncensored-image-profile',
+      },
+    })
+
+    await handleStoryBackgroundGeneration(makeJob())
+
+    expect(craftTargetFlag()).toBe(true)
+    // The resolver's settings actually reached the handler with the forced
+    // AUTO_ROUTE and every scan off.
+    const resolved = mockResolveDanger.mock.results[0].value as {
+      settings: { mode: string; scanImagePrompts: boolean }
+      source: string
+    }
+    expect(resolved.source).toBe('chat-uncensored')
+    expect(resolved.settings.mode).toBe('AUTO_ROUTE')
+    expect(resolved.settings.scanImagePrompts).toBe(false)
   })
 })
 

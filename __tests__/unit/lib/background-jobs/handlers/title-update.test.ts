@@ -36,7 +36,7 @@ jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
   })),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
-  isChatActiveDangerous: () => false,
+  shouldUseUncensoredRoute: () => false,
 }))
 jest.mock('@/lib/services/system-events.service', () => ({
   createTitleGenerationEvent: jest.fn(),

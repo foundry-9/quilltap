@@ -42,7 +42,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import {
   classifyContent as classifyDangerousContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service';
@@ -906,7 +906,7 @@ async function resolveAppearances(
   if (context.chatId) {
     try {
       const chat = await repos.chats.findById(context.chatId);
-      isDangerousChat = isChatActiveDangerous(chat);
+      isDangerousChat = shouldUseUncensoredRoute(chat);
 
       const chatEvents = await repos.chats.getMessages(context.chatId);
       recentChatMessages = chatEvents
@@ -1141,12 +1141,12 @@ async function expandPromptWithContext(
 async function loadSettingsAndBuildCheapLLM(
   userId: string,
   chatSettings: ChatSettings | undefined,
-  chat?: { conciergeOverride?: 'OFF' | null } | null
+  chat?: { conciergeOverride?: 'OFF' | 'UNCENSORED' | null } | null
 ): Promise<{
   dangerSettings: DangerousContentSettings;
   cheapLLMSelection: CheapLLMSelection | null;
 }> {
-  // 4b. Resolve dangerous content settings (chat may be Off-duty)
+  // 4b. Resolve dangerous content settings (chat may carry an operator override)
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
   const dangerSettings = dangerousContentResolved.settings;
 
@@ -1218,8 +1218,8 @@ async function runImageGenerationTool(
       });
     }
 
-    // Fetch chat once so the Concierge off-duty override is honored everywhere downstream.
-    let chatForOverride: { conciergeOverride?: 'OFF' | null } | null = null;
+    // Fetch chat once so any operator Concierge override is honored everywhere downstream.
+    let chatForOverride: { conciergeOverride?: 'OFF' | 'UNCENSORED' | null } | null = null;
     if (context.chatId) {
       try {
         const fetched = await repos.chats.findById(context.chatId);

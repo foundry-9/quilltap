@@ -298,6 +298,8 @@ import { repairFilesMimeAndSizeFromMountBlobMigration } from './repair-files-mim
 import { repairMountBlobSha256FromBytesMigration } from './repair-mount-blob-sha256-from-bytes';
 // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
 import { addChatConciergeOverrideMigration } from './add-chat-concierge-override';
+// Widen conciergeOverride to admit 'UNCENSORED' (four-state Concierge control)
+import { widenConciergeOverrideDomainMigration } from './widen-concierge-override-domain';
 // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
 import { addComposerSpellcheckFieldMigration } from './add-composer-spellcheck-field';
 // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
@@ -673,6 +675,8 @@ export const migrations: Migration[] = [
   repairMountBlobSha256FromBytesMigration,
   // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
   addChatConciergeOverrideMigration,
+  // Widen conciergeOverride to admit 'UNCENSORED' (four-state Concierge control)
+  widenConciergeOverrideDomainMigration,
   // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
   addComposerSpellcheckFieldMigration,
   // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
@@ -1036,6 +1040,8 @@ export {
   repairMountBlobSha256FromBytesMigration,
   // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
   addChatConciergeOverrideMigration,
+  // Widen conciergeOverride to admit 'UNCENSORED' (four-state Concierge control)
+  widenConciergeOverrideDomainMigration,
   // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
   addComposerSpellcheckFieldMigration,
   // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)

@@ -216,7 +216,7 @@ export interface EnrichedChatSummary {
   project: EnrichedProject | null
   storyBackground: EnrichedStoryBackground | null
   isDangerousChat: boolean
-  conciergeOverride: 'OFF' | null
+  conciergeOverride: 'OFF' | 'UNCENSORED' | null
   chatType: 'salon' | 'help' | 'autonomous' | 'brahma'
   /** Scriptorium rendering status, derived from renderedMarkdown + chunk embeddings. */
   scriptoriumStatus: 'none' | 'rendered' | 'embedded'

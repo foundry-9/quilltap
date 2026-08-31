@@ -11,7 +11,7 @@ import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/l
 import { foldChatSummary, ChatMessage, generateTitleFromSummary, generateHelpChatTitleFromSummary } from '@/lib/memory/cheap-llm-tasks'
 import { Provider, ConnectionProfile, CheapLLMSettings, ChatEvent, MessageEvent, isHelpLikeChatType } from '@/lib/schemas/types'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { logger } from '@/lib/logger'
 import { createContextSummaryEvent, createTitleGenerationEvent } from '@/lib/services/system-events.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
@@ -343,7 +343,7 @@ export async function generateContextSummary(
       return { success: false, error: 'No cheap LLM provider available', wasGenerated: false }
     }
 
-    if (isChatActiveDangerous(chat)) {
+    if (shouldUseUncensoredRoute(chat)) {
       const chatSettingsForDanger = await repos.chatSettings.findByUserId(userId)
       const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettingsForDanger, chat)
       cheapLLM = resolveUncensoredCheapLLMSelection(

@@ -18,7 +18,7 @@ import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { getConciergeState, shouldShowDangerStyling } from '@/lib/services/dangerous-content/chat-override'
 import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer'
 import {
   type TurnState,
@@ -1079,23 +1079,45 @@ export function SalonView({ chatId }: SalonViewProps) {
               />
             </button>
           )}
-          {chat.conciergeOverride === 'OFF' ? (
-            <span
-              className="qt-danger-badge flex-shrink-0"
-              title="The Concierge is off-duty for this chat. No moderation, no rerouting — set from the sidebar's Chat section."
-            >
-              <Icon name="check-circle" className="w-3 h-3" />
-              Off-duty
-            </span>
-          ) : chat.isDangerousChat ? (
-            <span
-              className="qt-danger-badge flex-shrink-0"
-              title={`The Concierge has flagged this chat${chat.dangerCategories?.length ? `: ${chat.dangerCategories.join(', ')}` : ''}`}
-            >
-              <Icon name="alert-triangle" className="w-3 h-3" />
-              Flagged
-            </span>
-          ) : null}
+          {(() => {
+            // Monitored is the default and renders no badge — the pill means
+            // "something other than the default is set."
+            const conciergeState = getConciergeState(chat)
+            if (conciergeState === 'flagged') {
+              return (
+                <span
+                  className="qt-danger-badge flex-shrink-0"
+                  title={`The Concierge has flagged this chat${chat.dangerCategories?.length ? `: ${chat.dangerCategories.join(', ')}` : ''}`}
+                >
+                  <Icon name="alert-triangle" className="w-3 h-3" />
+                  Flagged
+                </span>
+              )
+            }
+            if (conciergeState === 'vouched') {
+              return (
+                <span
+                  className="qt-danger-badge qt-danger-badge-muted flex-shrink-0"
+                  title="You have vouched for this chat. The Concierge stops watching; the ordinary providers still apply — set from the sidebar's Chat section."
+                >
+                  <Icon name="check-circle" className="w-3 h-3" />
+                  Vouched Safe
+                </span>
+              )
+            }
+            if (conciergeState === 'uncensored') {
+              return (
+                <span
+                  className="qt-danger-badge qt-danger-badge-info flex-shrink-0"
+                  title="You have opened the uncensored door yourself. Nothing is scanned, nothing is softened — set from the sidebar's Chat section."
+                >
+                  <Icon name="eye-off" className="w-3 h-3" />
+                  Uncensored
+                </span>
+              )
+            }
+            return null
+          })()}
           <a
             href={`/salon/${id}`}
             className="qt-text-primary truncate hover:text-foreground transition-colors"
@@ -1471,7 +1493,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           participantNames={participantNames}
           currentUserId={chat?.user?.id ?? null}
           userParticipantIdSet={userParticipantIdSet}
-          isDangerousChat={isChatActiveDangerous(chat)}
+          isDangerousChat={shouldShowDangerStyling(chat)}
           showThinking={chat?.showThinking ?? chatSettings?.thinkingDisplay?.defaultVisible ?? true}
           thinkingCollapsedByDefault={chatSettings?.thinkingDisplay?.defaultCollapsed ?? true}
           streamingReasoning={sseStreaming.streamingReasoning}

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 #
-# concierge-tristate-test.sh
+# concierge-four-state-test.sh
 # ---------------------------------------------------------------------------
-# Acceptance checks for the Concierge per-chat danger-status tri-state:
+# Acceptance checks for the Concierge per-chat danger-status four-state:
 #
-#   CT-1  Sidebar tri-state control     (Safe / Flagged / Off-duty)
-#   CT-2  Off-duty chats stay off-duty  (no auto-override)
+#   CT-1  Sidebar four-state control    (Monitored / Flagged / Vouched Safe /
+#                                        Uncensored)
+#   CT-2  Operator states stay put      (no auto-override out of Vouched Safe
+#                                        or Uncensored)
 #
 # How it works (and why):
 #   * State changes go through the HTTP PUT API — the exact code path the
@@ -23,20 +25,20 @@
 #
 # Requires: a running dev server (npm run dev), jq, and the quilltap CLI.
 #
-# WARNING: each full run appends ~9 synthetic Concierge bubbles to the target
+# WARNING: each full run appends ~15 synthetic Concierge bubbles to the target
 #          chat's history (they're honest "mode changed" announcements, but
 #          they accumulate). Point this at a THROWAWAY / test chat, not a
 #          conversation you care about. The chat's effective state is restored
 #          at the end unless --keep is given.
 #
 # Usage:
-#   scripts/concierge-tristate-test.sh --chat <chatId> [options]
+#   scripts/concierge-four-state-test.sh --chat <chatId> [options]
 #
 #   --chat <id>        Target chat UUID (required; or set $CHAT, or pass first arg)
 #   --instance <name>  Quilltap instance (default: Friday)
 #   --base-url <url>   Server base URL (default: http://localhost:3000)
 #   --dry-run          Preflight + show current state + planned transitions; no writes
-#   --arm              CT-2 scan-skip: set off-duty, stamp a baseline, exit
+#   --arm              CT-2 scan-skip: set an operator state, stamp a baseline, exit
 #   --recheck          CT-2 scan-skip: verify no scan-enqueued job since the baseline
 #   --no-jest          Skip the CT-2 jest guard suites
 #   --keep             Don't restore the chat's original state at the end
@@ -67,7 +69,7 @@ while [ $# -gt 0 ]; do
     --recheck)   MODE="recheck"; shift ;;
     --no-jest)   RUN_JEST=0; shift ;;
     --keep)      RESTORE=0; shift ;;
-    -h|--help)   sed -n '2,55p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)   sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)          echo "Unknown option: $1" >&2; exit 2 ;;
     *)           CHAT="$1"; shift ;;
   esac
@@ -95,15 +97,17 @@ ov_of()  { qv "SELECT conciergeOverride AS v FROM chats WHERE id='$CHAT'"; }
 dg_of()  { qv "SELECT isDangerousChat AS v FROM chats WHERE id='$CHAT'"; }
 ann_marker() { qv "SELECT COALESCE(MAX(createdAt),'') AS v FROM chat_messages WHERE chatId='$CHAT' AND systemSender='concierge'"; }
 
-derived_pill() { # ov dg -> pill label
-  if [ "$1" = "OFF" ]; then echo "Off-duty"
+derived_pill() { # ov dg -> pill label (Monitored renders no pill)
+  if [ "$1" = "OFF" ]; then echo "Vouched Safe"
+  elif [ "$1" = "UNCENSORED" ]; then echo "Uncensored"
   elif [ "$2" = "1" ]; then echo "Flagged"
   else echo "(none)"; fi
 }
-effective_state() { # ov dg -> safe|flagged|off
-  if [ "$1" = "OFF" ]; then echo off
+effective_state() { # ov dg -> monitored|flagged|vouched|uncensored
+  if [ "$1" = "OFF" ]; then echo vouched
+  elif [ "$1" = "UNCENSORED" ]; then echo uncensored
   elif [ "$2" = "1" ]; then echo flagged
-  else echo safe; fi
+  else echo monitored; fi
 }
 
 # ----- API driver (the only writer; server-mediated) -----------------------
@@ -156,7 +160,7 @@ preflight() {
   [ "$code" = "200" ] || die "server not reachable at $BASE_URL (HTTP $code). Is 'npm run dev' running?"
   local title; title="$(qv "SELECT title AS v FROM chats WHERE id='$CHAT'")"
   [ "$title" = "null" ] && die "chat '$CHAT' not found in instance '$INSTANCE'"
-  printf "%sConcierge tri-state test%s\n" "$C_HDR" "$C_RST"
+  printf "%sConcierge four-state test%s\n" "$C_HDR" "$C_RST"
   info "instance=$INSTANCE  base=$BASE_URL"
   info "chat=$CHAT  (\"$title\")"
 }
@@ -166,9 +170,9 @@ BASELINE_FILE="${TMPDIR:-/tmp}/ct-scan-baseline-$CHAT.json"
 
 arm_scan() {
   preflight
-  section "CT-2 scan-skip: arm baseline"
-  api_set_state off || die "could not set chat off-duty"
-  check_pair "OFF" "$(dg_of)" "off-duty confirmed"   # dg preserved, whatever it is
+  section "CT-2 scan-skip: arm baseline (Uncensored — the new state must skip too)"
+  api_set_state uncensored || die "could not set chat Uncensored"
+  check_pair "UNCENSORED" "$(dg_of)" "Uncensored confirmed"   # dg preserved, whatever it is
   local maxj now
   maxj="$(qv "SELECT COALESCE(MAX(createdAt),'') AS v FROM background_jobs WHERE type='CHAT_DANGER_CLASSIFICATION' AND payload LIKE '%$CHAT%'")"
   now="$(qv "SELECT strftime('%Y-%m-%dT%H:%M:%fZ','now') AS v")"
@@ -184,14 +188,16 @@ recheck_scan() {
   local maxj armedAt n ov dg
   maxj="$(jq -r .maxJob "$BASELINE_FILE")"; armedAt="$(jq -r .armedAt "$BASELINE_FILE")"
   ov="$(ov_of)"; dg="$(dg_of)"
-  [ "$ov" = "OFF" ] && ok "still off-duty (conciergeOverride=OFF, isDangerousChat=$dg)" \
-                    || bad "no longer off-duty (conciergeOverride=$ov) — something flipped it!"
+  case "$ov" in
+    OFF|UNCENSORED) ok "still operator-decided (conciergeOverride=$ov, isDangerousChat=$dg)" ;;
+    *) bad "no longer operator-decided (conciergeOverride=$ov) — something flipped it!" ;;
+  esac
   n="$(qv "SELECT COUNT(*) AS v FROM background_jobs WHERE type='CHAT_DANGER_CLASSIFICATION' AND payload LIKE '%$CHAT%' AND createdAt > '$maxj'")"
   [ "$n" = "null" ] && n=0
   if [ "$n" -eq 0 ] 2>/dev/null; then
-    ok "scheduled scan enqueued NO classification job for this off-duty chat since $armedAt"
+    ok "scheduled scan enqueued NO classification job for this operator-decided chat since $armedAt"
   else
-    bad "scan enqueued $n classification job(s) for an off-duty chat — scan-skip FAILED"
+    bad "scan enqueued $n classification job(s) for an operator-decided chat — scan-skip FAILED"
   fi
   info "(If the server hasn't been up ≥10 min since arming, the scan may not have ticked yet — re-run later.)"
 }
@@ -202,11 +208,12 @@ run_jest() {
   local suites=(
     "__tests__/unit/lib/services/dangerous-content/manual-flip.test.ts"
     "__tests__/unit/lib/services/dangerous-content/chat-override.test.ts"
+    "__tests__/unit/lib/services/dangerous-content/resolver.test.ts"
     "__tests__/unit/background-jobs/chat-danger-classification.test.ts"
   )
   if (cd "$ROOT" && npx jest "${suites[@]}" --silent >/tmp/ct_jest.log 2>&1); then
-    ok "manual-flip + chat-override + chat-danger-classification suites passed"
-    info "covers: tri-state → (override,flag) writes & announcements, getConciergeState, off-duty handler bail"
+    ok "manual-flip + chat-override + resolver + chat-danger-classification suites passed"
+    info "covers: four-state → (override,flag) writes & announcements, predicates, resolver overrides, handler bail"
   else
     bad "guard suites failed — see /tmp/ct_jest.log (if native ABI mismatch: npm rebuild better-sqlite3)"
   fi
@@ -227,8 +234,8 @@ if [ "$MODE" = "dry" ]; then
   section "DRY RUN — plumbing check, no writes"
   ok "server reachable, CLI queryable, chat found"
   check_pair "$ORIG_OV" "$ORIG_DG" "current pair readable"
-  info "planned CT-1 walk: safe → flagged → safe → off → safe → flagged → off"
-  info "planned CT-2: flagged → off (preserve flag), then jest guards"
+  info "planned CT-1 walk: monitored → flagged → monitored → vouched → monitored → uncensored → monitored → flagged → vouched → uncensored"
+  info "planned CT-2: flagged → vouched (preserve flag) → uncensored (preserve flag), then jest guards"
   printf "\n%sDry run OK.%s Re-run without --dry-run to execute (mutates the chat).\n" "$C_OK" "$C_RST"
   exit 0
 fi
@@ -237,21 +244,26 @@ printf "\n%s⚠ This appends synthetic Concierge bubbles to chat %s. Ctrl-C with
 sleep 3
 
 # normalize to a known starting point (unasserted setup)
-api_set_state safe >/dev/null 2>&1 || true
+api_set_state monitored >/dev/null 2>&1 || true
 
-section "CT-1: sidebar tri-state control"
-#          state    ov     dg  announce-phrase            label
-transition flagged  null   1   "thrown the switch"        "Safe→Flagged"
-transition safe     null   0   "stands down for the moment" "Flagged→Safe"
-transition off      OFF    0   "takes the afternoon off"  "Safe→Off-duty (flag preserved=0)"
-transition safe     null   0   "returns to his post"      "Off-duty→Safe"
-transition flagged  null   1   ""                         "Safe→Flagged (setup)"
-transition off      OFF    1   "takes the afternoon off"  "Flagged→Off-duty (flag preserved=1)"
+section "CT-1: sidebar four-state control"
+#          state      ov         dg  announce-phrase              label
+transition flagged    null       1   "thrown the switch"          "Monitored→Flagged"
+transition monitored  null       0   "stands down for the moment" "Flagged→Monitored"
+transition vouched    OFF        0   "takes the afternoon off"    "Monitored→Vouched Safe (flag preserved=0)"
+transition monitored  null       0   "returns to his post"        "Vouched Safe→Monitored"
+transition uncensored UNCENSORED 0   "uncensored door stands open" "Monitored→Uncensored (flag preserved=0)"
+transition monitored  null       0   "returns to his post"        "Uncensored→Monitored"
+transition flagged    null       1   ""                           "Monitored→Flagged (setup)"
+transition vouched    OFF        1   "takes the afternoon off"    "Flagged→Vouched Safe (flag preserved=1)"
+transition uncensored UNCENSORED 1   "uncensored door stands open" "Vouched Safe→Uncensored (flag preserved=1)"
+transition flagged    null       1   "thrown the switch"          "Uncensored→Flagged"
 
-section "CT-2: off-duty stays off-duty (live, deterministic parts)"
-transition flagged  null   1   ""                         "set Flagged baseline"
-transition off      OFF    1   "takes the afternoon off"  "→Off-duty preserves Flagged"
-check_pair "OFF" "1" "off-duty is stable (override wins, flag preserved underneath)"
+section "CT-2: operator states stay put (live, deterministic parts)"
+transition vouched    OFF        1   "takes the afternoon off"    "→Vouched Safe preserves Flagged"
+check_pair "OFF" "1" "Vouched Safe is stable (override wins, flag preserved underneath)"
+transition uncensored UNCENSORED 1   "uncensored door stands open" "→Uncensored preserves Flagged"
+check_pair "UNCENSORED" "1" "Uncensored is stable (override wins, flag preserved underneath)"
 info "scan-skip over a live 10-min tick: run '$0 --chat $CHAT --arm' then '--recheck' later"
 
 [ "$RUN_JEST" -eq 1 ] && run_jest

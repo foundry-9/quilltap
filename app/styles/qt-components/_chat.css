@@ -2822,13 +2822,27 @@
   }
 
   /**
-   * Danger badge for breadcrumb header
+   * Concierge badge for the breadcrumb header. Parameterized over one CSS
+   * var so the four-state family is a recolor, not four rules: the base is
+   * the red Flagged pill; the modifiers below recolor it for the two
+   * operator states (Monitored renders no badge at all).
    */
   .qt-danger-badge {
+    --qt-concierge-badge-color: var(--color-destructive, #dc2626);
     @apply inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium;
-    background: color-mix(in srgb, var(--color-destructive, #dc2626) 15%, transparent);
-    color: var(--color-destructive, #dc2626);
-    border: 1px solid color-mix(in srgb, var(--color-destructive, #dc2626) 40%, transparent);
+    background: color-mix(in srgb, var(--qt-concierge-badge-color) 15%, transparent);
+    color: var(--qt-concierge-badge-color);
+    border: 1px solid color-mix(in srgb, var(--qt-concierge-badge-color) 40%, transparent);
+  }
+
+  /* Vouched Safe — no colour: the Concierge isn't in the room. */
+  .qt-danger-badge-muted {
+    --qt-concierge-badge-color: var(--color-muted-foreground, #6b7280);
+  }
+
+  /* Uncensored — the eye you closed yourself. */
+  .qt-danger-badge-info {
+    --qt-concierge-badge-color: var(--color-info, #2563eb);
   }
 
   /**

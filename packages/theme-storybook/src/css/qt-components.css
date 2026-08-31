@@ -1033,6 +1033,41 @@
 }
 
 /* ==========================================================================
+   CONCIERGE BADGE (Salon breadcrumb header)
+   ========================================================================== */
+
+/**
+ * Concierge badge for the Salon breadcrumb header. Parameterized over one
+ * CSS var so the four-state family is a recolor, not four rules: the base
+ * is the red Flagged pill; the modifiers below recolor it for the two
+ * operator states (Monitored renders no badge at all).
+ */
+.qt-danger-badge {
+  --qt-concierge-badge-color: var(--color-destructive, #dc2626);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--qt-concierge-badge-color) 15%, transparent);
+  color: var(--qt-concierge-badge-color);
+  border: 1px solid color-mix(in srgb, var(--qt-concierge-badge-color) 40%, transparent);
+}
+
+/* Vouched Safe — no colour: the Concierge isn't in the room. */
+.qt-danger-badge-muted {
+  --qt-concierge-badge-color: var(--color-muted-foreground, #6b7280);
+}
+
+/* Uncensored — the eye you closed yourself. */
+.qt-danger-badge-info {
+  --qt-concierge-badge-color: var(--color-info, #2563eb);
+}
+
+/* ==========================================================================
    WARDROBE SLOT BADGES
    ========================================================================== */
 

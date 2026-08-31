@@ -149,7 +149,7 @@ If no uncensored image profile is configured, concealment applies as before — 
 
 The candid draft requires **two** things at once, and a picture that comes back unexpectedly demure has almost always lost one of them.
 
-**The chat must actually be Flagged, not merely flaggable.** Auto-Route flags a chat when the classifier's score clears your **Detection Threshold**, and a chat can be thoroughly undressed while scoring well under it — the classifier weighs the whole compressed summary, not the state of anybody's wardrobe. A scene may therefore sit at a score of 0.3 against a threshold of 0.8, be marked Safe, and receive the concealed draft for as long as it likes. If a chat ought to be candid and the classifier disagrees, flip it yourself with the per-chat Concierge switch described below; a manual flag is sticky, and the classifier will not quietly overturn it later.
+**The chat must actually be Flagged, not merely flaggable.** Auto-Route flags a chat when the classifier's score clears your **Detection Threshold**, and a chat can be thoroughly undressed while scoring well under it — the classifier weighs the whole compressed summary, not the state of anybody's wardrobe. A scene may therefore sit at a score of 0.3 against a threshold of 0.8, be marked Safe, and receive the concealed draft for as long as it likes. If a chat ought to be candid and the classifier disagrees, take the decision out of its hands with the per-chat Concierge switch described below — set the chat **Uncensored** (the operator's own assertion, no classifier involved) or, if you want the warning apparatus too, **Flagged**; either is sticky, and the classifier will not quietly overturn your hand later.
 
 **The adapter must sit on the profile the Concierge actually routes to.** The **Image Generation Profile** named under *Uncensored Providers* is a distinct setting from whichever profile a given chat happens to use. Configure a LoRA on one profile while the Concierge points at another and a reroute will hand your scene to the other profile — correctly, obediently, and without the adapter. When you retire an uncensored profile in favour of a new one, move this setting across with it.
 
@@ -217,21 +217,36 @@ The practical upshot is that an image-bearing turn is no longer the one turn the
 
 ## The Per-Chat Concierge Switch
 
-Every chat keeps a small brass switch in the sidebar — found under the **Chat** section of the Chat Sidebar — bearing three positions: **Safe**, **Flagged**, and **Off-duty**. It is the only place a chat's relationship with the Concierge may be set, adjusted, or — should the operator so insist — dispensed with entirely.
+Every chat keeps a small brass switch in the sidebar — found under the **Chat** section of the Chat Sidebar — bearing four positions arranged under two headings: **The Concierge decides** (Monitored, Flagged) and **You decide** (Vouched Safe, Uncensored). It is the only place a chat's relationship with the Concierge may be set, adjusted, or — should the operator so insist — dispensed with entirely.
 
-### Safe
+Two questions, taken together, place a chat on the switch. *Who decided* — the Concierge's classifier, or you? And *which route does the chat take* — the ordinary providers, or the uncensored ones?
 
-The default footing. The global Concierge settings apply: the gatekeeper makes his quiet rounds before each dispatch, and if the conversation drifts into the sort of territory that draws his eye, he will throw the switch himself and announce, with all due discretion, that the chat is now Flagged. This is the position you want for ordinary use.
+|  | The Concierge decides | You decide |
+|---|---|---|
+| **Ordinary route** | Monitored | Vouched Safe |
+| **Uncensored route** | Flagged | Uncensored |
+
+The Concierge may move a chat between Monitored and Flagged as the conversation warrants; only your own hand can place a chat in the right-hand column, and nothing but your own hand moves it out again.
+
+### Monitored
+
+The default footing. The global Concierge settings apply: the gatekeeper makes his quiet rounds before each dispatch, and if the conversation drifts into the sort of territory that draws his eye, he will throw the switch himself and announce, with all due discretion, that the chat is now Flagged. This is the position you want for ordinary use. (In earlier editions this position was labelled *Safe*.)
 
 ### Flagged
 
-The chat is to be treated as dangerous. Subsequent text traffic is routed to the uncensored desk; background errands — memory extraction, title revisions, story backgrounds — likewise. The position arrives in one of two ways: the Concierge has flipped it himself after classification, or the operator has thrown the switch by hand. To throw it back to Safe, simply select Safe; the Concierge will stand down for the moment, and resume his customary watch on the next user message.
+The Concierge has this chat down as dangerous. Subsequent text traffic is routed to the uncensored desk; background errands — memory extraction, title revisions, story backgrounds — likewise. The position arrives in one of two ways: the Concierge has flipped it himself after classification, or the operator has thrown the switch by hand. To throw it back, simply select Monitored; the Concierge will stand down for the moment, and resume his customary watch on the next user message.
 
-### Off-duty
+### Vouched Safe
 
-Reserved for the operator who would prefer the Concierge take the afternoon off. In this position **no moderation occurs**. The gatekeeper does not classify, the prompts go to whichever censored provider the chat is configured to use, and image generators receive whatever the conversation produces, unaltered. Provider refusals — and the occasional sternly worded reply — are part of the bargain. The chat never auto-flips out of Off-duty; only the operator's hand returns it to Safe or Flagged.
+You have vouched for this chat, and the Concierge, satisfied, stops watching it. **No moderation occurs**: the gatekeeper does not classify, and no announcements are posted. The prompts still go to the *ordinary* providers the chat is configured to use — which may still refuse the conversation on their own account — and image prompts go out with their customary concealment. The chat never auto-flips out of Vouched Safe; only your hand returns it to the Concierge's care. (In earlier editions this position was labelled *Off-duty*.)
 
-Each transition between positions is announced in the chat history by the Concierge himself, in his customary voice, so the conversation's moderation provenance remains transparent on later re-readings.
+### Uncensored
+
+You have sent the Concierge away and opened the uncensored door yourself. The chat takes **every uncensored route the Flagged state takes** — text traffic to the uncensored desk, background errands likewise, story-background prompts drafted candidly — but with none of the apparatus: nothing is classified, nothing is scanned, no danger styling is painted, and no warning is issued. The risk, and the verdict, are yours. Notably, this position works even when the global Concierge mode is **Off** — asking for uncensored routing on one chat should not require throwing a global switch first. It does still require an uncensored provider to be configured under *Uncensored Providers* above.
+
+If the classifier keeps calling a spicy chat safe and you are tired of arguing with it, this — not Flagged — is usually the position you want: Flagged carries the Concierge's warning apparatus with it, where Uncensored simply takes the route.
+
+Each transition between positions is announced in the chat history by the Concierge himself, in his customary voice, so the conversation's moderation provenance remains transparent on later re-readings. The Salon's header wears a small pill for any position other than Monitored — red for Flagged, grey for Vouched Safe, blue for Uncensored — so a glance tells you whether anything other than the default is in force.
 
 ## Quick-Hide Integration
 

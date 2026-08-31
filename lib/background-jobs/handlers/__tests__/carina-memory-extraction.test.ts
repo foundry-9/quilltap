@@ -23,7 +23,7 @@ jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
 }));
 
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
-  isChatActiveDangerous: jest.fn(),
+  shouldUseUncensoredRoute: jest.fn(),
 }));
 
 jest.mock('@/lib/services/system-events.service', () => ({
@@ -41,7 +41,7 @@ jest.mock('@/lib/instance-settings', () => ({
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 import { processTurnForMemory } from '@/lib/memory/memory-processor';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
 import type { BackgroundJob } from '@/lib/schemas/types';
 
@@ -102,7 +102,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(getRepositories).mockReturnValue(makeMockRepos() as never);
   jest.mocked(resolveDangerousContentSettings).mockReturnValue({ settings: { mode: 'OFF' } } as never);
-  jest.mocked(isChatActiveDangerous).mockReturnValue(false);
+  jest.mocked(shouldUseUncensoredRoute).mockReturnValue(false);
   jest.mocked(getMemoryExtractionLimits).mockResolvedValue({ enabled: false } as never);
   jest.mocked(processTurnForMemory).mockResolvedValue({
     success: true,

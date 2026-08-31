@@ -22,7 +22,7 @@ import { processTurnForMemory } from '@/lib/memory/memory-processor';
 import { CheapLLMTaskLostError } from '@/lib/memory/cheap-llm-tasks';
 import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
@@ -133,7 +133,7 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
     cheapLLMSettings: chatSettings.cheapLLMSettings,
     availableProfiles,
     dangerSettings,
-    isDangerousChat: isChatActiveDangerous(chat),
+    isDangerousChat: shouldUseUncensoredRoute(chat),
     memoryExtractionLimits,
     sourceMessageTimestamp,
     // Episodic spine: which clock the chat's story runs on.

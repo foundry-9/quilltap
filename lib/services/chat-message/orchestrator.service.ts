@@ -66,7 +66,7 @@ import {
   safeClose,
 } from './streaming.service'
 import { dispatchCourierTransport } from './courier-transport.service'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import {
   buildNativeToolSystemInstructions,
   determineEnabledToolOptions,
@@ -1149,7 +1149,7 @@ async function processMessage(
       preSearchedQueryEmbedding,
       // Memory recap: uncensored fallback for dangerous chats. Off-duty
       // chats opt out, so the fallback is not engaged for them.
-      uncensoredFallbackOptions: (isChatActiveDangerous(chat) && dangerSettings && cheapLLMSelection)
+      uncensoredFallbackOptions: (shouldUseUncensoredRoute(chat) && dangerSettings && cheapLLMSelection)
         ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
         : undefined,
       // Status callback for budget-driven compression phases

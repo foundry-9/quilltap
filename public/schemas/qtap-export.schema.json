@@ -655,8 +655,8 @@
           "description": "messageCount at classification time, used to detect changes for re-check."
         },
         "conciergeOverride": {
-          "enum": ["OFF", null],
-          "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = the Concierge is off-duty for this chat and no moderation effects apply."
+          "enum": ["OFF", "UNCENSORED", null],
+          "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = Vouched Safe (the operator vouches for the chat — no moderation, ordinary providers); 'UNCENSORED' = the operator asserts the chat spicy (uncensored routing with no classification or scanning)."
         },
         "answerConfirmationOverride": {
           "enum": ["ON", "OFF", null],

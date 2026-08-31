@@ -37,7 +37,7 @@ import type { RecallContext } from '@/lib/memory/recall-tags'
 import { recentlyWhisperedIdSet } from '@/lib/memory/recall-history'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
@@ -240,7 +240,7 @@ async function proactiveRecallTask(
   // Gate on the canonical accessor so an Off-duty chat never reroutes here,
   // independent of how `dangerSettings` was resolved upstream.
   let recallSelection = cheapLLMSelection
-  if (isChatActiveDangerous(chat)) {
+  if (shouldUseUncensoredRoute(chat)) {
     recallSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection,
       true,

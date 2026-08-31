@@ -17,7 +17,7 @@ import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -257,11 +257,11 @@ export async function finalizeMessageResponse({
             conversationContext,
             cheapLLMSelection,
             connectionProfile,
-            isDangerousChat: isChatActiveDangerous(chat),
+            isDangerousChat: shouldUseUncensoredRoute(chat),
             uncensoredFallback: {
               dangerSettings,
               availableProfiles: allProfiles,
-              isDangerousChat: isChatActiveDangerous(chat),
+              isDangerousChat: shouldUseUncensoredRoute(chat),
             },
             onAffirming: () => safeEnqueue(controller, encodeStatusEvent(encoder, {
               stage: 'affirming',
@@ -511,7 +511,7 @@ export async function finalizeMessageResponse({
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings.cheapLLMSettings,
       dangerSettings,
-      isDangerousChat: isChatActiveDangerous(chat),
+      isDangerousChat: shouldUseUncensoredRoute(chat),
     }
 
     // Per-turn memory extraction.
@@ -573,7 +573,7 @@ export async function finalizeMessageResponse({
       memoryChatSettings: {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
         dangerSettings,
-        isDangerousChat: isChatActiveDangerous(chat),
+        isDangerousChat: shouldUseUncensoredRoute(chat),
       },
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,

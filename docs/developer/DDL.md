@@ -497,7 +497,7 @@ CREATE TABLE "chats" (
   "dangerCategories" TEXT DEFAULT '[]',
   "dangerClassifiedAt" TEXT DEFAULT NULL,
   "dangerClassifiedAtMessageCount" INTEGER DEFAULT NULL,
-  "conciergeOverride" TEXT DEFAULT NULL,  -- per-chat Concierge mode: NULL = follow global; 'OFF' = off-duty (skip every Concierge effect)
+  "conciergeOverride" TEXT DEFAULT NULL,  -- per-chat Concierge mode: NULL = follow global; 'OFF' = Vouched Safe (skip every Concierge effect, ordinary providers); 'UNCENSORED' = operator-asserted uncensored routing (no classification, no scanning)
   "answerConfirmationOverride" TEXT DEFAULT NULL,  -- per-chat answer-confirmation override: NULL = inherit (project override, then global); 'ON'/'OFF' = force the Salon consistency check on/off. Added by add-answer-confirmation-columns-v2.
   "turnQueue" TEXT DEFAULT '[]',
   "spokenThisCycleParticipantIds" TEXT DEFAULT '[]',  -- JSON array of participantIds that have spoken in the current rotation cycle (includes user-controlled characters)
