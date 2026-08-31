@@ -1117,6 +1117,76 @@ Validate an API key for image generation.
 }
 ```
 
+#### `POST /api/v1/image-profiles?action=lora-metadata`
+
+Ask HuggingFace what it declares about a LoRA source, so the image-profile
+editor can show the user the adapter's papers before they trust it to a paid
+generation. Backed by `lib/image-gen/huggingface-lookup`.
+
+**This action renders no compatibility verdict, by design.** Deciding whether an
+adapter suits a provider model would mean matching NanoGPT's model ids against
+HuggingFace's `base_model` strings — two independent naming conventions, neither
+of which owes us stability — and a false "this will not work" on an adapter that
+works is worse than silence. The response carries facts only; the reader draws
+the conclusion.
+
+POST rather than GET for one reason: the optional `hfToken` is a credential, and
+a credential does not belong in a query string.
+
+**Body**:
+- `source` (required) — a bare `owner/name`, or any `huggingface.co` URL
+  (including the `/resolve/main/weights.safetensors` form, from which the
+  repository id is recovered). A weights URL on any other host has no repository
+  behind it and answers `not-a-repo-id` without touching the network.
+- `hfToken` (optional) — the profile's `hf_api_token`, widening the lookup to
+  private and gated repositories. Never logged, never echoed back.
+
+**Response** — always `200`; a lookup that fails is a result to display, not a
+broken request:
+
+```json
+{
+  "ok": true,
+  "facts": {
+    "repoId": "XLabs-AI/flux-RealismLora",
+    "url": "https://huggingface.co/XLabs-AI/flux-RealismLora",
+    "baseModels": ["black-forest-labs/FLUX.1-dev"],
+    "isAdapter": true,
+    "isLora": true,
+    "pipelineTag": "text-to-image",
+    "gated": false,
+    "weightFiles": ["lora.safetensors"],
+    "triggerPhrase": null,
+    "downloads": 15707,
+    "likes": 1232,
+    "lastModified": "2024-08-22T10:19:23.000Z"
+  }
+}
+```
+
+```json
+{
+  "ok": false,
+  "reason": "missing-or-private",
+  "repoId": "nobody/nothing-at-all",
+  "url": "https://huggingface.co/nobody/nothing-at-all",
+  "detail": "HTTP 401"
+}
+```
+
+`baseModels` merges `cardData.base_model` with any `base_model:adapter:…` tags,
+card first, deduplicated. `triggerPhrase` is `cardData.instance_prompt` — the
+adapter's magic word, and the reason the lookup earns a button at all.
+
+`reason` values: `not-a-repo-id`, `missing-or-private`, `not-found`,
+`rate-limited`, `timeout`, `network`, `http`.
+
+**`missing-or-private` is never reported as `not-found`.** Unauthenticated,
+HuggingFace answers "no such repository" and "private, and not yours"
+identically — both `401`, both `Invalid username or password.` — and does so
+deliberately. A `404` (and therefore `not-found`) only appears once a token has
+established who is asking.
+
 #### `GET /api/v1/image-profiles/[id]`
 
 Get a specific image profile.

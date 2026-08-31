@@ -4,6 +4,45 @@
 
 ### 4.9-dev
 
+#### Added: Query a LoRA against HuggingFace from the image-profile editor
+
+Each row in the LoRA Adapters panel now has a **Query** button beside its Source field. It fetches
+the repository's public metadata from HuggingFace and displays it: the base model the card names,
+whether the repository is tagged as a LoRA adapter, its `.safetensors` files, whether it is gated,
+its download and like counts, and the trigger phrase declared in `instance_prompt`. The adapter's
+name in the panel links to the model card in a new tab.
+
+A one-click button copies the declared trigger phrase into the row's Trigger Phrase field. Nothing
+else in the row is modified, and the Source field is never rewritten.
+
+The button is enabled only when a HuggingFace repository can be read out of the source — a bare
+`owner/name`, or any `huggingface.co` URL, including a link to a specific weights file. Weights
+hosted elsewhere have no repository to query and the button stays disabled.
+
+The panel deliberately makes no claim about whether the adapter will work with the selected model.
+That would require matching NanoGPT model ids against HuggingFace `base_model` strings, and a wrong
+"incompatible" warning on an adapter that works is worse than no warning. The facts are shown; the
+user decides.
+
+Two cases are called out in the panel because they have consequences:
+
+- A repository with more than one `.safetensors` file is ambiguous when named by bare `owner/name`;
+  the provider picks. Name the file directly to control which is used.
+- A gated repository needs a HuggingFace token. The panel states whether the selected model accepts
+  one — only the pruna `p-image` family does.
+
+A row's result is cleared when its Source is edited, so stale metadata is never shown next to a
+different address.
+
+New endpoint: `POST /api/v1/image-profiles?action=lora-metadata`. It is a POST because the optional
+`hf_api_token` is a credential and does not belong in a query string. The lookup runs server-side,
+so the browser never contacts HuggingFace directly. A failed lookup returns HTTP 200 with
+`ok: false` and a reason.
+
+A 401 from HuggingFace is reported as "missing or private", never as "does not exist". HuggingFace
+returns the same 401 for a nonexistent repository and a private one, on purpose; a 404 appears only
+once a token has been supplied.
+
 #### Documentation: why a working LoRA can still produce a tame story background
 
 Two help entries for a failure that raises no error. `help/image-generation-profiles.md` gains a

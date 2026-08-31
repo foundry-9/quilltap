@@ -561,6 +561,11 @@ export function ImageProfileForm({
         support={loraSupport}
         loras={currentLoras}
         onChange={handleLorasChange}
+        hfToken={
+          typeof formData.parameters?.hf_api_token === 'string'
+            ? formData.parameters.hf_api_token
+            : undefined
+        }
       />
 
       {/* Default Profile Checkbox */}

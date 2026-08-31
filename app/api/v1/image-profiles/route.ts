@@ -7,6 +7,7 @@
  * GET /api/v1/image-profiles?action=list-models - List available image models
  * GET /api/v1/image-profiles?action=list-providers - List available image providers
  * GET /api/v1/image-profiles?action=options-schema - Per-provider (and per-model) image options schema
+ * POST /api/v1/image-profiles?action=lora-metadata - Ask HuggingFace what it knows about a LoRA source
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -18,6 +19,7 @@ import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { validateProfileLoras } from '@/lib/image-gen/lora-validation';
 import { resolveLoraSupport } from '@/lib/image-gen/lora-support';
+import { lookupHuggingFaceLora } from '@/lib/image-gen/huggingface-lookup';
 import type { ImageLoraSupport, ProviderOptionsSchema } from '@quilltap/plugin-types';
 
 /**
@@ -387,8 +389,53 @@ async function handleValidateKey(req: NextRequest, context: RequestContext) {
 }
 
 /**
+ * Handle lora-metadata action
+ *
+ * Asks HuggingFace what it knows about a LoRA source and hands the answer
+ * back verbatim. It renders **no compatibility verdict** — see
+ * `lib/image-gen/huggingface-lookup` for why guessing at one would be worse
+ * than silence — so this is a read-out the user interprets, not a gate.
+ *
+ * POST rather than GET for one reason: the optional `hf_api_token` is a
+ * credential, and a credential does not belong in a query string where it
+ * would land in every access log between here and the browser.
+ */
+async function handleLoraMetadata(req: NextRequest) {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest('A JSON body with a `source` is required');
+  }
+
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+    return badRequest('A JSON body with a `source` is required');
+  }
+
+  const { source, hfToken } = body as { source?: unknown; hfToken?: unknown };
+
+  if (typeof source !== 'string' || source.trim().length === 0) {
+    return badRequest('A LoRA source is required');
+  }
+  if (hfToken !== undefined && typeof hfToken !== 'string') {
+    return badRequest('hfToken must be a string when supplied');
+  }
+
+  const result = await lookupHuggingFaceLora(
+    source,
+    typeof hfToken === 'string' && hfToken.length > 0 ? hfToken : undefined
+  );
+
+  // Failures answer 200 with `ok: false`: "HuggingFace would not tell us"
+  // is a result the editor displays, not an error the form should treat as a
+  // broken request.
+  return successResponse(result);
+}
+
+/**
  * POST /api/v1/image-profiles - Create a new image profile
  * POST /api/v1/image-profiles?action=validate-key - Validate an API key
+ * POST /api/v1/image-profiles?action=lora-metadata - Look up a LoRA source on HuggingFace
  */
 export const POST = createContextHandler(async (req, context) => {
   const { user, repos } = context;
@@ -397,6 +444,11 @@ export const POST = createContextHandler(async (req, context) => {
   // Handle validate-key action
   if (action === 'validate-key') {
     return handleValidateKey(req, context);
+  }
+
+  // Handle lora-metadata action
+  if (action === 'lora-metadata') {
+    return handleLoraMetadata(req);
   }
 
   try {

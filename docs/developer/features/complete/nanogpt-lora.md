@@ -418,6 +418,59 @@ Where it deviates from, or sharpens, the plan above:
   offered by the plugin, collapsing two half-features into one. Not in scope;
   the trigger-phrase plumbing is shared already.
 
+## Addendum: querying a source against HuggingFace (landed after the fact)
+
+A LoRA row is free text, and the original feature posted whatever it was given.
+The failure that motivated this addendum is the one the module comments already
+worried about one layer down: a Flux 1 adapter on a Flux 2 model produces a
+request that succeeds, an account that is debited, and a picture that ignores
+the adapter entirely. No error, anywhere.
+
+**Shape.** A **Query** button per row, backed by
+`POST /api/v1/image-profiles?action=lora-metadata` and
+`lib/image-gen/huggingface-lookup`. It fetches the repository's public metadata
+and renders it in `components/image-profiles/LoraQueryResult.tsx`. The repo-id
+parsing is split into `lib/image-gen/huggingface-repo-id` — pure and
+dependency-free — because the editor decides in the browser whether a source is
+even askable-about, and the lookup module imports the logger.
+
+**The design decision worth preserving: it renders no compatibility verdict.**
+The obvious feature is a warning when the adapter's `base_model` disagrees with
+the selected model. It was considered and deliberately rejected. NanoGPT leaves
+`allowed_passthrough_parameters` empty (see *Verification caveat* above), which
+is why the family table is hand-maintained in the first place; a compatibility
+check would mean matching NanoGPT model-id prefixes against HuggingFace
+`base_model` strings, two conventions that answer to nobody. A false
+"incompatible" on an adapter that works is worse than the silence it replaced,
+and it would rot invisibly as either side renames things. The panel shows facts
+and stops. A unit test asserts no `compatible` / `verdict` / `works` key ever
+appears on the payload, so the temptation cannot be indulged quietly later.
+
+**What the facts buy, beyond existence:**
+
+- `cardData.instance_prompt` is the adapter's trigger phrase — exactly the field
+  the row already has, and otherwise buried in a model card. One click fills it.
+  This alone justifies the button.
+- The `.safetensors` list: more than one file means a bare `owner/name` is
+  ambiguous and the provider picks.
+- `gated`: consequential, because only the pruna `weights` family has an
+  `hf_api_token` slot. The panel says whether the *selected* model has anywhere
+  to put one — a claim about our own wiring, which we do know.
+
+**The 401 rule.** Unauthenticated, HuggingFace answers "no such repository" and
+"private, and not yours" identically, on purpose. The lookup reports
+`missing-or-private` and never upgrades it to `not-found`; `404` appears only
+once a token has established who is asking. Pinned by test.
+
+**Credential handling.** POST, not GET, because `hf_api_token` rides the body —
+a credential in a query string lands in every access log on the way. The lookup
+runs host-side so the browser never contacts HuggingFace, and the token is
+logged only as `hasToken: true`.
+
+**Staleness.** A row's result is cleared when its Source is edited, and results
+are re-indexed when a row is removed. Facts about the previous address sitting
+beside a new one would be worse than no facts.
+
 ## Follow-ups (named, not in scope)
 
 1. **Per-character LoRAs** — `ImageLoraSpec[]` on the character, merged

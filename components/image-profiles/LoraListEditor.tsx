@@ -10,11 +10,22 @@
  * against a four-adapter model, then pointed at a one-adapter model) are
  * flagged, not deleted: switching the model back must lose nothing, and the
  * request builder caps the list again at generation time anyway.
+ *
+ * Each row can **Query** its source against HuggingFace. That is a read-out,
+ * not a gate: it never blocks saving, never rewrites the Source field, and
+ * offers no opinion on whether the adapter suits the selected model — see
+ * `lib/image-gen/huggingface-lookup` for why such an opinion would be a
+ * liability. A stale answer is worse than none, so a row's result is cleared
+ * the moment its source is edited.
  */
 
 'use client'
 
+import { useState } from 'react'
 import type { ImageLoraSpec, ImageLoraSupport } from '@quilltap/plugin-types'
+import type { HuggingFaceLookupResult } from '@/lib/image-gen/huggingface-lookup'
+import { extractHuggingFaceRepoId } from '@/lib/image-gen/huggingface-repo-id'
+import { LoraQueryResult } from './LoraQueryResult'
 
 interface LoraListEditorProps {
   /** Resolved support for the selected model; null hides the editor entirely. */
@@ -22,6 +33,18 @@ interface LoraListEditorProps {
   /** Current value of `parameters.loras`. */
   loras: ImageLoraSpec[]
   onChange: (loras: ImageLoraSpec[]) => void
+  /**
+   * The profile's configured `hf_api_token`, when it has one. Passed through
+   * to the lookup so gated and private repositories resolve for the people
+   * entitled to see them; it rides the request body, never the query string.
+   */
+  hfToken?: string
+}
+
+/** Per-row lookup state, keyed by row index. */
+interface RowQuery {
+  loading: boolean
+  result: HuggingFaceLookupResult | null
 }
 
 /** Mirrors `DEFAULT_LORA_SCALE` in lib/image-gen/lora-support.ts. */
@@ -49,7 +72,9 @@ function sourceHint(support: ImageLoraSupport): string {
   return `${parts.slice(0, -1).join(', ')} or ${parts[parts.length - 1]}.`
 }
 
-export function LoraListEditor({ support, loras, onChange }: LoraListEditorProps) {
+export function LoraListEditor({ support, loras, onChange, hfToken }: LoraListEditorProps) {
+  const [queries, setQueries] = useState<Record<number, RowQuery>>({})
+
   if (!support) return null
 
   const bounds = scaleBounds(support)
@@ -57,15 +82,60 @@ export function LoraListEditor({ support, loras, onChange }: LoraListEditorProps
   const atCap = loras.length >= max
 
   const update = (index: number, patch: Partial<ImageLoraSpec>) => {
+    // An answer about the previous source would be actively misleading beside
+    // a new one, so editing the source discards it.
+    if (patch.source !== undefined) {
+      setQueries(prev => {
+        if (!prev[index]) return prev
+        const next = { ...prev }
+        delete next[index]
+        return next
+      })
+    }
     onChange(loras.map((lora, i) => (i === index ? { ...lora, ...patch } : lora)))
   }
 
   const remove = (index: number) => {
+    // Rows are keyed by position, so removing one has to shuffle the results
+    // down with them — otherwise row 1's findings resurface under row 0.
+    setQueries(prev => {
+      const next: Record<number, RowQuery> = {}
+      for (const [key, value] of Object.entries(prev)) {
+        const at = Number(key)
+        if (at === index) continue
+        next[at > index ? at - 1 : at] = value
+      }
+      return next
+    })
     onChange(loras.filter((_, i) => i !== index))
   }
 
   const add = () => {
     onChange([...loras, { source: '', scale: bounds.default }])
+  }
+
+  const query = async (index: number, source: string) => {
+    setQueries(prev => ({ ...prev, [index]: { loading: true, result: null } }))
+    try {
+      const res = await fetch('/api/v1/image-profiles?action=lora-metadata', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source, ...(hfToken ? { hfToken } : {}) }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = (await res.json()) as HuggingFaceLookupResult
+      setQueries(prev => ({ ...prev, [index]: { loading: false, result: data } }))
+    } catch {
+      // A failed request is reported in the same panel as a failed lookup —
+      // from the reader's chair they are the same disappointment.
+      setQueries(prev => ({
+        ...prev,
+        [index]: {
+          loading: false,
+          result: { ok: false, reason: 'network', repoId: null, url: null },
+        },
+      }))
+    }
   }
 
   return (
@@ -87,6 +157,10 @@ export function LoraListEditor({ support, loras, onChange }: LoraListEditorProps
       {loras.map((lora, index) => {
         const overCap = index >= max
         const scale = typeof lora.scale === 'number' ? lora.scale : bounds.default
+        // The button is offered only when there is a repository to ask about.
+        // A weights URL on some other host has no card behind it.
+        const repoId = extractHuggingFaceRepoId(lora.source)
+        const rowQuery = queries[index]
         return (
           <div
             key={index}
@@ -120,14 +194,33 @@ export function LoraListEditor({ support, loras, onChange }: LoraListEditorProps
               <label className="qt-text-label-xs" htmlFor={`lora-source-${index}`}>
                 Source
               </label>
-              <input
-                id={`lora-source-${index}`}
-                type="text"
-                value={lora.source}
-                onChange={e => update(index, { source: e.target.value })}
-                placeholder="owner/model-name or https://…/weights.safetensors"
-                className="qt-input text-sm"
-              />
+              <div className="flex items-start gap-2">
+                <input
+                  id={`lora-source-${index}`}
+                  type="text"
+                  value={lora.source}
+                  onChange={e => update(index, { source: e.target.value })}
+                  placeholder="owner/model-name or https://…/weights.safetensors"
+                  className="qt-input text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => query(index, lora.source)}
+                  disabled={!repoId || rowQuery?.loading}
+                  className="qt-button shrink-0 px-3 py-2 qt-button-secondary text-xs"
+                  title={
+                    repoId
+                      ? `Ask HuggingFace about ${repoId}`
+                      : 'Only a HuggingFace owner/model-name (or a huggingface.co address) can be looked up'
+                  }
+                >
+                  {rowQuery?.loading ? 'Asking…' : 'Query'}
+                </button>
+              </div>
+              <p className="qt-text-xs">
+                Querying asks HuggingFace what it declares about this adapter — its base model, its weights,
+                its magic word. It settles nothing about whether the two of you will get along.
+              </p>
             </div>
 
             <div>
@@ -166,6 +259,15 @@ export function LoraListEditor({ support, loras, onChange }: LoraListEditorProps
                 prompt on every generation that uses this profile.
               </p>
             </div>
+
+            {rowQuery?.result && (
+              <LoraQueryResult
+                result={rowQuery.result}
+                supportsPrivateWeightsToken={support.supportsPrivateWeightsToken === true}
+                currentTriggerPhrase={lora.triggerPhrase ?? ''}
+                onUseTriggerPhrase={phrase => update(index, { triggerPhrase: phrase })}
+              />
+            )}
           </div>
         )
       })}
