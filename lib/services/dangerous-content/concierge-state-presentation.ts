@@ -91,7 +91,11 @@ export function conciergeToneSuffix(tone: ConciergeTone): '' | '-muted' | '-info
   return '';
 }
 
-/** Tone → the `qt-text-*` utility, for the icons that carry a colour of their own. */
+/**
+ * Tone → the text-colour utility class, for the icons that carry a colour of
+ * their own (the sidebar's state glyph). Spelled out one branch at a time
+ * rather than interpolated, so `check-qt-classes` can see each class name.
+ */
 export function conciergeToneTextClass(tone: ConciergeTone): string {
   switch (tone) {
     case 'muted': return 'qt-text-muted';
