@@ -1752,6 +1752,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
   if (isMultiCharacter) {
+    logger.debug('[ContextManager] Inter-character memory retrieval complete', {
+      chatId: chat.id,
+      characterId: character.id,
+      durationMs: Math.round(performance.now() - tInterStart),
+      loadedCount: interCharacterLoadedCount,
+      includedCount: interCharacterMemoriesIncluded,
+    })
   }
 
   // 2c. Retrieve relevant knowledge from all three tiers available to the

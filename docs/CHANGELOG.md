@@ -4,6 +4,14 @@
 
 ### 4.9-dev
 
+#### Fixed: restored the inter-character memory timing log
+
+`buildContext` carried an empty `if (isMultiCharacter) { }` block. The chore that stripped every
+`logger.debug` call from the source emptied it, leaving the conditional plus two locals nothing
+read any more — `tInterStart` and `interCharacterLoadedCount`. Since debug logging has been
+restored elsewhere in the same file, the log is back rather than the block deleted: inter-character
+memory retrieval again reports its duration, loaded count, and included count.
+
 #### Fixed: a stalled cheap-LLM route could hold a turn for three minutes per character (bug 115)
 
 `buildContext` awaits `extractMemorySearchKeywords` to distill a memory-search query when no
