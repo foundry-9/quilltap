@@ -4,6 +4,27 @@
 
 ### 4.9-dev
 
+#### Fixed: a stalled cheap-LLM route could hold a turn for three minutes per character (bug 115)
+
+`buildContext` awaits `extractMemorySearchKeywords` to distill a memory-search query when no
+proactive pre-compute pass has one ready (first turn, continue mode, or an empty proactive result).
+The call blocks the turn with an empty composer, but named no latency tier, so it took the
+background budget of 90s plus the timeout retry a background pass is entitled to. On a cheap route
+that accepts requests and never answers, that is up to 180s of nothing per responding character —
+observed in a four-character room as a 7m16s turn, two of those waits and a turn pass, with no
+error logged and every background job reporting a clean finish.
+
+`extractMemorySearchKeywords` now takes a `latency` argument defaulting to `background`, and the
+`context-manager` call site passes `interactive`: 45s and no retry. The distillation is an
+optimisation over the recent-window query the branch already holds, so a lost pass costs recall
+quality rather than the turn. The proactive pass in `pre-compute.service.ts` and the `recall-replay`
+diagnostic keep the background budget, which is correct for both.
+
+This completes bug 107, which introduced the latency tier and applied it to the two other inline
+cheap calls — the compression cache miss and the memory recap — but not to this one. Regression
+tests cover both halves: that the argument leaves the call site, and the budget and retry
+arithmetic underneath, which bug 107 shipped untested.
+
 #### Added: the Concierge state can be chosen on the New Chat form
 
 The four-state Concierge control (Monitored / Flagged / Vouched Safe / Uncensored) could only be

@@ -12,8 +12,10 @@
 import {
   executeCheapLLMTask,
   CHEAP_LLM_TASK_TIMEOUT_MS,
+  CHEAP_LLM_TASK_TIMEOUT_INTERACTIVE_MS,
   CHEAP_LLM_TASK_TIMEOUT_LOCAL_MS,
 } from '../core-execution'
+import { extractMemorySearchKeywords } from '../memory-tasks'
 import { createLLMProvider } from '@/lib/llm'
 import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
@@ -152,4 +154,76 @@ it('eventually abandons a local provider too', async () => {
 
   expect(result.success).toBe(false)
   expect(result.error).toContain('budget')
+})
+
+/**
+ * Bug 115. The interactive tier is not a smaller number for its own sake — it
+ * is the whole of what an operator watching an empty composer experiences when
+ * the cheap route stalls. A pass that keeps the background tier by omission
+ * costs 90s, and then 90s again for the retry a background pass is entitled to.
+ *
+ * `extractMemorySearchKeywords` is the case that got it wrong: it serves the
+ * proactive pre-compute pass (nobody waiting, `background`) and the
+ * `context-manager` dynamic-head fallback (turn blocked, `interactive`) from
+ * one function, so the tier has to come from the caller and the caller has to
+ * remember to send it.
+ */
+describe('the interactive tier, on the call that is awaited inside a turn', () => {
+  const DISTILL = [{ role: 'user' as const, content: 'the mission today' }]
+
+  const distill = (latency?: 'background' | 'interactive') =>
+    extractMemorySearchKeywords(
+      DISTILL, 'Amy', REMOTE, 'user-1', 'chat-1', 'char-1', undefined, latency,
+    )
+
+  it('abandons at the interactive budget, not the background one', async () => {
+    sendMessage.mockReturnValue(new Promise(() => {}))
+
+    const task = distill('interactive')
+    await jest.advanceTimersByTimeAsync(CHEAP_LLM_TASK_TIMEOUT_INTERACTIVE_MS + 1)
+    const result = await task
+
+    expect(result.success).toBe(false)
+    expect(result.timedOut).toBe(true)
+  })
+
+  it('forgoes the retry, so one stall cannot cost two budgets', async () => {
+    sendMessage.mockReturnValue(new Promise(() => {}))
+
+    const task = distill('interactive')
+    await jest.advanceTimersByTimeAsync(CHEAP_LLM_TASK_TIMEOUT_INTERACTIVE_MS + 1)
+    await task
+
+    // The whole defect, in one number: a background pass here gets a second
+    // attempt at a fresh socket, and the turn waits out both.
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('hands the provider the interactive budget rather than the background one', async () => {
+    sendMessage.mockResolvedValue({
+      content: '{"keywords":["mission"]}',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    })
+
+    await distill('interactive')
+
+    const [params] = sendMessage.mock.calls[0]
+    expect(params.requestTimeoutMs).toBeLessThan(CHEAP_LLM_TASK_TIMEOUT_INTERACTIVE_MS)
+  })
+
+  it('leaves the proactive pass on the background tier when no tier is named', async () => {
+    sendMessage.mockReturnValue(new Promise(() => {}))
+
+    const task = distill()
+    // Still healthy at the interactive ceiling — nobody is waiting on this one.
+    await jest.advanceTimersByTimeAsync(CHEAP_LLM_TASK_TIMEOUT_INTERACTIVE_MS + 1)
+    expect(sendMessage).toHaveBeenCalledTimes(1)
+
+    await jest.advanceTimersByTimeAsync(CHEAP_LLM_TASK_TIMEOUT_MS + 1)
+    await jest.advanceTimersByTimeAsync(CHEAP_LLM_TASK_TIMEOUT_MS + 1)
+    const result = await task
+
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+    expect(result.success).toBe(false)
+  })
 })

@@ -1398,6 +1398,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
                 nowIso: new Date().toISOString(),
                 timelineMode: chat.timelineMode ?? 'realtime',
               },
+              // The operator is waiting on this one: it is the fallback branch,
+              // so no proactive pass pre-computed it and the turn is blocked
+              // behind the call. Tight budget, and no retry — the distillation
+              // is an optimisation over `memorySearchQuery`, which is already
+              // in hand, so a lost pass costs recall quality, not the turn.
+              // A background budget here is 90s plus a free retry, i.e. up to
+              // three minutes of empty composer per responding character on a
+              // stalled cheap route (bug 115).
+              'interactive',
             )
             if (distill.success && distill.result) {
               // Prefer the natural-language paraphrase as the embedding query —
