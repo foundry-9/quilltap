@@ -32,6 +32,7 @@ import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archiv
 import { deleteUserData } from './delete-service';
 import { remapBackupData } from './uuid-remap';
 import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
+import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
 
@@ -369,6 +370,17 @@ export async function restore(
         await globalRepos.folders.create({ ...folderData, userId: targetUserId }, { id: folder.id });
         foldersRestored++;
       } catch (error) {
+        // A backup taken before bug 114 was collapsed can carry many rows for
+        // one (userId, projectId, path). The unique index rejects the extras;
+        // the first one restored is the survivor and the rest are noise, so
+        // they're dropped quietly rather than filling the report with warnings.
+        if (isUniqueConstraintError(error)) {
+          moduleLogger.debug('Skipped duplicate folder row during restore', {
+            folderId: folder.id,
+            path: folder.path,
+          });
+          continue;
+        }
         warnings.push(`Failed to restore folder "${folder.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore folder', { folderId: folder.id, error });
       }

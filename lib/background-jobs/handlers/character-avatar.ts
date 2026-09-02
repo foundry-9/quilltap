@@ -486,17 +486,17 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
     // The legacy `folders` table backs the pre-Scriptorium file tree UI. It's
     // only meaningful for disk-backed (or project-mount-backed) writes; vault
     // writes own their folder structure inside doc_mount_folders.
+    // find-or-create at the repository chokepoint: this runs in the forked
+    // child, where the call is buffered whole and replayed on the parent's RW
+    // connection, so the return value is the synthetic `undefined` (bug 114).
     if (!usedVault) {
-      const existingFolder = await repos.folders.findByPath(job.userId, '/character-avatars/', fileProjectId);
-      if (!existingFolder) {
-        await repos.folders.create({
-          userId: job.userId,
-          path: '/character-avatars/',
-          name: 'character-avatars',
-          parentFolderId: null,
-          projectId: fileProjectId,
-        });
-      }
+      await repos.folders.ensureByPath({
+        userId: job.userId,
+        path: '/character-avatars/',
+        name: 'character-avatars',
+        parentFolderId: null,
+        projectId: fileProjectId,
+      });
     }
 
     await repos.files.create({

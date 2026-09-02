@@ -1001,7 +1001,13 @@ CREATE INDEX "idx_folders_createdAt" ON "folders" ("createdAt" DESC);
 CREATE INDEX "idx_folders_parentFolderId" ON "folders" ("parentFolderId");
 CREATE INDEX "idx_folders_projectId" ON "folders" ("projectId");
 CREATE INDEX "idx_folders_userId" ON "folders" ("userId");
+CREATE UNIQUE INDEX "idx_folders_userId_projectId_path"
+  ON "folders" ("userId", COALESCE("projectId", ''), "path");
 ```
+
+A folder's identity is `(userId, projectId, path)`, and the UNIQUE index enforces one row per identity. `projectId` is nullable — general (non-project) files carry NULL — and SQLite treats every NULL as distinct in a UNIQUE index, so it is coalesced to `''` to make "no project" a single value; same reason as the `doc_mount_folders` index below.
+
+The index arrived in 4.9.0 (migration `collapse-duplicate-folders-v1`, which first collapses each group down to its oldest row and repoints any `parentFolderId` naming a discarded one). Before it, every writer hand-rolled `findByPath` → `create`, which is neither atomic across concurrent background jobs nor able to tell a failed read from an absent folder, and the machine-written paths (`/character-avatars/`, `/story-backgrounds/`) accumulated a row per generated image — bug 114. **All folder creation for a path that may already exist now goes through `FoldersRepository.ensureByPath`**, which resolves a constraint violation to the winning row. `folders.parentFolderId` is the only column in this database that references `folders.id`; `files` locates its folder by `folderPath` + `projectId`, not by id.
 
 ### help_docs
 

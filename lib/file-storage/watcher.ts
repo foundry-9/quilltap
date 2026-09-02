@@ -311,13 +311,10 @@ async function handleDirAdd(relativePath: string): Promise<void> {
     const folderName = parts[parts.length - 1];
     const folderPath = '/' + parts.slice(1).join('/') + '/';
 
-    // Check if folder record exists
-    const existingFolder = await repos.folders.findByPath(userId, folderPath, projectId);
-    if (existingFolder) {
-      return;
-    }
-
-    await repos.folders.create({
+    // Find-or-create through the repository chokepoint. chokidar can fire
+    // `addDir` for the same directory more than once, and a job may be creating
+    // the very same folder row concurrently (bug 114).
+    await repos.folders.ensureByPath({
       userId,
       path: folderPath,
       name: folderName,
@@ -325,7 +322,7 @@ async function handleDirAdd(relativePath: string): Promise<void> {
       projectId,
     });
 
-    logger.info('Created folder record for new directory on disk', {
+    logger.info('Ensured folder record for directory on disk', {
       folderPath,
       projectId,
     });

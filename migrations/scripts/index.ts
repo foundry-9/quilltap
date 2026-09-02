@@ -381,6 +381,7 @@ import { retirePrefillOnThinkingProfilesMigration } from './retire-prefill-on-th
 // Provider fallback chains: fallbackProfileId + allowTierFallback on connection_profiles
 import { addProfileFallbackFieldsMigration } from './add-profile-fallback-fields';
 import { recomputeChatLastMessageAtMigration } from './recompute-chat-last-message-at';
+import { collapseDuplicateFoldersMigration } from './collapse-duplicate-folders';
 
 /**
  * All available migrations.
@@ -763,6 +764,8 @@ export const migrations: Migration[] = [
   addProfileFallbackFieldsMigration,
   // Chat activity: recompute lastMessageAt from character-authored messages only (bug 112)
   recomputeChatLastMessageAtMigration,
+  // File tree: collapse duplicate folder rows + unique (userId, projectId, path) index (bug 114)
+  collapseDuplicateFoldersMigration,
 ];
 
 export {
@@ -1124,5 +1127,7 @@ export {
   addProfileFallbackFieldsMigration,
   // Chat activity: recompute lastMessageAt from character-authored messages only (bug 112)
   recomputeChatLastMessageAtMigration,
+  // File tree: collapse duplicate folder rows + unique (userId, projectId, path) index (bug 114)
+  collapseDuplicateFoldersMigration,
 };
 

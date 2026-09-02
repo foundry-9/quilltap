@@ -92,7 +92,7 @@ function makeFile(overrides: Record<string, unknown> = {}) {
 
 describe('importFiles', () => {
   let filesCreate: jest.Mock
-  let foldersCreate: jest.Mock
+  let foldersEnsureByPath: jest.Mock
   let foldersFindByPath: jest.Mock
   let repos: Record<string, unknown>
   let warnings: string[]
@@ -105,7 +105,9 @@ describe('importFiles', () => {
       ...data,
       id: 'file-new',
     }))
-    foldersCreate = jest
+    // The importer writes through the `ensureByPath` chokepoint, not `create`
+    // (bug 114) — `findByPath` above it is only the reuse-reporting branch.
+    foldersEnsureByPath = jest
       .fn()
       .mockImplementation(async (data: Record<string, unknown>) => ({ ...data, id: 'folder-new' }))
     foldersFindByPath = jest.fn().mockResolvedValue(null)
@@ -118,7 +120,7 @@ describe('importFiles', () => {
     }
 
     ;(getRepositories as jest.Mock).mockReturnValue({
-      folders: { create: foldersCreate, findByPath: foldersFindByPath },
+      folders: { ensureByPath: foldersEnsureByPath, findByPath: foldersFindByPath },
     })
 
     // The project-less path: this is what the uploads bridge hands back.
@@ -268,8 +270,8 @@ describe('importFiles', () => {
 
     // The parent already existed and was reused, not duplicated.
     expect(counts.folders).toBe(1)
-    expect(foldersCreate).toHaveBeenCalledTimes(1)
-    const created = foldersCreate.mock.calls[0][0] as Record<string, unknown>
+    expect(foldersEnsureByPath).toHaveBeenCalledTimes(1)
+    const created = foldersEnsureByPath.mock.calls[0][0] as Record<string, unknown>
     expect(created.path).toBe('/plates/etchings/')
     // …and the child points at the folder that was already here.
     expect(created.parentFolderId).toBe('folder-existing')

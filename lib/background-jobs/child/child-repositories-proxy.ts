@@ -178,6 +178,15 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'vectorIndices.entryExists': 'read',
 
   // ---- Writes with non-conforming names ------------------------------------
+  // folders: find-or-create. Buffered *whole* so the parent replays it on its
+  // RW connection, where read-your-writes and the (userId, projectId, path)
+  // unique index make it genuinely idempotent — a child-side read could not see
+  // another job's buffered create, which is how the legacy `folders` table
+  // grew a row per generated image (bug 114). Its in-child callers (the
+  // story-background and character-avatar handlers) DISCARD the return value,
+  // so the `undefined` synthetic write result is fine; a caller that needs the
+  // folder back must not run in the child.
+  'folders.ensureByPath': 'write',
   // memories
   'memories.updateForCharacter': 'write',
   // chats

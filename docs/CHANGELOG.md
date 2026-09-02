@@ -4,6 +4,29 @@
 
 ### 4.9-dev
 
+#### Fixed: the folders table accumulated a duplicate row per generated image
+
+Generating a character avatar or a story background into a project appended another row to the
+`folders` table for `/character-avatars/` or `/story-backgrounds/`, rather than reusing the row
+already there. In one instance that left 607 rows describing 24 folders, with 207 of them for a
+single project's `/story-backgrounds/`. Nothing was lost and the folder dropdown looked correct
+(it de-dupes by path), but the table grew without bound.
+
+The trigger was fixed in April: `FolderSchema.parentFolderId` was `.nullable()` without
+`.optional()` while the SQLite hydrator turns a NULL column into `undefined`, so every root-level
+folder failed validation on read and `findByPath` returned `null` — indistinguishable from "no
+such folder" to the six call sites that hand-rolled `findByPath` then `create`. What survived was
+the structure that let a bad read write 600 rows: no uniqueness constraint on a folder's identity,
+six copies of the guard, and a check-then-insert that is not atomic across concurrent background
+jobs (in the forked job child, a second job cannot see the first's buffered create at all).
+
+Folder creation now goes through one chokepoint, `FoldersRepository.ensureByPath`, with a unique
+index on `(userId, COALESCE(projectId, ''), path)` behind it; a lost race resolves to the row that
+won instead of adding another. The `collapse-duplicate-folders-v1` migration keeps the oldest row
+of each group, repoints any child folder whose parent it discards, deletes the rest, and creates
+the index. Restoring a backup taken before the collapse drops its duplicate folder rows quietly.
+Filed as bug 114.
+
 #### Fixed: Move to Project offered only the root folder for every destination
 
 The **Folder** dropdown in the Move to Project dialog listed `/ (Root)` and nothing else,

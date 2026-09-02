@@ -937,21 +937,17 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
 
     // Legacy folder records only matter for the project-mount tree; the
     // Lantern mount manages its own folder hierarchy in doc_mount_folders.
+    // find-or-create at the repository chokepoint: this runs in the forked
+    // child, where the call is buffered whole and replayed on the parent's RW
+    // connection, so the return value is the synthetic `undefined` (bug 114).
     if (!usedLantern) {
-      const existingFolder = await repos.folders.findByPath(
-        job.userId,
-        '/story-backgrounds/',
-        folderProjectId
-      );
-      if (!existingFolder) {
-        await repos.folders.create({
-          userId: job.userId,
-          path: '/story-backgrounds/',
-          name: 'story-backgrounds',
-          parentFolderId: null,
-          projectId: folderProjectId,
-        });
-      }
+      await repos.folders.ensureByPath({
+        userId: job.userId,
+        path: '/story-backgrounds/',
+        name: 'story-backgrounds',
+        parentFolderId: null,
+        projectId: folderProjectId,
+      });
     }
 
     const category: FileCategory = 'IMAGE';

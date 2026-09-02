@@ -72,7 +72,10 @@ async function importFolders(
         ? idByOldId.get(folder.parentFolderId) ?? null
         : null;
 
-      const created = await globalRepos.folders.create({
+      // Find-or-create at the chokepoint. The `findByPath` above is the
+      // reuse-reporting branch, not the uniqueness guarantee — that lives in
+      // `ensureByPath` and the unique index behind it (bug 114).
+      const created = await globalRepos.folders.ensureByPath({
         userId,
         path: folder.path,
         name: folder.name,

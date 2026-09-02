@@ -9,6 +9,7 @@
 import { Folder, FolderInput, FolderSchema } from '@/lib/schemas/types';
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
 import { logger } from '@/lib/logger';
+import { isUniqueConstraintError } from '../sqlite-errors';
 import { TypedQueryFilter, QueryOptions } from '../interfaces';
 
 /**
@@ -50,6 +51,77 @@ export class FoldersRepository extends UserOwnedBaseRepository<Folder> {
       'Error creating folder',
       { userId: data.userId, path: data.path }
     );
+  }
+
+  /**
+   * Find-or-create the folder at `path` — **the only sanctioned way to bring a
+   * folder row into being for a path that may already have one.**
+   *
+   * Every caller used to hand-roll `findByPath` → `create`, and each copy had
+   * the same two holes (bug 114):
+   *
+   *   - **The read can fail soft.** `findByPath` swallows query errors and
+   *     returns `null` (its `safeQuery` fallback), which a hand-rolled guard
+   *     cannot tell apart from "no such folder" — so a read failure mints a
+   *     duplicate instead of surfacing. This is not hypothetical: until
+   *     c180246b1 (2026-04-17) `FolderSchema.parentFolderId` was `.nullable()`
+   *     without `.optional()` while the SQLite hydrator turns a NULL column
+   *     into `undefined`, so *every* root-level folder failed validation on
+   *     read and every image generation appended another row.
+   *   - **The check and the insert are not atomic.** Two background jobs
+   *     generating images into the same project run concurrently (the global
+   *     in-flight cap is 4), both read `null`, and both insert. In the forked
+   *     child it is worse still: writes are buffered and reads use a readonly
+   *     connection, so a second job cannot see the first's buffered create at
+   *     all. See docs/developer/BACKGROUND_JOBS_CHILD.md.
+   *
+   * The `(userId, COALESCE(projectId, ''), path)` unique index closes both: the
+   * loser of a race takes a constraint violation and resolves to the winning
+   * row rather than adding to the pile.
+   *
+   * In the forked job child this call is **buffered whole** and replayed by the
+   * parent on its RW connection (`folders.ensureByPath` is a `write` in the
+   * child proxy's `METHOD_OVERRIDES`), so an in-child caller receives the
+   * synthetic `undefined` and **must discard the return value**.
+   *
+   * @param data The folder data; `projectId` null means general files
+   * @returns Promise<Folder> The existing or newly created folder
+   */
+  async ensureByPath(
+    data: Omit<FolderInput, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<Folder> {
+    const projectId = data.projectId ?? null;
+
+    const existing = await this.findByPath(data.userId, data.path, projectId);
+    if (existing) {
+      return existing;
+    }
+
+    try {
+      return await this.create({ ...data, projectId });
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) {
+        throw error;
+      }
+
+      // Someone committed this path between our read and our insert. The
+      // winning row is committed and visible, so resolve to it.
+      const winner = await this.findByPath(data.userId, data.path, projectId);
+      if (!winner) {
+        // Unique conflict with nothing to reconcile to — surface it rather
+        // than silently returning a folder that does not exist.
+        throw error;
+      }
+
+      logger.debug('Reconciled concurrent folder create to existing folder', {
+        userId: data.userId,
+        path: data.path,
+        projectId,
+        folderId: winner.id,
+      });
+
+      return winner;
+    }
   }
 
   /**
