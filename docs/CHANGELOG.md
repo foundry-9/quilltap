@@ -4,6 +4,24 @@
 
 ### 4.9-dev
 
+#### Fixed: Move to Project offered only the root folder for every destination
+
+The **Folder** dropdown in the Move to Project dialog listed `/ (Root)` and nothing else,
+whatever project you picked, even when the project plainly had folders. `FolderPicker` derived
+the folder list correctly on every render but then mirrored it into component state behind an
+"only if empty" guard. The derivation seeds Root unconditionally, before consulting any data, so
+the first render — with both queries still in flight — produced a one-entry list that satisfied
+the guard; the mirror was filled with the loading state and sealed against every update
+afterwards, including a change of destination. The mirror is gone: the list is a `useMemo` over
+the fetched files and folders, rendered directly, so it re-derives when the destination changes.
+The only state that remains holds folders created while the create-folder API was unreachable,
+scoped to the project they were created under. A successful folder creation now refetches instead
+of copying the previous render's snapshot. Filed as bug 113.
+
+Also in the same dropdown: nested folders were indented with ordinary spaces, which an `<option>`
+collapses, so a child folder rendered at the same visual depth as its parent. Now non-breaking
+spaces.
+
 #### Changed: The per-chat Concierge control is now a four-state
 
 The sidebar's per-chat Concierge switch grew from three states to four, separating who decided
