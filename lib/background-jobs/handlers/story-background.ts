@@ -15,7 +15,7 @@ import {
 
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
-import { SceneStateSchema } from '@/lib/schemas/chat.types';
+import { SceneStateSchema, isParticipantPresent } from '@/lib/schemas/chat.types';
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
@@ -573,13 +573,24 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // woman with…"). Re-appending canonical `Friday: A woman. …` portraits on
   // top of that produces a divided/triptych image as the provider tries to
   // render both the integrated scene AND the portrait sidecards.
+  //
+  // Absent and removed participants of THIS chat are excluded too, for the
+  // opposite reason: they were deliberately kept out of `payload.characterIds`
+  // because they are not in the scene. Back-filling an appearance for one would
+  // undo that — a crafter that picked their name out of the transcript would be
+  // handed a portrait to render, putting them back in the frame by the side
+  // door. A character absent here may still be enumerated when genuinely
+  // unaffiliated with the chat, which is what this scan is for.
   // Held for the moderation-reroute path below, which re-crafts the prompt and
   // must re-run this same enrichment on the replacement.
   let nonParticipantCharacters: Awaited<ReturnType<typeof repos.characters.findByUserId>> = [];
   try {
-    const participantIdSet = new Set(payload.characterIds);
+    const excludedIds = new Set(payload.characterIds);
+    for (const p of chat.participants ?? []) {
+      if (p.characterId && !isParticipantPresent(p.status)) excludedIds.add(p.characterId);
+    }
     const userCharacters = await repos.characters.findByUserId(job.userId);
-    nonParticipantCharacters = userCharacters.filter(c => !participantIdSet.has(c.id));
+    nonParticipantCharacters = userCharacters.filter(c => !excludedIds.has(c.id));
     const enrichResult = appendMissingCharacterEnumerations(
       finalPrompt!,
       nonParticipantCharacters,

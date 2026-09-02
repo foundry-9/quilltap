@@ -13,7 +13,7 @@
  */
 
 import { BackgroundJob, ChatSettings } from '@/lib/schemas/types';
-import { isHelpLikeChatType, type ChatMetadata } from '@/lib/schemas/chat.types';
+import { isHelpLikeChatType, isParticipantPresent, type ChatMetadata } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
   considerTitleUpdate,
@@ -276,9 +276,13 @@ export async function queueStoryBackgroundIfEnabled(
     return;
   }
 
-  // Get character IDs from participants
+  // Get character IDs from participants who are actually in the scene. Absent
+  // and (soft-)removed participants must never be painted into the background —
+  // the crafter is told to place every enumerated character as a figure in the
+  // frame, so a stale enumeration puts someone in the room who walked out of it.
+  // 'silent' counts as present: they are standing there, just not speaking.
   const characterIds = chat.participants
-    .filter(p => p.characterId)
+    .filter(p => isParticipantPresent(p.status) && p.characterId)
     .map(p => p.characterId!);
 
   if (characterIds.length === 0) {

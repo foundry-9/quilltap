@@ -8,6 +8,8 @@ import { NextResponse } from 'next/server';
 import { exists, getFilePath } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { notFound, serverError } from '@/lib/api/responses';
+import { normalizeBackgroundDisplayMode } from '@/lib/schemas/project.types';
+import type { BackgroundDisplayMode } from '@/lib/schemas/project.types';
 import type { RequestContext } from '@/lib/api/middleware';
 
 /**
@@ -23,34 +25,16 @@ export async function handleGetBackground(
       return notFound('Project');
     }
 
-    // Determine the background based on backgroundDisplayMode
-    const displayMode = project.backgroundDisplayMode || 'theme';
+    // Determine the background based on backgroundDisplayMode. A project stored
+    // in a mode retired in 4.9 ('project', 'static') reads back as 'theme'; the
+    // schema coerces it, and this guards a raw row that bypassed the overlay.
+    const displayMode = normalizeBackgroundDisplayMode(project.backgroundDisplayMode) as
+      | BackgroundDisplayMode
+      | undefined ?? 'theme';
 
     // If mode is 'theme', no background
     if (displayMode === 'theme') {
       return NextResponse.json({ backgroundUrl: null, displayMode });
-    }
-
-    // If mode is 'static', use staticBackgroundImageId
-    if (displayMode === 'static' && project.staticBackgroundImageId) {
-      const file = await repos.files.findById(project.staticBackgroundImageId);
-      if (file) {
-        return NextResponse.json({
-          backgroundUrl: getFilePath(file),
-          displayMode,
-        });
-      }
-    }
-
-    // If mode is 'project', use storyBackgroundImageId
-    if (displayMode === 'project' && project.storyBackgroundImageId) {
-      const file = await repos.files.findById(project.storyBackgroundImageId);
-      if (file) {
-        return NextResponse.json({
-          backgroundUrl: getFilePath(file),
-          displayMode,
-        });
-      }
     }
 
     // If mode is 'latest_chat', find the most recently updated chat with a background

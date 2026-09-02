@@ -112,7 +112,15 @@ describe('mapLegacyProjectRow', () => {
   });
 
   it('preserves an explicit backgroundDisplayMode', () => {
-    expect(mapLegacyProjectRow({ id: 'a', name: 'A', backgroundDisplayMode: 'static' }).backgroundDisplayMode).toBe('static');
+    expect(mapLegacyProjectRow({ id: 'a', name: 'A', backgroundDisplayMode: 'latest_chat' }).backgroundDisplayMode).toBe('latest_chat');
+  });
+
+  it('normalizes the modes retired in 4.9 to theme', () => {
+    for (const retired of ['project', 'static']) {
+      expect(
+        mapLegacyProjectRow({ id: 'a', name: 'A', backgroundDisplayMode: retired }).backgroundDisplayMode
+      ).toBe('theme');
+    }
   });
 });
 

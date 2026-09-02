@@ -256,8 +256,6 @@ export function useProjectDetail(projectId: string): UseProjectDetailReturn {
       const modeLabels: Record<BackgroundDisplayMode, string> = {
         theme: 'theme background',
         latest_chat: 'latest chat background',
-        project: 'project background',
-        static: 'static background',
       }
       showSuccessToast(`Background set to ${modeLabels[mode]}`)
     } catch (err) {

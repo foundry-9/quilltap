@@ -1363,7 +1363,7 @@
         "storyBackgroundsEnabled": { "type": ["boolean", "null"] },
         "staticBackgroundImageId": { "type": ["string", "null"] },
         "storyBackgroundImageId": { "type": ["string", "null"] },
-        "backgroundDisplayMode": { "enum": ["latest_chat", "project", "static", "theme"] },
+        "backgroundDisplayMode": { "enum": ["latest_chat", "project", "static", "theme"], "description": "How the project displays a background. 'project' and 'static' were retired in 4.9 (neither ever produced an image) and remain valid here only so pre-4.9 exports still validate; importers normalize both to 'theme'." },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
         "_characterRosterNames": {

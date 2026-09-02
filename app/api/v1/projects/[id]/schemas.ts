@@ -20,7 +20,7 @@ export const updateProjectSchema = z.object({
   defaultRoleplayTemplateId: z.string().uuid().nullable().optional(),
   defaultAlertCharactersOfLanternImages: z.boolean().nullable().optional(),
   answerConfirmationOverride: z.enum(['ON', 'OFF']).nullable().optional(),
-  backgroundDisplayMode: z.enum(['latest_chat', 'project', 'static', 'theme']).optional(),
+  backgroundDisplayMode: z.enum(['latest_chat', 'theme']).optional(),
 });
 
 export const addCharacterSchema = z.object({

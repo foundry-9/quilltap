@@ -9,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { badRequest, serverError, successResponse } from '@/lib/api/responses';
 import { enqueueStoryBackgroundGeneration } from '@/lib/background-jobs/queue-service';
 import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution';
+import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { RequestContext } from '@/lib/api/middleware';
 import type { ChatMetadata } from '@/lib/schemas/types';
 
@@ -38,13 +39,15 @@ export async function handleRegenerateBackground(
       return badRequest('No image profile available for story background generation. Configure an image profile in Chat Settings.');
     }
 
-    // Get character IDs from participants
+    // Get character IDs from participants who are actually in the scene. Absent
+    // and (soft-)removed participants must never be painted into the background;
+    // 'silent' counts as present — they are standing there, just not speaking.
     const characterIds = chat.participants
-      .filter(p => p.characterId)
+      .filter(p => isParticipantPresent(p.status) && p.characterId)
       .map(p => p.characterId!);
 
     if (characterIds.length === 0) {
-      return badRequest('No characters in chat to generate background for.');
+      return badRequest('No characters present in chat to generate background for.');
     }
 
     // Queue the story background generation job

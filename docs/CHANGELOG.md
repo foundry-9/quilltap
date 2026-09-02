@@ -110,6 +110,56 @@ no character has ever posted is dated by when it was created.
 Existing chats are recalculated once on startup; the loading screen names the step. No data is
 changed other than this timestamp.
 
+#### Removed: two project background display modes that never worked
+
+The project **Story Backgrounds** mode selector offered four options; two of them could not produce
+an image under any circumstances.
+
+- **Project-generated background** read `project.storyBackgroundImageId`, a field written only by
+  the *Latest chat* path. Nothing ever generated a project-specific background — there is no such
+  generator. A project in this mode showed either nothing, or a stale image left behind from a
+  previous stint in Latest chat mode.
+- **Static uploaded image** read `project.staticBackgroundImageId`, which nothing anywhere writes.
+  The field is not accepted by the project update schema, and there is no upload control beside the
+  option. It was always a no-op.
+
+Both are gone from the selector and from the `backgroundDisplayMode` enum, which is now
+`latest_chat | theme`. The two remaining modes are unchanged.
+
+Projects still stored in a retired mode are read as **theme** — the same blank result they were
+already getting. The coercion happens in `ProjectPropertiesSchema` itself, because that schema is
+`.parse`d on every project read: narrowing the enum without it would have thrown on any project left
+in a retired mode rather than merely showing it no picture. The legacy-row mapper in the
+project-store cutover migration normalizes the same way, so an instance migrating from an older
+version lands on a valid value.
+
+The two image-ID fields are kept. `storyBackgroundImageId` is still written when a chat background
+is generated for a project in Latest chat mode, and both remain the natural storage should a real
+project-background generator or an upload control ever be built.
+
+#### Fixed: story backgrounds no longer paint absent characters into the scene
+
+The two places that queue a story background collected every character participant in the chat,
+including ones marked **Absent** and ones that had been removed (removal is a soft delete, so those
+rows are still in the chat). The prompt crafter is told to place each character it is given as a
+figure in the frame, so a character who had walked out of the scene was drawn standing in it, and
+the prompt's back-fill step then supplied their appearance to keep the image provider from
+inventing one.
+
+Both call sites now filter to participants who are actually present. **Silent** still counts as
+present — a silent character is in the room, just not speaking. If every participant is absent or
+removed, no background is generated at all rather than one of an empty room populated by ghosts.
+The scene-state tracker already filtered this way; the background generator now matches it.
+
+The prompt's back-fill step was closed off as well. It scans the finished prompt for workspace
+characters the crafter named but was not given, and appends their appearance so the image provider
+does not invent one. Its candidate pool is everyone who is not a payload participant — which, now
+that absent participants are excluded from the payload, is exactly where they land. A crafter that
+picked an absent character's name out of the transcript would have been handed their portrait to
+render, restoring by the side door the figure the filter had just removed. Absent and removed
+participants of the chat are now excluded from that pool too. A character with no connection to the
+chat is still enumerated, which is what the scan is for.
+
 #### Fixed: restoring a backup no longer dates every chat to the moment of the restore
 
 Restoring replays each chat's messages, and doing so stamped every chat with the current time. The

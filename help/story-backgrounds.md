@@ -16,9 +16,10 @@ When enabled, Quilltap generates a landscape scene image featuring your characte
 2. **Scene Understanding**: The system determines the current scene in one of two ways:
    - **Scene State Tracker** (preferred): After every chat turn, a lightweight background task automatically tracks the current scene — where characters are, what they're doing, and what they look like. When this data is fresh (within 5 messages), the Lantern uses it directly, saving an extra LLM call.
    - **On-demand derivation** (fallback): If no recent scene state exists, the system reads your recent messages and asks a cheap LLM to describe the scene, much as a particularly attentive stage manager might.
-3. **Prompt Creation**: The system uses a cheap LLM to craft an atmospheric scene prompt based on the scene context and character appearances
-4. **Image Generation**: The prompt is sent to your configured image generation profile
-5. **Display**: The generated image appears as a semi-transparent background (30% opacity) behind your chat content
+3. **Casting**: Only characters presently in the scene are painted into it. A participant marked **Silent** is still standing there and duly appears; one marked **Absent**, or one shown the door altogether, does not — the Lantern declines to sketch a figure who has excused themselves from the room. Should every last participant have wandered off, no background is attempted at all, on the sensible grounds that an empty room furnishes poor atmosphere.
+4. **Prompt Creation**: The system uses a cheap LLM to craft an atmospheric scene prompt based on the scene context and character appearances
+5. **Image Generation**: The prompt is sent to your configured image generation profile
+6. **Display**: The generated image appears as a semi-transparent background (30% opacity) behind your chat content
 
 ## Enabling Story Backgrounds
 
@@ -61,14 +62,14 @@ A story that has wandered somewhere less than fully clothed presents the Lantern
 
 ## Project Backgrounds
 
-Projects can display backgrounds in different ways:
+A project may wear one of two faces:
 
 - **Theme**: No background image (uses your theme colors)
-- **Static**: A manually uploaded background image
-- **Project**: A generated background for the project (based on character roster)
 - **Latest Chat**: Automatically uses the most recent chat's background
 
-Set the mode on the project's own page, in the **Image Generation** card under **Story Backgrounds**. In **Theme** mode the project page falls back to whatever decorative backdrop your theme gives the Prospero section, exactly as the projects list does — the other three modes replace it with the project's chosen image.
+Set the mode on the project's own page, in the **Image Generation** card under **Story Backgrounds**. In **Theme** mode the project page falls back to whatever decorative backdrop your theme gives the Prospero section, exactly as the projects list does; **Latest Chat** replaces it with the most recently generated background from any conversation in the project.
+
+Two further options — **Project-generated background** and **Static uploaded image** — were struck from the menu in 4.9, having been advertised without ever having been built. Neither could produce a picture: the first read a slot only the Latest Chat machinery ever filled, and the second read a slot nothing filled at all, there being no means anywhere in the building to upload such an image. A project left in either mode now shows its theme backdrop, which is precisely what it was showing before, only now the menu has the decency to admit it.
 
 When a project is open beside a conversation in a split workspace, the conversation's background wins the whole screen; the project's background returns when you close or move away from that conversation.
 

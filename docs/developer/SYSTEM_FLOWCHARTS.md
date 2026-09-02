@@ -389,8 +389,6 @@ flowchart TD
     subgraph Display["Display Modes (Project Level)"]
         DONE --> DM{"backgroundDisplayMode"}
         DM -->|theme| DM1[No background, theme colors]
-        DM -->|static| DM2[User-uploaded image]
-        DM -->|project| DM3[Project's AI-generated image]
         DM -->|latest_chat| DM4[Most recent chat's<br/>AI-generated image]
     end
 ```

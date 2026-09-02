@@ -70,7 +70,7 @@ export interface ProjectFile {
   relativePath?: string
 }
 
-export type BackgroundDisplayMode = 'latest_chat' | 'project' | 'static' | 'theme'
+export type BackgroundDisplayMode = 'latest_chat' | 'theme'
 
 export interface Project {
   id: string

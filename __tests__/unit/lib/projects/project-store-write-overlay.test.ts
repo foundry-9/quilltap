@@ -157,6 +157,23 @@ describe('applyProjectStoreWriteOverlay — properties read-modify-write', () =>
     expect(written.backgroundDisplayMode).toBe('theme');
   });
 
+  it('normalizes a retired background display mode on the way to disk', async () => {
+    // A pre-4.9 .qtap import or backup restore can hand us 'project'/'static'.
+    // Writes route through ProjectPropertiesSchema.parse, so the retired value
+    // must land on disk already coerced rather than being persisted afresh.
+    mockRead.mockResolvedValue({
+      content: JSON.stringify(STORED_PROPERTIES),
+      mtime: 0,
+      size: 0,
+    });
+
+    await applyProjectStoreWriteOverlay(PROJECT_ID, {
+      backgroundDisplayMode: 'static',
+    } as unknown as Partial<Project>);
+
+    expect(lastWrittenProperties().backgroundDisplayMode).toBe('theme');
+  });
+
   it('strips store-resident keys from the DB-bound patch', async () => {
     mockRead.mockResolvedValue({
       content: JSON.stringify(STORED_PROPERTIES),
