@@ -45,13 +45,13 @@ export function CharacterConversationsTab({ characterId, characterName, refreshK
   const [chats, setChats] = useState<Chat[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [refreshingArchive, setRefreshingArchive] = useState(false)
-  const { shouldHideByIds, hideDangerousChats } = useQuickHide()
+  const { shouldHideChat } = useQuickHide()
   const visibleChats = useMemo(
-    () => chats.filter(chat => {
-      if (hideDangerousChats && chat.isDangerousChat) return false
-      return !shouldHideByIds((chat.tags || []).map(ct => ct.tag.id))
-    }),
-    [chats, shouldHideByIds, hideDangerousChats]
+    () => chats.filter(chat => !shouldHideChat({
+      characterTags: (chat.tags || []).map(ct => ct.tag.id),
+      conciergeState: chat.conciergeState,
+    })),
+    [chats, shouldHideChat]
   )
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)

@@ -10,6 +10,7 @@
 import { showConfirmation } from '@/lib/alert'
 import { showErrorToast } from '@/lib/toast'
 import type { ChatCardData } from '@/components/chat/ChatCard'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 
 // ----------------------------------------------------------------------------
 // Salon list — chats with full participant + project metadata
@@ -40,7 +41,8 @@ export interface SalonChatShape {
   tags: Array<{ tag: { id: string; name: string } }>
   project: { id: string; name: string; color: string | null } | null
   storyBackground: { id: string; filepath: string } | null
-  isDangerousChat?: boolean
+  conciergeState?: ConciergeState
+  dangerCategories?: string[]
   chatType?: 'salon' | 'help' | 'autonomous' | 'brahma'
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
   _count: { messages: number; memories?: number }
@@ -70,7 +72,8 @@ export function transformSalonChatToCardData(chat: SalonChatShape): ChatCardData
     updatedAt: chat.updatedAt,
     project: chat.project,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
-    isDangerousChat: chat.isDangerousChat === true,
+    conciergeState: chat.conciergeState,
+    dangerCategories: chat.dangerCategories,
     isAutonomous: chat.chatType === 'autonomous',
     scriptoriumStatus: chat.scriptoriumStatus ?? 'none',
   }
@@ -98,7 +101,8 @@ export interface CharacterChatShape {
   storyBackground?: { id: string; filepath: string } | null
   messages: CharacterChatMessageShape[]
   tags?: Array<{ tag: { id: string; name: string } }>
-  isDangerousChat?: boolean
+  conciergeState?: ConciergeState
+  dangerCategories?: string[]
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
   _count?: { messages: number; memories?: number }
 }
@@ -126,7 +130,8 @@ export function transformCharacterChatToCardData(chat: CharacterChatShape): Chat
     userCharacter: chat.userCharacter || null,
     previewText: getCharacterChatPreview(chat.messages),
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
-    isDangerousChat: chat.isDangerousChat === true,
+    conciergeState: chat.conciergeState,
+    dangerCategories: chat.dangerCategories,
     scriptoriumStatus: chat.scriptoriumStatus || 'none',
   }
 }

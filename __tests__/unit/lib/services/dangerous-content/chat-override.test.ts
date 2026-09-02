@@ -8,6 +8,7 @@
 
 import {
   getConciergeState,
+  conciergeStateUsesUncensoredRoute,
   shouldUseUncensoredRoute,
   shouldShowDangerStyling,
   isClassifierOnDuty,
@@ -58,6 +59,20 @@ describe('shouldUseUncensoredRoute', () => {
 
   it.each(TABLE)('returns $uncensoredRoute for $state (override=$chat.conciergeOverride, dangerous=$chat.isDangerousChat)', ({ chat, uncensoredRoute }) => {
     expect(shouldUseUncensoredRoute(chat)).toBe(uncensoredRoute)
+  })
+})
+
+describe('conciergeStateUsesUncensoredRoute', () => {
+  it('is the bottom row of the 2×2 and nothing else', () => {
+    expect(conciergeStateUsesUncensoredRoute('monitored')).toBe(false)
+    expect(conciergeStateUsesUncensoredRoute('vouched')).toBe(false)
+    expect(conciergeStateUsesUncensoredRoute('flagged')).toBe(true)
+    expect(conciergeStateUsesUncensoredRoute('uncensored')).toBe(true)
+  })
+
+  it.each(TABLE)('agrees with shouldUseUncensoredRoute for $state (override=$chat.conciergeOverride, dangerous=$chat.isDangerousChat)', ({ chat, state, uncensoredRoute }) => {
+    expect(conciergeStateUsesUncensoredRoute(state)).toBe(uncensoredRoute)
+    expect(conciergeStateUsesUncensoredRoute(getConciergeState(chat))).toBe(shouldUseUncensoredRoute(chat))
   })
 })
 

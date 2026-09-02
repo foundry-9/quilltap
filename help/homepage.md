@@ -31,6 +31,14 @@ This section displays your most recently active conversations, showing:
 - **Participants** — Character avatars showing who's involved
 - **Last updated** — When the chat was last active
 - **Message count** — How many messages are in the conversation
+- **The Concierge's mark** — A small asterisk beside the message count, worn
+  only by a conversation on which the Concierge's default arrangement no longer
+  stands. It comes in three shades: **red**, and the Concierge has taken the
+  measure of the conversation himself and found it dangerous; **grey**, and you
+  have vouched for it, sending him politely away; **blue**, and you have opened
+  the uncensored door with your own hand. A conversation he is merely keeping a
+  companionable eye on wears no mark at all. Rest the pointer on any asterisk
+  and he will explain himself at length, and tell you where the switch is kept.
 
 You can click any recent chat to jump back into the conversation, or hover over a chat to hide it if you want to keep your list cleaner.
 

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useSession } from '@/components/providers/session-provider'
+import { conciergeStateUsesUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 
 interface QuickHideTag {
   id: string
@@ -25,7 +26,13 @@ interface QuickHideContextValue {
   clearAllHidden: () => void
   refresh: () => Promise<void>
   shouldHideByIds: (tagIds?: Array<string | null | undefined>) => boolean
-  shouldHideChat: (chat: { characterTags?: string[]; isDangerous?: boolean }) => boolean
+  /**
+   * THE quick-hide rule for a chat, in one place. "Dangerous Chats" hides
+   * whatever takes the uncensored route — Flagged (the Concierge's verdict)
+   * and Uncensored (the operator's) — never a Vouched Safe chat that merely
+   * carries a preserved label underneath.
+   */
+  shouldHideChat: (chat: { characterTags?: Array<string | null | undefined>; conciergeState?: ConciergeState }) => boolean
 }
 
 const STORAGE_KEY = 'quilltap.quickHide.activeTags'
@@ -196,11 +203,11 @@ export function QuickHideProvider({ children }: { children: React.ReactNode }) {
   )
 
   const shouldHideChat = useCallback(
-    (chat: { characterTags?: string[]; isDangerous?: boolean }) => {
+    (chat: { characterTags?: Array<string | null | undefined>; conciergeState?: ConciergeState }) => {
       if (shouldHideByIds(chat.characterTags)) {
         return true
       }
-      if (hideDangerousChats && chat.isDangerous) {
+      if (hideDangerousChats && chat.conciergeState && conciergeStateUsesUncensoredRoute(chat.conciergeState)) {
         return true
       }
       return false

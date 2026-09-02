@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals'
-import { screen, fireEvent, waitFor } from '@testing-library/react'
+import { screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { renderWithQuery as render } from '../../../helpers/renderWithQuery'
 import React from 'react'
 import { WelcomeSection } from '@/components/homepage/WelcomeSection'
@@ -25,6 +25,8 @@ import { ProjectItem } from '@/components/homepage/ProjectItem'
 import { CharactersSection } from '@/components/homepage/CharactersSection'
 import { CharacterCard } from '@/components/homepage/CharacterCard'
 import type { RecentChat, HomepageProject, HomepageCharacter } from '@/components/homepage/types'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { conciergeStateUsesUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 
 // Mock next/link
 jest.mock('next/link', () => {
@@ -126,12 +128,32 @@ jest.mock('@/app/prospero/components', () => ({
   },
 }))
 
-// Mock useQuickHide provider
+// Mock useQuickHide provider. Lists now ask the provider one question —
+// shouldHideChat — so the rule (tags plus the Concierge's uncensored row)
+// lives in exactly one place.
 jest.mock('@/components/providers/quick-hide-provider', () => ({
   useQuickHide: jest.fn(() => ({
+    shouldHideChat: jest.fn(() => false),
     shouldHideByIds: jest.fn(() => false),
   })),
 }))
+
+const mockUseQuickHide = require('@/components/providers/quick-hide-provider').useQuickHide
+
+/** Point the provider mock at a hide predicate for one test. */
+function stubQuickHide(shouldHideChat: (chat: { characterTags?: string[]; conciergeState?: ConciergeState }) => boolean) {
+  const spy = jest.fn(shouldHideChat)
+  mockUseQuickHide.mockReturnValue({ shouldHideChat: spy, shouldHideByIds: jest.fn(() => false) })
+  return spy
+}
+
+// Every test starts with nothing hidden; the ones that care call stubQuickHide.
+beforeEach(() => {
+  mockUseQuickHide.mockReturnValue({
+    shouldHideChat: jest.fn(() => false),
+    shouldHideByIds: jest.fn(() => false),
+  })
+})
 
 // Test data factories
 function createMockRecentChat(overrides: Partial<RecentChat> = {}): RecentChat {
@@ -156,6 +178,8 @@ function createMockRecentChat(overrides: Partial<RecentChat> = {}): RecentChat {
       },
     ],
     _count: { messages: 42 },
+    conciergeState: 'monitored',
+    dangerCategories: [],
     ...overrides,
   }
 }
@@ -513,6 +537,112 @@ describe('RecentChatItem', () => {
   })
 })
 
+describe('RecentChatItem — the Concierge mark', () => {
+  // The asterisk marks any state other than the default, in the same three
+  // tones as the Salon header's pill. Monitored is the default and wears
+  // nothing.
+  it('draws no mark for a Monitored chat', () => {
+    const { container } = render(<RecentChatItem chat={createMockRecentChat({ conciergeState: 'monitored' })} />)
+    expect(container.querySelector('.qt-concierge-mark')).toBeNull()
+  })
+
+  it('draws no mark when the payload carries no state at all', () => {
+    const { container } = render(<RecentChatItem chat={createMockRecentChat({ conciergeState: undefined })} />)
+    expect(container.querySelector('.qt-concierge-mark')).toBeNull()
+  })
+
+  it.each([
+    ['flagged', 'Concierge: Flagged', ['qt-concierge-mark-muted', 'qt-concierge-mark-info']],
+    ['vouched', 'Concierge: Vouched Safe', ['qt-concierge-mark-info']],
+    ['uncensored', 'Concierge: Uncensored', ['qt-concierge-mark-muted']],
+  ] as const)('marks a %s chat and labels it "%s"', (conciergeState, label, absentModifiers) => {
+    const { container } = render(
+      <RecentChatItem chat={createMockRecentChat({ conciergeState })} />
+    )
+
+    const mark = screen.getByLabelText(label)
+    expect(mark).toHaveTextContent('*')
+    expect(mark).toHaveClass('qt-concierge-mark')
+    for (const absent of absentModifiers) {
+      expect(container.querySelector(`.${absent}`)).toBeNull()
+    }
+  })
+
+  it('gives each state its own tone class', () => {
+    // Red is the base rule (no modifier); grey and blue are modifiers.
+    const flagged = render(<RecentChatItem chat={createMockRecentChat({ conciergeState: 'flagged' })} />)
+    expect(flagged.container.querySelector('.qt-concierge-mark')?.className).toBe('qt-concierge-mark')
+    flagged.unmount()
+
+    const vouched = render(<RecentChatItem chat={createMockRecentChat({ conciergeState: 'vouched' })} />)
+    expect(vouched.container.querySelector('.qt-concierge-mark')).toHaveClass('qt-concierge-mark-muted')
+    vouched.unmount()
+
+    const uncensored = render(<RecentChatItem chat={createMockRecentChat({ conciergeState: 'uncensored' })} />)
+    expect(uncensored.container.querySelector('.qt-concierge-mark')).toHaveClass('qt-concierge-mark-info')
+  })
+
+  describe('the tooltip', () => {
+    beforeEach(() => { jest.useFakeTimers() })
+    afterEach(() => { jest.runOnlyPendingTimers(); jest.useRealTimers() })
+
+    it('explains the state after the pointer has dwelt on the mark', () => {
+      render(<RecentChatItem chat={createMockRecentChat({ conciergeState: 'vouched' })} />)
+      const mark = screen.getByLabelText('Concierge: Vouched Safe')
+
+      expect(screen.queryByRole('tooltip', { hidden: true })).toBeNull()
+
+      fireEvent.pointerEnter(mark)
+      act(() => { jest.advanceTimersByTime(250) })
+
+      const bubble = screen.getByRole('tooltip', { hidden: true })
+      expect(bubble).toHaveTextContent('Vouched Safe')
+      expect(bubble).toHaveTextContent('The Concierge stops watching')
+      expect(bubble).toHaveTextContent("Change it from the Salon sidebar's Chat section.")
+    })
+
+    it("names the classifier's categories on a Flagged chat", () => {
+      render(
+        <RecentChatItem
+          chat={createMockRecentChat({ conciergeState: 'flagged', dangerCategories: ['NSFW', 'Violence'] })}
+        />
+      )
+
+      fireEvent.pointerEnter(screen.getByLabelText('Concierge: Flagged'))
+      act(() => { jest.advanceTimersByTime(250) })
+
+      const bubble = screen.getByRole('tooltip', { hidden: true })
+      expect(bubble).toHaveTextContent('Categories')
+      expect(bubble).toHaveTextContent('NSFW, Violence')
+    })
+
+    it('never surfaces a preserved category list on an operator state', () => {
+      render(
+        <RecentChatItem
+          chat={createMockRecentChat({ conciergeState: 'uncensored', dangerCategories: ['NSFW'] })}
+        />
+      )
+
+      fireEvent.pointerEnter(screen.getByLabelText('Concierge: Uncensored'))
+      act(() => { jest.advanceTimersByTime(250) })
+
+      expect(screen.getByRole('tooltip', { hidden: true })).not.toHaveTextContent('Categories')
+    })
+  })
+
+  it('still opens the chat when the mark itself is clicked', () => {
+    // The mark sits inside the row's <Link>; it must not swallow the click.
+    const onClick = jest.fn()
+    const { container } = render(<RecentChatItem chat={createMockRecentChat({ conciergeState: 'flagged' })} />)
+    const link = container.querySelector('a')!
+    link.addEventListener('click', onClick)
+
+    fireEvent.click(screen.getByLabelText('Concierge: Flagged'))
+
+    expect(onClick).toHaveBeenCalled()
+  })
+})
+
 describe('RecentChatsSection', () => {
   it('renders section title', () => {
     const chats = [createMockRecentChat()]
@@ -585,11 +715,7 @@ describe('RecentChatsSection', () => {
   })
 
   it('filters chats based on quick-hide tags', () => {
-    // Mock shouldHideByIds to hide chats with 'hidden-tag'
-    const mockUseQuickHide = require('@/components/providers/quick-hide-provider').useQuickHide
-    mockUseQuickHide.mockReturnValue({
-      shouldHideByIds: jest.fn((tagIds: string[]) => tagIds?.includes('hidden-tag')),
-    })
+    stubQuickHide(chat => Boolean(chat.characterTags?.includes('hidden-tag')))
 
     const chats = [
       createMockRecentChat({
@@ -621,19 +747,10 @@ describe('RecentChatsSection', () => {
     render(<RecentChatsSection chats={chats} />)
     expect(screen.getByText('Visible Chat')).toBeInTheDocument()
     expect(screen.queryByText('Hidden Chat')).not.toBeInTheDocument()
-
-    // Reset mock to default
-    mockUseQuickHide.mockReturnValue({
-      shouldHideByIds: jest.fn(() => false),
-    })
   })
 
   it('shows empty state when all chats are hidden by quick-hide', () => {
-    // Mock shouldHideByIds to hide all chats
-    const mockUseQuickHide = require('@/components/providers/quick-hide-provider').useQuickHide
-    mockUseQuickHide.mockReturnValue({
-      shouldHideByIds: jest.fn(() => true),
-    })
+    stubQuickHide(() => true)
 
     const chats = [
       createMockRecentChat({
@@ -653,20 +770,10 @@ describe('RecentChatsSection', () => {
     render(<RecentChatsSection chats={chats} />)
     expect(screen.queryByText('Chat One')).not.toBeInTheDocument()
     expect(screen.getByText('No chats yet')).toBeInTheDocument()
-
-    // Reset mock to default
-    mockUseQuickHide.mockReturnValue({
-      shouldHideByIds: jest.fn(() => false),
-    })
   })
 
   it('collects tags from all character participants for filtering', () => {
-    // Mock to track what tags are passed
-    const mockShouldHideByIds = jest.fn(() => false)
-    const mockUseQuickHide = require('@/components/providers/quick-hide-provider').useQuickHide
-    mockUseQuickHide.mockReturnValue({
-      shouldHideByIds: mockShouldHideByIds,
-    })
+    const mockShouldHideChat = stubQuickHide(() => false)
 
     const chats = [
       createMockRecentChat({
@@ -695,13 +802,32 @@ describe('RecentChatsSection', () => {
 
     render(<RecentChatsSection chats={chats} />)
 
-    // Verify shouldHideByIds was called with all tags from all participants
-    expect(mockShouldHideByIds).toHaveBeenCalledWith(['tag-a', 'tag-b', 'tag-c'])
-
-    // Reset mock to default
-    mockUseQuickHide.mockReturnValue({
-      shouldHideByIds: jest.fn(() => false),
+    // Every tag from every participant, and the chat's derived state, go to
+    // the provider's one rule.
+    expect(mockShouldHideChat).toHaveBeenCalledWith({
+      characterTags: ['tag-a', 'tag-b', 'tag-c'],
+      conciergeState: 'monitored',
     })
+  })
+
+  it('hides the uncensored row and keeps the rest when "Dangerous Chats" is on', () => {
+    // The real rule, borrowed: hide whatever takes the uncensored route.
+    stubQuickHide(chat => Boolean(chat.conciergeState && conciergeStateUsesUncensoredRoute(chat.conciergeState)))
+
+    const chats = [
+      createMockRecentChat({ id: 'a', title: 'Watched Chat', conciergeState: 'monitored' }),
+      createMockRecentChat({ id: 'b', title: 'Flagged Chat', conciergeState: 'flagged' }),
+      createMockRecentChat({ id: 'c', title: 'Vouched Chat', conciergeState: 'vouched' }),
+      createMockRecentChat({ id: 'd', title: 'Uncensored Chat', conciergeState: 'uncensored' }),
+    ]
+
+    render(<RecentChatsSection chats={chats} />)
+
+    expect(screen.getByText('Watched Chat')).toBeInTheDocument()
+    // A vouched chat is no longer hidden, whatever label it preserves.
+    expect(screen.getByText('Vouched Chat')).toBeInTheDocument()
+    expect(screen.queryByText('Flagged Chat')).not.toBeInTheDocument()
+    expect(screen.queryByText('Uncensored Chat')).not.toBeInTheDocument()
   })
 })
 

@@ -22,6 +22,8 @@ import { DAY_GRANULARITY_MS, useNow } from '@/hooks/useNow'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
 import { chatActivityAt } from '@/lib/chat/chat-activity'
+import { ConciergeMark } from '@/components/chat/ConciergeMark'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 
 // ============================================================================
 // Types
@@ -76,8 +78,10 @@ export interface ChatCardData {
   previewText?: string | null
   /** Story background image URL - displayed instead of avatars when present */
   storyBackgroundUrl?: string | null
-  /** Whether this chat has been classified as dangerous */
-  isDangerousChat?: boolean
+  /** The derived Concierge four-state — never the raw danger label */
+  conciergeState?: ConciergeState
+  /** The classifier's categories, shown on the mark's tooltip when Flagged */
+  dangerCategories?: string[]
   /** Scriptorium rendering status: none = not rendered, rendered = markdown only, embedded = fully indexed */
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
   /** Whether this chat is an autonomous character-to-character room (4.6) */
@@ -285,8 +289,12 @@ export function ChatCard({
                   <Icon name="file" className="w-3 h-3" />
                 </button>
               )}
-              {chat.isDangerousChat && (
-                <span className="qt-text-destructive text-sm flex-shrink-0" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>
+              {chat.conciergeState && (
+                <ConciergeMark
+                  conciergeState={chat.conciergeState}
+                  dangerCategories={chat.dangerCategories}
+                  className="text-sm flex-shrink-0"
+                />
               )}
               {chat.isAutonomous && (
                 <span

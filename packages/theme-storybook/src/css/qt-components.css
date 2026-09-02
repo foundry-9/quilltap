@@ -1067,6 +1067,30 @@
   --qt-concierge-badge-color: var(--color-info, #2563eb);
 }
 
+/**
+ * Concierge mark — the list-view asterisk, on chat cards and the homepage's
+ * Recent Chats. Same three tones as the badge above and the same colour
+ * tokens, so a theme that retints one retints both. Monitored draws no mark,
+ * so there is no third modifier.
+ */
+.qt-concierge-mark {
+  --qt-concierge-mark-color: var(--color-destructive, #dc2626);
+  display: inline-block;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--qt-concierge-mark-color);
+}
+
+/* Vouched Safe — no colour: the Concierge isn't in the room. */
+.qt-concierge-mark-muted {
+  --qt-concierge-mark-color: var(--color-muted-foreground, #6b7280);
+}
+
+/* Uncensored — the eye you closed yourself. */
+.qt-concierge-mark-info {
+  --qt-concierge-mark-color: var(--color-info, #2563eb);
+}
+
 /* ==========================================================================
    WARDROBE SLOT BADGES
    ========================================================================== */

@@ -18,6 +18,7 @@ import { profileParams } from '@/lib/llm/cheap-llm';
 import { resolveSamplingParams } from '@/lib/llm/sampling-params';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { ensureFictionalBaseRealTime } from '@/lib/chat/timestamp-utils';
 import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/memory-recap';
@@ -888,14 +889,18 @@ async function handleList(req: NextRequest, context: RequestContext) {
 }
 
 /**
- * Check if any dangerous chats exist for the current user
+ * Does the user have anything for "Dangerous Chats" to hide?
+ *
+ * The toggle hides whatever takes the uncensored route — Flagged (the
+ * Concierge's verdict) and Uncensored (the operator's) — so the affordance
+ * appears on exactly that set, not on every chat carrying a preserved label.
  */
 async function handleHasDangerous(context: RequestContext) {
   const { user, repos } = context;
 
   try {
     const allChats = await repos.chats.findByUserId(user.id);
-    const hasDangerous = allChats.some((c: any) => c.isDangerousChat === true);
+    const hasDangerous = allChats.some((c) => shouldUseUncensoredRoute(c));
     return successResponse({ hasDangerous });
   } catch (error) {
     logger.error('[Chats v1] Error checking dangerous chats', {}, error instanceof Error ? error : undefined);
