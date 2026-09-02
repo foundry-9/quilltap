@@ -8,6 +8,8 @@
 #                                        Uncensored)
 #   CT-2  Operator states stay put      (no auto-override out of Vouched Safe
 #                                        or Uncensored)
+#   CT-3  State chosen at creation       (New Chat form's Concierge picker →
+#                                        POST /api/v1/chats conciergeState)
 #
 # How it works (and why):
 #   * State changes go through the HTTP PUT API — the exact code path the
@@ -41,6 +43,7 @@
 #   --arm              CT-2 scan-skip: set an operator state, stamp a baseline, exit
 #   --recheck          CT-2 scan-skip: verify no scan-enqueued job since the baseline
 #   --no-jest          Skip the CT-2 jest guard suites
+#   --no-ct3           Skip CT-3 (which creates and then deletes throwaway chats)
 #   --keep             Don't restore the chat's original state at the end
 #   -h, --help         This help
 # ---------------------------------------------------------------------------
@@ -55,6 +58,7 @@ BASE_URL="http://localhost:3000"
 CHAT="${CHAT:-}"
 MODE="run"          # run | dry | arm | recheck
 RUN_JEST=1
+RUN_CT3=1
 RESTORE=1
 DELAY="0.3"         # small settle after each PUT before reading via the CLI connection
 
@@ -68,8 +72,9 @@ while [ $# -gt 0 ]; do
     --arm)       MODE="arm"; shift ;;
     --recheck)   MODE="recheck"; shift ;;
     --no-jest)   RUN_JEST=0; shift ;;
+    --no-ct3)    RUN_CT3=0; shift ;;
     --keep)      RESTORE=0; shift ;;
-    -h|--help)   sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help)   sed -n '2,53p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*)          echo "Unknown option: $1" >&2; exit 2 ;;
     *)           CHAT="$1"; shift ;;
   esac
@@ -202,6 +207,122 @@ recheck_scan() {
   info "(If the server hasn't been up ≥10 min since arming, the scan may not have ticked yet — re-run later.)"
 }
 
+# ----- CT-3: the state chosen on the New Chat form ------------------------
+#
+# The Concierge picker moved onto the creation form, so `POST /api/v1/chats`
+# now takes a `conciergeState`. The route applies it through the same
+# `applyConciergeFlip` chokepoint the sidebar uses, between the SYSTEM prompt
+# message and everything else — so the created chat must carry the right stored
+# pair AND exactly one Concierge bubble, sitting after the prompt and before
+# the opening line. Every assertion is a read-only CLI query; the throwaway
+# chats are deleted through the API afterwards.
+
+# Expected (conciergeOverride, isDangerousChat) for a chat CREATED in a state.
+# The flag is only written by the Flagged branch; Vouched Safe and Uncensored
+# preserve whatever was underneath, which on a fresh row is nothing — so
+# "unflagged" is spelled `unset` and satisfied by either NULL or 0.
+ct3_state_pair() { # state -> "ov dg"
+  case "$1" in
+    flagged)    echo "null 1" ;;
+    vouched)    echo "OFF unset" ;;
+    uncensored) echo "UNCENSORED unset" ;;
+    *)          echo "null unset" ;;
+  esac
+}
+
+dg_matches() { # expected actual
+  if [ "$1" = "unset" ]; then
+    [ "$2" = "null" ] || [ "$2" = "0" ]
+  else
+    [ "$1" = "$2" ]
+  fi
+}
+
+ct3_create_chat() { # characterId profileId state ("" for "omit the field") -> new chat id
+  local body id
+  body="$(printf '{"title":"CT-3 throwaway","participants":[{"type":"CHARACTER","characterId":"%s","connectionProfileId":"%s","controlledBy":"llm"}]%s}' \
+            "$1" "$2" "$( [ -n "$3" ] && printf ',"conciergeState":"%s"' "$3" )")"
+  id="$(curl -s -X POST "$BASE_URL/api/v1/chats" \
+          -H 'Content-Type: application/json' -d "$body" | jq -r '.chat.id // empty')"
+  printf '%s' "$id"
+}
+
+ct3_delete_chat() { # chatId
+  curl -s -o /dev/null -X DELETE "$BASE_URL/api/v1/chats/$1"
+}
+
+ct3_case() { # state characterId profileId
+  local state="$1" charId="$2" profId="$3" newId pair exp_ov exp_dg ov dg n sys_rid con_rid
+  newId="$(ct3_create_chat "$charId" "$profId" "$state")"
+  if [ -z "$newId" ]; then
+    bad "CT-3 $state: POST /api/v1/chats returned no chat"
+    return
+  fi
+
+  pair="$(ct3_state_pair "$state")"; exp_ov="${pair%% *}"; exp_dg="${pair##* }"
+  ov="$(qv "SELECT conciergeOverride AS v FROM chats WHERE id='$newId'")"
+  dg="$(qv "SELECT isDangerousChat AS v FROM chats WHERE id='$newId'")"
+  if [ "$ov" = "$exp_ov" ] && dg_matches "$exp_dg" "$dg"; then
+    ok "CT-3 $state: created with (conciergeOverride=$ov, isDangerousChat=$dg) → pill: $(derived_pill "$ov" "$dg")"
+  else
+    bad "CT-3 $state: expected (ov=$exp_ov, dg=$exp_dg), got (ov=$ov, dg=$dg)"
+  fi
+
+  n="$(qv "SELECT COUNT(*) AS v FROM chat_messages WHERE chatId='$newId' AND systemSender='concierge'")"
+  [ "$n" = "null" ] && n=0
+  if [ "$n" = "1" ]; then
+    ok "CT-3 $state: exactly one Concierge bubble in the fresh history"
+  else
+    bad "CT-3 $state: expected 1 Concierge bubble, found $n"
+  fi
+
+  # rowid is insertion order on a SQLite rowid table — the SYSTEM prompt is
+  # written first, the Concierge's note second, the scene after that.
+  sys_rid="$(qv "SELECT MIN(rowid) AS v FROM chat_messages WHERE chatId='$newId' AND role='SYSTEM'")"
+  con_rid="$(qv "SELECT MIN(rowid) AS v FROM chat_messages WHERE chatId='$newId' AND systemSender='concierge'")"
+  if [ "$sys_rid" != "null" ] && [ "$con_rid" != "null" ] && [ "$con_rid" -gt "$sys_rid" ] 2>/dev/null; then
+    ok "CT-3 $state: the Concierge's note follows the system prompt"
+  else
+    bad "CT-3 $state: bubble placement wrong (system rowid=$sys_rid, concierge rowid=$con_rid)"
+  fi
+
+  ct3_delete_chat "$newId"
+  info "CT-3 $state: throwaway chat $newId deleted"
+}
+
+run_ct3() {
+  section "CT-3: the state chosen on the New Chat form (creation-time)"
+  local charId profId newId n ov dg
+  charId="$(qv "SELECT id AS v FROM characters WHERE controlledBy='llm' AND archivedAt IS NULL ORDER BY createdAt LIMIT 1")"
+  profId="$(qv "SELECT id AS v FROM connection_profiles ORDER BY createdAt LIMIT 1")"
+  if [ "$charId" = "null" ] || [ "$profId" = "null" ]; then
+    info "skipped — instance '$INSTANCE' has no LLM character and/or connection profile to build a chat from"
+    return
+  fi
+  info "cast: character=$charId profile=$profId (chats are created and then deleted)"
+
+  # Absence is the default: a plain create must stay exactly what it was.
+  newId="$(ct3_create_chat "$charId" "$profId" "")"
+  if [ -z "$newId" ]; then
+    bad "CT-3 omitted: POST /api/v1/chats returned no chat"
+  else
+    n="$(qv "SELECT COUNT(*) AS v FROM chat_messages WHERE chatId='$newId' AND systemSender='concierge'")"
+    [ "$n" = "null" ] && n=0
+    ov="$(qv "SELECT conciergeOverride AS v FROM chats WHERE id='$newId'")"
+    dg="$(qv "SELECT isDangerousChat AS v FROM chats WHERE id='$newId'")"
+    if [ "$ov" = "null" ] && dg_matches unset "$dg" && [ "$n" = "0" ]; then
+      ok "CT-3 omitted: created Monitored, no Concierge bubble"
+    else
+      bad "CT-3 omitted: expected Monitored with no bubble, got (ov=$ov, dg=$dg, bubbles=$n)"
+    fi
+    ct3_delete_chat "$newId"
+  fi
+
+  ct3_case flagged    "$charId" "$profId"
+  ct3_case vouched    "$charId" "$profId"
+  ct3_case uncensored "$charId" "$profId"
+}
+
 # ----- jest guard suites (CT-2 bail + derivation) --------------------------
 run_jest() {
   section "CT-2 guard suites (read-only, deterministic)"
@@ -236,6 +357,7 @@ if [ "$MODE" = "dry" ]; then
   check_pair "$ORIG_OV" "$ORIG_DG" "current pair readable"
   info "planned CT-1 walk: monitored → flagged → monitored → vouched → monitored → uncensored → monitored → flagged → vouched → uncensored"
   info "planned CT-2: flagged → vouched (preserve flag) → uncensored (preserve flag), then jest guards"
+  info "planned CT-3: create+delete four throwaway chats (omitted, flagged, vouched, uncensored)"
   printf "\n%sDry run OK.%s Re-run without --dry-run to execute (mutates the chat).\n" "$C_OK" "$C_RST"
   exit 0
 fi
@@ -266,6 +388,7 @@ transition uncensored UNCENSORED 1   "uncensored door stands open" "→Uncensore
 check_pair "UNCENSORED" "1" "Uncensored is stable (override wins, flag preserved underneath)"
 info "scan-skip over a live 10-min tick: run '$0 --chat $CHAT --arm' then '--recheck' later"
 
+[ "$RUN_CT3" -eq 1 ] && run_ct3
 [ "$RUN_JEST" -eq 1 ] && run_jest
 
 # restore

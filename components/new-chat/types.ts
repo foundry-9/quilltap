@@ -1,4 +1,5 @@
 import type { TimestampConfig } from '@/lib/schemas/types'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 /**
  * Scenario option shapes and dropdown tokens are shared with the Salon
  * sidebar's in-chat picker — they live in `components/scenario/types` and are
@@ -142,6 +143,14 @@ export interface NewChatAutonomousState {
 
 export interface NewChatFormState {
   imageProfileId: string
+  /**
+   * The Concierge state the chat is created with — the sidebar's four-state
+   * control, moved earlier in time so the choice is in force for the opening
+   * greeting. `'monitored'` is the default and is omitted from the create
+   * request; anything else is applied server-side through `applyConciergeFlip`
+   * right after the system-prompt message.
+   */
+  conciergeState: ConciergeState
   /**
    * Roleplay template for the new chat. Seeded with whatever the chat would
    * have defaulted to (project default > user/global default), and sent

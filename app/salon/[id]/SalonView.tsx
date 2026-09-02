@@ -1727,6 +1727,10 @@ export function SalonView({ chatId }: SalonViewProps) {
               ?.character?.id ?? null}
             initialImageProfileId={chat.imageProfileId ?? null}
             initialAvatarGenerationEnabled={chat.avatarGenerationEnabled ?? false}
+            /* A spicy conversation that changes venue stays spicy by default —
+               and the new chat's Concierge bubble says so, which the replayed
+               history alone would not. Overridable on the form. */
+            initialConciergeState={getConciergeState(chat)}
           />
         )}
 

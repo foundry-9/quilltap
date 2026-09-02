@@ -4,6 +4,30 @@
 
 ### 4.9-dev
 
+#### Added: the Concierge state can be chosen on the New Chat form
+
+The four-state Concierge control (Monitored / Flagged / Vouched Safe / Uncensored) could only be
+set after a chat existed, from the Salon sidebar. A conversation known in advance to be spicy had
+to be created Monitored, waited on, and then flipped — by which time the opening greeting had
+already gone out through the ordinary desk and might already have been refused.
+
+The New Chat form (both the modal and `/salon/new`) now carries a **The Concierge** dropdown above
+**Starting Scenario**, with the same four options in the same two optgroups as the sidebar and the
+same helper sentence underneath. The choice rides on `POST /api/v1/chats` as `conciergeState`, and
+the server applies it through the existing `applyConciergeFlip` chokepoint immediately after the
+system-prompt message and before any staff announcement or greeting — so the Concierge's bubble
+sits where the history says the state was set. "Continue Elsewhere" now seeds the picker from the
+source chat, so a change of venue keeps the conversation's posture.
+
+Greeting routing follows the chat rather than the global setting: `autoGenerateFirstMessage` now
+passes the fresh chat row to `resolveDangerousContentSettings`, and a Flagged or Uncensored chat
+generates its greeting on the uncensored provider first instead of only as a content-filter
+fallback. A Vouched Safe chat is never rerouted, even under a global `AUTO_ROUTE`, and an
+Uncensored chat reroutes even under a global `OFF`.
+
+Omitting the field (or sending `'monitored'`) produces exactly the request and the chat it always
+did. No schema, migration, export-schema or backup change.
+
 #### Changed: chat lists and Quick-hide follow the Concierge state, not the raw danger label
 
 The homepage's Recent Chats and every `ChatCard` list marked a chat with a red asterisk whenever

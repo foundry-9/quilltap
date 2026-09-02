@@ -19,6 +19,7 @@ import type {
   UserControlledCharacter,
 } from '../types'
 import type { TimestampConfig } from '@/lib/schemas/types'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import { toScenarioOption, type ScenarioPayload } from '@/components/scenario/types'
 
 interface UseNewChatOptions {
@@ -41,6 +42,12 @@ interface UseNewChatOptions {
   initialImageProfileId?: string | null
   initialAvatarGenerationEnabled?: boolean
   initialTimestampConfig?: TimestampConfig | null
+  /**
+   * Concierge state to pre-select (continuation mode). A spicy conversation
+   * that changes venue stays spicy by default; the user can still override it
+   * on the form before creating.
+   */
+  initialConciergeState?: ConciergeState | null
   /**
    * When true, the form starts in autonomous-room mode: `state.autonomous.enabled`
    * is true at mount, and freshness-window / visibility defaults are seeded
@@ -106,6 +113,7 @@ interface UseNewChatReturn {
 
 const INITIAL_STATE: NewChatFormState = {
   imageProfileId: '',
+  conciergeState: 'monitored',
   roleplayTemplateId: null,
   roleplayTemplateTouched: false,
   scenario: '',
@@ -151,6 +159,7 @@ export function useNewChat({
   initialImageProfileId,
   initialAvatarGenerationEnabled,
   initialTimestampConfig,
+  initialConciergeState,
   initialAutonomous = false,
 }: UseNewChatOptions = {}): UseNewChatReturn {
   const navigate = useWorkspaceNavigate()
@@ -506,6 +515,7 @@ export function useNewChat({
               initialAvatarGenerationEnabled ??
               loadedProject?.defaultAvatarGenerationEnabled ??
               prev.avatarGenerationEnabled,
+            conciergeState: initialConciergeState ?? prev.conciergeState,
           }))
         }
         // Seed selected character + defaults when initialCharacterId is provided
@@ -631,6 +641,7 @@ export function useNewChat({
     initialUserCharacterId,
     initialImageProfileId,
     initialAvatarGenerationEnabled,
+    initialConciergeState,
     selectedLlmCharacterIdsKey,
     showArchivedScenarios,
   ])
@@ -759,6 +770,13 @@ export function useNewChat({
 
       if (state.imageProfileId) {
         requestBody.imageProfileId = state.imageProfileId
+      }
+
+      // Omitted when Monitored so a plain create stays byte-identical to what it
+      // has always been; the server treats absence and 'monitored' the same way
+      // (no write, no Concierge bubble).
+      if (state.conciergeState !== 'monitored') {
+        requestBody.conciergeState = state.conciergeState
       }
 
       // Sent — including `null` for "No Template" — so the value the user saw in

@@ -10,6 +10,11 @@ import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalE
 import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import type { TimestampConfig } from '@/lib/schemas/types'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import {
+  CONCIERGE_STATE_PRESENTATION,
+  conciergeToneTextClass,
+} from '@/lib/services/dangerous-content/concierge-state-presentation'
 import { AutonomousRoomCard } from './AutonomousRoomCard'
 import type {
   ConnectionProfile,
@@ -352,6 +357,19 @@ export function NewChatForm({
     [setState]
   )
 
+  const handleConciergeStateChange = useCallback(
+    (next: ConciergeState) => {
+      setState((prev) => ({ ...prev, conciergeState: next }))
+    },
+    [setState]
+  )
+
+  // Label, icon, tone and helper sentence all come from the shared presentation
+  // table — the same one the Salon sidebar's control reads — so a copy edit
+  // lands on both. The `hint` ("Change it from the Salon sidebar…") is
+  // deliberately not shown: the reader is looking at the control that sets it.
+  const conciergePresentation = CONCIERGE_STATE_PRESENTATION[state.conciergeState]
+
   const isAutonomous = state.autonomous.enabled
   const updateAutonomous = useCallback(
     (patch: Partial<NewChatAutonomousState>) => {
@@ -548,6 +566,37 @@ export function NewChatForm({
               No image profiles configured.
             </p>
           )}
+        </div>
+
+        {/* The Concierge — settle the chat's state before the first word is
+            spoken, so the opening greeting is generated under it. */}
+        <div>
+          <label htmlFor="new-chat-concierge" className="mb-2 block text-sm qt-text-primary">
+            <span className="flex items-center gap-1.5">
+              The Concierge
+              <Icon
+                name={conciergePresentation.icon}
+                className={`w-3.5 h-3.5 ${conciergeToneTextClass(conciergePresentation.tone)}`}
+              />
+            </span>
+          </label>
+          <select
+            id="new-chat-concierge"
+            value={state.conciergeState}
+            onChange={(e) => handleConciergeStateChange(e.target.value as ConciergeState)}
+            disabled={creating}
+            className="qt-select"
+          >
+            <optgroup label="The Concierge decides">
+              <option value="monitored">Monitored (default)</option>
+              <option value="flagged">Flagged</option>
+            </optgroup>
+            <optgroup label="You decide">
+              <option value="vouched">Vouched Safe</option>
+              <option value="uncensored">Uncensored</option>
+            </optgroup>
+          </select>
+          <p className="qt-text-xs qt-text-muted mt-1">{conciergePresentation.detail}</p>
         </div>
 
         <div>

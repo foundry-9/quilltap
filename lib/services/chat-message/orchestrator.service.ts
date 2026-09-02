@@ -582,8 +582,8 @@ async function processMessage(
   // ============================================================================
   // Project + General Context Re-injection (Phase E: Prospero whisper)
   // ============================================================================
-  // The chat-start whisper is posted by `createInitialMessages` when the chat
-  // is created. Here we handle the cadence-based refresh: every
+  // The chat-start whisper is posted by `createInitialMessagesScenarioAndStaff`
+  // when the chat is created. Here we handle the cadence-based refresh: every
   // `projectContextReinjectInterval` messages we post a fresh Prospero
   // context whisper into the transcript so the LLM keeps the project's
   // description / instructions / linked stores in mind alongside the

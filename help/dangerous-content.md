@@ -217,7 +217,9 @@ The practical upshot is that an image-bearing turn is no longer the one turn the
 
 ## The Per-Chat Concierge Switch
 
-Every chat keeps a small brass switch in the sidebar — found under the **Chat** section of the Chat Sidebar — bearing four positions arranged under two headings: **The Concierge decides** (Monitored, Flagged) and **You decide** (Vouched Safe, Uncensored). It is the only place a chat's relationship with the Concierge may be set, adjusted, or — should the operator so insist — dispensed with entirely.
+Every chat keeps a small brass switch in the sidebar — found under the **Chat** section of the Chat Sidebar — bearing four positions arranged under two headings: **The Concierge decides** (Monitored, Flagged) and **You decide** (Vouched Safe, Uncensored). It is where a chat's relationship with the Concierge is adjusted, reconsidered, or — should the operator so insist — dispensed with entirely.
+
+The same four positions, in the same two companies, are also offered on the **new-chat form**, above **Starting Scenario**, for the conversations whose character is not in doubt before they begin. A posture chosen there is in force from the very first word: the Concierge posts his note at the top of the fresh history, and the opening greeting is composed under the arrangement rather than discovering it after a refusal. See [Chats Overview](chats.md) for the particulars. Everything below applies identically whichever of the two controls you reached for.
 
 Two questions, taken together, place a chat on the switch. *Who decided* — the Concierge's classifier, or you? And *which route does the chat take* — the ordinary providers, or the uncensored ones?
 

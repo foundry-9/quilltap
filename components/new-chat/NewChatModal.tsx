@@ -10,6 +10,7 @@ import { NewChatForm } from './NewChatForm'
 import { CharacterPickerPanel } from './CharacterPickerPanel'
 import { useNewChat } from './hooks'
 import type { TimestampConfig } from '@/lib/schemas/types'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { PreviousOutfitSummary } from '@/components/wardrobe'
 
 interface ChatSettingsResponse {
@@ -46,6 +47,8 @@ interface NewChatModalProps {
   initialAvatarGenerationEnabled?: boolean
   /** Timestamp config to pre-fill (continuation mode). */
   initialTimestampConfig?: TimestampConfig | null
+  /** Concierge state to pre-fill (continuation mode). */
+  initialConciergeState?: ConciergeState | null
   /** Open in autonomous-room creation mode (≥2 LLM cast, no user character). */
   autonomous?: boolean
 }
@@ -63,6 +66,7 @@ export function NewChatModal({
   initialImageProfileId,
   initialAvatarGenerationEnabled,
   initialTimestampConfig,
+  initialConciergeState,
   autonomous,
 }: NewChatModalProps) {
   const router = useRouter()
@@ -143,6 +147,7 @@ export function NewChatModal({
     initialImageProfileId: isOpen ? initialImageProfileId : undefined,
     initialAvatarGenerationEnabled: isOpen ? initialAvatarGenerationEnabled : undefined,
     initialTimestampConfig: isOpen ? initialTimestampConfig : undefined,
+    initialConciergeState: isOpen ? initialConciergeState : undefined,
     initialAutonomous: isOpen ? autonomous : undefined,
   })
 

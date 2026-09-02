@@ -18,7 +18,8 @@ import { profileParams } from '@/lib/llm/cheap-llm';
 import { resolveSamplingParams } from '@/lib/llm/sampling-params';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
-import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { ensureFictionalBaseRealTime } from '@/lib/chat/timestamp-utils';
 import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/memory-recap';
@@ -26,7 +27,7 @@ import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { z } from 'zod';
-import type { ChatEvent, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
+import type { ChatEvent, ChatMetadata, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';
 import { Cron } from 'croner';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
@@ -42,7 +43,7 @@ import {
   type OutfitSelectionContext,
 } from '@/lib/wardrobe/apply-outfit-selections';
 import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
-import { createCreationProgressEmitter } from '@/lib/chat/creation-progress';
+import { createCreationProgressEmitter, type CreationProgressEmitter } from '@/lib/chat/creation-progress';
 import { notFound, badRequest, serverError, successResponse, created } from '@/lib/api/responses';
 import {
   enrichParticipantSummary,
@@ -133,6 +134,16 @@ const createChatSchema = z.object({
    * Omit the key entirely to fall back to that default chain.
    */
   roleplayTemplateId: z.uuid().nullable().optional(),
+  /**
+   * Per-chat Concierge state to set at creation, using the same enum as the
+   * sidebar's PUT `conciergeState`. Omitted or 'monitored' → the chat is created
+   * Monitored exactly as today (no write, no announcement). Any other value is
+   * applied through `applyConciergeFlip` after the system-prompt message and
+   * before any staff announcement or greeting, so the Concierge's bubble sits
+   * where the history says the state was set and the opening greeting is
+   * generated under the chosen state.
+   */
+  conciergeState: z.enum(['monitored', 'flagged', 'vouched', 'uncensored']).optional(),
   outfitSelections: z.array(OutfitSelectionSchema).optional(), // Per-character outfit selections for chat start
   avatarGenerationEnabled: z.boolean().optional(), // Enable auto-generated character avatars on outfit changes
   /**
@@ -351,6 +362,32 @@ async function writeSystemPromptMessage(
   await repos.chats.addMessage(chatId, systemMessage);
 }
 
+/**
+ * Apply a Concierge state requested at creation. Runs after the system-prompt
+ * message and before any staff announcement or greeting, so the Concierge's
+ * bubble is the first thing in the history after the prompt and the greeting is
+ * generated under the chosen state. Monitored (or absence) is a no-op:
+ * `applyConciergeFlip` compares against the fresh row and does nothing.
+ *
+ * The route runs in the parent process, so the announcement's write lands
+ * immediately — every later reader (the greeting's own `findById`, the
+ * scheduled danger scan, memory extraction, story backgrounds) sees the pair.
+ */
+async function applyRequestedConciergeState(
+  chat: ChatMetadata,
+  requested: ConciergeState | undefined,
+  progress: CreationProgressEmitter,
+): Promise<void> {
+  if (!requested || requested === 'monitored') return;
+  progress.status('Briefing the Concierge…');
+  const result = await applyConciergeFlip(chat.id, requested, chat);
+  logger.debug('[Chats v1] Applied Concierge state at creation', {
+    chatId: chat.id,
+    requested,
+    changed: result.changed,
+  });
+}
+
 interface ScenarioAndStaffOptions {
   /**
    * Skip the auto-generated first character message. Set true on the
@@ -562,31 +599,6 @@ async function createInitialMessagesScenarioAndStaff(
 }
 
 /**
- * Backwards-compatible wrapper for the legacy non-continuation call site.
- * Writes the system prompt and then runs the scenario-and-staff phase.
- */
-async function createInitialMessages(
-  chatId: string,
-  context: ChatContext,
-  participants: ChatParticipantBaseInput[],
-  userId: string,
-  repos: Repos,
-  projectId?: string | null,
-  scenarioText?: string | null,
-): Promise<void> {
-  await writeSystemPromptMessage(chatId, context, repos);
-  await createInitialMessagesScenarioAndStaff(
-    chatId,
-    context,
-    participants,
-    userId,
-    repos,
-    projectId,
-    scenarioText,
-  );
-}
-
-/**
  * A generated opening greeting. `reasoningContent` is the thinking a
  * reasoning model produced while composing it — DISPLAY ONLY, persisted onto
  * the greeting message so the Salon renders its thinking fold like any other
@@ -694,6 +706,110 @@ async function autoGenerateFirstMessage(
     profileParameters: profileParams(connectionProfile),
   };
 
+  // The chat's own Concierge state decides which desk this greeting goes to.
+  // `applyRequestedConciergeState` has already written the pair by the time the
+  // scenario-and-staff phase reaches the greeting, so a chat created Uncensored
+  // asks the frank desk first instead of discovering it after a refusal.
+  const chatRow = await repos.chats.findById(chatId);
+
+  /**
+   * Generate the greeting on the Concierge's uncensored desk. Returns null when
+   * there is nothing to reroute to (the resolved mode isn't `AUTO_ROUTE`, no
+   * uncensored profile is configured, its key is unusable) or the attempt came
+   * back empty, so the caller falls through to the participant's own profile.
+   *
+   * The resolver is asked WITH the chat: a Vouched Safe chat collapses to
+   * `mode: 'OFF'` and never reroutes, and an Uncensored chat reroutes even when
+   * the global mode is `OFF`.
+   */
+  const generateViaUncensoredDesk = async (
+    trigger: 'chat-state' | 'content-filter',
+  ): Promise<GeneratedGreeting | null> => {
+    const chatSettings = await repos.chatSettings.findByUserId(userId);
+    const resolved = resolveDangerousContentSettings(chatSettings, chatRow);
+
+    if (resolved.settings.mode !== 'AUTO_ROUTE') {
+      return null;
+    }
+
+    const routeResult = await resolveProviderForDangerousContent(
+      connectionProfile,
+      apiKey,
+      resolved.settings,
+      userId
+    );
+
+    if (!routeResult.rerouted) {
+      return null;
+    }
+
+    logger.info('[Chats v1] Generating greeting on the Concierge uncensored provider', {
+      characterId: context.character.id,
+      trigger,
+      settingsSource: resolved.source,
+      uncensoredProfile: routeResult.connectionProfile.name,
+      uncensoredProvider: routeResult.connectionProfile.provider,
+      uncensoredModel: routeResult.connectionProfile.modelName,
+    });
+
+    const uncensoredParams = routeResult.connectionProfile.parameters as Record<string, unknown> | undefined;
+    // Each knob falls back to the character's own profile independently,
+    // so an uncensored profile that only sets a temperature still borrows
+    // the original's Max Tokens and Top P.
+    const uncensoredSampling = resolveSamplingParams(uncensoredParams ?? {});
+
+    const result = await generateGreetingMessage({
+      ...loggingFields,
+      systemPrompt: context.systemPrompt,
+      characterName: context.character.name,
+      provider: routeResult.connectionProfile.provider,
+      modelName: routeResult.connectionProfile.modelName,
+      baseUrl: routeResult.connectionProfile.baseUrl,
+      apiKey: routeResult.apiKey,
+      temperature: uncensoredSampling.temperature ?? sampling.temperature,
+      maxTokens: uncensoredSampling.maxTokens ?? sampling.maxTokens,
+      topP: uncensoredSampling.topP ?? sampling.topP,
+      participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
+      projectContext,
+      recentConversationsBlock: recentConversationsBlock || undefined,
+    });
+
+    if (!result.content) {
+      return null;
+    }
+
+    logger.info('[Chats v1] Greeting generation succeeded via Concierge uncensored provider', {
+      characterId: context.character.id,
+      trigger,
+      provider: routeResult.connectionProfile.provider,
+      model: routeResult.connectionProfile.modelName,
+    });
+    return { content: result.content, reasoningContent: result.reasoningContent };
+  };
+
+  // Attempt 0: a Flagged or Uncensored chat opens at the uncensored desk. The
+  // three-attempt ladder below (with memories → without → uncensored on a
+  // content filter) stays the path for Monitored and Vouched Safe chats.
+  let uncensoredDeskTried = false;
+  if (shouldUseUncensoredRoute(chatRow)) {
+    uncensoredDeskTried = true;
+    try {
+      const rerouted = await generateViaUncensoredDesk('chat-state');
+      if (rerouted) {
+        return rerouted;
+      }
+      logger.info('[Chats v1] Uncensored desk unavailable or empty for greeting — using the participant’s own profile', {
+        characterId: context.character.id,
+        chatId,
+      });
+    } catch (error) {
+      logger.warn('[Chats v1] Concierge uncensored greeting attempt failed', {
+        characterId: context.character.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   // Track whether any attempt hit a content filter so we can try the Concierge fallback
   let contentFilterHit = false;
 
@@ -754,59 +870,18 @@ async function autoGenerateFirstMessage(
     }
   }
 
-  // Attempt 3: If content filter was detected, try the Concierge uncensored provider
-  if (contentFilterHit) {
+  // Attempt 3: If a content filter was detected, try the Concierge uncensored
+  // provider — unless the chat's own state already sent us there first, in which
+  // case there is nothing new to try. A Vouched Safe chat resolves to
+  // `mode: 'OFF'` inside the helper and never reroutes, whatever the globe says.
+  if (contentFilterHit && !uncensoredDeskTried) {
     try {
-      const chatSettings = await repos.chatSettings.findByUserId(userId);
-      const resolved = resolveDangerousContentSettings(chatSettings);
-
-      if (resolved.settings.mode === 'AUTO_ROUTE') {
-        const routeResult = await resolveProviderForDangerousContent(
-          connectionProfile,
-          apiKey,
-          resolved.settings,
-          userId
-        );
-
-        if (routeResult.rerouted) {
-          logger.info('[Chats v1] Content filter detected on greeting — falling back to Concierge uncensored provider', {
-            characterId: context.character.id,
-            uncensoredProfile: routeResult.connectionProfile.name,
-            uncensoredProvider: routeResult.connectionProfile.provider,
-            uncensoredModel: routeResult.connectionProfile.modelName,
-          });
-
-          const uncensoredParams = routeResult.connectionProfile.parameters as Record<string, unknown> | undefined;
-          // Each knob falls back to the character's own profile independently,
-          // so an uncensored profile that only sets a temperature still borrows
-          // the original's Max Tokens and Top P.
-          const uncensoredSampling = resolveSamplingParams(uncensoredParams ?? {});
-
-          const result = await generateGreetingMessage({
-            ...loggingFields,
-            systemPrompt: context.systemPrompt,
-            characterName: context.character.name,
-            provider: routeResult.connectionProfile.provider,
-            modelName: routeResult.connectionProfile.modelName,
-            baseUrl: routeResult.connectionProfile.baseUrl,
-            apiKey: routeResult.apiKey,
-            temperature: uncensoredSampling.temperature ?? sampling.temperature,
-            maxTokens: uncensoredSampling.maxTokens ?? sampling.maxTokens,
-            topP: uncensoredSampling.topP ?? sampling.topP,
-            participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
-            projectContext,
-            recentConversationsBlock: recentConversationsBlock || undefined,
-          });
-
-          if (result.content) {
-            logger.info('[Chats v1] Greeting generation succeeded via Concierge uncensored provider', {
-              characterId: context.character.id,
-              provider: routeResult.connectionProfile.provider,
-              model: routeResult.connectionProfile.modelName,
-            });
-            return { content: result.content, reasoningContent: result.reasoningContent };
-          }
-        }
+      logger.info('[Chats v1] Content filter detected on greeting — falling back to Concierge uncensored provider', {
+        characterId: context.character.id,
+      });
+      const rerouted = await generateViaUncensoredDesk('content-filter');
+      if (rerouted) {
+        return rerouted;
       }
     } catch (error) {
       logger.warn('[Chats v1] Concierge fallback for greeting generation failed', {
@@ -1200,6 +1275,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     // skipping the auto first message.
     progress.status('Recalling the previous chapter…');
     await writeSystemPromptMessage(chat.id, chatContext, repos);
+    await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
     try {
       await applyChatContinuation({
         newChatId: chat.id,
@@ -1230,6 +1306,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     // "Hello!" message — there's no user to greet, and the first turn is
     // produced by the per-room procedure when the run starts.
     await writeSystemPromptMessage(chat.id, chatContext, repos);
+    await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
     await createInitialMessagesScenarioAndStaff(
       chat.id,
       chatContext,
@@ -1241,8 +1318,13 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
       { skipFirstMessage: true },
     );
   } else {
+    // Ordinary flow: system prompt → the Concierge's note (when a non-Monitored
+    // state was picked on the New Chat form) → the scene and the greeting, which
+    // is then generated under the chosen state.
     progress.status('Setting the opening scene…');
-    await createInitialMessages(
+    await writeSystemPromptMessage(chat.id, chatContext, repos);
+    await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
+    await createInitialMessagesScenarioAndStaff(
       chat.id,
       chatContext,
       participantsWithTimestamps,
