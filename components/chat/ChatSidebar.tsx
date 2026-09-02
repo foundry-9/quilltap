@@ -25,6 +25,10 @@ import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { triggerUrlDownload } from '@/lib/download-utils'
 import { getConciergeState, shouldShowDangerStyling, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import {
+  CONCIERGE_STATE_PRESENTATION,
+  conciergeToneTextClass,
+} from '@/lib/services/dangerous-content/concierge-state-presentation'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
 import type { TurnOrderEntry, TurnOrderStatus } from '@/lib/chat/turn-manager'
@@ -1125,22 +1129,15 @@ function ChatSection({
   // columns are the provenance (the Concierge's classifier vs the operator).
   // The optgroups carry the provenance structurally; the helper text names
   // the actor; the icon/color pair gives a third, colorblind-safe channel.
-  const conciergeHelperText =
-    conciergeState === 'monitored'
-      ? 'The Concierge keeps watch, and will flip the switch himself if the conversation calls for it.'
-      : conciergeState === 'flagged'
-        ? 'The Concierge has this chat down as dangerous, and routes it through the uncensored providers.'
-        : conciergeState === 'vouched'
-          ? 'You have vouched for this chat. The Concierge stops watching; the ordinary providers still apply, and may still refuse.'
-          : 'You have sent the Concierge away and opened the uncensored door yourself. Nothing is scanned, nothing is softened — the risk is yours.'
-  const conciergeStateIcon =
-    conciergeState === 'monitored'
-      ? { name: 'eye' as const, className: 'qt-text-success' }
-      : conciergeState === 'flagged'
-        ? { name: 'alert-triangle' as const, className: 'qt-text-danger' }
-        : conciergeState === 'vouched'
-          ? { name: 'check-circle' as const, className: 'qt-text-muted' }
-          : { name: 'eye-off' as const, className: 'qt-text-info' }
+  // All of it comes from the presentation table, which this section's own
+  // sentences seeded — so the list marks and the header pill say the same
+  // words, and a copy edit here lands in all three.
+  const conciergePresentation = CONCIERGE_STATE_PRESENTATION[conciergeState]
+  const conciergeHelperText = conciergePresentation.detail
+  const conciergeStateIcon = {
+    name: conciergePresentation.icon,
+    className: conciergeToneTextClass(conciergePresentation.tone),
+  }
 
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-chat flex flex-col gap-3">

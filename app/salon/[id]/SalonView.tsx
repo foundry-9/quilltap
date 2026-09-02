@@ -19,6 +19,13 @@ import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
 import { getConciergeState, shouldShowDangerStyling } from '@/lib/services/dangerous-content/chat-override'
+import {
+  CONCIERGE_STATE_PRESENTATION,
+  conciergeToneSuffix,
+  describeConciergeState,
+} from '@/lib/services/dangerous-content/concierge-state-presentation'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { ConciergeTooltipBody } from '@/components/chat/ConciergeMark'
 import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer'
 import {
   type TurnState,
@@ -1081,42 +1088,28 @@ export function SalonView({ chatId }: SalonViewProps) {
           )}
           {(() => {
             // Monitored is the default and renders no badge — the pill means
-            // "something other than the default is set."
+            // "something other than the default is set." Everything the pill
+            // says comes from the presentation table, so it speaks the same
+            // words as the list marks and the sidebar's helper text.
             const conciergeState = getConciergeState(chat)
-            if (conciergeState === 'flagged') {
-              return (
+            if (conciergeState === 'monitored') return null
+
+            const { label, icon, tone } = CONCIERGE_STATE_PRESENTATION[conciergeState]
+            const description = describeConciergeState(conciergeState, chat.dangerCategories ?? undefined)
+            const toneSuffix = conciergeToneSuffix(tone)
+
+            return (
+              <Tooltip content={<ConciergeTooltipBody {...description} />} placement="bottom">
                 <span
-                  className="qt-danger-badge flex-shrink-0"
-                  title={`The Concierge has flagged this chat${chat.dangerCategories?.length ? `: ${chat.dangerCategories.join(', ')}` : ''}`}
+                  className={`qt-danger-badge${toneSuffix ? ` qt-danger-badge${toneSuffix}` : ''} flex-shrink-0`}
+                  role="img"
+                  aria-label={`Concierge: ${label}`}
                 >
-                  <Icon name="alert-triangle" className="w-3 h-3" />
-                  Flagged
+                  <Icon name={icon} className="w-3 h-3" />
+                  {label}
                 </span>
-              )
-            }
-            if (conciergeState === 'vouched') {
-              return (
-                <span
-                  className="qt-danger-badge qt-danger-badge-muted flex-shrink-0"
-                  title="You have vouched for this chat. The Concierge stops watching; the ordinary providers still apply — set from the sidebar's Chat section."
-                >
-                  <Icon name="check-circle" className="w-3 h-3" />
-                  Vouched Safe
-                </span>
-              )
-            }
-            if (conciergeState === 'uncensored') {
-              return (
-                <span
-                  className="qt-danger-badge qt-danger-badge-info flex-shrink-0"
-                  title="You have opened the uncensored door yourself. Nothing is scanned, nothing is softened — set from the sidebar's Chat section."
-                >
-                  <Icon name="eye-off" className="w-3 h-3" />
-                  Uncensored
-                </span>
-              )
-            }
-            return null
+              </Tooltip>
+            )
           })()}
           <a
             href={`/salon/${id}`}

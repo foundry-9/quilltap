@@ -397,6 +397,13 @@ Phase 1 is the one that carries risk and is worth landing on its own.
    off-duty chats, on the grounds that they surface the *label*, not the live
    action state. With four states and a colour system that distinguishes them, that
    rationale weakens.
+
+   **Resolved (4.9)** — see
+   [concierge-list-marks.md](concierge-list-marks.md). Yes: the lists now surface
+   the *state*, exactly as the header does. A vouched chat wears a grey mark
+   rather than a red one, an uncensored chat wears a blue one where it wore
+   nothing, and Monitored wears nothing anywhere. Quick-hide's "Dangerous Chats"
+   follows the same rule and hides the uncensored row only.
 3. **Does `Uncensored` need its own audit trail?** `Flagged` records
    `dangerClassifiedAt` and a score. An operator assertion records nothing but the
    announcement bubble. A `conciergeSetAt` timestamp may be worth adding while the

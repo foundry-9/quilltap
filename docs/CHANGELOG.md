@@ -4,15 +4,50 @@
 
 ### 4.9-dev
 
-#### Docs: plan for Concierge marks on chat lists
+#### Changed: chat lists and Quick-hide follow the Concierge state, not the raw danger label
 
-Added `docs/developer/features/concierge-list-marks.md`: a plan to replace the homepage's raw
-`isDangerousChat` asterisk with a mark derived from the four-state Concierge status (red Flagged,
-grey Vouched Safe, blue Uncensored, none for Monitored) using the custom tooltip, to put a derived
-`conciergeState` on list payloads, to make Quick-hide's "Dangerous Chats" hide Flagged and
-Uncensored chats, and to stop the classification trigger from enqueueing a discarded job on every
-turn of an Uncensored chat. Records the decision that `isDangerousChat` keeps its meaning as the
-classifier's label. No code changes yet.
+The homepage's Recent Chats and every `ChatCard` list marked a chat with a red asterisk whenever
+its stored `isDangerousChat` label was true, and Quick-hide's "Dangerous Chats" toggle hid on the
+same raw label at four separate sites. Both predated the four-state Concierge control and were
+wrong in both directions.
+
+The mark is now derived from `getConciergeState` and appears for every state other than Monitored,
+in the same three tones the Salon header pill uses: red Flagged, grey Vouched Safe, blue
+Uncensored. Hovering it shows a Quilltap-drawn tooltip (not a native `title`, which is unreliable
+under the Electron shell) with the state's name, what it means, the classifier's categories when
+Flagged, and where to change it.
+
+Two behaviour changes follow:
+
+- A vouched chat with a preserved dangerous label loses its red asterisk, gains a grey one, and is
+  **no longer hidden** by "Dangerous Chats".
+- An uncensored chat gains a blue asterisk where it had nothing, and **is now hidden** by
+  "Dangerous Chats".
+
+"Dangerous Chats" now hides whatever takes the uncensored route — Flagged (the Concierge's verdict)
+and Uncensored (the operator's) — and the sidebar footer's hide affordance appears on that same
+set rather than on any chat carrying the label. The four inline filters that bypassed
+`shouldHideChat` now call it, so the rule lives in one place.
+
+Under the hood: list payloads (`EnrichedChatSummary`, `RecentChat`, `ChatCardData`, and the
+character-conversations and Prospero chat serialisers) carry a derived `conciergeState` plus
+`dangerCategories` instead of the raw pair, so no list reads the two stored fields again;
+`conciergeStateUsesUncensoredRoute(state)` in `chat-override.ts` is the one place naming the
+uncensored row, with `shouldUseUncensoredRoute` delegating to it; and a new
+`concierge-state-presentation.ts` is the single source for every word, icon and tone the four
+states wear — the list mark, the Salon header pill and the sidebar's helper text all read from it.
+No schema, migration, export-schema or backup change: `conciergeState` is derived at read time and
+`dangerCategories` already existed.
+
+#### Fixed: Uncensored chats enqueued a classification job every turn that the handler then discarded
+
+`triggerChatDangerClassification` gated on the resolver's mode and on the raw sticky label but
+never asked whether the classifier was on duty. A vouched chat was fine by accident (the resolver
+collapses it to `mode: 'OFF'`), but an uncensored chat resolves to `AUTO_ROUTE` on purpose and its
+preserved label is usually `false` or `null` — so every turn, from both the streaming finalizer and
+the message-edit route, enqueued a `CHAT_DANGER_CLASSIFICATION` job that the handler immediately
+threw away at its own guard. Harmless to the data, wasteful in the job child. The trigger now bails
+on `!isClassifierOnDuty(chat)` before any setting lookup.
 
 #### Fixed: the folders table accumulated a duplicate row per generated image
 

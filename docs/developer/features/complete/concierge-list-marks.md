@@ -1,10 +1,10 @@
 # Concierge Marks on Chat Lists
 
-**Status:** Planned (4.9-dev, 2026-09-02)
+**Status:** Implemented (4.9-dev, 2026-09-02)
 **Scope:** quilltap-server — homepage Recent Chats (primary), Quick-hide's
 "Dangerous Chats" filter, Salon header badge and sidebar (shared copy), `ChatCard`
 lists (same mark); no schema change, no shell impact
-**Builds on:** [concierge-four-state.md](complete/concierge-four-state.md) — this
+**Builds on:** [concierge-four-state.md](concierge-four-state.md) — this
 resolves its open question 2 ("Should Vouched Safe suppress the danger badge on
 list-view cards?")
 
@@ -12,7 +12,7 @@ list-view cards?")
 
 The homepage's Recent Chats list marks a chat with a small red asterisk when its
 stored `isDangerousChat` label is true
-([RecentChatItem.tsx:72](../../../components/homepage/RecentChatItem.tsx)), and
+([RecentChatItem.tsx:72](../../../../components/homepage/RecentChatItem.tsx)), and
 Quick-hide's "Dangerous Chats" toggle hides on the same raw label at four sites.
 Both predate the four-state Concierge control and are wrong in two directions:
 
@@ -31,7 +31,7 @@ The change:
 1. Derive the mark from `getConciergeState`, show an asterisk for **every state
    other than Monitored**, colour it with the same three tones the header pill
    uses, and explain it with a Quilltap-drawn tooltip
-   ([`components/ui/Tooltip.tsx`](../../../components/ui/Tooltip.tsx)) — the
+   ([`components/ui/Tooltip.tsx`](../../../../components/ui/Tooltip.tsx)) — the
    native `title` widget is unreliable under the Electron shell, which is why the
    Salon's message buttons already moved off it.
 2. Make "Dangerous Chats" hide the chats that **take the uncensored route** —
@@ -59,7 +59,7 @@ uncensored route, by either provenance." The reasons, so nobody re-litigates it:
   a writer sets `conciergeOverride` and forgets the label.
 - **The column is tri-state and owned by the classifier.** `null` = never scanned,
   `false` = scanned and found safe, `true` = scanned and found dangerous. The
-  scheduled scan ([scheduled-danger-scan.ts:138](../../../lib/background-jobs/scheduled-danger-scan.ts))
+  scheduled scan ([scheduled-danger-scan.ts:138](../../../../lib/background-jobs/scheduled-danger-scan.ts))
   and the classification handler use `null`-vs-`false` plus
   `dangerClassifiedAtMessageCount` to decide what to re-scan. An operator-written
   `true` would corrupt that freshness logic.
@@ -80,9 +80,9 @@ the raw pair stays inside the enrichment service and the sanctioned writers.
 
 Today the four states are described in three places with three different sets of
 words: the header badge's `title` strings in
-[SalonView.tsx:1082–1118](<../../../app/salon/[id]/SalonView.tsx>), the sidebar's
+[SalonView.tsx:1082–1118](<../../../../app/salon/[id]/SalonView.tsx>), the sidebar's
 helper text and icon map in
-[ChatSidebar.tsx:1128–1144](../../../components/chat/ChatSidebar.tsx), and the
+[ChatSidebar.tsx:1128–1144](../../../../components/chat/ChatSidebar.tsx), and the
 list asterisk's `"Flagged as dangerous"`. Adding a fourth consumer by copy-paste is
 how the copy drifts.
 
@@ -153,21 +153,21 @@ existing truth-table test in
 
 The list shapes stop carrying the raw pair and carry the derived state instead:
 
-- **`EnrichedChatSummary`** ([chat-enrichment.service.ts:207](../../../lib/services/chat-enrichment.service.ts))
+- **`EnrichedChatSummary`** ([chat-enrichment.service.ts:207](../../../../lib/services/chat-enrichment.service.ts))
   gains `conciergeState: ConciergeState` (computed once with `getConciergeState`
   at the same spot that currently copies `isDangerousChat` / `conciergeOverride`,
   line 602) and `dangerCategories: string[]` (from the chat row, `[]` default).
   Drop `isDangerousChat` and `conciergeOverride` from the summary once no
   consumer reads them — the list route's `hasDangerous` at
-  [chats/route.ts:898](../../../app/api/v1/chats/route.ts) is the one server-side
+  [chats/route.ts:898](../../../../app/api/v1/chats/route.ts) is the one server-side
   reader, and it moves to `conciergeStateUsesUncensoredRoute` (see Quick-hide below).
-- **`RecentChat`** ([types.ts](../../../components/homepage/types.ts)):
+- **`RecentChat`** ([types.ts](../../../../components/homepage/types.ts)):
   `isDangerousChat` → `conciergeState: ConciergeState`, plus `dangerCategories?: string[]`.
-  `getHomeData` ([home-data.service.ts:67](../../../lib/services/home-data.service.ts))
+  `getHomeData` ([home-data.service.ts:67](../../../../lib/services/home-data.service.ts))
   passes both through. The `/api/v1/system/home` route serialises whatever the
   service returns; no route change.
 - **`ChatCardData`** and the two transforms in
-  [lib/chat-utils.ts](../../../lib/chat-utils.ts) (`SalonChatShape`,
+  [lib/chat-utils.ts](../../../../lib/chat-utils.ts) (`SalonChatShape`,
   `CharacterChatShape`): same substitution. The Salon list is fed by the
   enrichment service and gets the field for free; the character-conversations tab
   and Prospero's `ChatsSection` have their own API shapes — check each during
@@ -180,20 +180,20 @@ the sidebar's manual-flip control genuinely needs both.
 
 ### Quick-hide hides the uncensored row
 
-[quick-hide-provider.tsx](../../../components/providers/quick-hide-provider.tsx):
+[quick-hide-provider.tsx](../../../../components/providers/quick-hide-provider.tsx):
 `shouldHideChat` takes `{ characterTags?, conciergeState? }` instead of
 `{ characterTags?, isDangerous? }` and hides when
 `hideDangerousChats && conciergeState && conciergeStateUsesUncensoredRoute(conciergeState)`.
 The four inline filters that bypass `shouldHideChat` today are rewritten to call
 it, so the rule lives in one place:
 
-- [RecentChatsSection.tsx:23](../../../components/homepage/RecentChatsSection.tsx)
-- [SalonListView.tsx:105](../../../app/salon/SalonListView.tsx)
-- [character-conversations-tab.tsx:51](../../../components/character/character-conversations-tab.tsx)
-- [ChatsSection.tsx:69](<../../../app/prospero/[id]/components/ChatsSection.tsx>) (Prospero)
+- [RecentChatsSection.tsx:23](../../../../components/homepage/RecentChatsSection.tsx)
+- [SalonListView.tsx:105](../../../../app/salon/SalonListView.tsx)
+- [character-conversations-tab.tsx:51](../../../../components/character/character-conversations-tab.tsx)
+- [ChatsSection.tsx:69](<../../../../app/prospero/[id]/components/ChatsSection.tsx>) (Prospero)
 
 The sidebar footer's "there is something to hide" affordance
-([sidebar-footer.tsx:145](../../../components/layout/left-sidebar/sidebar-footer.tsx))
+([sidebar-footer.tsx:145](../../../../components/layout/left-sidebar/sidebar-footer.tsx))
 reads `hasDangerousChats` from the chats list route, which computes it from the raw
 label at line 898; that becomes "any chat on the uncensored row" so the toggle
 appears exactly when it would hide something. The `localStorage` key and the menu
@@ -223,7 +223,7 @@ Returns `null` for Monitored; otherwise:
   `Tooltip` attaches no `onClick` when `pinnable` is false, so the click bubbles to
   the link untouched.
 - **Tooltip body** uses the existing `qt-tooltip-body` / `qt-tooltip-title`
-  classes ([_surfaces.css:1104](../../../app/styles/qt-components/_surfaces.css)):
+  classes ([_surfaces.css:1104](../../../../app/styles/qt-components/_surfaces.css)):
   a title line (the label), the detail sentence, the optional categories line, and
   the hint in a quieter tone. `ConciergeTooltipBody` is a tiny presentational
   component exported from the same file so the header badge can reuse it.
@@ -235,7 +235,7 @@ Returns `null` for Monitored; otherwise:
 
 The header pill is `.qt-danger-badge` parameterised over `--qt-concierge-badge-color`
 with `-muted` / `-info` modifiers
-([_chat.css:2830–2846](../../../app/styles/qt-components/_chat.css)). Add a sibling
+([_chat.css:2830–2846](../../../../app/styles/qt-components/_chat.css)). Add a sibling
 family in the same block rather than reusing badge-named modifiers on a non-badge:
 
 ```css
@@ -251,7 +251,7 @@ family in the same block rather than reusing badge-named modifiers on a non-badg
 
 Three rules, one variable, same colour tokens as the badge so themes that retint
 `--color-destructive` / `--color-info` retint both at once. Mirror the family into
-[`packages/theme-storybook/src/css/qt-components.css`](../../../packages/theme-storybook/src/css/qt-components.css)
+[`packages/theme-storybook/src/css/qt-components.css`](../../../../packages/theme-storybook/src/css/qt-components.css)
 next to the badge block (de-Tailwinded), bump theme-storybook to **1.0.69**, and
 **stop for the human to `npm publish`** before installing — the publish gates the
 commit. `qt-concierge-mark` is a bare component class, outside the
@@ -262,7 +262,7 @@ commit. `qt-concierge-mark` is a bare component class, outside the
 The home payload has no realtime topic (`queryKeys.home` is absent from
 `lib/realtime/topic-map.ts`, deliberately). A state flipped in the Salon sidebar
 reaches the home tab on re-activation via `tabActivationQueryKeys`
-([tab-refetch.ts:46](../../../lib/workspace/tab-refetch.ts)), and the legacy `/`
+([tab-refetch.ts:46](../../../../lib/workspace/tab-refetch.ts)), and the legacy `/`
 route is server-rendered per load. That matches how the existing asterisk behaves;
 **do not add a poll** (CLAUDE.md: a new polling site is a bug). If it ever needs to
 be live, the right move is a `home` row in `REALTIME_TOPICS` fed from the chat
@@ -296,7 +296,7 @@ Salon detail view (which hands both fields to the sidebar). The audit confirmed:
   note that suspected otherwise had misread the trigger below.)
 - **The classification trigger enqueues a doomed job for Uncensored chats.**
   `triggerChatDangerClassification`
-  ([memory-trigger.service.ts:147](../../../lib/services/chat-message/memory-trigger.service.ts))
+  ([memory-trigger.service.ts:147](../../../../lib/services/chat-message/memory-trigger.service.ts))
   gates on the resolver's mode and on the raw sticky label, but never asks
   `isClassifierOnDuty`. A *vouched* chat is fine by accident: the resolver
   collapses it to `mode: 'OFF'`, so the trigger bails. An *uncensored* chat
@@ -305,7 +305,7 @@ Salon detail view (which hands both fields to the sidebar). The audit confirmed:
   `CHAT_DANGER_CLASSIFICATION` job on every turn — from both the streaming
   finalizer and the message-edit route — which the handler then discards at its
   own `!isClassifierOnDuty` guard
-  ([chat-danger-classification.ts:57](../../../lib/background-jobs/handlers/chat-danger-classification.ts)).
+  ([chat-danger-classification.ts:57](../../../../lib/background-jobs/handlers/chat-danger-classification.ts)).
   Harmless to the data, wasteful in the job child. **Fix (Phase 1):** add
   `if (!isClassifierOnDuty(chat)) return` immediately after the chat lookup,
   before the resolver call, and refresh the stale "Off-duty" comment above it.
@@ -313,7 +313,7 @@ Salon detail view (which hands both fields to the sidebar). The audit confirmed:
   classifier's own gate. Test: `__tests__/unit/services/chat-danger-trigger.test.ts`
   gains "skips without enqueueing when the operator decided" for both
   `conciergeOverride: 'OFF'` and `'UNCENSORED'`, with a `false` label.
-- [MessageRow.tsx:578](<../../../app/salon/[id]/components/MessageRow.tsx>) memo
+- [MessageRow.tsx:578](<../../../../app/salon/[id]/components/MessageRow.tsx>) memo
   comparison on `isDangerousChat` — harmless (it only decides re-render), noted
   for completeness.
 
@@ -382,7 +382,7 @@ Delegate 1, 2, and 6 freely — they are fully specified above.
   (`createMockRecentChat` gains the fields): no mark for Monitored; red/grey/blue
   class for the other three; `aria-label`; tooltip text appears on `pointerEnter`
   after the delay (follow the timer pattern in
-  [`__tests__/unit/components/tooltip.test.tsx`](../../../__tests__/unit/components/tooltip.test.tsx));
+  [`__tests__/unit/components/tooltip.test.tsx`](../../../../__tests__/unit/components/tooltip.test.tsx));
   clicking the mark still fires the link's `onClick`; the section hides Flagged
   and Uncensored when the toggle is on.
 
@@ -416,7 +416,7 @@ Delegate 1, 2, and 6 freely — they are fully specified above.
 - Append a "Resolved" note under open question 2 in
   `concierge-four-state.md` pointing here.
 - `git mv` this file to `docs/developer/features/complete/` and update
-  [update-documentation](../../../.claude/commands/update-documentation.md),
+  [update-documentation](../../../../.claude/commands/update-documentation.md),
   which lists feature docs individually.
 
 ## Verification

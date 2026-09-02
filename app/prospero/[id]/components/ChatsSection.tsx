@@ -42,7 +42,8 @@ function transformProjectChatToCardData(chat: ProjectChat): ChatCardData {
     // Project is null since we're already in project context
     project: null,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
-    isDangerousChat: chat.isDangerousChat === true,
+    conciergeState: chat.conciergeState,
+    dangerCategories: chat.dangerCategories,
   }
 }
 
@@ -58,30 +59,25 @@ export function ChatsSection({
 }: ChatsSectionProps) {
   const observerRef = useRef<IntersectionObserver | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
-  const { shouldHideByIds, hideDangerousChats } = useQuickHide()
+  const { shouldHideChat } = useQuickHide()
   const contentWidth = useContentWidthOptional()
   const isWide = contentWidth?.isWide ?? false
 
   // Filter chats based on quick-hide rules
   const visibleChats = useMemo(() => {
     return chats.filter(chat => {
-      // Hide dangerous chats when filter is active
-      if (hideDangerousChats && chat.isDangerousChat) {
-        return false
-      }
-
       // Collect all tag IDs: chat tags + all participant character tags
-      const allTagIds: string[] = (chat.tags || []).map(ct => ct.tag.id)
+      const characterTags: string[] = (chat.tags || []).map(ct => ct.tag.id)
 
       for (const participant of chat.participants) {
         if (participant.tags) {
-          allTagIds.push(...participant.tags)
+          characterTags.push(...participant.tags)
         }
       }
 
-      return !shouldHideByIds(allTagIds)
+      return !shouldHideChat({ characterTags, conciergeState: chat.conciergeState })
     })
-  }, [chats, shouldHideByIds, hideDangerousChats])
+  }, [chats, shouldHideChat])
 
 
   // Set up intersection observer for infinite scroll

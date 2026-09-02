@@ -246,17 +246,21 @@ You have sent the Concierge away and opened the uncensored door yourself. The ch
 
 If the classifier keeps calling a spicy chat safe and you are tired of arguing with it, this — not Flagged — is usually the position you want: Flagged carries the Concierge's warning apparatus with it, where Uncensored simply takes the route.
 
-Each transition between positions is announced in the chat history by the Concierge himself, in his customary voice, so the conversation's moderation provenance remains transparent on later re-readings. The Salon's header wears a small pill for any position other than Monitored — red for Flagged, grey for Vouched Safe, blue for Uncensored — so a glance tells you whether anything other than the default is in force.
+Each transition between positions is announced in the chat history by the Concierge himself, in his customary voice, so the conversation's moderation provenance remains transparent on later re-readings. The Salon's header wears a small pill for any position other than Monitored — red for Flagged, grey for Vouched Safe, blue for Uncensored — so a glance tells you whether anything other than the default is in force. The very same three shades mark a chat wherever it is merely *listed* — the homepage's Recent Chats, the Salon's roll of conversations, a character's Conversations, a project's chats — where the pill contracts to a modest asterisk beside the message count. Monitored, being the arrangement everyone already assumes, wears nothing at all anywhere; rest the pointer on a mark or a pill and you will get the same explanation from each, since both are reading from the Concierge's one sheet of notes.
 
 ## Quick-Hide Integration
 
-Chats classified as dangerous can be hidden from the sidebar using the quick-hide system.
+Chats that take the uncensored route can be hidden from the sidebar using the quick-hide system.
 
 ### Hiding Dangerous Chats
 
 1. Click the **eye icon** in the sidebar footer
 2. In the **Content Filters** section, toggle **"Dangerous Chats"** to hide them
-3. Dangerous chats will be hidden from the sidebar, projects section, and all-chats page
+3. Chats on the uncensored route will be hidden from the sidebar, projects section, and all-chats page
+
+What the toggle hides is a matter of the *route*, not of anyone's opinion: a chat wearing the red mark (**Flagged**, by the Concierge's own reckoning) and a chat wearing the blue one (**Uncensored**, by yours) both go behind the curtain, since both take the spicy road. A chat you have **Vouched Safe** does not, however old and lurid a classification it may still be carrying about in its pocket — you said it was fine, and the toggle takes you at your word. A **Monitored** chat, naturally, stays where it is.
+
+The eye icon itself appears in the sidebar footer only when there is in fact something for it to hide.
 
 The toggle is persisted in your browser's local storage, so your preference is remembered across sessions.
 

@@ -22,6 +22,7 @@ import { badRequest, notFound, serverError, successResponse } from '@/lib/api/re
 import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
 import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
+import { getConciergeState } from '@/lib/services/dangerous-content/chat-override';
 
 const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags', 'stats', 'depiction-guidelines'] as const;
 type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
@@ -219,7 +220,8 @@ export async function handleGet(
               storyBackground,
               messages: recentMessages,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
-              isDangerousChat: chat.isDangerousChat === true,
+              conciergeState: getConciergeState(chat),
+              dangerCategories: chat.dangerCategories ?? [],
               _count: {
                 messages: messageCount,
                 memories: memoryCount,

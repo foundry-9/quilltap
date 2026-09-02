@@ -17,6 +17,7 @@
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { checkAndGenerateSummaryIfNeeded } from '@/lib/chat/context-summary'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
+import { isClassifierOnDuty } from '@/lib/services/dangerous-content/chat-override'
 import {
   enqueueChatDangerClassification,
   enqueueSceneStateTracking,
@@ -154,16 +155,24 @@ export async function triggerChatDangerClassification(
   }
 ): Promise<void> {
   try {
-    // Get the chat first so an Off-duty override short-circuits before we
-    // do any setting lookups.
+    // Get the chat first so an operator override short-circuits before we do
+    // any setting lookups.
     const chat = await repos.chats.findById(options.chatId)
     if (!chat) {
       return
     }
 
+    // Once the operator has spoken — Vouched Safe or Uncensored — the
+    // classifier is off the case, and the handler would discard the job at its
+    // own guard. Bail here so an Uncensored chat stops enqueueing a doomed job
+    // on every turn.
+    if (!isClassifierOnDuty(chat)) {
+      return
+    }
+
     // Resolve danger settings — bail if mode is OFF. Passing `chat` collapses
-    // to OFF when the chat is Off-duty OR is a moderation-exempt type (Help
-    // Chat, Brahma Console), so those surfaces are never enqueued.
+    // to OFF for a moderation-exempt chat type (Help Chat, Brahma Console),
+    // so those surfaces are never enqueued either.
     const chatSettings = await repos.chatSettings.findByUserId(options.userId)
     const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat)
     if (dangerSettings.mode === 'OFF') {

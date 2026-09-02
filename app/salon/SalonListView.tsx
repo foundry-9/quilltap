@@ -34,7 +34,7 @@ export function SalonListView() {
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [highlightedChatId, setHighlightedChatId] = useState<string | null>(null)
   const importedChatRef = useRef<HTMLDivElement>(null)
-  const { shouldHideByIds, hideDangerousChats, includeAutonomousRooms } = useQuickHide()
+  const { shouldHideChat, includeAutonomousRooms } = useQuickHide()
   const bgStyle = useSubsystemBackgroundStyle('salon')
 
   const { data: chatSettings } = useQuery({
@@ -89,26 +89,17 @@ export function SalonListView() {
   const visibleChats = useMemo(
     () => chats.filter(chat => {
       // Collect all tag IDs: chat tags + all participant tags
-      const allTagIds: string[] = chat.tags.map(ct => ct.tag.id)
+      const characterTags: string[] = chat.tags.map(ct => ct.tag.id)
 
       for (const participant of chat.participants) {
         if (participant.character?.tags) {
-          allTagIds.push(...participant.character.tags)
+          characterTags.push(...participant.character.tags)
         }
       }
 
-      if (shouldHideByIds(allTagIds)) {
-        return false
-      }
-
-      // Check danger filter using full chat metadata
-      if (hideDangerousChats && chat.isDangerousChat === true) {
-        return false
-      }
-
-      return true
+      return !shouldHideChat({ characterTags, conciergeState: chat.conciergeState })
     }),
-    [chats, shouldHideByIds, hideDangerousChats]
+    [chats, shouldHideChat]
   )
 
   // Auto-scroll and highlight imported chat

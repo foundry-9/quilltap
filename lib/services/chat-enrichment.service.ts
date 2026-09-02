@@ -25,6 +25,8 @@ import {
 } from '@/lib/photos/resolve-character-avatar'
 import { logger } from '@/lib/logger'
 import { byChatActivityDesc } from '@/lib/chat/chat-activity'
+import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 
 type Repos = RepositoryContainer
 
@@ -215,8 +217,14 @@ export interface EnrichedChatSummary {
   tags: EnrichedTag[]
   project: EnrichedProject | null
   storyBackground: EnrichedStoryBackground | null
-  isDangerousChat: boolean
-  conciergeOverride: 'OFF' | 'UNCENSORED' | null
+  /**
+   * The derived Concierge four-state. Lists carry this instead of the raw
+   * `isDangerousChat` / `conciergeOverride` pair so nothing downstream has to
+   * read the two stored fields together (and get it wrong).
+   */
+  conciergeState: ConciergeState
+  /** The classifier's categories, surfaced only for `'flagged'`. `[]` when none. */
+  dangerCategories: string[]
   chatType: 'salon' | 'help' | 'autonomous' | 'brahma'
   /** Scriptorium rendering status, derived from renderedMarkdown + chunk embeddings. */
   scriptoriumStatus: 'none' | 'rendered' | 'embedded'
@@ -599,8 +607,8 @@ export async function enrichChatForList(
     tags,
     project,
     storyBackground,
-    isDangerousChat: chat.isDangerousChat === true,
-    conciergeOverride: chat.conciergeOverride ?? null,
+    conciergeState: getConciergeState(chat),
+    dangerCategories: chat.dangerCategories ?? [],
     chatType: (chat.chatType ?? 'salon') as 'salon' | 'help' | 'autonomous' | 'brahma',
     scriptoriumStatus,
     _count: { messages: messageCount, memories: memoryCount },
