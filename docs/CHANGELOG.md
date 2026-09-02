@@ -4,6 +4,16 @@
 
 ### 4.9-dev
 
+#### Docs: plan for Concierge marks on chat lists
+
+Added `docs/developer/features/concierge-list-marks.md`: a plan to replace the homepage's raw
+`isDangerousChat` asterisk with a mark derived from the four-state Concierge status (red Flagged,
+grey Vouched Safe, blue Uncensored, none for Monitored) using the custom tooltip, to put a derived
+`conciergeState` on list payloads, to make Quick-hide's "Dangerous Chats" hide Flagged and
+Uncensored chats, and to stop the classification trigger from enqueueing a discarded job on every
+turn of an Uncensored chat. Records the decision that `isDangerousChat` keeps its meaning as the
+classifier's label. No code changes yet.
+
 #### Fixed: the folders table accumulated a duplicate row per generated image
 
 Generating a character avatar or a story background into a project appended another row to the
