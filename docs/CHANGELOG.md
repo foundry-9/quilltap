@@ -4,6 +4,36 @@
 
 ### 4.9-dev
 
+#### Docs: filed bugs 116, 117 and 118 from one mis-described image upload
+
+An uploaded screenshot of a warship was stored with a 3175-character description of a tabby
+kitten, produced by the configured Image Description Profile and returned unchanged to a character
+that later called `describe_image`. Three defects, no code changes yet.
+
+**Bug 116** (High) — the describe path believes the model's answer without checking the image
+arrived. Quilltap sent the bytes correctly; the routed model discarded them and answered from the
+instruction alone, which the response reported as `promptTokens: 38`. `describeImageWithProfile`
+holds two disproofs and reads neither: `response.usage`, which it passes to the LLM log and drops,
+and `LLMResponse.attachmentResults`, which the provider plugin populates for exactly this purpose.
+The only check performed greps the response text for refusal words, so it catches a model that says
+it cannot see and never one that answers confidently. The result is written to `files.description`,
+which short-circuits every later reader permanently.
+
+**Bug 117** (Medium) — a chat upload's FileEntry records the hash of its pre-transcode bytes.
+`chat-files-v2.ts` hashes the input buffer, then the storage bridge converts the image to WebP and
+returns the stored bytes' hash, which is used for `mimeType` and `size` and discarded for `sha256`.
+Every join between `files` and the document store therefore fails for converted uploads: the
+description never reaches `extractedText`, chunks or embeddings, and `describe_image` /
+`attach_image` cannot resolve a mount-link uuid. `images-v2.ts` orders the same two operations
+correctly. In one live instance, 118 of 239 uploaded images are affected and all 2541 generated
+images are not. Needs a backfill migration.
+
+**Bug 118** (Low) — the NanoGPT plugin manifest still declares `attachmentSupport.supported: false`
+and "attachments are not forwarded", unchanged since the plugin was added and contradicted by both
+the built plugin declaration and `lib/llm/attachment-support.ts`. No runtime effect; nothing reads
+the manifest field. It is the only one of eleven bundled plugin manifests that disagrees with its
+code, and the only declaration `image-transport.test.ts` does not gate.
+
 #### Fixed: restored the inter-character memory timing log
 
 `buildContext` carried an empty `if (isMultiCharacter) { }` block. The chore that stripped every
