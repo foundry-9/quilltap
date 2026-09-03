@@ -13,6 +13,7 @@ import {
   getWardrobeSuggestionPrompt,
   getPropertiesSuggestionPrompt,
   getNewSystemPromptsSuggestionPrompt,
+  coerceSuggestionArray,
 } from '@/lib/services/character-optimizer.service'
 import { createMockCharacter, createMockMemory } from '../fixtures/test-factories'
 import type { OptimizerAnalysis } from '@/lib/services/character-optimizer.service'
@@ -431,5 +432,51 @@ describe('per-item suggestion prompts', () => {
       const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis)
       expect(result.toLowerCase()).toContain('do not propose new scenarios')
     })
+  })
+})
+
+describe('coerceSuggestionArray', () => {
+  const suggestion = {
+    field: 'personality',
+    currentValue: 'Reserved.',
+    proposedValue: 'Reserved, but quick to intervene.',
+    rationale: 'The memories show repeated intervention.',
+    significance: 0.8,
+    memoryExcerpts: [],
+  }
+
+  it('passes an array through untouched', () => {
+    const input = [suggestion]
+    expect(coerceSuggestionArray(input)).toBe(input)
+  })
+
+  it('unwraps a suggestions wrapper object', () => {
+    expect(coerceSuggestionArray({ suggestions: [suggestion] })).toEqual([suggestion])
+  })
+
+  it('unwraps the other wrapper keys models reach for', () => {
+    for (const key of ['items', 'results', 'data', 'amendments']) {
+      expect(coerceSuggestionArray({ [key]: [suggestion] })).toEqual([suggestion])
+    }
+  })
+
+  it('wraps a lone bare suggestion object', () => {
+    expect(coerceSuggestionArray(suggestion)).toEqual([suggestion])
+  })
+
+  it('returns an empty array for anything unusable', () => {
+    expect(coerceSuggestionArray(null)).toEqual([])
+    expect(coerceSuggestionArray(undefined)).toEqual([])
+    expect(coerceSuggestionArray('not json')).toEqual([])
+    expect(coerceSuggestionArray(42)).toEqual([])
+    expect(coerceSuggestionArray({ note: 'no amendments warranted' })).toEqual([])
+  })
+
+  it('never returns a value the array pipeline would choke on', () => {
+    // The bug: a non-array reached `.filter(...)` and aborted the whole run.
+    for (const input of [null, 'x', 7, { suggestions: [suggestion] }, suggestion, [suggestion]]) {
+      expect(Array.isArray(coerceSuggestionArray(input))).toBe(true)
+      expect(() => coerceSuggestionArray(input).filter(Boolean)).not.toThrow()
+    }
   })
 })

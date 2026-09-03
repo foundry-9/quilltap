@@ -4,6 +4,26 @@
 
 ### 4.9-dev
 
+#### Fixed: one bad sub-step no longer kills a whole Refine-from-Memories run (bug 119)
+
+The character optimizer fans a character out into one LLM pass per concern — general fields, each
+scenario, each system prompt, physical description, wardrobe, aliases, proposed new prompts — and
+each pass asks for a JSON array of suggestions. A model that answers with a wrapper object
+(`{"suggestions": [...]}`), or with a single bare suggestion object, produces text `JSON.parse`
+accepts, so the parse guard never fired: `parseLLMJson<OptimizerSuggestion[]>` is a cast, not a
+check, and the object reached `.filter`. The resulting TypeError escaped the sub-step and aborted
+the entire optimization, surfacing in the modal as `q.filter is not a function` and discarding
+every sub-step that had not yet run.
+
+- `coerceSuggestionArray` normalises the parse result — an array passes through; a wrapper object
+  yields the first array under `suggestions`, `items`, `results`, `data` or `amendments`; a lone
+  object carrying a `field` key becomes a one-element array; anything else becomes an empty array.
+  A non-array answer now logs a warning naming the sub-step and how many suggestions were
+  recovered.
+- Each sub-step is wrapped so an unexpected throw is logged and skipped rather than ending the run.
+  A pass is self-contained and only appends to the suggestion list, and two other failure modes in
+  the same function already continued rather than aborting.
+
 #### Fixed: a describer's answer is now verified before it is believed (bug 116)
 
 `describeImageWithProfile` accepted whatever the vision model returned. A NanoGPT route for

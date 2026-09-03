@@ -170,6 +170,29 @@ function coerceSuggestionText(value: unknown): string {
 }
 
 /**
+ * Defensively coerce a sub-step's parsed JSON into an array of suggestions.
+ * The prompts ask for a bare JSON array, but a model periodically answers with
+ * a wrapper object (`{"suggestions": [...]}`) or, when it has exactly one
+ * amendment to offer, with a single bare suggestion object. Both parse
+ * cleanly, so the parse guard never fires — and the array operations that
+ * follow then threw a TypeError that aborted the whole optimization run,
+ * discarding every suggestion the earlier sub-steps had already produced
+ * (bug 119). Anything genuinely unusable becomes an empty array.
+ */
+export function coerceSuggestionArray(value: unknown): OptimizerSuggestion[] {
+  if (Array.isArray(value)) return value as OptimizerSuggestion[];
+  if (!value || typeof value !== 'object') return [];
+  const record = value as Record<string, unknown>;
+  // A wrapper object: take the first plausibly-named array property.
+  for (const key of ['suggestions', 'items', 'results', 'data', 'amendments']) {
+    if (Array.isArray(record[key])) return record[key] as OptimizerSuggestion[];
+  }
+  // A lone suggestion object, un-arrayed. `field` is the shape's fingerprint.
+  if (typeof record.field === 'string') return [record as unknown as OptimizerSuggestion];
+  return [];
+}
+
+/**
  * Build character context string from character data. `wardrobeItems` is the
  * character's current wardrobe (optional — omitted in some tests); it is shown
  * so suggestions can account for what the character already owns and wears.
@@ -881,7 +904,7 @@ export async function runCharacterOptimizer(
     let subStepIndex = 0;
     const allSuggestions: OptimizerSuggestion[] = [];
 
-    const runSubStep = async (
+    const runSubStepCore = async (
       kind: OptimizerSubStepKind,
       label: string,
       instruction: string,
@@ -918,7 +941,16 @@ export async function runCharacterOptimizer(
 
       let parsed: OptimizerSuggestion[] = [];
       try {
-        parsed = parseLLMJson<OptimizerSuggestion[]>(raw);
+        const rawParsed = parseLLMJson<unknown>(raw);
+        parsed = coerceSuggestionArray(rawParsed);
+        if (!Array.isArray(rawParsed)) {
+          logger.warn('[CharacterOptimizer] Sub-step answered with a non-array; coerced', {
+            characterId,
+            subStep: label,
+            parsedType: Array.isArray(rawParsed) ? 'array' : typeof rawParsed,
+            recovered: parsed.length,
+          });
+        }
       } catch (parseError) {
         logger.warn('[CharacterOptimizer] Sub-step produced unparseable JSON; skipping', {
           characterId,
@@ -991,6 +1023,30 @@ export async function runCharacterOptimizer(
         subStep,
         partialSuggestions: filtered,
       });
+    };
+
+    /**
+     * One misbehaving sub-step must never cost the run. Every sub-step is a
+     * self-contained pass whose only output is appended to `allSuggestions`,
+     * so an unexpected throw is logged and skipped rather than aborting the
+     * whole optimization and discarding the suggestions already gathered
+     * (bug 119).
+     */
+    const runSubStep = async (
+      kind: OptimizerSubStepKind,
+      label: string,
+      instruction: string,
+    ): Promise<void> => {
+      try {
+        await runSubStepCore(kind, label, instruction);
+      } catch (subStepError) {
+        logger.error(
+          '[CharacterOptimizer] Sub-step failed unexpectedly; continuing',
+          { characterId, subStep: label },
+          subStepError instanceof Error ? subStepError : undefined,
+        );
+        onProgress({ type: 'substep_complete', step: 'generating', partialSuggestions: [] });
+      }
     };
 
     await runSubStep(
