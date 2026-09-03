@@ -233,6 +233,7 @@ export async function importFiles(
       let storageKey: string;
       let storedMimeType: string;
       let sizeBytes: number;
+      let storedSha256: string;
       if (projectId) {
         const uploaded = await fileStorageManager.uploadFile({
           filename: file.originalFilename,
@@ -244,6 +245,7 @@ export async function importFiles(
         storageKey = uploaded.storageKey;
         storedMimeType = uploaded.storedMimeType;
         sizeBytes = uploaded.sizeBytes;
+        storedSha256 = uploaded.sha256;
       } else {
         const written = await writeUserUploadToMountStore({
           filename: file.originalFilename,
@@ -254,6 +256,7 @@ export async function importFiles(
         storageKey = written.storageKey;
         storedMimeType = written.storedMimeType;
         sizeBytes = written.sizeBytes;
+        storedSha256 = written.sha256;
       }
 
       const { kept, dropped } = await remapLinkedTo(
@@ -282,8 +285,12 @@ export async function importFiles(
         linkedTo: kept,
         tags,
         // Post-bridge truth, not what the archive claimed (see module header).
+        // sha256 joined that rule in 4.9.0: the bridge transcodes bitmaps to
+        // WebP, and a row carrying the archive's pre-transcode hash cannot be
+        // joined to the mount blob it points at (bug 117).
         mimeType: storedMimeType,
         size: sizeBytes,
+        sha256: storedSha256,
         storageKey,
       });
       imported++;

@@ -13,11 +13,19 @@
  * wins) reported the feature working. The suite was green over behaviour
  * production never exhibited.
  *
- * So this file does two things the old coverage did not:
- *   1. exercises the registry-initialised branch explicitly, and
+ * So this file does three things the old coverage did not:
+ *   1. exercises the registry-initialised branch explicitly,
  *   2. feeds the **real, built** plugin declarations through it and holds them
  *      against the static mirror, so the next stale declaration fails here
- *      instead of silently degrading a user's vision profile.
+ *      instead of silently degrading a user's vision profile, and
+ *   3. holds each plugin's `manifest.json` against its own build (bug 118).
+ *
+ * On (3): the build stays authoritative — a manifest/build disagreement is a
+ * *manifest* bug, and that is the direction the assertions read. But leaving
+ * the manifest out of the comparison entirely, as this file originally did,
+ * made it the one copy of the declaration with nothing gating it, and so the
+ * only copy free to rot. NanoGPT's said `supported: false` for eleven plugin
+ * versions after bug 91 taught it to forward images.
  *
  * The node environment is deliberate: the plugin bundles are Node artefacts.
  */
@@ -83,6 +91,39 @@ function loadBuiltPluginDeclarations(): Record<string, AttachmentSupport> {
     const name = plugin.metadata?.providerName
     if (!name || !plugin.attachmentSupport) continue
     declarations[name.toUpperCase()] = plugin.attachmentSupport
+  }
+  return declarations
+}
+
+/** A plugin manifest's `providerConfig.attachmentSupport`, as authored. */
+interface ManifestAttachmentSupport {
+  supported: boolean
+  mimeTypes: string[]
+  description?: string
+}
+
+/**
+ * Load every bundled provider plugin's *manifest* declaration of the same
+ * capability. Nothing in `app/` or `lib/` reads this field, which is exactly
+ * why it needs a test: a declaration with no reader produces no symptom when
+ * it goes stale (bug 118). Keyed by `providerConfig.providerName` so it lines
+ * up with the built declarations above.
+ */
+function loadManifestDeclarations(): Record<string, ManifestAttachmentSupport> {
+  const declarations: Record<string, ManifestAttachmentSupport> = {}
+  for (const dir of fs.readdirSync(PLUGIN_DIST)) {
+    const manifestPath = path.join(PLUGIN_DIST, dir, 'manifest.json')
+    if (!fs.existsSync(manifestPath)) continue
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as {
+      providerConfig?: {
+        providerName?: string
+        attachmentSupport?: ManifestAttachmentSupport
+      }
+    }
+    const name = manifest.providerConfig?.providerName
+    const support = manifest.providerConfig?.attachmentSupport
+    if (!name || !support) continue
+    declarations[name.toUpperCase()] = support
   }
   return declarations
 }
@@ -192,6 +233,57 @@ describe('providerCanTransportImages', () => {
       ])
       expect(providerCanTransportImages('OPENROUTER')).toBe(true)
       expect(staticProviderCanTransportImages('OPENROUTER')).toBe(true)
+    })
+  })
+
+  /**
+   * Bug 118's regression guard: the third copy of the same declaration. The
+   * build wins on disagreement — the manifest is the copy that must be
+   * corrected — but the disagreement has to fail here rather than wait for
+   * someone to notice it a year later while chasing something else.
+   */
+  describe('plugin manifests agree with their own builds', () => {
+    const built = loadBuiltPluginDeclarations()
+    const manifests = loadManifestDeclarations()
+    const shared = Object.keys(built)
+      .filter(name => name in manifests)
+      .sort()
+
+    it('found the manifests to compare', () => {
+      // Without this the whole block passes vacuously if the plugin layout
+      // moves — which is the failure mode that let bug 118 sit unnoticed.
+      expect(shared).toContain('NANOGPT')
+      expect(shared).toContain('OPENROUTER')
+      expect(shared.length).toBeGreaterThan(5)
+    })
+
+    it.each(shared)('%s manifest and build agree on whether attachments are supported', name => {
+      expect({ provider: name, supported: manifests[name].supported }).toEqual({
+        provider: name,
+        supported: built[name].supportsAttachments === true,
+      })
+    })
+
+    it.each(shared)('%s manifest and build declare the same image MIME types', name => {
+      const manifestImages = (manifests[name].mimeTypes ?? [])
+        .filter(t => t.startsWith('image/'))
+        .sort()
+      const builtImages = (built[name].supportedMimeTypes ?? [])
+        .filter(t => t.startsWith('image/'))
+        .sort()
+      expect(manifestImages).toEqual(builtImages)
+    })
+
+    it('NanoGPT forwards images in all three declarations — the bug 118 case', () => {
+      expect(manifests.NANOGPT.supported).toBe(true)
+      expect(manifests.NANOGPT.mimeTypes.slice().sort()).toEqual([
+        'image/gif',
+        'image/jpeg',
+        'image/png',
+        'image/webp',
+      ])
+      expect(built.NANOGPT.supportsAttachments).toBe(true)
+      expect(staticProviderCanTransportImages('NANOGPT')).toBe(true)
     })
   })
 })

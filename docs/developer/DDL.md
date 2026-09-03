@@ -983,6 +983,10 @@ CREATE INDEX "idx_files_sha256" ON "files" ("sha256");
 CREATE INDEX "idx_files_userId" ON "files" ("userId");
 ```
 
+**Invariant (enforced at write time):** `sha256`, `mimeType` and `size` all describe the bytes **actually stored**, never the bytes handed to the writer. The Scriptorium storage bridges transcode bitmap uploads to WebP (`transcodeToWebP`, via `storeMountFile`), so a writer that records its input describes a file that exists nowhere. All three are therefore taken from the bridge's return value; `lib/chat-files-v2.ts` additionally runs the bridge's own transcode before hashing, so the one hash serves both upload dedup and the join to `doc_mount_files.sha256` — the join that carries an image's description into the search index and lets `describe_image` / `attach_image` resolve a mount link back to its FileEntry.
+
+`mimeType`/`size` were brought into line by `repair-files-mime-and-size-from-mount-blob-v1`, which deliberately left `sha256` alone on the grounds that it was load-bearing for dedup; that carve-out was bug 117, and `realign-file-entry-sha256-v1` closes it by reading each row's hash back out of the mount blob its `storageKey` names.
+
 ### folders
 
 ```sql
@@ -1614,7 +1618,7 @@ A `doc_mount_files` row is the **content identity** for a set of bytes — one r
 
 Writers call `findOrCreateByContent(sha256, ...)` rather than `create` directly: if a content row with the matching sha already exists, its UUID is reused so any existing links continue to resolve correctly. The `sha256` INDEX is not UNIQUE because pre-refactor databases may carry duplicate sha rows from the days when every (mountPoint, relativePath) was its own file row; the migration deliberately leaves them in place rather than collapsing. `findBySha256` returns the first match.
 
-**Invariant (enforced at write time):** `sha256` equals the SHA-256 of the stored bytes. New content rows are minted by `linkBlobContent` in `doc-mount-file-links.repository`, which recomputes the sha from the actual bytes rather than trusting the caller. Any caller-supplied sha that diverges from the actual bytes hash triggers a warning log; the recomputed value wins. The `repair-mount-blob-sha256-from-bytes-v1` migration corrects pre-existing drifted rows. Note: `files.sha256` in the *main* DB is the input-bytes hash and is intentionally different — it is load-bearing for upload dedup and is not rewritten here.
+**Invariant (enforced at write time):** `sha256` equals the SHA-256 of the stored bytes. New content rows are minted by `linkBlobContent` in `doc-mount-file-links.repository`, which recomputes the sha from the actual bytes rather than trusting the caller. Any caller-supplied sha that diverges from the actual bytes hash triggers a warning log; the recomputed value wins. The `repair-mount-blob-sha256-from-bytes-v1` migration corrects pre-existing drifted rows. `files.sha256` in the *main* DB carries the same invariant and is joined against this column; it used to hold the pre-transcode *input* hash instead, which broke every such join for transcoded uploads (bug 117, fixed in 4.9.0 by `realign-file-entry-sha256-v1`).
 
 ### doc_mount_file_links
 

@@ -364,13 +364,14 @@ These settings govern which model is called upon to do the describing.
 - Should the primary refuse — or return an empty answer, or something so terse and hedged that it reads as a refusal ("I cannot…", "unable to…") — the uncensored fallback, if you have named one, is given its turn. If both decline, the message explains as much rather than pretending the attachment never arrived.
 - Every consultation is entered in the LLM logs as an **IMAGE_DESCRIPTION** call, so its cost, its latency, and its refusals are all a matter of record.
 - Should a describer prove sluggish, the consultation is abandoned after a minute so a single slow portrait can never hold your correspondent's reply hostage.
+- **The describer's word is checked before it is believed.** A gateway that fronts hundreds of models — NanoGPT, OpenRouter and their kind — may accept your picture with every appearance of politeness and route it to a model that quietly disregards it. The model, asked to describe an image it was never shown, will describe *an* image: fluently, at length, in tidy sections, and entirely out of its own head. Quilltap now examines the bill. A consultation charged for the instruction alone did not look at your picture, whatever prose came back, and the answer is discarded unread rather than filed. So too when the provider itself reports the attachment as never sent. In either case the failure names the offending profile and the fallbacks take their turn as they would after any other refusal.
 
 **Elsewhere in the house:** the primary profile is also the model consulted by the wardrobe's image analyser (see [Wardrobe](wardrobe.md)) and Aurora's *Describe from image* step. Those features prefer a *more* capable model when left to choose for themselves, on the reasoning that reading a garment's cut from a photograph is finer work than summarising a snapshot.
 
 **Prerequisites:**
 
 - At least one connection profile with **Supports image attachments (vision input)** ticked, and a working API key for it
-- The describing model must genuinely accept images; ticking the box on a model that cannot see produces empty answers rather than descriptions
+- The describing model must genuinely accept images. Ticking the box on a model that cannot see is now caught rather than believed — the consultation fails by name and passes to the fallbacks — but it still costs you a wasted call, so tick it only where it is true
 
 ### Memory Cascade Settings
 

@@ -2,17 +2,47 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | FIXED in v4 (2026-09-02) |
 | **Found** | 2026-09-02 |
-| **Fixed** | — |
+| **Fixed** | 2026-09-02 |
 | **Severity** | **Medium** (nothing is lost or corrupted, and the paths that break do so by returning "not found" rather than a wrong answer — but a transcoded chat upload is permanently unreachable from its own stored bytes, so its description never reaches the search index, `describe_image`/`attach_image` cannot resolve it from a mount link, and every future consumer that joins the two tables by hash inherits the hole) |
 | **Who it bites** | every chat-uploaded bitmap the bridge transcodes to WebP — in Friday, **118 of 239 uploaded images (49%)**, and **every single one** of them is a converted `image/webp` |
 | **Provenance** | Live (Friday, 2026-09-02) — found while diagnosing [bug 116](bug-116-describer-answer-never-verified.md), from an `auto-describe: completed` line reporting `linksUpdated: 0` for a file that plainly had a mount link |
-| **Fix site** | `lib/chat-files-v2.ts` (`uploadChatFile` / `uploadFileToProject`) |
+| **Fix site** | `lib/chat-files-v2.ts` (`uploadChatFile` / `uploadFileToProject`), plus the same drift in `lib/import/quilltap-import/import-files.ts` and `lib/backup/restore/restore.ts`; migration `realign-file-entry-sha256-v1` |
 | **v5 status** | **Applies.** Any port that hashes content for identity must fix *which* bytes the hash names — input or stored — and use the same answer on both sides of every join. The trap is that both answers are defensible and the codebase already contains both. |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-09-02).** The fix removed the conflict rather than
+choosing between its halves. `uploadChatFile` now calls the bridge's own
+`transcodeToWebP` *before* anything is hashed — the shape `lib/images-v2.ts`
+has always had, and the reason all 2541 of its generated rows joined cleanly —
+so the bytes that are hashed are the bytes that land on disk and one hash
+serves both jobs: dedup against other uploads, and the join to
+`doc_mount_files.sha256`. `transcodeToWebP` is a no-op on anything already WebP
+or not an image, so the bridge's second pass changes nothing. The row then
+records the bridge's returned `sha256` alongside its `mimeType` and `size`,
+with a warning log if the two ever stop agreeing.
+
+**The open question below was therefore not answered with a second column.**
+One column with a clear rule was enough, as it has been for `images-v2.ts`,
+once the rule was "the hash names the stored bytes" on both sides. The residual
+is that sharp's WebP encoding must stay deterministic for dedup to survive two
+uploads of one source file; it is, for a given sharp version, and a version
+bump costs a missed duplicate and nothing worse — the same bargain
+`images-v2.ts` has always made.
+
+Two sibling writers had the identical drift and were corrected the same way:
+`import-files.ts` and `restore.ts` both recorded an archive's claimed hash over
+bytes the bridge had just transcoded.
+
+Migration `realign-file-entry-sha256-v1` performs the backfill described below,
+reading each row's hash back out of the mount blob its `storageKey` names. It
+lifts the deliberate carve-out in
+`repair-files-mime-and-size-from-mount-blob-v1`, whose module comment now says
+so. `DDL.md` carried the old rule as an intentional invariant in two places;
+both now state the new one.
 
 ### Symptom
 

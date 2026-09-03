@@ -2,17 +2,36 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | FIXED in v4 (2026-09-02) |
 | **Found** | 2026-09-02 |
-| **Fixed** | — |
+| **Fixed** | 2026-09-02 |
 | **Severity** | **High** (silent fabrication written to durable storage: a confident, detailed, wholly invented description of a picture the model never saw is persisted onto `files.description`, from where it short-circuits every future reader forever — the chat turn, `describe_image`, the gallery, exports) |
 | **Who it bites** | anyone whose Image Description Profile routes through a gateway or model that accepts an `image_url` part and ignores it. Confirmed on `NANOGPT/deepseek/deepseek-v4-flash-vision-exp`; the shape applies to any router fronting hundreds of upstream models, which is most of what NanoGPT and OpenRouter are for |
 | **Provenance** | Live (Friday, chat `ed1de505`, file `3358d097-0e09-4204-b9d2-a84fec5331e5`, 2026-09-02 21:23 UTC) — user reported "I attached an image and they used `describe_image` to describe it, and it was definitely the **WRONG** description" |
-| **Fix site** | `lib/chat/file-attachment-fallback.ts` (`describeImageWithProfile`) |
+| **Fix site** | `lib/chat/file-attachment-fallback.ts` — new exported `verifyImageReachedModel`, called from `describeImageWithProfile` ahead of every content check |
 | **v5 status** | **Applies.** Any port that substitutes a text description for image bytes must verify the bytes arrived before believing the text. The two proofs are already on the response object; the trap is that neither is looked at, and the failure produces well-formed prose rather than an error. |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-09-02).** `describeImageWithProfile` now verifies the
+image arrived before the text is believed, via a new exported
+`verifyImageReachedModel`. Both proofs named below are read: the plugin's
+`attachmentResults.failed` ledger, and `usage.promptTokens` against a ceiling
+derived from `IMAGE_DESCRIPTION_INSTRUCTION` at a deliberately pessimistic 2.5
+chars/token (66 tokens; the live call reported 38, and the cheapest real image
+tier in the field would put a genuine call at ~123). Cache-read tokens are
+added back before comparing, because every plugin normalises them *out* of
+`promptTokens` under the 4.6.1 invariant and a cache hit would otherwise read
+as a dropped image. A missing `usage`, or `promptTokens: 0`, is silence and is
+not failed. Either verdict returns `type: 'unsupported'` with an error naming
+the profile, so the existing fallback chain and the uncensored describer take
+their turns exactly as they do after a refusal. The check runs *before* the
+empty-response and refusal-detector branches, because the failure it catches
+produces the healthiest-looking response in the file.
+
+The provenance note below still describes the pre-fix behaviour and is left as
+written.
 
 ### Symptom
 

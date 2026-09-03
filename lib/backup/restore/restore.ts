@@ -16,6 +16,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
 import { makeCarriedStoreRowsResolver } from './carried-store-rows';
+import { parseMountBlobStorageKey } from '@/lib/file-storage/project-store-bridge';
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { rawQuery } from '@/lib/database/manager';
@@ -473,6 +474,16 @@ export async function restore(
       data.docMountPoints || [],
     );
 
+    // The carried branch below skips the replay, so it never sees a bridge and
+    // cannot take its `sha256` from one. The archived blob rows restore
+    // verbatim and carry the hash of their own bytes, which is the same answer
+    // the bridge would have given — so index them by id and use that, rather
+    // than trusting a `files.sha256` a pre-4.9.0 source instance may have
+    // written from its pre-transcode input (bug 117).
+    const carriedBlobSha256ById = new Map<string, string>(
+      (data.docMountBlobs || []).map(b => [b.id, b.sha256] as const)
+    );
+
     for (let i = 0; i < data.files.length; i++) {
       const file = data.files[i];
       const originalFile = parsedData.files[i]; // original IDs for disk lookup
@@ -489,8 +500,14 @@ export async function restore(
           delete (fileData as Record<string, unknown>).s3Key;
           delete (fileData as Record<string, unknown>).s3Bucket;
           delete (fileData as Record<string, unknown>).mountPointId;
+          const carriedBlobId = parseMountBlobStorageKey(carriedStorageKey)?.blobId;
+          const carriedSha256 = carriedBlobId ? carriedBlobSha256ById.get(carriedBlobId) : undefined;
           await repos.files.create(
-            { ...fileData, storageKey: carriedStorageKey },
+            {
+              ...fileData,
+              ...(carriedSha256 ? { sha256: carriedSha256 } : {}),
+              storageKey: carriedStorageKey,
+            },
             { id: file.id }
           );
           filesRestored++;
@@ -505,6 +522,7 @@ export async function restore(
           let restoredStorageKey: string;
           let restoredMimeType: string;
           let restoredSize: number;
+          let restoredSha256: string;
           if (file.projectId) {
             const uploadResult = await fileStorageManager.uploadFile({
               filename: file.originalFilename,
@@ -516,6 +534,7 @@ export async function restore(
             restoredStorageKey = uploadResult.storageKey;
             restoredMimeType = uploadResult.storedMimeType;
             restoredSize = uploadResult.sizeBytes;
+            restoredSha256 = uploadResult.sha256;
           } else {
             const written = await writeUserUploadToMountStore({
               filename: file.originalFilename,
@@ -526,13 +545,16 @@ export async function restore(
             restoredStorageKey = written.storageKey;
             restoredMimeType = written.storedMimeType;
             restoredSize = written.sizeBytes;
+            restoredSha256 = written.sha256;
           }
 
           // Create file metadata with storage key. The bridges may transcode
-          // bytes (bitmaps → WebP), so we record the post-bridge mime/size
-          // rather than what the backup row claimed — a backup made before
-          // this fix may carry the pre-transcode lie, and re-writing it would
-          // re-introduce the "media_type X but bytes are Y" error.
+          // bytes (bitmaps → WebP), so we record the post-bridge
+          // mime/size/sha256 rather than what the backup row claimed — a backup
+          // made before this fix may carry the pre-transcode lie, and
+          // re-writing it would re-introduce the "media_type X but bytes are Y"
+          // error, and (for sha256) a FileEntry that cannot be joined to the
+          // mount blob it points at (bug 117).
           // Strip auto-generated and legacy fields from backup data
           const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
           // Remove legacy fields that may exist in older backups
@@ -544,6 +566,7 @@ export async function restore(
               ...fileData,
               mimeType: restoredMimeType,
               size: restoredSize,
+              sha256: restoredSha256,
               storageKey: restoredStorageKey,
             },
             { id: file.id }

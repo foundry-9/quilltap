@@ -382,6 +382,8 @@ import { retirePrefillOnThinkingProfilesMigration } from './retire-prefill-on-th
 import { addProfileFallbackFieldsMigration } from './add-profile-fallback-fields';
 import { recomputeChatLastMessageAtMigration } from './recompute-chat-last-message-at';
 import { collapseDuplicateFoldersMigration } from './collapse-duplicate-folders';
+// files.sha256 must name the bytes on disk, not the pre-transcode input (bug 117)
+import { realignFileEntrySha256Migration } from './realign-file-entry-sha256';
 
 /**
  * All available migrations.
@@ -766,6 +768,8 @@ export const migrations: Migration[] = [
   recomputeChatLastMessageAtMigration,
   // File tree: collapse duplicate folder rows + unique (userId, projectId, path) index (bug 114)
   collapseDuplicateFoldersMigration,
+  // Realign files.sha256 with the stored bytes so FileEntries join to their mount blobs (bug 117)
+  realignFileEntrySha256Migration,
 ];
 
 export {
@@ -1129,5 +1133,7 @@ export {
   recomputeChatLastMessageAtMigration,
   // File tree: collapse duplicate folder rows + unique (userId, projectId, path) index (bug 114)
   collapseDuplicateFoldersMigration,
+  // Realign files.sha256 with the stored bytes so FileEntries join to their mount blobs (bug 117)
+  realignFileEntrySha256Migration,
 };
 

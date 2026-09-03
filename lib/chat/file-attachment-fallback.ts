@@ -18,7 +18,7 @@ import { getErrorMessage } from '@/lib/error-utils'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import { profileParams } from '@/lib/llm/cheap-llm'
 import { resolveSamplingParams } from '@/lib/llm/sampling-params'
-import type { FileAttachment } from '@/lib/llm/base'
+import type { FileAttachment, LLMResponse } from '@/lib/llm/base'
 import { logger } from '@/lib/logger'
 
 /**
@@ -32,6 +32,97 @@ const IMAGE_DESCRIPTION_TIMEOUT_MS = 60_000
 /** The instruction sent to the vision model. Shared with the LLM-call log. */
 const IMAGE_DESCRIPTION_INSTRUCTION =
   'Please describe this image in great detail. Include all visible elements, colors, composition, mood, and any text or notable features. Be thorough and descriptive.'
+
+/**
+ * A deliberately pessimistic characters-per-token ratio, used only to put a
+ * *ceiling* on what the instruction alone could cost. Real BPE tokenizers run
+ * 3.5–4.5 chars/token on English prose (the live call put the instruction
+ * above at ~4.3), so 2.5 leaves ~40% headroom before a text-only prompt could
+ * climb past the ceiling and be mistaken for a real one.
+ */
+const MIN_CHARS_PER_TOKEN = 2.5
+
+/**
+ * The most prompt tokens `IMAGE_DESCRIPTION_INSTRUCTION` could plausibly cost
+ * on its own. A prompt at or below this billed for text and nothing else — no
+ * image was processed, on any provider, whatever the response says. The margin
+ * to a genuine image call is wide: the cheapest image tier in the field
+ * (OpenAI low-detail, 85 tokens) still lands a real call well clear of it, and
+ * most providers charge hundreds to thousands.
+ */
+const INSTRUCTION_TOKEN_CEILING = Math.ceil(
+  IMAGE_DESCRIPTION_INSTRUCTION.length / MIN_CHARS_PER_TOKEN
+)
+
+/** Verdict from `verifyImageReachedModel`. */
+export type ImageArrivalVerdict =
+  | { arrived: true }
+  | { arrived: false; reason: string }
+
+/**
+ * Did the image actually reach the model, or did we get 683 tokens of confident
+ * prose about a picture nobody looked at?
+ *
+ * Bug 116: `describeImageWithProfile` believed the describer's answer on its
+ * own recognisance. A NanoGPT route for an experimental vision model accepted
+ * the `image_url` part and discarded it, then answered the only thing it had —
+ * "Please describe this image in great detail." — with a detailed, sectioned,
+ * entirely invented description of a tabby kitten, which was persisted to
+ * `files.description` and short-circuited every later reader forever. Nothing
+ * threw; the failure produced well-formed prose, and the only post-hoc check in
+ * the function is a refusal detector that treats length as evidence of success.
+ *
+ * Two proofs were already on the response object and neither was read:
+ *
+ *  1. **The plugin's attachment ledger.** `attachmentResults.failed` is the
+ *     plugin telling us, in so many words, that it did not send the bytes.
+ *     This half would not have fired on the live incident — the plugin *did*
+ *     send — but it is the detector for the neighbouring failure class, and
+ *     leaving it unread is bug 91's blindness surviving one layer up.
+ *  2. **The response's own token count.** `promptTokens` at or below what the
+ *     instruction costs by itself is an arithmetic-grade, provider-agnostic
+ *     statement that no image was processed. On the live call it was 38.
+ *
+ * Silence is not evidence: a missing `usage`, or a zero `promptTokens`, means
+ * the provider reported nothing and must not be failed for it. Cache-read
+ * tokens are added back before comparing, because every plugin normalises them
+ * *out* of `promptTokens` (the 4.6.1 invariant) and a cache hit would otherwise
+ * read as a dropped image.
+ */
+export function verifyImageReachedModel(
+  response: Pick<LLMResponse, 'usage' | 'attachmentResults' | 'cacheUsage'>,
+  attachmentId: string
+): ImageArrivalVerdict {
+  const failed = response.attachmentResults?.failed ?? []
+  if (failed.length > 0) {
+    const mine = failed.find(f => f.id === attachmentId) ?? failed[0]
+    return {
+      arrived: false,
+      reason: `the provider reported the attachment as not sent: ${mine.error || 'no reason given'}`,
+    }
+  }
+
+  const promptTokens = response.usage?.promptTokens
+  if (typeof promptTokens !== 'number' || promptTokens <= 0) {
+    return { arrived: true }
+  }
+
+  const cacheRead =
+    (response.cacheUsage?.cacheReadInputTokens ?? 0) +
+    (response.cacheUsage?.cachedTokens ?? 0)
+  const billedInput = promptTokens + cacheRead
+  if (billedInput <= INSTRUCTION_TOKEN_CEILING) {
+    return {
+      arrived: false,
+      reason:
+        `the model was billed for ${billedInput} prompt tokens, which is no more than the ` +
+        `${INSTRUCTION_TOKEN_CEILING} the instruction costs on its own — the image was accepted and discarded ` +
+        `before it reached the model, and any description returned is invented`,
+    }
+  }
+
+  return { arrived: true }
+}
 
 /**
  * Get image description profile from repos
@@ -414,6 +505,37 @@ async function describeImageWithProfile(
       logger.warn('[Image Fallback] Failed to record IMAGE_DESCRIPTION llm log', {
         error: getErrorMessage(logErr),
       })
+    }
+
+    // Before believing a word of it: did the image actually arrive? This has
+    // to run ahead of every content check, because the failure it catches
+    // produces the healthiest-looking response in the file — long, confident,
+    // sectioned prose that passes the refusal detector with room to spare
+    // (bug 116). The caller persists whatever we return onto
+    // `files.description`, from where it short-circuits every future reader,
+    // so a wrong answer here is permanent.
+    const arrival = verifyImageReachedModel(response, attachmentForLLM.id)
+    if (!arrival.arrived) {
+      logger.warn('[Image Fallback] Describer answered without the image; discarding its description', {
+        provider: imageDescProfile.provider,
+        model: imageDescProfile.modelName,
+        profileId: imageDescProfile.id,
+        filename: file.filename,
+        reason: arrival.reason,
+        promptTokens: response.usage?.promptTokens,
+        contentLength: response.content?.length ?? 0,
+      })
+      return {
+        type: 'unsupported',
+        error: `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) did not process the image — ${arrival.reason}. Pick a describer on a model that genuinely reads images; a gateway may accept an image and route to a model that ignores it.`,
+        processingMetadata: {
+          originalFilename: file.filename,
+          originalMimeType: file.mimeType,
+          descriptionProfileId: imageDescProfile.id,
+          descriptionProvider: imageDescProfile.provider,
+          descriptionModel: imageDescProfile.modelName,
+        },
+      }
     }
 
     // Check for empty or invalid responses

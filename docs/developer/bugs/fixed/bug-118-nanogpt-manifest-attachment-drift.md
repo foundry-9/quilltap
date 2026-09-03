@@ -2,17 +2,38 @@
 
 | | |
 |---|---|
-| **Status** | **Open** |
+| **Status** | FIXED in v4 (2026-09-02) |
 | **Found** | 2026-09-02 |
-| **Fixed** | — |
+| **Fixed** | 2026-09-02 |
 | **Severity** | **Low** (no runtime effect today — nothing in `app/` or `lib/` reads the manifest's `providerConfig.attachmentSupport`; it is a shipped, schema-validated, load-bearing-looking declaration that states the opposite of the truth, and the next reader to wire it up inherits a wrong answer for exactly the provider bug 91 was about) |
 | **Who it bites** | nobody at runtime; anyone reading the manifest to answer "does NanoGPT forward images?", and any future consumer of the field |
 | **Provenance** | Live (Friday, 2026-09-02) — found while diagnosing [bug 116](bug-116-describer-answer-never-verified.md), comparing what the plugin declares against what it does |
 | **Fix site** | `plugins/dist/qtap-plugin-nanogpt/manifest.json`, `__tests__/unit/lib/llm/image-transport.test.ts` |
 | **v5 status** | **Applies as a discipline point.** A capability declared in more than one place needs every copy under one gate, or the ungated copy is the one that rots. |
-| **Index** | [bugs.md](../bugs.md) |
+| **Index** | [bugs.md](../../bugs.md) |
 
 ---
+
+**FIXED in v4 (2026-09-02).** The manifest now declares
+`supported: true` with the four MIME types from
+`NANOGPT_SUPPORTED_IMAGE_MIME_TYPES` and the code's own description; plugin
+bumped to 1.2.2 in both `package.json` and `manifest.json`, and
+`npm run build:plugins` re-run — the built `index.js` declaration is byte-identical,
+since it was already right.
+
+`__tests__/unit/lib/llm/image-transport.test.ts` now loads all three
+declarations and holds the manifest against the build for every bundled
+plugin, on both `supported` and the image MIME list, with a guard test
+asserting the manifests were actually found so the block cannot pass vacuously
+if the plugin layout moves. The existing comment about the build being
+authoritative stays correct and was extended rather than replaced: the build
+still wins, a disagreement is still a *manifest* bug, and it now fails a test
+instead of waiting a year to be noticed. Verified by reverting the manifest —
+three tests fail, naming NANOGPT.
+
+The open question below — whether the field should exist at all, given nothing
+reads it — was left open. It is kept because a manifest is what a third-party
+plugin author reads and fills in first, and it is now gated.
 
 ### Symptom
 

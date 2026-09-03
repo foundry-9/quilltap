@@ -1,47 +1,49 @@
 /**
- * Migration: Repair drifted `files.mimeType` / `files.size` on mount-blob rows
+ * Migration: Realign `files.sha256` with the bytes actually stored
  *
- * The Scriptorium storage bridges (`writeProjectFileToMountStore`,
- * `writeUserUploadToMountStore`, `writeLanternBackgroundToMountStore`,
- * `writeCharacterAvatarToVault`) transcode bitmap uploads to WebP before
- * persisting them, via `transcodeToWebP`. Their return value carries the
- * post-transcode `storedMimeType` and `sizeBytes`, but prior to this fix
- * the callers (FileStorageManager.uploadFile, uploadFileToProject,
- * character-avatar / story-background handlers, the v1 file/image/wardrobe
- * routes, restore-service) discarded those values and stamped the resulting
- * `files` row with the *input* mimeType and `buffer.length`.
+ * `lib/chat-files-v2.ts` hashed the *input* buffer and let the storage bridge
+ * transcode afterwards, so a chat upload that arrived as PNG or JPEG was
+ * stored as WebP under a row whose `sha256` named bytes that exist nowhere.
+ * The sibling path `lib/images-v2.ts` transcodes first and hashes second,
+ * which is why every generated image joined cleanly and half the uploads did
+ * not — in the instance that surfaced this, 118 of 239 uploaded images, all of
+ * them converted WebP.
  *
- * Consequence: every FileEntry whose underlying mount blob is WebP but whose
- * `mimeType` says `image/jpeg` (or PNG, HEIC, etc.) was a ticking bomb. The
- * symptom that prompted this repair was Anthropic rejecting attachments with
- * `messages.N.content.M.image.source.base64: The image was specified using
- * the image/jpeg media type, but the image appears to be a image/webp image`.
- * HTTP `Content-Type` headers on `/api/v1/files/[id]?action=download` and the
- * proxy route were similarly lying.
+ * Nothing was corrupted; the joins simply stopped meeting. `files.sha256` was
+ * speaking input-hash and the mount index was speaking stored-hash, so every
+ * cross-domain lookup returned an empty result that its caller read as "no
+ * such file" and logged at `info`:
  *
- * This migration walks every `files` row whose `storageKey` starts with
- * `mount-blob:`, joins to the mount-index DB's `doc_mount_blobs` table by
- * the blob id encoded in the storage key, and UPDATEs `mimeType` / `size`
- * when they disagree with the blob's `storedMimeType` / `sizeBytes`.
+ *   - `lib/photos/auto-describe-attachment.ts` — a generated description never
+ *     reached `doc_mount_file_links.description`/`extractedText`, so it was
+ *     never chunked or embedded and the image was unsearchable (`linksUpdated: 0`)
+ *   - `lib/tools/handlers/doc-edit/photo-handlers.ts` — `describe_image` and
+ *     `attach_image` could not resolve a mount-link uuid to its FileEntry
+ *   - `lib/photos/save-image-to-album.ts` — `keep_image` from a mount link
+ *     could not find its sister FileEntry
+ *   - `lib/photos/photo-link-summary.ts` — link summaries reported zero linkers
  *
- * `sha256` is *not* touched here. At the time this was written the legacy
- * `files.sha256` was the input bytes' hash and load-bearing for upload-time
- * deduplication (`findBySha256` runs before the transcode), so rewriting it to
- * the stored sha would have broken dedup of same-source re-uploads.
+ * See bug 117. The forward fix runs the bridge's own `transcodeToWebP` before
+ * anything is hashed, so one hash serves both dedup and the join; this
+ * migration repairs the rows written before that.
  *
- * That carve-out turned out to be bug 117: it left `files` speaking input-hash
- * while the mount index spoke stored-hash, and every join between them
- * returned an empty result its caller read as "no such file". The forward fix
- * removed the conflict rather than choosing between its halves — chat uploads
- * now run the bridge's own transcode *before* hashing, so dedup and the join
- * compare the same thing — and `realign-file-entry-sha256-v1` repairs the rows
- * this migration left behind.
+ * It walks every `files` row whose `storageKey` is a `mount-blob:` key, reads
+ * the blob's own hash out of the mount-index database, and writes it to
+ * `files.sha256` where the two disagree. No bytes are touched and no blob is
+ * re-hashed — `doc_mount_blobs.sha256` is recomputed from the actual bytes at
+ * write time (`linkBlobContent`) and repaired by
+ * `repair-mount-blob-sha256-from-bytes-v1`, so it is already the trustworthy
+ * side of the join.
  *
- * Idempotent: rows already in agreement are skipped. Rows whose mount blob
- * has been removed (orphaned storage key) are logged and left alone — they
- * are a separate cleanup problem.
+ * Note that `repair-files-mime-and-size-from-mount-blob-v1` deliberately left
+ * `sha256` alone, on the grounds that it was load-bearing for upload dedup.
+ * That was true at the time and is no longer: dedup now compares stored-bytes
+ * hashes on both sides, so this column can mean one thing.
  *
- * Migration ID: repair-files-mime-and-size-from-mount-blob-v1
+ * Idempotent: rows already in agreement are skipped, and a row whose blob has
+ * gone missing is logged and left as it is rather than guessed at.
+ *
+ * Migration ID: realign-file-entry-sha256-v1
  */
 
 import Database, { Database as DatabaseType } from 'better-sqlite3';
@@ -57,7 +59,7 @@ import {
 } from '../lib/database-utils';
 import { getMountIndexDatabasePath } from '../../lib/paths';
 
-const MIGRATION_ID = 'repair-files-mime-and-size-from-mount-blob-v1';
+const MIGRATION_ID = 'realign-file-entry-sha256-v1';
 const STORAGE_KEY_PREFIX = 'mount-blob:';
 const BATCH_SIZE = 500;
 
@@ -82,6 +84,7 @@ function openMountIndexDb(): DatabaseType | null {
   }
 }
 
+/** `mount-blob:<mountPointId>:<blobId>` → `<blobId>`. */
 function parseBlobId(storageKey: string): string | null {
   if (!storageKey.startsWith(STORAGE_KEY_PREFIX)) return null;
   const rest = storageKey.slice(STORAGE_KEY_PREFIX.length);
@@ -92,23 +95,22 @@ function parseBlobId(storageKey: string): string | null {
 
 interface FileRow {
   id: string;
-  mimeType: string;
-  size: number;
+  sha256: string;
   storageKey: string;
 }
 
 interface BlobRow {
-  storedMimeType: string;
-  sizeBytes: number;
+  sha256: string;
 }
 
-export const repairFilesMimeAndSizeFromMountBlobMigration: Migration = {
+export const realignFileEntrySha256Migration: Migration = {
   id: MIGRATION_ID,
   description:
-    'Reconcile files.mimeType and files.size with the mount blob they point at; the storage bridges transcode bitmaps to WebP and the FileEntry must reflect what is on disk',
-  introducedInVersion: '4.6.0',
+    'Rewrite files.sha256 to the hash of the bytes actually stored, so FileEntries join to the mount blobs they point at',
+  introducedInVersion: '4.9.0',
   dependsOn: [
     'relink-files-to-mount-blobs-v1',
+    'repair-mount-blob-sha256-from-bytes-v1',
   ],
 
   async shouldRun(): Promise<boolean> {
@@ -129,7 +131,7 @@ export const repairFilesMimeAndSizeFromMountBlobMigration: Migration = {
     const startTime = Date.now();
     let mountDb: DatabaseType | null = null;
     let scanned = 0;
-    let updated = 0;
+    let realigned = 0;
     let orphaned = 0;
     let malformedKey = 0;
 
@@ -140,7 +142,7 @@ export const repairFilesMimeAndSizeFromMountBlobMigration: Migration = {
           id: MIGRATION_ID,
           success: true,
           itemsAffected: 0,
-          message: 'No mount-index database present; nothing to reconcile',
+          message: 'No mount-index database present; nothing to realign',
           durationMs: Date.now() - startTime,
           timestamp: new Date().toISOString(),
         };
@@ -157,14 +159,14 @@ export const repairFilesMimeAndSizeFromMountBlobMigration: Migration = {
           id: MIGRATION_ID,
           success: true,
           itemsAffected: 0,
-          message: 'No mount-blob FileEntries to reconcile',
+          message: 'No mount-blob FileEntries to realign',
           durationMs: Date.now() - startTime,
           timestamp: new Date().toISOString(),
         };
       }
 
       const selectBatch = mainDb.prepare(
-        `SELECT id, mimeType, size, storageKey
+        `SELECT id, sha256, storageKey
            FROM "files"
           WHERE storageKey LIKE 'mount-blob:%'
             AND id > ?
@@ -173,29 +175,32 @@ export const repairFilesMimeAndSizeFromMountBlobMigration: Migration = {
       );
 
       const findBlob = mountDb.prepare(
-        `SELECT storedMimeType, sizeBytes FROM "doc_mount_blobs" WHERE id = ?`,
+        `SELECT sha256 FROM "doc_mount_blobs" WHERE id = ?`,
       );
 
       const updateFile = mainDb.prepare(
-        `UPDATE "files" SET mimeType = ?, size = ?, updatedAt = ? WHERE id = ?`,
+        `UPDATE "files" SET sha256 = ?, updatedAt = ? WHERE id = ?`,
       );
 
       let lastId = '';
-      while (true) {
+      for (;;) {
         const batch = selectBatch.all(lastId, BATCH_SIZE) as FileRow[];
         if (batch.length === 0) break;
 
-        // Read every blob's metadata up-front (no writes), then apply
-        // updates inside a single batch transaction. Keeping the read /
-        // write phases separate lets us tolerate orphaned blob references
-        // without aborting the whole batch.
-        const updates: Array<{ id: string; mimeType: string; size: number }> = [];
+        // Read the blob hashes up-front, apply the writes in one transaction
+        // afterwards: a row whose blob has vanished must not abort the batch
+        // around it.
+        const updates: Array<{ id: string; sha256: string }> = [];
         for (const row of batch) {
           scanned++;
+          // Per row, not per batch: `reportProgress` throttles itself to
+          // ~250 ms, and a library larger than one batch should not leave the
+          // loading screen still for 500 rows at a time.
+          reportProgress(scanned, total, 'files');
           const blobId = parseBlobId(row.storageKey);
           if (!blobId) {
             malformedKey++;
-            logger.warn('Malformed mount-blob storage key; skipping', {
+            logger.warn('Malformed mount-blob storage key; sha256 left untouched', {
               context: `migration.${MIGRATION_ID}`,
               fileId: row.id,
               storageKey: row.storageKey,
@@ -205,43 +210,36 @@ export const repairFilesMimeAndSizeFromMountBlobMigration: Migration = {
           const blob = findBlob.get(blobId) as BlobRow | undefined;
           if (!blob) {
             orphaned++;
-            logger.warn('Mount blob missing for FileEntry; mime/size left untouched', {
+            logger.warn('Mount blob missing for FileEntry; sha256 left untouched', {
               context: `migration.${MIGRATION_ID}`,
               fileId: row.id,
               blobId,
             });
             continue;
           }
-          if (blob.storedMimeType === row.mimeType && blob.sizeBytes === row.size) {
-            continue;
-          }
-          updates.push({
-            id: row.id,
-            mimeType: blob.storedMimeType,
-            size: blob.sizeBytes,
-          });
+          if (blob.sha256 === row.sha256) continue;
+          updates.push({ id: row.id, sha256: blob.sha256 });
         }
 
         if (updates.length > 0) {
           const now = new Date().toISOString();
           const tx = mainDb.transaction((rows: typeof updates) => {
             for (const u of rows) {
-              updateFile.run(u.mimeType, u.size, now, u.id);
-              updated++;
+              updateFile.run(u.sha256, now, u.id);
+              realigned++;
             }
           });
           tx(updates);
         }
 
-        reportProgress(scanned, total, 'files');
         lastId = batch[batch.length - 1].id;
       }
 
-      const message = `Scanned ${scanned} mount-blob FileEntries; reconciled ${updated}; ${orphaned} orphaned (no matching blob), ${malformedKey} malformed storage keys`;
+      const message = `Scanned ${scanned} mount-blob FileEntries; realigned ${realigned} sha256 values; ${orphaned} orphaned (no matching blob), ${malformedKey} malformed storage keys`;
       logger.info(message, {
         context: `migration.${MIGRATION_ID}`,
         scanned,
-        updated,
+        realigned,
         orphaned,
         malformedKey,
       });
@@ -249,24 +247,24 @@ export const repairFilesMimeAndSizeFromMountBlobMigration: Migration = {
       return {
         id: MIGRATION_ID,
         success: true,
-        itemsAffected: updated,
+        itemsAffected: realigned,
         message,
         durationMs: Date.now() - startTime,
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      logger.error('Repair-files-mime-and-size-from-mount-blob migration aborted', {
+      logger.error('Realign-file-entry-sha256 migration aborted', {
         context: `migration.${MIGRATION_ID}`,
         error: errorMessage,
         scanned,
-        updated,
+        realigned,
       });
       return {
         id: MIGRATION_ID,
         success: false,
-        itemsAffected: updated,
-        message: 'Repair-files-mime-and-size-from-mount-blob migration aborted',
+        itemsAffected: realigned,
+        message: 'Realign-file-entry-sha256 migration aborted',
         error: errorMessage,
         durationMs: Date.now() - startTime,
         timestamp: new Date().toISOString(),

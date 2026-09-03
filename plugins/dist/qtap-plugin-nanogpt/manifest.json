@@ -3,7 +3,7 @@
   "name": "qtap-plugin-nanogpt",
   "title": "NanoGPT",
   "description": "NanoGPT pay-as-you-go gateway to hundreds of chat, image, and embedding models",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",
@@ -55,9 +55,14 @@
       "webSearch": false
     },
     "attachmentSupport": {
-      "supported": false,
-      "mimeTypes": [],
-      "description": "NanoGPT chat requests are text-only in Quilltap; attachments are not forwarded"
+      "supported": true,
+      "mimeTypes": [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp"
+      ],
+      "description": "Images (JPEG, PNG, GIF, WebP) — requires a vision-capable routed model"
     }
   },
   "permissions": {

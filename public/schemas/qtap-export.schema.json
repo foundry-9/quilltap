@@ -1558,7 +1558,7 @@
       "additionalProperties": true,
       "properties": {
         "id": { "$ref": "#/$defs/UUID" },
-        "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64, "description": "SHA-256 of the bytes as stored, matching `mimeType` and `size` — not of whatever was originally uploaded. The importer recomputes all three from its own storage bridge, which transcodes bitmaps to WebP, so an archive written before 4.9.0 may carry a pre-transcode hash here and the importer's value wins." },
         "originalFilename": { "type": "string" },
         "mimeType": { "type": "string" },
         "size": { "type": "integer", "minimum": 0 },

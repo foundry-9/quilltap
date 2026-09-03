@@ -4,6 +4,66 @@
 
 ### 4.9-dev
 
+#### Fixed: a describer's answer is now verified before it is believed (bug 116)
+
+`describeImageWithProfile` accepted whatever the vision model returned. A NanoGPT route for
+`deepseek/deepseek-v4-flash-vision-exp` accepted the `image_url` part, discarded it, and answered
+the instruction alone with 3175 characters about a tabby kitten; the picture was a warship. The
+response was persisted to `files.description`, from where it short-circuited the chat turn,
+`describe_image`, the gallery and exports permanently. Nothing threw, nothing logged above `info`,
+and the only post-hoc check in the function greps the text for refusal words — so a confident
+answer read as the healthiest possible result, with length taken as evidence of success.
+
+New `verifyImageReachedModel` runs before any content check and reads the two proofs the response
+already carried:
+
+- `attachmentResults.failed` — the plugin saying it did not send the bytes. This half would not
+  have fired on the live incident (the plugin did send) but is the detector for the neighbouring
+  failure class, and leaving it unread was bug 91's blindness one layer up.
+- `usage.promptTokens` — at or below what `IMAGE_DESCRIPTION_INSTRUCTION` costs by itself, the
+  model was billed for text and nothing else. The live call reported 38. The ceiling is derived
+  from the instruction at 2.5 chars/token, well below the 3.5–4.5 real tokenizers produce, and
+  cache-read tokens are added back first since every plugin normalises them out of `promptTokens`.
+
+Either verdict fails the attempt with an error naming the profile and falls through to the normal
+fallback chain. A missing `usage`, or `promptTokens: 0`, is treated as silence and not as evidence.
+
+#### Fixed: a chat upload's FileEntry recorded the hash of bytes that were never stored (bug 117)
+
+`uploadChatFile` hashed the input buffer and let the storage bridge transcode afterwards, so any
+bitmap converted to WebP produced a `files` row whose `sha256` named bytes that exist nowhere.
+`files` spoke input-hash while the mount index spoke stored-hash, and every join between them
+returned an empty result its caller read as "no such file": auto-descriptions never reached
+`doc_mount_file_links.description`/`extractedText` and were never chunked or embedded (the image
+was unsearchable), `describe_image` / `attach_image` could not resolve a mount-link uuid to its
+FileEntry, `keep_image` could not find a link's sister row, and link summaries reported zero
+linkers. In one live instance, 118 of 239 uploaded images; all 2541 generated images were correct,
+because `images-v2.ts` orders the same two operations the other way.
+
+`chat-files-v2.ts` now runs the bridge's own `transcodeToWebP` before anything is hashed — the
+shape `images-v2.ts` has always had — so one hash serves both upload dedup and the join, and the
+row records the bridge's returned `sha256` alongside its `mimeType` and `size`. The two sibling
+writers that recorded an archive's claimed hash over post-bridge bytes, `import-files.ts` and
+`restore.ts`, were corrected the same way.
+
+New migration `realign-file-entry-sha256-v1` repairs existing rows: for every `files` row with a
+`mount-blob:` storage key it reads the blob's own hash out of the mount index and writes it back,
+skipping rows already in agreement and logging rather than guessing when a blob is missing. This
+lifts the deliberate carve-out in `repair-files-mime-and-size-from-mount-blob-v1`, which left
+`sha256` alone because it was load-bearing for dedup; dedup now compares stored-bytes hashes on
+both sides, so the column can mean one thing.
+
+#### Fixed: the NanoGPT manifest said images were not forwarded, eleven versions after they were (bug 118)
+
+`plugins/dist/qtap-plugin-nanogpt/manifest.json` declared `attachmentSupport.supported: false` with
+an empty MIME list, unchanged since the plugin was added and contradicted by both the built plugin
+declaration and `lib/llm/attachment-support.ts`. No runtime effect — nothing reads the field — but
+it was the only one of eleven bundled manifests disagreeing with its own code, and the only copy of
+the declaration nothing gated. Manifest corrected to match the code (plugin 1.2.2, built output
+unchanged), and `image-transport.test.ts` now holds all three declarations together instead of two.
+The build stays authoritative; a manifest/build disagreement is a manifest bug, and now a failing
+test.
+
 #### Docs: filed bugs 116, 117 and 118 from one mis-described image upload
 
 An uploaded screenshot of a warship was stored with a 3175-character description of a tabby
