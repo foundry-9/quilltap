@@ -22,6 +22,7 @@ import { restore } from '@/lib/backup/restore/restore';
 import { parseBackupZip } from '@/lib/backup/restore/archive';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
+import { rawQuery } from '@/lib/database/manager';
 
 jest.mock('@/lib/backup/restore/archive', () => ({
   parseBackupZip: jest.fn(),
@@ -75,6 +76,7 @@ jest.mock('@/lib/llm/connection-profile-names', () => ({
 const mockedParseBackupZip = parseBackupZip as jest.MockedFunction<typeof parseBackupZip>
 const mockedGetUserRepositories = getUserRepositories as jest.MockedFunction<typeof getUserRepositories>
 const mockedGetRepositories = getRepositories as jest.MockedFunction<typeof getRepositories>
+const mockedRawQuery = rawQuery as jest.MockedFunction<typeof rawQuery>
 
 const EMPTY_COLLECTIONS = [
   'characters', 'tags', 'connectionProfiles', 'imageProfiles', 'embeddingProfiles',
@@ -136,6 +138,40 @@ const NEW_EQUIPPED_OUTFIT = {
 }
 
 /**
+ * The 4.9/4.10 additions that ride *inside* an existing column rather than
+ * arriving as one of their own — a widened enum domain and three JSON bags.
+ *
+ * These are the additions most likely to be lost quietly. A new column at
+ * least announces itself with a migration; a new key inside a JSON column is
+ * invisible to every schema check, and a widened enum only fails at the moment
+ * some restored row happens to carry the new value.
+ */
+
+/** `chats.conciergeOverride` grew a fourth state in 4.9; the column did not change. */
+const WIDENED_CONCIERGE_OVERRIDE = 'UNCENSORED'
+
+/** `chat_settings.cheapLLMSettings` (a JSON column) grew `allowCheapFallback` in 4.10. */
+const NEW_CHEAP_LLM_SETTINGS = {
+  strategy: 'PROVIDER_CHEAPEST',
+  fallbackToLocal: true,
+  embeddingProvider: 'OPENAI',
+  allowCheapFallback: true,
+}
+
+/** `image_profiles.parameters` (an open JSON bag) gained the reserved `loras` key in 4.9. */
+const NEW_IMAGE_PROFILE_PARAMETERS = {
+  size: '1024x1024',
+  loras: [{ source: 'author/some-lora', scale: 0.8, triggerPhrase: 'in the style of', label: 'Some LoRA' }],
+}
+
+/** `instance_settings.memoryRecall` (a JSON value) gained `perTurnConversationSummaries` in 4.9. */
+const NEW_MEMORY_RECALL_SETTING = JSON.stringify({
+  scopePolicy: 'down-weight',
+  expandRelated: false,
+  perTurnConversationSummaries: true,
+})
+
+/**
  * A repo stand-in whose every accessed method is an auto-created jest.fn.
  * `restore()` touches a long tail of repositories we don't care about here;
  * this keeps the test focused on the four that carry the new columns.
@@ -167,6 +203,9 @@ function buildRepoMocks() {
   const connectionsCreate = jest.fn().mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
     Promise.resolve({ ...data, id: opts?.id ?? 'generated-profile-id' })
   )
+  const imageProfilesCreate = jest.fn().mockImplementation((data: Record<string, unknown>, opts?: { id?: string }) =>
+    Promise.resolve({ ...data, id: opts?.id ?? 'generated-image-profile-id' })
+  )
 
   const userRepos = new Proxy({} as Record<string, unknown>, {
     get(_t, prop: string) {
@@ -174,6 +213,7 @@ function buildRepoMocks() {
         return repoStub({ create: chatsCreate, addMessage, getLastPlayedMessageAt, update: chatsUpdate })
       if (prop === 'memories') return repoStub({ create: memoriesCreate })
       if (prop === 'connections') return repoStub({ create: connectionsCreate, findAll: jest.fn().mockResolvedValue([]) })
+      if (prop === 'imageProfiles') return repoStub({ create: imageProfilesCreate })
       return repoStub()
     },
   })
@@ -196,6 +236,7 @@ function buildRepoMocks() {
     memoriesCreate,
     chatSettingsCreate,
     connectionsCreate,
+    imageProfilesCreate,
   }
 }
 
@@ -332,6 +373,109 @@ describe('restore field fidelity — 4.9 data-model additions', () => {
     await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
 
     expect(chatsCreate.mock.calls[0][0]).toMatchObject({ equippedOutfit: NEW_EQUIPPED_OUTFIT })
+  })
+
+  it("carries the widened conciergeOverride domain ('UNCENSORED') through restore", async () => {
+    const { chatsCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chats: [
+          {
+            id: 'chat-1',
+            userId: 'old-user',
+            title: 'A Spicy Conversation',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            participants: [],
+            tags: [],
+            conciergeOverride: WIDENED_CONCIERGE_OVERRIDE,
+            messages: [],
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    // The fourth state is a *value*, not a column: a restore that narrowed it
+    // back to 'OFF' or dropped it would silently re-arm the classifier on a
+    // chat whose operator had already ruled on it.
+    expect(chatsCreate.mock.calls[0][0]).toMatchObject({
+      conciergeOverride: WIDENED_CONCIERGE_OVERRIDE,
+    })
+  })
+
+  it('carries the cheap-LLM fallback opt-in inside cheapLLMSettings through restore', async () => {
+    const { chatSettingsCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        chatSettings: [
+          {
+            id: 'settings-1',
+            userId: 'old-user',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            cheapLLMSettings: NEW_CHEAP_LLM_SETTINGS,
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    // `allowCheapFallback` defaults to false, so losing it in transit reads as
+    // the user having declined an automatic stand-in they actually opted into.
+    expect(chatSettingsCreate.mock.calls[0][0]).toMatchObject({
+      cheapLLMSettings: NEW_CHEAP_LLM_SETTINGS,
+    })
+  })
+
+  it("carries an image profile's LoRA adapters through restore", async () => {
+    const { imageProfilesCreate } = buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        imageProfiles: [
+          {
+            id: 'image-profile-1',
+            userId: 'old-user',
+            name: 'An Image Profile',
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-01T00:00:00.000Z',
+            parameters: NEW_IMAGE_PROFILE_PARAMETERS,
+          },
+        ],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    // `parameters` is an open bag: nothing downstream validates its shape, so
+    // nothing downstream would notice the reserved `loras` key going missing.
+    expect(imageProfilesCreate).toHaveBeenCalledTimes(1)
+    expect(imageProfilesCreate.mock.calls[0][0]).toMatchObject({
+      parameters: NEW_IMAGE_PROFILE_PARAMETERS,
+    })
+    expect(imageProfilesCreate.mock.calls[0][1]).toEqual({ id: 'image-profile-1' })
+  })
+
+  it('carries the per-turn conversation-summaries recall knob through restore', async () => {
+    buildRepoMocks()
+    primeArchive(
+      makeBackupData({
+        instanceSettings: [{ key: 'memoryRecall', value: NEW_MEMORY_RECALL_SETTING }],
+      })
+    )
+
+    await restore('/tmp/backup.zip', { mode: 'merge', targetUserId: 'user-1' })
+
+    // instance_settings is upserted by raw SQL rather than through a
+    // repository, so the value travels as an opaque string — the guard is that
+    // the row is written at all, and written verbatim.
+    const upsert = mockedRawQuery.mock.calls.find(
+      (call) => Array.isArray(call[1]) && (call[1] as unknown[])[0] === 'memoryRecall'
+    )
+    expect(upsert).toBeDefined()
+    expect((upsert as unknown[])[1]).toEqual(['memoryRecall', NEW_MEMORY_RECALL_SETTING])
   })
 })
 

@@ -4,6 +4,31 @@
 
 ### 4.9-dev
 
+#### Tests: the restore field-fidelity guard now pins every 4.9/4.10 data-model addition (checklist item 10)
+
+Backup/restore completeness audit over the commits since the 4.8.4 merge-back. Every new table,
+column, and on-disk asset added this cycle is already covered by both backup and restore, and the
+only exclusions are the secrets (`api_keys`, `apiKeyId`, `.dbkey`) plus `help_doc_chunks`, which is
+rebuilt from the shipped `help/*.md` on every boot the way `help_docs` already was. No production
+code changed.
+
+`restore-field-fidelity.test.ts` claimed to pin the 4.9 cycle but covered only the three
+`connection_profiles` columns and the `hair` wardrobe slot. Added four cases for the additions that
+ride *inside* an existing column, where nothing else would catch a loss — a new column announces
+itself with a migration, but a new key in a JSON bag or a widened enum domain is invisible to every
+schema check:
+
+- `chats.conciergeOverride` restoring as `'UNCENSORED'` rather than narrowing back to `'OFF'`, which
+  would re-arm the classifier on a chat the operator had already ruled on.
+- `chat_settings.cheapLLMSettings.allowCheapFallback`, whose `false` default reads as the user having
+  declined a stand-in they opted into.
+- `image_profiles.parameters.loras` — the bag is unvalidated by design, so nothing downstream would
+  notice the reserved key going missing.
+- The `memoryRecall` instance-settings row (carrying `perTurnConversationSummaries`), upserted by raw
+  SQL rather than through a repository.
+
+Each case was mutation-tested against `restore.ts`: dropping the field fails that guard and no other.
+
 #### Changed: published packages pinned to their released versions everywhere they are consumed
 
 `@quilltap/plugin-utils` 2.6.0, `@quilltap/plugin-types` 2.6.0 and `create-quilltap-theme` 2.0.19
