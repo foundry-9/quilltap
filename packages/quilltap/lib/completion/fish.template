@@ -234,6 +234,9 @@ for verb in show remove rm delete set-passphrase passphrase default rename resto
 end
 
 complete -c quilltap -n '__quilltap_using_subcommand instances' -l 'names-only' -d 'Print one name per line'
+for verb in list ls
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -l 'json' -d 'JSON output'
+end
 complete -c quilltap -n '__quilltap_using_subverb instances default' -l 'clear' -d 'Clear default instance'
 for verb in restore-key rebuild-key
   complete -c quilltap -n "__quilltap_using_subverb instances $verb" -l 'passphrase' -d 'Passphrase for the rebuilt .dbkey'

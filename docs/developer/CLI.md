@@ -140,6 +140,7 @@ Register an instance once with `npx quilltap instances add <name> <path>` (and o
 - `npx quilltap instances default <name>` — marks a registered instance as the fall-through target so flag-free `quilltap` invocations use it.
 - `instances default --clear` — reverts to the OS platform default.
 - `instances rename <old> <new>` — preserves the stored passphrase and updates the `*` marker.
+- `instances list --json` — the registry as JSON (name, path, `hasPassphrase`, `isDefault`) for scripts. (`--names-only` also exists, but it is plumbing for the shell completions rather than a documented output mode.)
 
 ### Rebuilding a `.dbkey` — `instances restore-key`
 
