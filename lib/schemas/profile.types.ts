@@ -210,9 +210,6 @@ export const ImageLoraSpecSchema = z.object({
 
 export type ImageLoraSpecStored = z.infer<typeof ImageLoraSpecSchema>;
 
-/** The reserved key under which `ImageLoraSpecSchema[]` lives in `parameters`. */
-export const IMAGE_PROFILE_LORAS_KEY = 'loras';
-
 export const ImageProfileSchema = z.object({
   id: UUIDSchema,
   userId: UUIDSchema,

@@ -23,9 +23,6 @@
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import {
   createOperationProgressEmitter,
-  failOperationProgress,
-  finishOperationProgress,
-  publishOperationProgress,
   subscribeOperationProgress,
   __resetOperationProgressForTests,
   type CoreProgressEvent,
@@ -54,14 +51,6 @@ export type CreationProgressEvent =
     };
 
 /**
- * Append an event to a channel and fan it out to live subscribers. No-op after
- * the channel has finished (a terminal event was already published).
- */
-export function publishCreationProgress(id: string, event: CreationProgressEvent): void {
-  publishOperationProgress(id, event);
-}
-
-/**
  * Subscribe to a channel. Returns the buffered backlog to replay immediately
  * (which may already include the terminal `done`/`error`) plus an unsubscribe.
  */
@@ -70,16 +59,6 @@ export function subscribeCreationProgress(
   listener: (event: CreationProgressEvent) => void,
 ): { replay: CreationProgressEvent[]; unsubscribe: () => void } {
   return subscribeOperationProgress<CreationProgressEvent>(id, listener);
-}
-
-/** Publish the terminal `done` event and schedule the channel for cleanup. */
-export function finishCreationProgress(id: string): void {
-  finishOperationProgress(id);
-}
-
-/** Publish the terminal `error` event and schedule the channel for cleanup. */
-export function failCreationProgress(id: string, message: string): void {
-  failOperationProgress(id, message);
 }
 
 /**

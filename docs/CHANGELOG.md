@@ -4,6 +4,34 @@
 
 ### 4.9-dev
 
+#### Removed: dead code found by the v4.9 release sweep (checklist item 5)
+
+Second knip pass of the v4.9 cycle, scoped to the commits since the 4.8.4 merge-back. This round
+also scanned two places knip cannot see: exports under `app/` (every file there is an entry
+point, so knip never reports its exports) and exports whose only remaining references are tests
+(the jest plugin treats test files as entry points). Full write-up in
+`docs/developer/DEAD-CODE-REPORT.md`.
+
+- Deleted three modules with no production importer: `lib/database/meta.ts` (the Mongo-era
+  `quilltap_meta` preferred-backend store; nothing else creates or reads that table),
+  `lib/sillytavern/persona.ts` (persona import/export, including the deprecated `importSTPersona`),
+  and `hooks/useNavbarCollapse.ts` (its navbar consumer went in 4.x). Their test suites went with
+  them.
+- Removed 34 unreferenced exports across 23 files, among them the Mongo relics `getDataBackend` /
+  `isMongoDBEnabled`, the never-adopted `handleProviderError` / `getUserFriendlyError`, the
+  Host's roster announcement builders (their poster was removed in the 2026-06-03 sweep) and the
+  `buildMultiCharacterContextSection` helper only they used, `getContextStatus` /
+  `getContextWarningLevel`, the three cost-tier helpers in `lib/llm/pricing.ts`, the
+  `publish` / `finish` / `fail` wrappers in `lib/chat/creation-progress.ts` (the emitter is the
+  live path), and two orphaned Zod schemas under `app/api/v1/`. Tests that existed only to cover
+  a removed symbol were pruned; tests that used one as scaffolding now call the underlying
+  primitive.
+- The LoRA scale bounds (`DEFAULT_LORA_SCALE`, `resolveLoraScaleBounds`) were dead in
+  `lib/image-gen/lora-support.ts` while the profile editor carried a byte-identical private copy.
+  The checklist-3 refactor moved them to a client-safe `lib/image-gen/lora-scale.ts`; this sweep
+  drops the re-export `lora-support.ts` kept for server-side callers, of which there are none.
+- Net: 56 files, −2,861 / +173 lines.
+
 #### Changed: release-checklist refactor pass over the 4.9 diff (DRY / SRP / chokepoints)
 
 A sweep over everything changed since 4.8.4 (324 commits, ~1250 files) folded copy-pasted logic

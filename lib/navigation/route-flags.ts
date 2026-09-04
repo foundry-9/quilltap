@@ -44,10 +44,3 @@ export function getRouteFlags(pathname?: string | null): RouteFlagResult {
 
   return DEFAULT_FLAGS;
 }
-
-/**
- * Convenience helper specifically for checking debug support.
- */
-export function routeSupportsDebug(pathname?: string | null): boolean {
-  return getRouteFlags(pathname).supportsDebug;
-}

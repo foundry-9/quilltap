@@ -14,10 +14,6 @@ interface ActiveDocumentRecord {
   displayTitle?: string
 }
 
-interface ActiveDocumentResponse {
-  document: ActiveDocumentRecord | null
-}
-
 interface OpenDocumentsResponse {
   documents: ActiveDocumentRecord[]
 }
@@ -87,15 +83,6 @@ export async function persistChatDocumentState(
   updates: Partial<{ documentMode: DocumentMode; dividerPosition: number }>,
 ): Promise<void> {
   await patchChat(chatId, updates)
-}
-
-export async function fetchActiveDocumentRecord(chatId: string): Promise<ActiveDocumentResponse> {
-  const response = await fetch(`/api/v1/chats/${chatId}?action=active-document`, {
-    method: 'POST',
-    headers: JSON_HEADERS,
-  })
-
-  return parseJsonResponse<ActiveDocumentResponse>(response, 'Failed to load active document')
 }
 
 /**

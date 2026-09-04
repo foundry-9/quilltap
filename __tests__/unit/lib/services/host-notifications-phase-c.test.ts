@@ -45,7 +45,6 @@ const { getRepositories } = jest.requireMock('@/lib/repositories/factory') as {
 import {
   buildScenarioContent,
   buildUserCharacterContent,
-  buildMultiCharacterRosterContent,
   buildSilentModeEntryContent,
   buildSilentModeExitContent,
   buildJoinScenarioContent,
@@ -108,37 +107,6 @@ describe('buildUserCharacterContent', () => {
   it('uses the no-description fallback when description is only whitespace', () => {
     const result = buildUserCharacterContent('Charlie', '   ')
     expect(result).toContain("user's voice in this conversation")
-  })
-})
-
-// ---------------------------------------------------------------------------
-// buildMultiCharacterRosterContent
-// ---------------------------------------------------------------------------
-
-describe('buildMultiCharacterRosterContent', () => {
-  it('returns a standalone message when there are no other participants', () => {
-    const result = buildMultiCharacterRosterContent('Friday', [])
-    expect(result).toContain('Friday')
-    expect(result).toContain('stands alone in the Salon')
-  })
-
-  it('announces the company present when others are listed', () => {
-    const others: OtherParticipantInfo[] = [
-      {
-        name: 'Reginald',
-        type: 'CHARACTER',
-        description: 'A pompous barrister.',
-        status: 'active',
-      },
-    ]
-    const result = buildMultiCharacterRosterContent('Friday', others)
-    expect(result).toContain('The Host outlines the company present in the Salon:')
-    expect(result).toContain('Reginald')
-  })
-
-  it('includes the responding character name in the standalone fallback', () => {
-    const result = buildMultiCharacterRosterContent('Constance', [])
-    expect(result).toContain('Constance')
   })
 })
 

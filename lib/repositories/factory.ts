@@ -1,9 +1,7 @@
 /**
  * Repository Factory
  *
- * Provides access to backend-agnostic data repositories.
- * Automatically selects the appropriate backend (MongoDB or SQLite)
- * based on the DATABASE_BACKEND configuration.
+ * Provides access to the SQLite-backed data repositories.
  *
  * With the new migration system, migrations run in instrumentation.ts BEFORE
  * the server starts accepting requests, so data is always guaranteed to be
@@ -38,22 +36,6 @@ let cachedRepositories: RepositoryContainer | null = null;
  * Track if we've already waited for migrations (safety check only)
  */
 let migrationWaitComplete = false;
-
-/**
- * Get the configured data backend
- * @returns The configured backend type ('sqlite')
- */
-export function getDataBackend(): 'sqlite' {
-  return 'sqlite';
-}
-
-/**
- * Check if MongoDB is the active backend
- * @returns False - MongoDB is no longer supported
- */
-export function isMongoDBEnabled(): boolean {
-  return false;
-}
 
 /**
  * Ensure migrations have completed before serving data

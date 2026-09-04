@@ -26,7 +26,6 @@ const {
   deprecatedRedirect,
   withDeprecationHeaders,
   buildRedirectUrl,
-  V1_MIGRATION_DEPRECATION,
 } = require('@/lib/api/responses');
 
 describe('API Response Helpers', () => {
@@ -515,16 +514,4 @@ describe('API Response Helpers', () => {
     });
   });
 
-  describe('V1_MIGRATION_DEPRECATION', () => {
-    it('should have correct structure', () => {
-      expect(V1_MIGRATION_DEPRECATION).toBeDefined();
-      expect(V1_MIGRATION_DEPRECATION.sunsetDate).toBeDefined();
-      expect(V1_MIGRATION_DEPRECATION.docsUrl).toBe('/docs/api-v1-migration');
-    });
-
-    it('should have valid sunset date', () => {
-      const date = new Date(V1_MIGRATION_DEPRECATION.sunsetDate);
-      expect(date.toString()).not.toBe('Invalid Date');
-    });
-  });
 });

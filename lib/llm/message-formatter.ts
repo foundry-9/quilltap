@@ -211,57 +211,6 @@ export function formatMessagesForProvider(
   })
 }
 
-/**
- * Build a multi-character context description for the system prompt
- *
- * @param otherParticipants Array of other participants (name and brief description)
- * @param respondingCharacterName Name of the character who will respond
- * @returns String to append to system prompt
- */
-export function buildMultiCharacterContextSection(
-  otherParticipants: Array<{ name: string; aliases?: string[]; pronouns?: { subject: string; object: string; possessive: string }; description?: string; type: 'CHARACTER'; status?: string }>,
-  respondingCharacterName: string
-): string {
-  if (otherParticipants.length === 0) {
-    return ''
-  }
-
-  const lines: string[] = [
-    '',
-    '## Other Participants in This Conversation',
-    '',
-  ]
-
-  // Status guide — always present so the LLM understands the participation model
-  lines.push('**Participant Status Guide:**')
-  lines.push('- **active**: Present and participating normally in the conversation')
-  lines.push('- **silent**: Present but observing silently — may think and act physically, but does not speak aloud')
-  lines.push('- **absent**: Away from the scene — cannot perceive what is happening')
-  lines.push('')
-
-  for (const participant of otherParticipants) {
-    const typeLabel = participant.type === 'CHARACTER' && participant.name.includes('User') ? '(the user)' : ''
-    const aliasNote = participant.aliases && participant.aliases.length > 0
-      ? ` (also known as: ${participant.aliases.join(', ')})`
-      : ''
-    const pronounNote = participant.pronouns
-      ? ` (pronouns: ${participant.pronouns.subject}/${participant.pronouns.object}/${participant.pronouns.possessive})`
-      : ''
-    const statusNote = ` [${participant.status || 'active'}]`
-    const description = participant.description ? ` - ${participant.description}` : ''
-    lines.push(`- **${participant.name}**${aliasNote}${pronounNote}${statusNote} ${typeLabel}${description}`)
-  }
-
-  lines.push('')
-  lines.push(
-    `You are ${respondingCharacterName}. Stay in character when responding to the other participants. ` +
-    `Messages from other characters and the user will be marked with their names. ` +
-    `Your responses will be attributed to you (${respondingCharacterName}).`
-  )
-
-  return lines.join('\n')
-}
-
 // `normalizeContentBlockFormat` and `stripCharacterNamePrefix` moved to the
 // dependency-free `response-normalizer.ts` so client-safe modules can import
 // them without dragging in the provider registry (node:fs). Re-exported here

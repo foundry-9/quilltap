@@ -184,17 +184,6 @@ export const toolResultSchema = z.object({
   })).optional(),
 });
 
-export const queueMemoriesSchema = z.object({
-  characterId: z.string().optional(),
-  characterName: z.string().optional(),
-  messagePairs: z.array(z.object({
-    userMessageId: z.string(),
-    assistantMessageId: z.string(),
-    userContent: z.string(),
-    assistantContent: z.string(),
-  })).optional(),
-});
-
 const STAFF_SENDER_ENUM = z.enum([
   'lantern',
   'aurora',

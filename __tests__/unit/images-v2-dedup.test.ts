@@ -1,7 +1,7 @@
 /**
  * Regression tests for the SHA-256 image deduplication flow in lib/images-v2.ts.
  *
- * The `calculateSha256` helper is covered in images-v2.test.ts; this file covers
+ * The hash itself comes from `sha256OfBuffer` (`lib/utils/sha256`); this file covers
  * the *dedup decision* that consumes the hash inside createFile() — the part the
  * earlier post-4.5.1 sha256 work hardened but that had no functional coverage:
  *
@@ -40,7 +40,8 @@ jest.mock('@/lib/files/webp-conversion', () => ({
   })),
 }));
 
-import { ingestImageBuffer, calculateSha256 } from '@/lib/images-v2';
+import { ingestImageBuffer } from '@/lib/images-v2';
+import { sha256OfBuffer } from '@/lib/utils/sha256';
 import { getRepositories } from '@/lib/repositories/factory';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 
@@ -99,7 +100,7 @@ beforeEach(() => {
 describe('images-v2 dedup flow (ingestImageBuffer → createFile)', () => {
   it('returns the existing entry when an identical hash is already stored and bytes exist', async () => {
     const buffer = Buffer.from('the same image bytes');
-    const sha = calculateSha256(buffer);
+    const sha = sha256OfBuffer(buffer);
     const existing = makeExisting({ sha256: sha, linkedTo: ['char-a'] });
 
     findBySha256.mockResolvedValue([existing]);
@@ -124,7 +125,7 @@ describe('images-v2 dedup flow (ingestImageBuffer → createFile)', () => {
 
   it('merges linkedTo onto the existing entry when a new link is supplied', async () => {
     const buffer = Buffer.from('shared portrait');
-    const sha = calculateSha256(buffer);
+    const sha = sha256OfBuffer(buffer);
     const existing = makeExisting({ sha256: sha, linkedTo: ['char-a'] });
     const updated = makeExisting({ sha256: sha, linkedTo: ['char-a', 'char-b'] });
 
@@ -150,7 +151,7 @@ describe('images-v2 dedup flow (ingestImageBuffer → createFile)', () => {
 
   it('deletes orphaned metadata and creates a fresh file when the stored bytes are missing', async () => {
     const buffer = Buffer.from('orphan recovery bytes');
-    const sha = calculateSha256(buffer);
+    const sha = sha256OfBuffer(buffer);
     const existing = makeExisting({ sha256: sha });
     const created = makeCreated({ sha256: sha });
 
@@ -172,7 +173,7 @@ describe('images-v2 dedup flow (ingestImageBuffer → createFile)', () => {
 
   it('creates a fresh file when no duplicate hash is found', async () => {
     const buffer = Buffer.from('brand new image');
-    const sha = calculateSha256(buffer);
+    const sha = sha256OfBuffer(buffer);
     const created = makeCreated({ sha256: sha });
 
     findBySha256.mockResolvedValue([]);

@@ -3,22 +3,22 @@
  */
 
 import { describe, it, expect } from '@jest/globals'
-import { getRouteFlags, routeSupportsDebug } from '@/lib/navigation/route-flags'
+import { getRouteFlags } from '@/lib/navigation/route-flags'
 
 describe('route flag helpers', () => {
   it('returns debug support for chat conversation routes', () => {
-    expect(routeSupportsDebug('/salon/123')).toBe(true)
+    expect(getRouteFlags('/salon/123').supportsDebug).toBe(true)
     expect(getRouteFlags('/salon/abc').supportsDebug).toBe(true)
   })
 
   it('disables debug support for other routes', () => {
-    expect(routeSupportsDebug('/')).toBe(false)
-    expect(routeSupportsDebug('/salon')).toBe(false)
+    expect(getRouteFlags('/').supportsDebug).toBe(false)
+    expect(getRouteFlags('/salon').supportsDebug).toBe(false)
   })
 
   it('handles undefined or empty pathnames gracefully', () => {
-    expect(routeSupportsDebug(undefined)).toBe(false)
-    expect(routeSupportsDebug(null)).toBe(false)
-    expect(routeSupportsDebug('')).toBe(false)
+    expect(getRouteFlags(undefined).supportsDebug).toBe(false)
+    expect(getRouteFlags(null).supportsDebug).toBe(false)
+    expect(getRouteFlags('').supportsDebug).toBe(false)
   })
 })

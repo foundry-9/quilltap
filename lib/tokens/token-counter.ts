@@ -241,36 +241,3 @@ export function truncateToTokenLimit(
 
   return truncated + suffix
 }
-
-/**
- * Calculate percentage of context used
- *
- * @param usedTokens Tokens currently used
- * @param contextLimit Total context window size
- * @returns Percentage (0-100)
- */
-export function getContextUsagePercent(
-  usedTokens: number,
-  contextLimit: number
-): number {
-  if (contextLimit <= 0) return 100
-  return Math.min(100, Math.round((usedTokens / contextLimit) * 100))
-}
-
-/**
- * Get warning level based on context usage
- *
- * @param usedTokens Tokens currently used
- * @param contextLimit Total context window size
- * @returns Warning level: 'ok' | 'warning' | 'critical'
- */
-export function getContextWarningLevel(
-  usedTokens: number,
-  contextLimit: number
-): 'ok' | 'warning' | 'critical' {
-  const percent = getContextUsagePercent(usedTokens, contextLimit)
-
-  if (percent >= 95) return 'critical'
-  if (percent >= 80) return 'warning'
-  return 'ok'
-}

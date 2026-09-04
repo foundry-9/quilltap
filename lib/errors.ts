@@ -89,40 +89,6 @@ export function handleError(error: unknown): NextResponse {
 }
 
 /**
- * Validate request body against a schema
- * Throws AppError if validation fails
- */
-export function validateRequestBody(body: any, requiredFields: string[]) {
-  const missingFields = requiredFields.filter(
-    field => !(field in body) || body[field] === null || body[field] === undefined || body[field] === ''
-  )
-
-  if (missingFields.length > 0) {
-    throw new AppError(
-      `Missing required fields: ${missingFields.join(', ')}`,
-      400,
-      ErrorCode.VALIDATION_ERROR,
-      { missingFields }
-    )
-  }
-}
-
-/**
- * Ensure user is authenticated
- * Throws AppError if not authenticated
- */
-export function requireAuth(session: any) {
-  if (!session?.user?.id) {
-    throw new AppError(
-      'Authentication required',
-      401,
-      ErrorCode.UNAUTHORIZED
-    )
-  }
-  return session
-}
-
-/**
  * Ensure user owns a resource
  * Throws AppError if not owner
  */

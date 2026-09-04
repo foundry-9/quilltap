@@ -172,10 +172,3 @@ export class UuidRemapper {
     return this.mapping.size;
   }
 }
-
-/**
- * Create a new UuidRemapper instance for a new restore operation
- */
-export function createUuidRemapper(): UuidRemapper {
-  return new UuidRemapper();
-}
