@@ -58,7 +58,7 @@ export const GET = createContextHandler(
     async (req, { repos }) => {
       try {
         const archetypeItems = await repos.wardrobe.findArchetypes(readIncludeArchived(req));
-        return NextResponse.json({ wardrobeItems: archetypeItems });
+        return successResponse({ wardrobeItems: archetypeItems });
       } catch (error) {
         logger.error(
           '[Wardrobe Archetypes v1] Error fetching archetype items',
