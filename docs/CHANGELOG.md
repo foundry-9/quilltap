@@ -4,6 +4,30 @@
 
 ### 4.9-dev
 
+#### Added: test coverage for bugs 104 and 111 and sixteen new modules (checklist item 2, second pass)
+
+A second pass over checklist item 2, covering everything that landed after the first one. Audited
+all 50 bugs fixed since 4.8.4 (66-119) and all 66 source modules added in the same range. Eighteen
+test files added, 233 cases.
+
+- Regression tests for the two fixed bugs that had none. Bug 104 (Z.AI's private vision list
+  dropped images for `glm-5.3-flash`) asserts the plugin holds no opinion at all about which model
+  ids read pictures, since the host has already answered that question; ten of its fifteen cases
+  fail against the pre-fix provider. Bug 111 (a failed NanoGPT image generation logged nothing at
+  `error`) asserts the request body reaches the log on the failure path with key names only, so
+  `hf_api_token` stays out of it; three of its seven cases fail against the pre-fix provider.
+- First coverage for the sixteen new modules that had none: the two mount-index route factories
+  (`mount-wardrobe-route-factory.ts`, `scenario-item-route-factory.ts`), `message-attachment-adapter.ts`,
+  the two wardrobe container hooks, `wardrobe-container.ts`, `wardrobe-instructions-handlers.ts`,
+  `slot-guidance.ts`, `huggingface-repo-id.ts`, `lora-validation.ts`, `api-key-support.ts`,
+  `sanitize-pronouns.ts`, `query-params.ts`, `sqlite-errors.ts`, `sqlcipher-key.ts` and
+  `mount-index-guard.ts`.
+
+No source changed. Suite: 776 files, 11,978 tests, all passing (was 758 / 11,745).
+
+Bugs 87, 88, 112 and 119 turned out to be covered already, under tests that do not name their bug
+number. Bugs 89, 90, 100 and 102 remain guarded outside jest, as before.
+
 #### Fixed: one bad sub-step no longer kills a whole Refine-from-Memories run (bug 119)
 
 The character optimizer fans a character out into one LLM pass per concern — general fields, each
