@@ -3,7 +3,7 @@
   "name": "qtap-plugin-nanogpt",
   "title": "NanoGPT",
   "description": "NanoGPT pay-as-you-go gateway to hundreds of chat, image, and embedding models",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "author": {
     "name": "Foundry-9 LLC",
     "email": "charles.sebold@foundry-9.com",

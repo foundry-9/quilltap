@@ -4,6 +4,21 @@
 
 ### 4.9-dev
 
+#### Changed: install the published `@quilltap/plugin-utils` 2.6.1 everywhere
+
+Follow-on to the dependency refresh below, now that 2.6.1 is on npm. The root and all fourteen
+plugins that depend on it declared `^2.6.0`, so the lockfiles kept resolving 2.6.0 and the app
+shipped the older copy — the same drift `b52b996c1` corrected for 2.6.0. All fifteen declaration
+sites now read `^2.6.1`.
+
+Every bundle is byte-identical: 2.6.1 changed only `PLUGIN_UTILS_VERSION`, which no plugin imports,
+so esbuild drops it. The fourteen plugins still take a patch bump with a matching `manifest.json`,
+because their shipped `package.json` changed even though their `index.js` did not.
+`qtap-plugin-builtin-embeddings` does not depend on plugin-utils and is untouched.
+
+`@quilltap/theme-storybook` 1.0.70 is published but has no consumer in this repo, so there is no
+range to move. `@quilltap/plugin-types` stays at `^2.6.0`, its current published version.
+
 #### Changed: dependency refresh across the app, the packages, and the plugins
 
 `npm update -S` at the root, in all five `packages/`, and in all fifteen `plugins/dist/` packages.
