@@ -21,7 +21,8 @@ import { useGroups } from '@/app/aurora/hooks/useGroups'
 import { GroupsGrid } from '@/app/aurora/components/GroupsGrid'
 import { Icon } from '@/components/ui/icon'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
-import { useOnTabActivated, useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
+import { useInTabDrilldown } from '@/components/workspace/useInTabDrilldown'
 
 const AIImportWizard = dynamic(() => import('@/components/settings/ai-import/AIImportWizard'), {
   loading: () => <p className="qt-text-muted p-8 text-center">Loading wizard...</p>,
@@ -88,10 +89,13 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
   const bgStyle = useSubsystemBackgroundStyle('aurora')
   // In a workspace tab, drilling into a character renders in place (keep-alive)
   // instead of navigating to /aurora/[id]/view. (Group detail still routes.)
-  const inTab = useWorkspaceTabId() != null
+  const {
+    inTab,
+    selectedId: selectedGroupId,
+    setSelectedId: setSelectedGroupId,
+  } = useInTabDrilldown(initialGroupId)
   const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(null)
   const [openChatForSelected, setOpenChatForSelected] = useState(false)
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(initialGroupId ?? null)
 
   // Fetch groups on mount
   useEffect(() => {
@@ -104,21 +108,16 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
     void fetchGroups()
   })
 
-  // A deep-link re-open refreshes the tab payload; follow it into the group.
-  // Adjusting state during render is React's sanctioned derive-from-prop-change
-  // pattern (re-renders immediately, nothing committed in between).
-  const [prevInitialGroupId, setPrevInitialGroupId] = useState(initialGroupId)
-  if (initialGroupId !== prevInitialGroupId) {
-    setPrevInitialGroupId(initialGroupId)
-    if (initialGroupId) setSelectedGroupId(initialGroupId)
-  }
-
   const queryClient = useQueryClient()
   // "Show archived" opts into the tombstones the API hides by default; the two
   // filter states cache under distinct keys so they never cross-contaminate.
   const [showArchived, setShowArchived] = useState(false)
+  const charactersListKey = useMemo(
+    () => queryKeys.characters.list(showArchived ? { archived: 'include' } : undefined),
+    [showArchived]
+  )
   const { data, isLoading: loading, error: loadError } = useQuery({
-    queryKey: queryKeys.characters.list(showArchived ? { archived: 'include' } : undefined),
+    queryKey: charactersListKey,
     queryFn: ({ signal }) =>
       apiFetch<{ characters: Character[] }>(
         showArchived ? '/api/v1/characters?archived=include' : '/api/v1/characters',
@@ -133,9 +132,8 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       updater?: (prev: { characters: Character[] } | undefined) => { characters: Character[] } | undefined,
       opts?: { revalidate?: boolean }
     ): Promise<void> => {
-      const activeKey = queryKeys.characters.list(showArchived ? { archived: 'include' } : undefined)
       if (updater) {
-        queryClient.setQueryData<{ characters: Character[] }>(activeKey, updater)
+        queryClient.setQueryData<{ characters: Character[] }>(charactersListKey, updater)
         if (opts?.revalidate !== false) {
           // Prefix invalidation so the other archived-filter variant refreshes too.
           await queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
@@ -144,7 +142,7 @@ export function AuroraView({ initialGroupId }: AuroraViewProps = {}) {
       }
       await queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
     },
-    [queryClient, showArchived]
+    [queryClient, charactersListKey]
   )
   const characters = useMemo(() => data?.characters ?? [], [data])
   const error = loadError ? (loadError instanceof Error ? loadError.message : 'An error occurred') : null

@@ -16,26 +16,25 @@ import { z } from 'zod'
 import { createContextHandler } from '@/lib/api/middleware'
 import { successResponse, badRequest, notFound, serverError } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
-import { ensureProjectOfficialStore } from '@/lib/mount-index/ensure-project-store'
-import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store'
-import { ensureProjectWardrobeFolder, readProjectWardrobe } from '@/lib/mount-index/project-wardrobe'
-import { ensureGroupWardrobeFolder, readGroupWardrobe } from '@/lib/mount-index/group-wardrobe'
-import { readGeneralWardrobe } from '@/lib/mount-index/general-wardrobe'
+import { readGroupWardrobe } from '@/lib/mount-index/group-wardrobe'
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool'
 import {
   createProjectWardrobeItem,
   deleteProjectWardrobeItem,
 } from '@/lib/database/repositories/vault-overlay/wardrobe-writes'
+import type { RepositoryContainer } from '@/lib/repositories/factory'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
+import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body'
+import { resolveWardrobeContainer } from '@/lib/wardrobe/resolve-container'
+import type { ResolvedWardrobeContainer } from '@/lib/wardrobe/resolve-container'
+import type { WardrobeContainerScope } from '@/lib/wardrobe/wardrobe-container'
 
 type TransferAction = 'move' | 'copy'
-type SourceScope = 'character' | 'group' | 'project' | 'general'
-type DestinationScope = 'general' | 'project' | 'group' | 'character'
 /** What travels with a composite: its same-container components, or nothing. */
 type ComponentMode = 'move' | 'copy' | 'none'
 
 interface ResolvedSource {
-  scope: SourceScope
+  scope: WardrobeContainerScope
   item: WardrobeItem
   characterId: string | null
   mountPointId: string | null
@@ -45,12 +44,6 @@ interface ResolvedSource {
    * with it — components living in *other* tiers stay put.
    */
   containerItems: WardrobeItem[]
-}
-
-interface ResolvedDestination {
-  scope: DestinationScope
-  characterId: string | null
-  mountPointId: string | null
 }
 
 const transferRequestSchema = z
@@ -123,9 +116,29 @@ function collectContainerComponents(
   return result
 }
 
-function locationKey(scope: SourceScope | DestinationScope, id: string | null): string {
+function locationKey(scope: WardrobeContainerScope, id: string | null): string {
   if (scope === 'general') return 'general'
   return `${scope}:${id ?? ''}`
+}
+
+/**
+ * Look `itemId` up in a resolved container. The hit carries the container's
+ * whole item list so a composite's same-container components can be gathered.
+ */
+async function findInContainer(
+  container: ResolvedWardrobeContainer,
+  itemId: string,
+): Promise<ResolvedSource | null> {
+  const containerItems = await container.readItems()
+  const item = containerItems.find((i) => i.id === itemId)
+  if (!item) return null
+  return {
+    scope: container.scope,
+    item,
+    characterId: container.characterId,
+    mountPointId: container.mountPointId,
+    containerItems,
+  }
 }
 
 async function resolveSourceItem(
@@ -133,49 +146,18 @@ async function resolveSourceItem(
   sourceCharacterId: string,
   sourceProjectId: string | null,
   itemId: string,
-  repos: {
-    characters: { findById: (id: string) => Promise<{ id: string; userId?: string | null } | null> }
-    projects: { findById: (id: string) => Promise<{ id: string; name?: string | null; userId?: string | null } | null> }
-    wardrobe: {
-      findByCharacterId: (characterId: string, includeArchived?: boolean) => Promise<WardrobeItem[]>
-    }
-  },
+  repos: RepositoryContainer,
 ): Promise<ResolvedSource | null> {
-  const sourceCharacter = await repos.characters.findById(sourceCharacterId)
-  if (!sourceCharacter || sourceCharacter.userId !== userId) {
-    return null
-  }
-
-  const personalItems = await repos.wardrobe.findByCharacterId(sourceCharacterId, true)
-  const personal = personalItems.find((item) => item.id === itemId)
-  if (personal) {
-    return {
-      scope: 'character',
-      item: personal,
-      characterId: sourceCharacterId,
-      mountPointId: null,
-      containerItems: personalItems,
-    }
-  }
+  const personal = await resolveWardrobeContainer('character', sourceCharacterId, repos, userId)
+  if (!personal) return null
+  const own = await findInContainer(personal, itemId)
+  if (own) return own
 
   if (sourceProjectId) {
-    const project = await repos.projects.findById(sourceProjectId)
+    const project = await resolveWardrobeContainer('project', sourceProjectId, repos, userId)
     if (project) {
-      const ensured = await ensureProjectOfficialStore(project.id, project.name || 'Project')
-      if (ensured) {
-        await ensureProjectWardrobeFolder(ensured.mountPointId)
-        const projectItems = await readProjectWardrobe(ensured.mountPointId, true)
-        const projectItem = projectItems.find((item) => item.id === itemId)
-        if (projectItem) {
-          return {
-            scope: 'project',
-            item: projectItem,
-            characterId: null,
-            mountPointId: ensured.mountPointId,
-            containerItems: projectItems,
-          }
-        }
-      }
+      const projectItem = await findInContainer(project, itemId)
+      if (projectItem) return projectItem
     }
   }
 
@@ -197,19 +179,8 @@ async function resolveSourceItem(
     }
   }
 
-  const generalItems = await readGeneralWardrobe(true)
-  const general = generalItems.find((item) => item.id === itemId)
-  if (general) {
-    return {
-      scope: 'general',
-      item: general,
-      characterId: null,
-      mountPointId: null,
-      containerItems: generalItems,
-    }
-  }
-
-  return null
+  const general = await resolveWardrobeContainer('general', null, repos, userId)
+  return general ? findInContainer(general, itemId) : null
 }
 
 /**
@@ -219,163 +190,25 @@ async function resolveSourceItem(
  */
 async function resolveExplicitSource(
   userId: string,
-  source: { scope: SourceScope; id?: string },
+  source: { scope: WardrobeContainerScope; id?: string },
   itemId: string,
-  repos: {
-    characters: { findById: (id: string) => Promise<{ id: string; userId?: string | null } | null> }
-    projects: { findById: (id: string) => Promise<{ id: string; name?: string | null; userId?: string | null } | null> }
-    groups: { findById: (id: string) => Promise<{ id: string; name?: string | null; userId?: string | null } | null> }
-    wardrobe: {
-      findByCharacterId: (characterId: string, includeArchived?: boolean) => Promise<WardrobeItem[]>
-    }
-  },
+  repos: RepositoryContainer,
 ): Promise<ResolvedSource | null> {
-  if (source.scope === 'general') {
-    const generalItems = await readGeneralWardrobe(true)
-    const item = generalItems.find((i) => i.id === itemId)
-    if (!item) return null
-    return { scope: 'general', item, characterId: null, mountPointId: null, containerItems: generalItems }
-  }
-
-  if (!source.id) return null
-
-  if (source.scope === 'character') {
-    const character = await repos.characters.findById(source.id)
-    if (!character || character.userId !== userId) return null
-    const personalItems = await repos.wardrobe.findByCharacterId(source.id, true)
-    const item = personalItems.find((i) => i.id === itemId)
-    if (!item) return null
-    return {
-      scope: 'character',
-      item,
-      characterId: source.id,
-      mountPointId: null,
-      containerItems: personalItems,
-    }
-  }
-
-  if (source.scope === 'project') {
-    const project = await repos.projects.findById(source.id)
-    if (!project) return null
-    const ensured = await ensureProjectOfficialStore(project.id, project.name || 'Project')
-    if (!ensured) return null
-    await ensureProjectWardrobeFolder(ensured.mountPointId)
-    const projectItems = await readProjectWardrobe(ensured.mountPointId, true)
-    const item = projectItems.find((i) => i.id === itemId)
-    if (!item) return null
-    return {
-      scope: 'project',
-      item,
-      characterId: null,
-      mountPointId: ensured.mountPointId,
-      containerItems: projectItems,
-    }
-  }
-
-  const group = await repos.groups.findById(source.id)
-  if (!group) return null
-  const ensured = await ensureGroupOfficialStore(group.id, group.name || 'Group')
-  if (!ensured) return null
-  await ensureGroupWardrobeFolder(ensured.mountPointId)
-  const groupItems = await readGroupWardrobe(ensured.mountPointId, true)
-  const item = groupItems.find((i) => i.id === itemId)
-  if (!item) return null
-  return {
-    scope: 'group',
-    item,
-    characterId: null,
-    mountPointId: ensured.mountPointId,
-    containerItems: groupItems,
-  }
-}
-
-async function resolveDestination(
-  userId: string,
-  destination: { scope: DestinationScope; id?: string },
-  repos: {
-    characters: { findById: (id: string) => Promise<{ id: string; userId?: string | null } | null> }
-    projects: { findById: (id: string) => Promise<{ id: string; name?: string | null; userId?: string | null } | null> }
-    groups: { findById: (id: string) => Promise<{ id: string; name?: string | null; userId?: string | null } | null> }
-  },
-): Promise<ResolvedDestination | null> {
-  if (destination.scope === 'general') {
-    return { scope: 'general', characterId: null, mountPointId: null }
-  }
-
-  if (!destination.id) {
-    return null
-  }
-
-  if (destination.scope === 'character') {
-    const character = await repos.characters.findById(destination.id)
-    if (!character || character.userId !== userId) return null
-    return { scope: 'character', characterId: character.id, mountPointId: null }
-  }
-
-  if (destination.scope === 'project') {
-    const project = await repos.projects.findById(destination.id)
-    if (!project) return null
-    const ensured = await ensureProjectOfficialStore(project.id, project.name || 'Project')
-    if (!ensured) return null
-    await ensureProjectWardrobeFolder(ensured.mountPointId)
-    return { scope: 'project', characterId: null, mountPointId: ensured.mountPointId }
-  }
-
-  const group = await repos.groups.findById(destination.id)
-  if (!group) return null
-  const ensured = await ensureGroupOfficialStore(group.id, group.name || 'Group')
-  if (!ensured) return null
-  await ensureGroupWardrobeFolder(ensured.mountPointId)
-  return { scope: 'group', characterId: null, mountPointId: ensured.mountPointId }
-}
-
-async function readDestinationItems(
-  destination: ResolvedDestination,
-  repos: {
-    wardrobe: {
-      findByCharacterId: (characterId: string, includeArchived?: boolean) => Promise<WardrobeItem[]>
-    }
-  },
-): Promise<WardrobeItem[]> {
-  if (destination.scope === 'general') {
-    return readGeneralWardrobe(true)
-  }
-
-  if (destination.scope === 'character') {
-    return repos.wardrobe.findByCharacterId(destination.characterId as string, true)
-  }
-
-  if (destination.scope === 'group') {
-    return readGroupWardrobe(destination.mountPointId as string, true)
-  }
-
-  return readProjectWardrobe(destination.mountPointId as string, true)
+  const container = await resolveWardrobeContainer(source.scope, source.id, repos, userId)
+  return container ? findInContainer(container, itemId) : null
 }
 
 async function createAtDestination(
-  destination: ResolvedDestination,
+  destination: ResolvedWardrobeContainer,
   item: WardrobeItem,
-  repos: {
-    wardrobe: {
-      create: (
-        data: Omit<WardrobeItem, 'id' | 'createdAt' | 'updatedAt'>,
-        options?: { id?: string; createdAt?: string; updatedAt?: string },
-      ) => Promise<WardrobeItem>
-    }
-  },
+  repos: RepositoryContainer,
 ): Promise<WardrobeItem> {
   if (destination.scope === 'general' || destination.scope === 'character') {
+    // A transferred item keeps its provenance and archived state, which a
+    // fresh create never carries.
     const created = await repos.wardrobe.create(
       {
-        characterId: destination.scope === 'character' ? destination.characterId : null,
-        title: item.title,
-        description: item.description ?? null,
-        imagePrompt: item.imagePrompt ?? null,
-        types: item.types,
-        componentItemIds: item.componentItemIds,
-        appropriateness: item.appropriateness ?? null,
-        isDefault: item.isDefault,
-        replace: item.replace,
+        ...wardrobeItemFromCreateBody(item, destination.characterId),
         migratedFromClothingRecordId: item.migratedFromClothingRecordId ?? null,
         archivedAt: item.archivedAt ?? null,
       },
@@ -394,9 +227,7 @@ async function createAtDestination(
 async function deleteFromSource(
   source: ResolvedSource,
   itemId: string,
-  repos: {
-    wardrobe: { delete: (id: string, ownerCharacterId?: string | null) => Promise<boolean> }
-  },
+  repos: RepositoryContainer,
 ): Promise<boolean> {
   // Project and group items both live in a mount's `Wardrobe/` folder rather
   // than a character vault, so both delete by mount point.
@@ -408,14 +239,11 @@ async function deleteFromSource(
 
 export const GET = createContextHandler(async (_req, { user, repos }) => {
   try {
-    const [allProjects, allGroups, characters] = await Promise.all([
+    const [projects, groups, characters] = await Promise.all([
       repos.projects.findAll(),
       repos.groups.findAll(),
       repos.characters.findByUserId(user.id),
     ])
-
-    const projects = allProjects
-    const groups = allGroups
 
     return successResponse({
       destinations: {
@@ -456,7 +284,12 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
       return notFound('Wardrobe item')
     }
 
-    const destination = await resolveDestination(user.id, body.destination, repos)
+    const destination = await resolveWardrobeContainer(
+      body.destination.scope,
+      body.destination.id,
+      repos,
+      user.id,
+    )
     if (!destination) {
       return badRequest('Invalid destination')
     }
@@ -514,7 +347,7 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
     // Refuse the whole transfer before writing anything if any planned id is
     // already taken at the destination — all-or-nothing means no half-landed
     // outfits.
-    const destinationItems = await readDestinationItems(destination, repos)
+    const destinationItems = await destination.readItems()
     const destinationIds = new Set(destinationItems.map((item) => item.id))
     for (const planned of [nextItem, ...plannedComponents]) {
       if (destinationIds.has(planned.id)) {
@@ -555,7 +388,7 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
     // a subtle resolution bug shows up here, not in the pre-projection value
     // `createAtDestination` returned. Anything planned-but-absent from the
     // read-back list is reported.
-    const afterItems = await readDestinationItems(destination, repos)
+    const afterItems = await destination.readItems()
     const afterOutfit = afterItems.find((item) => item.id === stored.id)
     const readBackIds = new Set(afterOutfit?.componentItemIds ?? [])
     const unresolvedComponentIds = nextItem.componentItemIds.filter(

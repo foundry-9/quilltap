@@ -25,7 +25,7 @@ trivial operation through both TS and Rust and assert equivalence.
 
 ## Hard constraint discovered during planning: the SQLCipher key path
 
-`lib/database/meta.ts` opens the DB like this:
+`applySqlcipherKey` (`lib/database/backends/sqlite/sqlcipher-key.ts`) keys every connection, and the backends then open like this:
 
 ```ts
 const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');

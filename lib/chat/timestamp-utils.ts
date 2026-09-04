@@ -462,25 +462,6 @@ export function shouldInjectTimestamp(
 }
 
 /**
- * Format a timestamp for injection into a system prompt.
- *
- * @param timestamp - Calculated timestamp
- * @param autoPrepend - Whether to format for auto-prepending
- * @returns Formatted string for prompt injection
- */
-export function formatTimestampForSystemPrompt(
-  timestamp: CalculatedTimestamp,
-  autoPrepend: boolean
-): string {
-  if (autoPrepend) {
-    return `Current time: ${timestamp.formatted}`
-  }
-  // If not auto-prepend, just return the formatted timestamp
-  // (for use with {{timestamp}} template variable)
-  return timestamp.formatted
-}
-
-/**
  * Anchor a fictional clock to real time, so it can actually advance.
  *
  * Story time runs 1:1 with the wall clock, measured from `fictionalBaseRealTime`. Nothing

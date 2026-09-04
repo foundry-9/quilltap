@@ -7,7 +7,7 @@
  */
 
 import type { Character } from '@/lib/schemas/character.types';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, bySlot } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import type { getRepositories } from '@/lib/repositories/factory';
 import {
@@ -66,9 +66,7 @@ export async function buildCharacterAvatarPrompt(
   const { equippedSlots } = options;
   const projectMountPointIds = options.projectMountPointIds;
 
-  const leafCounts = Object.fromEntries(
-    WARDROBE_SLOT_TYPES.map((slot) => [slot, 0]),
-  ) as Record<WardrobeItemType, number>;
+  const leafCounts = bySlot(() => 0);
 
   // Physical description — fall back through the canonical fields the avatar
   // handler has always favored.

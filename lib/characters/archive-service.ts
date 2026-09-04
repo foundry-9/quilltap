@@ -70,6 +70,8 @@ import {
   CHARACTER_WARDROBE_JSON_PATH,
 } from '@/lib/database/repositories/vault-overlay/schema';
 import type { FileCategory } from '@/lib/schemas/file.types';
+import type { ParticipantStatus } from '@/lib/schemas/chat.types';
+import { isTextDocumentFileType } from '@/lib/schemas/mount-index.types';
 
 export interface ArchiveCharacterResult {
   archived: boolean;
@@ -116,14 +118,6 @@ export class ArchiveVerificationError extends Error {
     this.name = 'ArchiveVerificationError';
   }
 }
-
-/**
- * The writer only emits `doc_mount_document` records for text file types;
- * everything else in a store travels as a blob. Verification has to apply the
- * same filter or it compares against a total the bundle was never going to
- * carry.
- */
-const TEXT_DOCUMENT_FILE_TYPES = new Set(['markdown', 'txt', 'json', 'jsonl']);
 
 /**
  * The §4.2a keep-set: vault paths that survive the prune. The ten managed-field
@@ -189,7 +183,7 @@ export async function archiveCharacter(
     const archiveFileId = await createArchiveFileRecord(userId, repos, bundle);
     written.push(archiveFileId);
 
-    await flipCharacterParticipantsToAbsent(userId, characterId);
+    await flipCharacterParticipants(userId, characterId, { from: null, to: 'absent' });
 
     // The commit. Note what is NOT here: characterDocumentMountPointId (the
     // vault survives the archive), defaultImageId and avatarOverrides (they
@@ -293,7 +287,7 @@ export async function rehydrateCharacter(
     }
   }
 
-  await flipCharacterParticipantsToPresent(userId, characterId);
+  await flipCharacterParticipants(userId, characterId, { from: 'absent', to: 'active' });
 
   // Re-chunk + re-embed the restored vault content (§6 step 5). Non-fatal:
   // the boot reconcile sweep is the backstop, and the character is already
@@ -515,14 +509,7 @@ async function createArchiveBundle(
   const encrypted = encryptArchive(plaintext, passphrase);
   const roundTripped = decryptArchive(encrypted, passphrase);
   const exportData = await assembleExportFromStream(
-    readNdjsonLines(
-      new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(roundTripped);
-          controller.close();
-        },
-      })
-    )
+    readNdjsonLines(bufferToByteStream(roundTripped))
   );
 
   return { plaintext, encrypted, exportData };
@@ -609,13 +596,18 @@ function assertCount(label: string, reported: number | undefined, actual: number
   }
 }
 
-/** What the live vault holds, filtered the way the writer filters it. */
+/**
+ * What the live vault holds, filtered the way the writer filters it: the
+ * writer only emits `doc_mount_document` records for text file types and
+ * everything else travels as a blob, so verification must apply the same
+ * predicate or it compares against a total the bundle was never going to carry.
+ */
 async function countLiveVault(mountPointId: string): Promise<{ documents: number; blobs: number }> {
   const globalRepos = getRepositories();
   const documents = await globalRepos.docMountDocuments.findByMountPointId(mountPointId);
   const blobs = await globalRepos.docMountBlobs.listByMountPoint(mountPointId);
   return {
-    documents: documents.filter((d) => TEXT_DOCUMENT_FILE_TYPES.has(d.fileType)).length,
+    documents: documents.filter((d) => isTextDocumentFileType(d.fileType)).length,
     blobs: blobs.length,
   };
 }
@@ -693,33 +685,24 @@ async function discardWrittenFiles(
   }
 }
 
-async function flipCharacterParticipantsToAbsent(userId: string, characterId: string): Promise<void> {
-  const repos = getUserRepositories(userId);
-
-  try {
-    const chats = await repos.chats.findByCharacterId(characterId);
-    await Promise.allSettled(
-      chats.flatMap((chat) =>
-        (chat.participants ?? [])
-          .filter((participant) => participant.characterId === characterId && participant.type === 'CHARACTER')
-          .map((participant) => repos.chats.setParticipantStatus(chat.id, participant.id, 'absent'))
-      )
-    );
-  } catch (error) {
-    logger.warn('Failed to flip character participants to absent during archive', {
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
-}
-
 /**
- * The archive flip's inverse (§4.5): every seat the archive parked at
- * `absent` comes back `active`. Only `absent` seats are touched — a
- * `removed` participant left the chat before the archive and stays gone.
- * Best-effort like its sibling: a stubborn seat must not fail the rehydrate.
+ * The two participant flips, one routine.
+ *
+ * Archive (`{ from: null, to: 'absent' }`, §4.4): every seat the character
+ * holds in every chat is parked at `absent`, whatever its status was.
+ *
+ * Rehydrate (`{ from: 'absent', to: 'active' }`, §4.5): the archive flip's
+ * inverse — only `absent` seats come back `active`. A `removed` participant
+ * left the chat before the archive and stays gone.
+ *
+ * Both are best-effort: a stubborn seat must not fail the archive or the
+ * rehydrate, so failures are logged and swallowed.
  */
-async function flipCharacterParticipantsToPresent(userId: string, characterId: string): Promise<void> {
+async function flipCharacterParticipants(
+  userId: string,
+  characterId: string,
+  transition: { from: ParticipantStatus | null; to: ParticipantStatus }
+): Promise<void> {
   const repos = getUserRepositories(userId);
 
   try {
@@ -731,16 +714,21 @@ async function flipCharacterParticipantsToPresent(userId: string, characterId: s
             (participant) =>
               participant.characterId === characterId &&
               participant.type === 'CHARACTER' &&
-              participant.status === 'absent'
+              (transition.from === null || participant.status === transition.from)
           )
-          .map((participant) => repos.chats.setParticipantStatus(chat.id, participant.id, 'active'))
+          .map((participant) => repos.chats.setParticipantStatus(chat.id, participant.id, transition.to))
       )
     );
   } catch (error) {
-    logger.warn('Failed to flip character participants back to active during rehydrate', {
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    });
+    logger.warn(
+      transition.to === 'absent'
+        ? 'Failed to flip character participants to absent during archive'
+        : 'Failed to flip character participants back to active during rehydrate',
+      {
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      }
+    );
   }
 }
 

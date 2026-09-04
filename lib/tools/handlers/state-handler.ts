@@ -57,6 +57,20 @@ export interface StateToolContext {
 }
 
 /**
+ * One tier of the cascade, resolved for a single operation: its current
+ * state and the write that replaces it. `groupId` is set only for the group
+ * tier, for logging. An `ok: false` result carries the typed tool error.
+ */
+type TierResolution =
+  | {
+      ok: true;
+      state: Record<string, unknown>;
+      groupId?: string;
+      persist: (next: Record<string, unknown>) => Promise<unknown>;
+    }
+  | { ok: false; error: string };
+
+/**
  * Error thrown during state execution
  */
 export class StateError extends Error {
@@ -90,6 +104,17 @@ export function setAtPath(
 }
 
 /**
+ * Read `operation` off an input that may not have parsed, so an error
+ * response can still echo the operation the caller asked for. Defaults to
+ * `'fetch'` when the input is not an object or carries no operation.
+ */
+function operationOf(input: unknown): StateOperation {
+  return typeof input === 'object' && input !== null && 'operation' in input
+    ? (input as Record<string, unknown>).operation as StateOperation
+    : 'fetch';
+}
+
+/**
  * Execute the state tool
  *
  * @param input - The tool input parameters
@@ -113,9 +138,7 @@ export async function executeStateTool(
       });
       return {
         success: false,
-        operation: typeof input === 'object' && input !== null && 'operation' in input
-          ? (input as Record<string, unknown>).operation as StateOperation
-          : 'fetch',
+        operation: operationOf(input),
         error: 'Invalid input: operation is required and must be "fetch", "set", or "delete"',
       };
     }
@@ -192,40 +215,70 @@ export async function executeStateTool(
       return null;
     };
 
+    // Resolve one tier of the cascade to its current state and the write
+    // that persists a replacement. The project/group/general/chat ladder
+    // lives here once; fetch, set and delete all climb it.
+    const resolveTier = async (tier: StateContext): Promise<TierResolution> => {
+      switch (tier) {
+        case 'project': {
+          if (!project) {
+            return { ok: false, error: 'Chat is not part of a project' };
+          }
+          const projectId = project.id;
+          return {
+            ok: true,
+            state: projectState,
+            persist: next => repos.projects.update(projectId, { state: next }),
+          };
+        }
+        case 'group': {
+          const resolved = await resolveGroupOrError();
+          if (!resolved.ok) {
+            return { ok: false, error: resolved.error };
+          }
+          const groupId = resolved.group.id;
+          return {
+            ok: true,
+            state: (resolved.group.state || {}) as Record<string, unknown>,
+            groupId,
+            persist: next => repos.groups.update(groupId, { state: next }),
+          };
+        }
+        case 'general': {
+          const generalState = await readGeneralState();
+          return {
+            ok: true,
+            state: generalState,
+            persist: next => writeGeneralState(next),
+          };
+        }
+        default:
+          return {
+            ok: true,
+            state: chatState,
+            persist: next => repos.chats.update(chat.id, { state: next }),
+          };
+      }
+    };
+
     // Handle operations
     switch (operation) {
       case 'fetch': {
         let resultValue: unknown;
         let groupIdForLog: string | undefined;
 
-        if (stateContext === 'chat') {
-          resultValue = getAtPath(chatState, parsedPath);
-        } else if (stateContext === 'project') {
-          if (!project) {
-            return {
-              success: false,
-              operation,
-              context: stateContext,
-              path,
-              error: 'Chat is not part of a project',
-            };
-          }
-          resultValue = getAtPath(projectState, parsedPath);
-        } else if (stateContext === 'group') {
-          const resolved = await resolveGroupOrError();
-          if (!resolved.ok) {
-            return { success: false, operation, context: stateContext, path, error: resolved.error };
-          }
-          groupIdForLog = resolved.group.id;
-          resultValue = getAtPath((resolved.group.state || {}) as Record<string, unknown>, parsedPath);
-        } else if (stateContext === 'general') {
-          const generalState = await readGeneralState();
-          resultValue = getAtPath(generalState, parsedPath);
-        } else {
+        if (stateContext === undefined) {
           // Merged cascade (chat over project over group over general).
           const cascade = await resolveStateCascade({ chat, groupScope });
           groupIdForLog = cascade.groupTier.appliedGroupId;
           resultValue = getAtPath(cascade.merged, parsedPath);
+        } else {
+          const tier = await resolveTier(stateContext);
+          if (!tier.ok) {
+            return { success: false, operation, context: stateContext, path, error: tier.error };
+          }
+          groupIdForLog = tier.groupId;
+          resultValue = getAtPath(tier.state, parsedPath);
         }
 
         logger.info('State fetch completed', {
@@ -253,43 +306,14 @@ export async function executeStateTool(
         if (denied) return denied;
 
         const targetContext = stateContext || 'chat';
-        let previousValue: unknown;
-        let newState: Record<string, unknown>;
-        let groupIdForLog: string | undefined;
-
-        if (targetContext === 'project') {
-          if (!project) {
-            return {
-              success: false,
-              operation,
-              context: targetContext,
-              path,
-              error: 'Chat is not part of a project',
-            };
-          }
-          previousValue = getAtPath(projectState, parsedPath);
-          newState = setAtPath({ ...projectState }, parsedPath, value);
-          await repos.projects.update(project.id, { state: newState });
-        } else if (targetContext === 'group') {
-          const resolved = await resolveGroupOrError();
-          if (!resolved.ok) {
-            return { success: false, operation, context: targetContext, path, error: resolved.error };
-          }
-          const groupState = (resolved.group.state || {}) as Record<string, unknown>;
-          previousValue = getAtPath(groupState, parsedPath);
-          newState = setAtPath({ ...groupState }, parsedPath, value);
-          await repos.groups.update(resolved.group.id, { state: newState });
-          groupIdForLog = resolved.group.id;
-        } else if (targetContext === 'general') {
-          const generalState = await readGeneralState();
-          previousValue = getAtPath(generalState, parsedPath);
-          newState = setAtPath({ ...generalState }, parsedPath, value);
-          await writeGeneralState(newState);
-        } else {
-          previousValue = getAtPath(chatState, parsedPath);
-          newState = setAtPath({ ...chatState }, parsedPath, value);
-          await repos.chats.update(chat.id, { state: newState });
+        const tier = await resolveTier(targetContext);
+        if (!tier.ok) {
+          return { success: false, operation, context: targetContext, path, error: tier.error };
         }
+
+        const previousValue = getAtPath(tier.state, parsedPath);
+        const newState = setAtPath({ ...tier.state }, parsedPath, value);
+        await tier.persist(newState);
 
         logger.info('State set completed', {
           context: 'state-handler',
@@ -297,7 +321,7 @@ export async function executeStateTool(
           chatId: context.chatId,
           characterId: context.characterId,
           targetContext,
-          groupId: groupIdForLog,
+          groupId: tier.groupId,
           path,
           hadPreviousValue: previousValue !== undefined,
         });
@@ -317,54 +341,16 @@ export async function executeStateTool(
         if (denied) return denied;
 
         const targetContext = stateContext || 'chat';
-        let previousValue: unknown;
-        let deleted: boolean;
-        let groupIdForLog: string | undefined;
+        const tier = await resolveTier(targetContext);
+        if (!tier.ok) {
+          return { success: false, operation, context: targetContext, path, error: tier.error };
+        }
 
-        if (targetContext === 'project') {
-          if (!project) {
-            return {
-              success: false,
-              operation,
-              context: targetContext,
-              path,
-              error: 'Chat is not part of a project',
-            };
-          }
-          previousValue = getAtPath(projectState, parsedPath);
-          const newState = { ...projectState };
-          deleted = deleteAtPath(newState, parsedPath);
-          if (deleted) {
-            await repos.projects.update(project.id, { state: newState });
-          }
-        } else if (targetContext === 'group') {
-          const resolved = await resolveGroupOrError();
-          if (!resolved.ok) {
-            return { success: false, operation, context: targetContext, path, error: resolved.error };
-          }
-          const groupState = (resolved.group.state || {}) as Record<string, unknown>;
-          previousValue = getAtPath(groupState, parsedPath);
-          const newState = { ...groupState };
-          deleted = deleteAtPath(newState, parsedPath);
-          if (deleted) {
-            await repos.groups.update(resolved.group.id, { state: newState });
-          }
-          groupIdForLog = resolved.group.id;
-        } else if (targetContext === 'general') {
-          const generalState = await readGeneralState();
-          previousValue = getAtPath(generalState, parsedPath);
-          const newState = { ...generalState };
-          deleted = deleteAtPath(newState, parsedPath);
-          if (deleted) {
-            await writeGeneralState(newState);
-          }
-        } else {
-          previousValue = getAtPath(chatState, parsedPath);
-          const newState = { ...chatState };
-          deleted = deleteAtPath(newState, parsedPath);
-          if (deleted) {
-            await repos.chats.update(chat.id, { state: newState });
-          }
+        const previousValue = getAtPath(tier.state, parsedPath);
+        const newState = { ...tier.state };
+        const deleted = deleteAtPath(newState, parsedPath);
+        if (deleted) {
+          await tier.persist(newState);
         }
 
         logger.info('State delete completed', {
@@ -373,7 +359,7 @@ export async function executeStateTool(
           chatId: context.chatId,
           characterId: context.characterId,
           targetContext,
-          groupId: groupIdForLog,
+          groupId: tier.groupId,
           path,
           deleted,
         });
@@ -403,9 +389,7 @@ export async function executeStateTool(
 
     return {
       success: false,
-      operation: typeof input === 'object' && input !== null && 'operation' in input
-        ? (input as Record<string, unknown>).operation as StateOperation
-        : 'fetch',
+      operation: operationOf(input),
       error: error instanceof Error ? error.message : 'Unknown error during state operation',
     };
   }

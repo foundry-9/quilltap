@@ -43,6 +43,19 @@ export async function triggerDownload(blob: Blob, filename: string): Promise<voi
 }
 
 /**
+ * Fetch a file (an image served by the app, typically) and hand it to
+ * {@link triggerDownload} as a blob. Throws `Failed to fetch image (<status>)`
+ * on a non-2xx answer so the caller can toast in its own words.
+ */
+export async function downloadFetchedFile(url: string, filename: string): Promise<void> {
+  console.debug('[download-utils] Fetching file for download', { url, filename });
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch image (${res.status})`);
+  const blob = await res.blob();
+  await triggerDownload(blob, filename);
+}
+
+/**
  * Trigger a download from a URL (e.g. an API endpoint that returns a file).
  *
  * Used for URL-based downloads (backup .zip, file downloads).

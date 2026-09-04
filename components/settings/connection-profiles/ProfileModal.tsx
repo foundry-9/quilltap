@@ -253,11 +253,16 @@ export function ProfileModal({
   // is why the rule is declarative rather than a plugin closure (bug 85). It
   // decides the multi-character prefill default below, and the warning that
   // goes with it.
-  const runsThinkingTurn = evaluateThinkingTurn({
-    rule: activeProviderConfig?.thinkingTurnRule ?? null,
-    parameters: form.formData.parameters,
-    model: getSelectedModelInfo(),
-  })
+  const thinkingTurnFor = (model: ReturnType<typeof getSelectedModelInfo>) =>
+    evaluateThinkingTurn({
+      rule: activeProviderConfig?.thinkingTurnRule ?? null,
+      parameters: form.formData.parameters,
+      model,
+    })
+  const runsThinkingTurn = thinkingTurnFor(getSelectedModelInfo())
+  // The provider's own prefill default, before the model's thinking habit is
+  // weighed in — the warnings below compare the user's choice against it.
+  const providerPrefillDefault = defaultMultiCharacterPrefill(form.formData.provider)
 
   // A stored row that never chose (null — pre-4.9, or an import) shows the
   // provider default until the model list arrives, because the thinking half
@@ -349,14 +354,7 @@ export function ProfileModal({
       const modelInfo = fetchedModelsWithInfo.find((m) => m.id === modelName) || null
       form.setField(
         'multiCharacterPrefill',
-        defaultMultiCharacterPrefill(
-          form.formData.provider,
-          evaluateThinkingTurn({
-            rule: activeProviderConfig?.thinkingTurnRule ?? null,
-            parameters: form.formData.parameters,
-            model: modelInfo,
-          })
-        )
+        defaultMultiCharacterPrefill(form.formData.provider, thinkingTurnFor(modelInfo))
       )
     }
 
@@ -915,7 +913,7 @@ export function ProfileModal({
                   that spends its reply wondering whether the name was addressed to it.
                 </p>
                 {form.formData.multiCharacterPrefill &&
-                  !defaultMultiCharacterPrefill(form.formData.provider) && (
+                  !providerPrefillDefault && (
                     <p className="qt-text-xs qt-text-warning ml-6">
                       Anthropic&apos;s recent models reject a request handed over mid-turn and will
                       return an error on every multi-character reply. Leave this unticked unless you
@@ -923,7 +921,7 @@ export function ProfileModal({
                     </p>
                   )}
                 {form.formData.multiCharacterPrefill &&
-                  defaultMultiCharacterPrefill(form.formData.provider) &&
+                  providerPrefillDefault &&
                   runsThinkingTurn && (
                     <p className="qt-text-xs qt-text-warning ml-6">
                       This model reasons before it answers, and a turn handed over already opened

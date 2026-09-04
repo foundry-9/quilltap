@@ -12,9 +12,6 @@ import {
   estimateCost,
   sortByCost,
   findCheapestModel,
-  getModelsUnderCost,
-  calculateCostTier,
-  calculateSavings,
 } from '@/lib/llm/pricing'
 
 // Test fixtures
@@ -208,94 +205,4 @@ describe('Model Pricing System', () => {
     })
   })
 
-  describe('getModelsUnderCost', () => {
-    const models = [expensiveModel, cheapModel, midTierModel, freeModel]
-
-    it('should return models under cost threshold', () => {
-      const cheap = getModelsUnderCost(models, 1)
-      expect(cheap.length).toBe(2) // freeModel and cheapModel
-      expect(cheap.some(m => m.modelId === 'llama3.2:3b')).toBe(true)
-      expect(cheap.some(m => m.modelId === 'gpt-4o-mini')).toBe(true)
-    })
-
-    it('should return empty array if no models under threshold', () => {
-      const cheap = getModelsUnderCost(models, 0.1)
-      expect(cheap.length).toBe(1) // Only free model
-      expect(cheap[0].modelId).toBe('llama3.2:3b')
-    })
-
-    it('should return all models if threshold is very high', () => {
-      const cheap = getModelsUnderCost(models, 1000)
-      expect(cheap.length).toBe(4)
-    })
-  })
-
-  describe('calculateCostTier', () => {
-    it('should return tier 1 for free models', () => {
-      expect(calculateCostTier(freeModel)).toBe(1)
-    })
-
-    it('should return tier 1 for very cheap models (< $0.50/1M avg)', () => {
-      const veryChhttp: ModelPricing = {
-        ...cheapModel,
-        promptCostPer1M: 0.075,
-        completionCostPer1M: 0.3,
-      }
-      expect(calculateCostTier(veryChhttp)).toBe(1)
-    })
-
-    it('should return tier 2 for cheap models ($0.50-$2/1M avg)', () => {
-      // cheapModel avg is 0.375, which is < 0.5, so it's tier 1
-      // Create a model with avg cost between 0.5 and 2
-      const tier2Model: ModelPricing = {
-        ...cheapModel,
-        promptCostPer1M: 0.8,
-        completionCostPer1M: 1.2, // avg = 1.0
-      }
-      expect(calculateCostTier(tier2Model)).toBe(2)
-    })
-
-    it('should return tier 3 for mid-tier models ($2-$10/1M avg)', () => {
-      expect(calculateCostTier(midTierModel)).toBe(3)
-    })
-
-    it('should return tier 4 for expensive models ($10-$50/1M avg)', () => {
-      expect(calculateCostTier(expensiveModel)).toBe(4)
-    })
-
-    it('should return tier 5 for very expensive models (>$50/1M avg)', () => {
-      const veryExpensive: ModelPricing = {
-        ...expensiveModel,
-        promptCostPer1M: 50,
-        completionCostPer1M: 100,
-      }
-      expect(calculateCostTier(veryExpensive)).toBe(5)
-    })
-  })
-
-  describe('calculateSavings', () => {
-    it('should calculate savings percentage correctly', () => {
-      // Opus avg: 45, Mini avg: 0.375
-      // Savings: (45 - 0.375) / 45 * 100 = 99.17%
-      const savings = calculateSavings(expensiveModel, cheapModel)
-      expect(savings).toBeGreaterThan(99)
-    })
-
-    it('should return 100% savings when switching to free model', () => {
-      const savings = calculateSavings(cheapModel, freeModel)
-      expect(savings).toBe(100)
-    })
-
-    it('should return 0 if expensive model cost is 0', () => {
-      const savings = calculateSavings(freeModel, cheapModel)
-      expect(savings).toBe(0)
-    })
-
-    it('should calculate savings between mid-tier models', () => {
-      // Sonnet avg: 9, Mini avg: 0.375
-      // Savings: (9 - 0.375) / 9 * 100 = 95.8%
-      const savings = calculateSavings(midTierModel, cheapModel)
-      expect(savings).toBeGreaterThan(95)
-    })
-  })
 })

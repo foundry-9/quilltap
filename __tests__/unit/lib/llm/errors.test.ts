@@ -44,8 +44,6 @@ const {
   isRecoverableRequestError,
   parseTokenLimitError,
   parseContentLimitError,
-  handleProviderError,
-  getUserFriendlyError,
 } = require('@/lib/llm/errors') as {
   LLMProviderError: new (provider: string, message: string, originalError?: Error) => LLMProviderErrorType
   APIKeyError: new (provider: string, message?: string) => LLMProviderErrorType
@@ -60,8 +58,6 @@ const {
   isRecoverableRequestError: (error: unknown) => boolean
   parseTokenLimitError: (error: unknown) => { requestedTokens?: number; maxTokens?: number }
   parseContentLimitError: (error: unknown) => { type: ContentLimitType; maxValue?: number; description?: string }
-  handleProviderError: (provider: string, error: unknown) => LLMProviderErrorType
-  getUserFriendlyError: (error: unknown) => string
 }
 
 describe('LLM Error Types', () => {
@@ -330,144 +326,5 @@ describe('Error Parsing Functions', () => {
       const result = parseContentLimitError(error)
       expect(result.type).toBe('unknown')
     })
-  })
-})
-
-describe('handleProviderError', () => {
-  it('returns existing LLMProviderError unchanged', () => {
-    const original = new TokenLimitError('OpenAI', 150000, 100000)
-    const result = handleProviderError('OpenAI', original)
-    expect(result).toBe(original)
-  })
-
-  it('converts unauthorized error to APIKeyError', () => {
-    const error = new Error('Unauthorized: Invalid API key')
-    const result = handleProviderError('OpenAI', error)
-    expect(result).toBeInstanceOf(APIKeyError)
-    expect(result.provider).toBe('OpenAI')
-  })
-
-  it('converts 401 error to APIKeyError', () => {
-    const error = new Error('HTTP 401 Authentication failed')
-    const result = handleProviderError('Anthropic', error)
-    expect(result).toBeInstanceOf(APIKeyError)
-  })
-
-  it('converts rate limit error to RateLimitError', () => {
-    const error = new Error('Rate limit exceeded, please retry')
-    const result = handleProviderError('OpenAI', error)
-    expect(result).toBeInstanceOf(RateLimitError)
-  })
-
-  it('converts 429 error to RateLimitError', () => {
-    const error = new Error('HTTP 429 Too many requests')
-    const result = handleProviderError('OpenAI', error)
-    expect(result).toBeInstanceOf(RateLimitError)
-  })
-
-  it('converts network error to NetworkError', () => {
-    const error = new Error('ECONNREFUSED: Connection refused')
-    const result = handleProviderError('OpenAI', error)
-    expect(result).toBeInstanceOf(NetworkError)
-  })
-
-  it('converts timeout error to NetworkError', () => {
-    const error = new Error('Request timeout after 30000ms')
-    const result = handleProviderError('OpenAI', error)
-    expect(result).toBeInstanceOf(NetworkError)
-  })
-
-  it('converts model not found error to ModelNotFoundError', () => {
-    const error = new Error('model gpt-5 not found')
-    const result = handleProviderError('OpenAI', error)
-    expect(result).toBeInstanceOf(ModelNotFoundError)
-  })
-
-  it('converts token limit error to TokenLimitError', () => {
-    const error = new Error('context_length_exceeded: 210000 tokens > 200000 maximum')
-    const result = handleProviderError('OpenAI', error)
-    expect(result).toBeInstanceOf(TokenLimitError)
-  })
-
-  it('converts invalid request to InvalidRequestError', () => {
-    const error = new Error('Invalid temperature: must be between 0 and 2')
-    const result = handleProviderError('OpenAI', error)
-    expect(result).toBeInstanceOf(InvalidRequestError)
-  })
-
-  it('wraps unknown error in LLMProviderError', () => {
-    const error = new Error('Some obscure error')
-    const result = handleProviderError('OpenAI', error)
-    expect(result).toBeInstanceOf(LLMProviderError)
-    expect(result.message).toBe('Some obscure error')
-  })
-
-  it('handles non-Error input', () => {
-    const result = handleProviderError('OpenAI', 'string error')
-    expect(result).toBeInstanceOf(LLMProviderError)
-    expect(result.message).toBe('An unknown error occurred')
-  })
-})
-
-describe('getUserFriendlyError', () => {
-  it('returns friendly message for APIKeyError', () => {
-    const error = new APIKeyError('OpenAI')
-    const message = getUserFriendlyError(error)
-    expect(message).toContain('Invalid or expired API key')
-    expect(message).toContain('OpenAI')
-  })
-
-  it('returns friendly message for RateLimitError with retryAfter', () => {
-    const error = new RateLimitError('OpenAI', 60)
-    const message = getUserFriendlyError(error)
-    expect(message).toContain('Rate limit exceeded')
-    expect(message).toContain('60 seconds')
-  })
-
-  it('returns friendly message for RateLimitError without retryAfter', () => {
-    const error = new RateLimitError('OpenAI')
-    const message = getUserFriendlyError(error)
-    expect(message).toContain('Rate limit exceeded')
-    expect(message).toContain('try again later')
-  })
-
-  it('returns friendly message for NetworkError', () => {
-    const error = new NetworkError('OpenAI')
-    const message = getUserFriendlyError(error)
-    expect(message).toContain('Unable to connect')
-    expect(message).toContain('internet connection')
-  })
-
-  it('returns friendly message for ModelNotFoundError', () => {
-    const error = new ModelNotFoundError('OpenAI', 'gpt-5')
-    const message = getUserFriendlyError(error)
-    expect(message).toContain('not found')
-    expect(message).toContain('select a different model')
-  })
-
-  it('returns friendly message for TokenLimitError with counts', () => {
-    const error = new TokenLimitError('OpenAI', 210000, 200000)
-    const message = getUserFriendlyError(error)
-    expect(message).toContain('token limit')
-    expect(message).toContain('210,000')
-    expect(message).toContain('200,000')
-  })
-
-  it('returns friendly message for generic LLMProviderError', () => {
-    const error = new LLMProviderError('OpenAI', 'Something went wrong')
-    const message = getUserFriendlyError(error)
-    expect(message).toContain('OpenAI')
-    expect(message).toContain('Something went wrong')
-  })
-
-  it('returns message for regular Error', () => {
-    const error = new Error('Generic error')
-    const message = getUserFriendlyError(error)
-    expect(message).toBe('Generic error')
-  })
-
-  it('returns generic message for non-Error', () => {
-    const message = getUserFriendlyError('string error')
-    expect(message).toContain('unexpected error')
   })
 })

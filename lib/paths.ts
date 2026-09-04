@@ -139,16 +139,6 @@ export function getShellCapabilities(): Set<string> {
 }
 
 /**
- * Check whether the Electron shell advertises a specific capability
- *
- * @param capability - The capability flag to check (e.g., "OPENS_FS_PATH")
- * @returns true if the shell has this capability
- */
-export function hasShellCapability(capability: string): boolean {
-  return getShellCapabilities().has(capability);
-}
-
-/**
  * Get the current platform
  *
  * @returns Platform identifier

@@ -9,7 +9,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
+import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import { stripCharacterNamePrefix } from '@/lib/llm/message-formatter'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ChatMetadataBase } from '@/lib/schemas/types'
@@ -212,11 +212,7 @@ async function processHelpResponse(
   // for one that merely accepts a key (Bug 81)
   const keyResolution = await resolveConnectionProfileApiKey(repos, connectionProfile)
   if (!keyResolution.ok) {
-    throw new Error(
-      keyResolution.reason === 'no-api-key-configured'
-        ? 'No API key configured'
-        : 'API key not found'
-    )
+    throw new Error(describeProfileApiKeyFailure(keyResolution.reason))
   }
   const apiKey = keyResolution.apiKey
 

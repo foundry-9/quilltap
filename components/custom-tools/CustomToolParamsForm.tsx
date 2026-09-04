@@ -25,14 +25,15 @@
  */
 
 import { useEffect, useRef } from 'react'
+import type { CustomToolParameter } from '@/lib/pascal/custom-tool.types'
 
-/** A single declared parameter of a custom-tool definition. */
-export interface CustomToolParameterSpec {
-  type: 'number' | 'integer' | 'string' | 'boolean'
+/**
+ * A single declared parameter of a custom-tool definition, as a form can
+ * render it: the schema's own shape, with the `default` already resolved to a
+ * literal — a `$state` default is the server's to resolve, never the form's.
+ */
+export type CustomToolParameterSpec = Omit<CustomToolParameter, 'default'> & {
   default: number | string | boolean
-  description?: string
-  min?: number
-  max?: number
 }
 
 /** Form values are held loosely (text inputs yield strings) and coerced on use. */

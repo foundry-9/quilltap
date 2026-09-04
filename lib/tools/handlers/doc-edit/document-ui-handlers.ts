@@ -23,6 +23,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import {
   postLibrarianOpenAnnouncement,
   documentHiddenFromCharacters,
+  toLibrarianOpenKind,
 } from '@/lib/services/librarian-notifications/writer';
 import { databaseDocumentExists } from '@/lib/mount-index/database-store';
 import type { ChatDocument } from '@/lib/schemas/chat-document.types';
@@ -33,6 +34,7 @@ import {
   buildReadResolutionContext,
   uriForResolvedPath,
   assertCharacterMayRead,
+  resolveActorOrigin,
 } from './shared';
 
 /**
@@ -180,18 +182,8 @@ export async function handleOpenDocument(
 
   // Post a Librarian announcement attributing the open to the invoking character, so everyone
   // in the chat sees who opened the document. Errors never propagate — they're swallowed inside
-  // the writer — but if we can't resolve a character name we fall back to user attribution.
-  let characterName: string | null = null;
-  if (context.characterId) {
-    try {
-      const character = await repos.characters.findById(context.characterId);
-      if (character?.name) {
-        characterName = character.name;
-      }
-    } catch (error) {
-    }
-  }
-
+  // the writer — and `resolveActorOrigin` falls back to user attribution when it can't name a
+  // character.
   await postLibrarianOpenAnnouncement({
     chatId: context.chatId,
     displayTitle,
@@ -199,9 +191,7 @@ export async function handleOpenDocument(
     scope,
     mountPoint: input.mount_point,
     isNew,
-    origin: characterName
-      ? { kind: 'opened-by-character', characterName }
-      : { kind: 'opened-by-user' },
+    origin: toLibrarianOpenKind(await resolveActorOrigin(context)),
     hiddenFromCharacters,
   });
 

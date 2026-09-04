@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { apiFetch, ApiFetchError } from '@/lib/query/fetcher'
+import { patchChat, type ChatPatch } from '@/lib/chat/patch-chat'
 import { queryKeys } from '@/lib/query/keys'
 import { showConfirmation } from '@/lib/alert'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
@@ -11,6 +12,63 @@ import type { ParticipantData } from '@/components/chat/ParticipantCard'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
 import type { TurnState } from '@/lib/chat/turn-manager'
 import type { Chat, Message } from '../types'
+
+/**
+ * Persist one `{ chat: { … } }` patch through {@link patchChat}. A server
+ * refusal and a network fault keep their historical log lines (`Failed to
+ * persist …` with the status, `Error persisting …` with the error); either one
+ * runs `onFailure`. Resolves `true` on success so a caller can gate a success
+ * toast on it.
+ */
+async function persistChatField(
+  chatId: string,
+  updates: ChatPatch,
+  logLabel: string,
+  onFailure?: () => void,
+): Promise<boolean> {
+  try {
+    await patchChat(chatId, updates)
+    return true
+  } catch (error) {
+    if (error instanceof ApiFetchError) {
+      console.error(`[Chat] Failed to persist ${logLabel}`, error.status)
+    } else {
+      console.error(`[Chat] Error persisting ${logLabel}`, error)
+    }
+    onFailure?.()
+    return false
+  }
+}
+
+/**
+ * A per-chat tri-state override the sidebar sets optimistically: local state
+ * seeded from the chat record (`null` = inherit), and a setter that applies
+ * the value at once, persists it via {@link persistChatField}, and rolls back
+ * to the previous value — toasting `errorToast` — when the write fails.
+ */
+function useOptimisticChatField<T>(
+  chatId: string,
+  field: Extract<keyof Chat, string>,
+  chatValue: T | null | undefined,
+  errorToast: string,
+): [T | null, (value: T | null) => Promise<void>] {
+  const [value, setValue] = useState<T | null>(null)
+  useEffect(() => {
+    if (chatValue !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
+      setValue(chatValue ?? null)
+    }
+  }, [chatValue])
+  const update = useCallback(async (next: T | null) => {
+    const previous = value
+    setValue(next)
+    await persistChatField(chatId, { [field]: next }, field, () => {
+      setValue(previous)
+      showErrorToast(errorToast)
+    })
+  }, [chatId, field, value, errorToast])
+  return [value, update]
+}
 
 interface UseChatControlsParams {
   chatId: string
@@ -59,14 +117,29 @@ export function useChatControls({
   const [agentModeEnabled, setAgentModeEnabled] = useState<boolean | null>(null)
   const [storyBackgroundsEnabled, setStoryBackgroundsEnabled] = useState(false)
   const [allowCrossCharacterVaultReads, setAllowCrossCharacterVaultReads] = useState(false)
-  const [coreWhisperEnabled, setCoreWhisperEnabled] = useState<boolean | null>(null)
-  const [coreWhisperInterval, setCoreWhisperInterval] = useState<number | null>(null)
+  // Per-chat Core whisper enabled override. Tri-state: null = inherit, true/false = explicit.
+  const [coreWhisperEnabled, handleSetCoreWhisperEnabled] = useOptimisticChatField<boolean>(
+    chatId, 'coreWhisperEnabled', chat?.coreWhisperEnabled, 'Could not update Core whisper setting',
+  )
+  // Per-chat Core whisper cadence override. null = inherit, positive integer = explicit.
+  const [coreWhisperInterval, handleSetCoreWhisperInterval] = useOptimisticChatField<number>(
+    chatId, 'coreWhisperInterval', chat?.coreWhisperInterval, 'Could not update Core whisper cadence',
+  )
   // "Nothing to add" turn-skipping toggle (null = enabled default; false = disabled).
-  const [turnSkippingEnabled, setTurnSkippingEnabled] = useState<boolean | null>(null)
-  // Per-chat thinking visibility override (tri-state: null = inherit global). DISPLAY ONLY.
-  const [showThinking, setShowThinking] = useState<boolean | null>(null)
-  // Per-chat answer-confirmation override (tri-state: null = inherit project/global).
-  const [answerConfirmationOverride, setAnswerConfirmationOverride] = useState<'ON' | 'OFF' | null>(null)
+  const [turnSkippingEnabled, handleSetTurnSkippingEnabled] = useOptimisticChatField<boolean>(
+    chatId, 'turnSkippingEnabled', chat?.turnSkippingEnabled, 'Could not update turn-skipping setting',
+  )
+  // Per-chat thinking-visibility override (tri-state: null = inherit global).
+  // DISPLAY ONLY — only governs whether captured reasoning is shown, never
+  // whether it is stored or fed to a model.
+  const [showThinking, handleSetShowThinking] = useOptimisticChatField<boolean>(
+    chatId, 'showThinking', chat?.showThinking, 'Could not update Thinking visibility',
+  )
+  // Per-chat answer-confirmation override (tri-state: null = inherit project
+  // then global, 'ON'/'OFF' = explicit).
+  const [answerConfirmationOverride, handleSetAnswerConfirmationOverride] = useOptimisticChatField<'ON' | 'OFF'>(
+    chatId, 'answerConfirmationOverride', chat?.answerConfirmationOverride, 'Could not update Answer Confirmation',
+  )
 
   // Refs
   const userStoppedStreamRef = useRef<boolean>(false)
@@ -109,41 +182,6 @@ export function useChatControls({
     }
   }, [chat?.allowCrossCharacterVaultReads])
 
-  // Initialize coreWhisperEnabled / coreWhisperInterval from chat data
-  useEffect(() => {
-    if (chat?.coreWhisperEnabled !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
-      setCoreWhisperEnabled(chat.coreWhisperEnabled ?? null)
-    }
-  }, [chat?.coreWhisperEnabled])
-  useEffect(() => {
-    if (chat?.coreWhisperInterval !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
-      setCoreWhisperInterval(chat.coreWhisperInterval ?? null)
-    }
-  }, [chat?.coreWhisperInterval])
-  // Initialize turnSkippingEnabled from chat data (null = enabled default)
-  useEffect(() => {
-    if (chat?.turnSkippingEnabled !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
-      setTurnSkippingEnabled(chat.turnSkippingEnabled ?? null)
-    }
-  }, [chat?.turnSkippingEnabled])
-  // Initialize showThinking from chat data (tri-state: null = inherit global)
-  useEffect(() => {
-    if (chat?.showThinking !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
-      setShowThinking(chat.showThinking ?? null)
-    }
-  }, [chat?.showThinking])
-  // Initialize answerConfirmationOverride from chat data (tri-state: null = inherit)
-  useEffect(() => {
-    if (chat?.answerConfirmationOverride !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- SWR data must sync to local state
-      setAnswerConfirmationOverride(chat.answerConfirmationOverride ?? null)
-    }
-  }, [chat?.answerConfirmationOverride])
-
   // Initialize lastAllLLMPauseTurnCountRef when chat loads as paused
   useEffect(() => {
     if (chat?.isPaused && isAllLLM && allLLMTurnCount > 0) {
@@ -171,23 +209,12 @@ export function useChatControls({
     [profilesData]
   )
 
-  // Function to set pause state and persist to database
+  // Set the pause state and persist it. No rollback: a failed write leaves the
+  // local pause in place and is only logged.
   const setPauseState = useCallback(async (paused: boolean) => {
     setIsPaused(paused)
     userStoppedStreamRef.current = paused
-
-    try {
-      const response = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { isPaused: paused } }),
-      })
-      if (!response.ok) {
-        console.error('[Chat] Failed to persist pause state', response.status)
-      }
-    } catch (error) {
-      console.error('[Chat] Error persisting pause state', error)
-    }
+    await persistChatField(chatId, { isPaused: paused }, 'pause state')
   }, [chatId, setIsPaused])
 
   // Toggle pause state
@@ -207,161 +234,30 @@ export function useChatControls({
   const handleToggleCrossCharacterVaultReads = useCallback(async () => {
     const newValue = !allowCrossCharacterVaultReads
     setAllowCrossCharacterVaultReads(newValue)
-
-    try {
-      const response = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { allowCrossCharacterVaultReads: newValue } }),
-      })
-      if (!response.ok) {
-        console.error('[Chat] Failed to persist cross-character vault reads', response.status)
+    const ok = await persistChatField(
+      chatId,
+      { allowCrossCharacterVaultReads: newValue },
+      'cross-character vault reads',
+      () => {
         setAllowCrossCharacterVaultReads(!newValue)
         showErrorToast('Could not update shared-vault setting')
-        return
-      }
+      },
+    )
+    if (ok) {
       showInfoToast(
         newValue
           ? 'Shared vault reads enabled — characters may peek at each other’s dossiers'
           : 'Shared vault reads disabled — each character is once more a closed book'
       )
-    } catch (error) {
-      console.error('[Chat] Error persisting cross-character vault reads', error)
-      setAllowCrossCharacterVaultReads(!newValue)
-      showErrorToast('Could not update shared-vault setting')
     }
   }, [chatId, allowCrossCharacterVaultReads])
 
-  // Per-chat Core whisper enabled override. Tri-state: null = inherit, true/false = explicit.
-  const handleSetCoreWhisperEnabled = useCallback(async (value: boolean | null) => {
-    const previous = coreWhisperEnabled
-    setCoreWhisperEnabled(value)
-    try {
-      const response = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { coreWhisperEnabled: value } }),
-      })
-      if (!response.ok) {
-        console.error('[Chat] Failed to persist coreWhisperEnabled', response.status)
-        setCoreWhisperEnabled(previous)
-        showErrorToast('Could not update Core whisper setting')
-      }
-    } catch (error) {
-      console.error('[Chat] Error persisting coreWhisperEnabled', error)
-      setCoreWhisperEnabled(previous)
-      showErrorToast('Could not update Core whisper setting')
-    }
-  }, [chatId, coreWhisperEnabled])
-
-  // Per-chat "nothing to add" turn-skipping toggle. null = enabled (default); false = disabled.
-  const handleSetTurnSkippingEnabled = useCallback(async (value: boolean | null) => {
-    const previous = turnSkippingEnabled
-    setTurnSkippingEnabled(value)
-    try {
-      const response = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { turnSkippingEnabled: value } }),
-      })
-      if (!response.ok) {
-        console.error('[Chat] Failed to persist turnSkippingEnabled', response.status)
-        setTurnSkippingEnabled(previous)
-        showErrorToast('Could not update turn-skipping setting')
-      }
-    } catch (error) {
-      console.error('[Chat] Error persisting turnSkippingEnabled', error)
-      setTurnSkippingEnabled(previous)
-      showErrorToast('Could not update turn-skipping setting')
-    }
-  }, [chatId, turnSkippingEnabled])
-
-  // Per-chat Core whisper cadence override. null = inherit, positive integer = explicit.
-  const handleSetCoreWhisperInterval = useCallback(async (value: number | null) => {
-    const previous = coreWhisperInterval
-    setCoreWhisperInterval(value)
-    try {
-      const response = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { coreWhisperInterval: value } }),
-      })
-      if (!response.ok) {
-        console.error('[Chat] Failed to persist coreWhisperInterval', response.status)
-        setCoreWhisperInterval(previous)
-        showErrorToast('Could not update Core whisper cadence')
-      }
-    } catch (error) {
-      console.error('[Chat] Error persisting coreWhisperInterval', error)
-      setCoreWhisperInterval(previous)
-      showErrorToast('Could not update Core whisper cadence')
-    }
-  }, [chatId, coreWhisperInterval])
-
-  // Per-chat thinking-visibility override. Tri-state: null = inherit global,
-  // true/false = explicit. DISPLAY ONLY — only governs whether captured
-  // reasoning is shown, never whether it is stored or fed to a model.
-  const handleSetShowThinking = useCallback(async (value: boolean | null) => {
-    const previous = showThinking
-    setShowThinking(value)
-    try {
-      const response = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { showThinking: value } }),
-      })
-      if (!response.ok) {
-        console.error('[Chat] Failed to persist showThinking', response.status)
-        setShowThinking(previous)
-        showErrorToast('Could not update Thinking visibility')
-      }
-    } catch (error) {
-      console.error('[Chat] Error persisting showThinking', error)
-      setShowThinking(previous)
-      showErrorToast('Could not update Thinking visibility')
-    }
-  }, [chatId, showThinking])
-
-  // Per-chat answer-confirmation override. Tri-state: null = inherit (project
-  // then global), 'ON'/'OFF' = explicit.
-  const handleSetAnswerConfirmationOverride = useCallback(async (value: 'ON' | 'OFF' | null) => {
-    const previous = answerConfirmationOverride
-    setAnswerConfirmationOverride(value)
-    try {
-      const response = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { answerConfirmationOverride: value } }),
-      })
-      if (!response.ok) {
-        console.error('[Chat] Failed to persist answerConfirmationOverride', response.status)
-        setAnswerConfirmationOverride(previous)
-        showErrorToast('Could not update Answer Confirmation')
-      }
-    } catch (error) {
-      console.error('[Chat] Error persisting answerConfirmationOverride', error)
-      setAnswerConfirmationOverride(previous)
-      showErrorToast('Could not update Answer Confirmation')
-    }
-  }, [chatId, answerConfirmationOverride])
-
-  // Toggle document editing mode and persist to database
+  // Toggle document editing mode and persist to database. No rollback, as
+  // with the pause state.
   const handleToggleDocumentEditingMode = useCallback(async () => {
     const newMode = !documentEditingMode
     setDocumentEditingMode(newMode)
-
-    try {
-      const response = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { documentEditingMode: newMode } }),
-      })
-      if (!response.ok) {
-        console.error('[Chat] Failed to persist document editing mode', response.status)
-      }
-    } catch (error) {
-      console.error('[Chat] Error persisting document editing mode', error)
-    }
+    await persistChatField(chatId, { documentEditingMode: newMode }, 'document editing mode')
   }, [chatId, documentEditingMode])
 
   const handleToggleAgentMode = useCallback(async () => {

@@ -25,51 +25,16 @@
  * Migration ID: add-doc-mount-link-groups-v1
  */
 
-import Database, { Database as DatabaseType } from 'better-sqlite3';
-import fs from 'fs';
-import path from 'path';
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import { reportProgress } from '../lib/progress';
-import { getMountIndexDatabasePath } from '../../lib/paths';
+import { columnExists, openMountIndexDbIfPresent, tableExists } from '../lib/database-utils';
 
 const MIGRATION_ID = 'add-doc-mount-link-groups-v1';
 
 const COLUMN_NAME = 'linkGroupId';
 const COLUMN_DEFINITION = `"linkGroupId" TEXT DEFAULT NULL`;
 const INDEX_NAME = 'idx_doc_mount_file_links_linkGroupId';
-
-function openMountIndexDb(): DatabaseType | null {
-  const dbPath = getMountIndexDatabasePath();
-  if (!fs.existsSync(path.dirname(dbPath))) return null;
-  if (!fs.existsSync(dbPath)) return null;
-  const db = new Database(dbPath);
-  try {
-    const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
-    if (pepper) {
-      const keyHex = Buffer.from(pepper, 'base64').toString('hex');
-      db.pragma(`key = "x'${keyHex}'"`);
-    }
-    db.pragma('journal_mode = WAL');
-    db.pragma('busy_timeout = 5000');
-    return db;
-  } catch (error) {
-    try { db.close(); } catch { /* ignore */ }
-    throw error;
-  }
-}
-
-function tableExists(db: DatabaseType, name: string): boolean {
-  const row = db.prepare(
-    `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`
-  ).get(name) as { name: string } | undefined;
-  return row !== undefined;
-}
-
-function hasColumn(db: DatabaseType, table: string, column: string): boolean {
-  const cols = db.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>;
-  return cols.some(c => c.name === column);
-}
 
 export const addDocMountLinkGroupsMigration: Migration = {
   id: MIGRATION_ID,
@@ -79,13 +44,11 @@ export const addDocMountLinkGroupsMigration: Migration = {
   dependsOn: ['add-doc-mount-file-links-v1'],
 
   async shouldRun(): Promise<boolean> {
-    const dbPath = getMountIndexDatabasePath();
-    if (!fs.existsSync(dbPath)) return false;
-    const db = openMountIndexDb();
+    const db = openMountIndexDbIfPresent();
     if (!db) return false;
     try {
       if (!tableExists(db, 'doc_mount_file_links')) return false;
-      if (!hasColumn(db, 'doc_mount_file_links', COLUMN_NAME)) return true;
+      if (!columnExists(db, 'doc_mount_file_links', COLUMN_NAME)) return true;
       // Column present but orphans may still be waiting (upgrade from a build
       // that added the column before the GC landed).
       const orphans = db.prepare(
@@ -100,7 +63,7 @@ export const addDocMountLinkGroupsMigration: Migration = {
 
   async run(): Promise<MigrationResult> {
     const startTime = Date.now();
-    const db = openMountIndexDb();
+    const db = openMountIndexDbIfPresent();
     if (!db) {
       return {
         id: MIGRATION_ID,
@@ -120,7 +83,7 @@ export const addDocMountLinkGroupsMigration: Migration = {
       // ----------------------------------------------------------------------
       // Step 1: add the column + partial index (idempotent).
       // ----------------------------------------------------------------------
-      if (!hasColumn(db, 'doc_mount_file_links', COLUMN_NAME)) {
+      if (!columnExists(db, 'doc_mount_file_links', COLUMN_NAME)) {
         db.exec(`ALTER TABLE "doc_mount_file_links" ADD COLUMN ${COLUMN_DEFINITION}`);
         columnAdded = true;
       }

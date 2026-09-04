@@ -16,7 +16,7 @@
  */
 
 import { ConnectionProfile, Provider } from '@/lib/schemas/types'
-import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { CheapLLMSettings, DangerousContentSettings } from '@/lib/schemas/settings.types'
 import { logger } from '@/lib/logger'
 import {
   getAverageCostPer1M,
@@ -101,22 +101,54 @@ export function profileParams(
   return base
 }
 
+/** Where a local Ollama server listens when a profile leaves its base URL blank. */
+const OLLAMA_DEFAULT_BASE_URL = 'http://localhost:11434'
+
 /**
- * Build a {@link CheapLLMSelection} straight from a connection profile, using
- * the profile's own base URL (no local-fallback substitution) and deriving
- * `isLocal` from the provider. Shared by the selection paths that pick a profile
- * as-is — the global default, the USER_DEFINED profile, and a non-local
- * `isCheap` profile. Ollama-forced and uncensored paths substitute a localhost
- * base URL and are intentionally NOT routed through here.
+ * Build a {@link CheapLLMSelection} straight from a connection profile,
+ * deriving `isLocal` from the provider and forwarding the profile's provider
+ * parameters. This is the one place the selection shape is assembled — every
+ * selection path (the ladder in {@link getCheapLLMProvider}, the uncensored
+ * reroute, and the direct utility calls that pick a profile as-is) goes
+ * through here.
+ *
+ * `localBaseUrlFallback` substitutes the default Ollama address when a local
+ * profile has no base URL of its own; non-local profiles always keep their own
+ * base URL (or none).
  */
-export function selectionFromProfile(profile: ConnectionProfile): CheapLLMSelection {
+export function selectionFromProfile(
+  profile: ConnectionProfile,
+  options: { localBaseUrlFallback?: boolean } = {},
+): CheapLLMSelection {
+  const isLocal = profile.provider === 'OLLAMA'
+  const baseUrl = profile.baseUrl
+    || (isLocal && options.localBaseUrlFallback ? OLLAMA_DEFAULT_BASE_URL : undefined)
   return {
     provider: profile.provider,
     modelName: profile.modelName,
-    baseUrl: profile.baseUrl || undefined,
+    baseUrl,
     connectionProfileId: profile.id,
-    isLocal: profile.provider === 'OLLAMA',
+    isLocal,
     profileParameters: profileParams(profile),
+  }
+}
+
+/**
+ * Build a {@link CheapLLMConfig} from a chatSettings row (or fall back to the
+ * defaults when the row or its `cheapLLMSettings` is absent). Shared so callers
+ * don't repeat the same merge.
+ */
+export function buildCheapLLMConfig(
+  chatSettings: { cheapLLMSettings?: CheapLLMSettings | null } | null | undefined,
+): CheapLLMConfig {
+  const settings = chatSettings?.cheapLLMSettings
+  if (!settings) return DEFAULT_CHEAP_LLM_CONFIG
+  return {
+    ...DEFAULT_CHEAP_LLM_CONFIG,
+    strategy: settings.strategy,
+    fallbackToLocal: settings.fallbackToLocal,
+    userDefinedProfileId: settings.userDefinedProfileId ?? undefined,
+    defaultCheapProfileId: settings.defaultCheapProfileId ?? undefined,
   }
 }
 
@@ -209,14 +241,7 @@ export function getCheapLLMProvider(
     // Prefer local (Ollama) cheap profiles for zero cost
     const localCheapProfile = cheapProfiles.find(p => p.provider === 'OLLAMA')
     if (localCheapProfile) {
-      return {
-        provider: 'OLLAMA',
-        modelName: localCheapProfile.modelName,
-        baseUrl: localCheapProfile.baseUrl || 'http://localhost:11434',
-        connectionProfileId: localCheapProfile.id,
-        isLocal: true,
-        profileParameters: profileParams(localCheapProfile),
-      }
+      return selectionFromProfile(localCheapProfile, { localBaseUrlFallback: true })
     }
     // Use the first available cheap profile
     return selectionFromProfile(cheapProfiles[0])
@@ -227,14 +252,7 @@ export function getCheapLLMProvider(
     // Look for an Ollama profile in available profiles
     const ollamaProfile = availableProfiles.find(p => p.provider === 'OLLAMA')
     if (ollamaProfile) {
-      return {
-        provider: 'OLLAMA',
-        modelName: ollamaProfile.modelName,
-        baseUrl: ollamaProfile.baseUrl || 'http://localhost:11434',
-        connectionProfileId: ollamaProfile.id,
-        isLocal: true,
-        profileParameters: profileParams(ollamaProfile),
-      }
+      return selectionFromProfile(ollamaProfile, { localBaseUrlFallback: true })
     }
 
     // If LOCAL_FIRST was explicitly requested but no Ollama profile exists,
@@ -250,13 +268,7 @@ export function getCheapLLMProvider(
   // For Ollama, always use the current profile's model - all local models are "free"
   // and we can't assume what models the user has installed
   if (currentProfile.provider === 'OLLAMA') {
-    return {
-      provider: currentProfile.provider,
-      modelName: currentProfile.modelName,
-      baseUrl: currentProfile.baseUrl || undefined,
-      connectionProfileId: currentProfile.id,
-      isLocal: true,
-    }
+    return selectionFromProfile(currentProfile)
   }
 
   // Map current provider to its cheapest variant (fallback)
@@ -269,13 +281,8 @@ export function getCheapLLMProvider(
     currentProfileModel: currentProfile.modelName,
   })
 
-  return {
-    provider: currentProfile.provider,
-    modelName: cheapModel,
-    baseUrl: currentProfile.baseUrl || undefined,
-    connectionProfileId: currentProfile.id,
-    isLocal: false,
-  }
+  // The current profile, but on its provider's cheapest model.
+  return { ...selectionFromProfile(currentProfile), modelName: cheapModel }
 }
 
 /**
@@ -305,165 +312,18 @@ export function resolveUncensoredCheapLLMSelection(
   if (dangerSettings.uncensoredTextProfileId) {
     const uncensoredProfile = availableProfiles.find(p => p.id === dangerSettings.uncensoredTextProfileId)
     if (uncensoredProfile) {
-      const isLocal = uncensoredProfile.provider === 'OLLAMA'
-      return {
-        provider: uncensoredProfile.provider,
-        modelName: uncensoredProfile.modelName,
-        baseUrl: isLocal ? (uncensoredProfile.baseUrl || 'http://localhost:11434') : (uncensoredProfile.baseUrl || undefined),
-        connectionProfileId: uncensoredProfile.id,
-        isLocal,
-        profileParameters: profileParams(uncensoredProfile),
-      }
+      return selectionFromProfile(uncensoredProfile, { localBaseUrlFallback: true })
     }
   }
 
   // Scan for any isDangerousCompatible profile
   const anyUncensored = availableProfiles.find(p => p.isDangerousCompatible === true)
   if (anyUncensored) {
-    const isLocal = anyUncensored.provider === 'OLLAMA'
-    return {
-      provider: anyUncensored.provider,
-      modelName: anyUncensored.modelName,
-      baseUrl: isLocal ? (anyUncensored.baseUrl || 'http://localhost:11434') : (anyUncensored.baseUrl || undefined),
-      connectionProfileId: anyUncensored.id,
-      isLocal,
-      profileParameters: profileParams(anyUncensored),
-    }
+    return selectionFromProfile(anyUncensored, { localBaseUrlFallback: true })
   }
 
   // Nothing found — fail open with standard selection
   return standardSelection
-}
-
-/**
- * Checks if a model is considered a "cheap" model
- * Used to validate user-defined cheap LLM profiles
- * First checks the plugin registry, falls back to hardcoded list.
- */
-export function isCheapModel(provider: Provider, modelName: string): boolean {
-  // First try the plugin registry
-  const registryConfig = getCheapModelConfig(provider)
-  const registryModels = registryConfig?.recommendedModels || []
-
-  // Fall back to hardcoded list
-  const recommendedModels = registryModels.length > 0
-    ? registryModels
-    : (RECOMMENDED_CHEAP_MODELS[provider] || [])
-
-  // Check exact match first
-  if (recommendedModels.includes(modelName)) {
-    return true
-  }
-
-  const lowerModelName = modelName.toLowerCase()
-
-  // Exclude known expensive models first
-  const expensiveIndicators = ['opus', 'o1', 'o3', 'ultra', 'pro']
-  if (expensiveIndicators.some(indicator => lowerModelName.includes(indicator))) {
-    return false
-  }
-
-  // Check for mid-tier models that shouldn't be considered cheap
-  // Note: "4o" alone (without "mini") is mid-tier, not cheap
-  if (lowerModelName.includes('4o') && !lowerModelName.includes('mini')) {
-    return false
-  }
-  if (lowerModelName.includes('sonnet')) {
-    return false
-  }
-
-  // Check if model name contains common cheap model indicators
-  const cheapIndicators = [
-    'mini',
-    'flash',
-    'haiku',
-    'turbo',
-    '3.5',
-    ':1b',
-    ':2b',
-    ':3b',
-    ':7b',
-    'small',
-    'tiny',
-    'instant',
-  ]
-
-  return cheapIndicators.some(indicator => lowerModelName.includes(indicator))
-}
-
-/**
- * Estimates the relative cost of a model (for UI display)
- * Returns a value from 1 (cheapest) to 5 (most expensive)
- */
-export function estimateModelCost(provider: Provider, modelName: string): number {
-  const lowerModelName = modelName.toLowerCase()
-
-  // Local models are free
-  if (provider === 'OLLAMA') {
-    return 1
-  }
-
-  // High-tier models (check first as they take priority)
-  const highTierIndicators = ['opus', 'o1-', 'o3-', 'ultra']
-  if (highTierIndicators.some(i => lowerModelName.includes(i))) {
-    return 5
-  }
-
-  // Check for cheap model indicators
-  if (isCheapModel(provider, modelName)) {
-    return 2
-  }
-
-  // Mid-tier models (everything else including pro, sonnet, 4o)
-  const midTierIndicators = ['sonnet', '4o', 'pro', 'gemini-1.5', 'gemini-2.0-pro']
-  if (midTierIndicators.some(i => lowerModelName.includes(i))) {
-    return 3
-  }
-
-  // Default to mid-tier
-  return 3
-}
-
-/**
- * Validates that a cheap LLM configuration is usable
- */
-export function validateCheapLLMConfig(
-  config: CheapLLMConfig,
-  availableProfiles: ConnectionProfile[]
-): { valid: boolean; error?: string } {
-  if (config.strategy === 'USER_DEFINED') {
-    if (!config.userDefinedProfileId) {
-      return {
-        valid: false,
-        error: 'USER_DEFINED strategy requires userDefinedProfileId',
-      }
-    }
-
-    const profile = availableProfiles.find(p => p.id === config.userDefinedProfileId)
-    if (!profile) {
-      return {
-        valid: false,
-        error: `Connection profile ${config.userDefinedProfileId} not found`,
-      }
-    }
-
-    // Warn if the selected model is not a cheap model
-    if (!isCheapModel(profile.provider, profile.modelName)) {
-      // Get recommended models from registry or fallback
-      const registryConfig = getCheapModelConfig(profile.provider)
-      const recommendedModels = registryConfig?.recommendedModels?.length
-        ? registryConfig.recommendedModels
-        : RECOMMENDED_CHEAP_MODELS[profile.provider]
-
-      return {
-        valid: true, // Still valid, just a warning
-        error: `Warning: ${profile.modelName} is not a recommended cheap model. ` +
-          `Consider using one of: ${recommendedModels?.join(', ')}`,
-      }
-    }
-  }
-
-  return { valid: true }
 }
 
 // ============================================================================

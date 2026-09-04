@@ -75,6 +75,8 @@ export const queryKeys = {
     textReplacements: ['settings', 'text-replacements'] as const,
     generalState: ['settings', 'general-state'] as const,
     taboo: ['settings', 'taboo'] as const,
+    dataRetention: ['settings', 'data-retention'] as const,
+    brahmaConsole: ['settings', 'brahma-console'] as const,
   },
   connectionProfiles: {
     all: ['connection-profiles'] as const,
@@ -84,6 +86,9 @@ export const queryKeys = {
   },
   imageProfiles: {
     all: ['image-profiles'] as const,
+    /** The per-model options schema + LoRA support flag the profile editor renders from. */
+    optionsSchema: (provider: string, model: string) =>
+      ['image-profiles', 'options-schema', provider, model] as const,
   },
   providers: {
     all: ['providers'] as const,
@@ -112,6 +117,8 @@ export const queryKeys = {
     tasksQueue: ['system', 'tasks-queue'] as const,
     capabilitiesReports: ['system', 'capabilities-reports'] as const,
     autonomousRooms: ['system', 'autonomous-rooms'] as const,
+    /** Fan-out status of the conversation-summary regeneration sweep. */
+    conversationSummaryRegenerate: ['system', 'conversation-summary-regenerate'] as const,
     dataDir: ['system', 'data-dir'] as const,
     unlock: ['system', 'unlock'] as const,
   },
@@ -142,6 +149,26 @@ export const queryKeys = {
       ['custom-tools', 'presets', vaultMountPointId, toolName] as const,
     /** The Workbench save-target list, grouped by attachment. */
     destinations: () => ['custom-tools', 'destinations'] as const,
+    /**
+     * One `.tool.json` as the Workbench editor opened it (content + mtime);
+     * `'new'` stands in for an unsaved draft so the key shape stays uniform.
+     */
+    file: (source: { mountPointId: string; path: string } | null) =>
+      source
+        ? (['custom-tools', 'file', source.mountPointId, source.path] as const)
+        : (['custom-tools', 'file', 'new'] as const),
+  },
+  /**
+   * The Commonplace Book's housekeeping reads (`/api/v1/memories?action=…`):
+   * fan-out job status plus the two config documents the settings cards edit.
+   */
+  memories: {
+    all: ['memories'] as const,
+    regenerateStatus: ['memories', 'regenerate-status'] as const,
+    backfillProgress: ['memories', 'backfill-progress'] as const,
+    recallConfig: ['memories', 'recall-config'] as const,
+    housekeepingConfig: ['memories', 'housekeeping-config'] as const,
+    characterMemoryCounts: ['memories', 'character-memory-counts'] as const,
   },
   userProfile: {
     detail: ['user', 'profile'] as const,

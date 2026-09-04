@@ -5,12 +5,15 @@ import { BaseModal } from '@/components/ui/BaseModal'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import {
+  GENERAL_CONTAINER,
+  decodeWardrobeContainer,
+  encodeWardrobeContainer,
   sameWardrobeContainer,
   type WardrobeContainer,
+  type WardrobeContainerScope,
 } from '@/lib/wardrobe/wardrobe-container'
 
 type TransferMode = 'move' | 'copy'
-type DestinationScope = 'general' | 'project' | 'group' | 'character'
 /** What travels with a composite outfit: its components, or nothing. */
 type ComponentMode = 'move' | 'copy' | 'none'
 
@@ -51,25 +54,6 @@ interface WardrobeTransferDialogProps {
   onTransferred: () => Promise<void> | void
 }
 
-interface DestinationValue {
-  scope: DestinationScope
-  id: string | null
-}
-
-function encodeDestination(scope: DestinationScope, id: string | null): string {
-  return `${scope}:${id ?? ''}`
-}
-
-function decodeDestination(value: string): DestinationValue | null {
-  const [scopeRaw, idRaw] = value.split(':', 2)
-  if (!scopeRaw) return null
-  if (scopeRaw !== 'general' && scopeRaw !== 'project' && scopeRaw !== 'group' && scopeRaw !== 'character') {
-    return null
-  }
-  const id = idRaw && idRaw.length > 0 ? idRaw : null
-  return { scope: scopeRaw, id }
-}
-
 export function WardrobeTransferDialog({
   isOpen,
   mode,
@@ -108,12 +92,9 @@ export function WardrobeTransferDialog({
       })
       .then((body) => {
         setDestinations(body.destinations)
-        const generalExcluded = sameWardrobeContainer(excludeDestination, {
-          scope: 'general',
-          id: null,
-        })
+        const generalExcluded = sameWardrobeContainer(excludeDestination, GENERAL_CONTAINER)
         if (body.destinations.general.available && !generalExcluded) {
-          setSelectedDestination(encodeDestination('general', null))
+          setSelectedDestination(encodeWardrobeContainer(GENERAL_CONTAINER))
         }
       })
       .catch((error) => {
@@ -125,7 +106,7 @@ export function WardrobeTransferDialog({
   }, [isOpen, mode, excludeDestination])
 
   const selection = useMemo(
-    () => decodeDestination(selectedDestination),
+    () => decodeWardrobeContainer(selectedDestination),
     [selectedDestination],
   )
 
@@ -134,7 +115,7 @@ export function WardrobeTransferDialog({
   const visibleDestinations = useMemo<DestinationsPayload | null>(() => {
     if (!destinations) return null
     if (!excludeDestination) return destinations
-    const excluded = (scope: DestinationScope, id: string | null): boolean =>
+    const excluded = (scope: WardrobeContainerScope, id: string | null): boolean =>
       sameWardrobeContainer(excludeDestination, { scope, id })
     return {
       general: {
@@ -244,7 +225,7 @@ export function WardrobeTransferDialog({
 
               {visibleDestinations?.general.available && (
                 <optgroup label="General">
-                  <option value={encodeDestination('general', null)}>{visibleDestinations.general.label}</option>
+                  <option value={encodeWardrobeContainer(GENERAL_CONTAINER)}>{visibleDestinations.general.label}</option>
                 </optgroup>
               )}
 
@@ -253,7 +234,7 @@ export function WardrobeTransferDialog({
                   {visibleDestinations.projects.map((project) => (
                     <option
                       key={`project-${project.id}`}
-                      value={encodeDestination('project', project.id)}
+                      value={encodeWardrobeContainer({ scope: 'project', id: project.id })}
                     >
                       {project.name}
                     </option>
@@ -264,7 +245,7 @@ export function WardrobeTransferDialog({
               {visibleDestinations && visibleDestinations.groups.length > 0 && (
                 <optgroup label="Groups">
                   {visibleDestinations.groups.map((group) => (
-                    <option key={`group-${group.id}`} value={encodeDestination('group', group.id)}>
+                    <option key={`group-${group.id}`} value={encodeWardrobeContainer({ scope: 'group', id: group.id })}>
                       {group.name}
                     </option>
                   ))}
@@ -276,7 +257,7 @@ export function WardrobeTransferDialog({
                   {visibleDestinations.users.map((user) => (
                     <option
                       key={`character-${user.id}`}
-                      value={encodeDestination('character', user.id)}
+                      value={encodeWardrobeContainer({ scope: 'character', id: user.id })}
                     >
                       {user.name}
                     </option>

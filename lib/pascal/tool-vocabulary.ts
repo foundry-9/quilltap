@@ -27,13 +27,8 @@
  * `hasAnsibleAccess` is true".
  */
 
-import { isStateRef, parseEffectTarget, type QtapCustomTool } from './custom-tool.types';
+import { isStateRef, parseEffectTarget, scanPlaceholders, type QtapCustomTool } from './custom-tool.types';
 
-/** The placeholder families `renderTemplate` understands. */
-const PLACEHOLDER_PATTERN = /\{\{([^}]+)\}\}/g;
-
-const PARAMS_PREFIX = 'params.';
-const METADATA_PREFIX = 'metadata.';
 const STATE_PREFIX = 'state.';
 
 /** What a definition quotes. Every field means "this tool actually says so". */
@@ -186,40 +181,31 @@ function collectPlaceholders(
     state: Set<string>;
   }
 ): void {
-  PLACEHOLDER_PATTERN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = PLACEHOLDER_PATTERN.exec(text)) !== null) {
-    const key = match[1].trim();
-
-    if (key === 'value') {
-      found.value = true;
-      continue;
-    }
-    if (key === 'roll') {
-      found.roll = true;
-      continue;
-    }
-    if (key === 'dice') {
-      found.dice = true;
-      continue;
-    }
-    if (key === 'llm') {
-      found.llm = true;
-      continue;
-    }
-    if (key.startsWith(PARAMS_PREFIX)) {
-      const name = key.slice(PARAMS_PREFIX.length);
-      if (declared.has(name)) found.params.add(name);
-      continue;
-    }
-    if (key.startsWith(METADATA_PREFIX)) {
-      const name = key.slice(METADATA_PREFIX.length);
-      if (name !== '') found.metadata.add(name);
-      continue;
-    }
-    if (key.startsWith(STATE_PREFIX)) {
-      const path = key.slice(STATE_PREFIX.length);
-      if (path !== '') found.state.add(path);
+  for (const { ref } of scanPlaceholders(text)) {
+    switch (ref.kind) {
+      case 'value':
+        found.value = true;
+        break;
+      case 'roll':
+        found.roll = true;
+        break;
+      case 'dice':
+        found.dice = true;
+        break;
+      case 'llm':
+        found.llm = true;
+        break;
+      case 'params':
+        if (declared.has(ref.name)) found.params.add(ref.name);
+        break;
+      case 'metadata':
+        found.metadata.add(ref.key);
+        break;
+      case 'state':
+        found.state.add(ref.path);
+        break;
+      case 'unknown':
+        break;
     }
   }
 }

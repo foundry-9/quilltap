@@ -10,10 +10,16 @@ import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import {
   isSQLiteBackend,
-  getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
+
+const COLUMNS: Array<{ name: string; ddl: string }> = [
+  { name: 'archivedAt', ddl: 'TEXT' },
+  { name: 'archiveFileId', ddl: 'TEXT' },
+  { name: 'archivedAvatarFileId', ddl: 'TEXT' },
+];
 
 export const addCharacterArchiveFieldsMigration: Migration = {
   id: 'add-character-archive-fields-v1',
@@ -30,9 +36,7 @@ export const addCharacterArchiveFieldsMigration: Migration = {
       return false;
     }
 
-    const columns = getSQLiteTableColumns('characters');
-    const columnNames = columns.map((col) => col.name);
-    return !columnNames.includes('archivedAt') || !columnNames.includes('archiveFileId') || !columnNames.includes('archivedAvatarFileId');
+    return COLUMNS.some((col) => !sqliteColumnExists('characters', col.name));
   },
 
   async run(): Promise<MigrationResult> {
@@ -40,25 +44,11 @@ export const addCharacterArchiveFieldsMigration: Migration = {
     let columnsAdded = 0;
 
     try {
-      const db = getSQLiteDatabase();
-
       if (sqliteTableExists('characters')) {
-        const columns = getSQLiteTableColumns('characters');
-        const columnNames = columns.map((col) => col.name);
-
-        if (!columnNames.includes('archivedAt')) {
-          db.exec('ALTER TABLE "characters" ADD COLUMN "archivedAt" TEXT');
-          columnsAdded++;
-        }
-
-        if (!columnNames.includes('archiveFileId')) {
-          db.exec('ALTER TABLE "characters" ADD COLUMN "archiveFileId" TEXT');
-          columnsAdded++;
-        }
-
-        if (!columnNames.includes('archivedAvatarFileId')) {
-          db.exec('ALTER TABLE "characters" ADD COLUMN "archivedAvatarFileId" TEXT');
-          columnsAdded++;
+        for (const col of COLUMNS) {
+          if (addColumnIfMissing('characters', col.name, col.ddl)) {
+            columnsAdded++;
+          }
         }
       }
 

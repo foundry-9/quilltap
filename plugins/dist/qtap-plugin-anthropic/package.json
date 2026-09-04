@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-anthropic",
-  "version": "1.0.55",
+  "version": "1.0.56",
   "description": "Anthropic provider plugin for Quilltap",
   "main": "index.js",
   "types": "index.d.ts",

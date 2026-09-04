@@ -566,6 +566,15 @@ export function canReceiveWhisper(status: ParticipantStatus): boolean {
 }
 
 /**
+ * Whether a message is a whisper — addressed to one or more specific
+ * participants (`targetParticipantIds` non-empty) rather than the whole room.
+ * Whispers never advance the turn rotation.
+ */
+export function hasWhisperTargets(message: Pick<MessageEvent, 'targetParticipantIds'>): boolean {
+  return Array.isArray(message.targetParticipantIds) && message.targetParticipantIds.length > 0;
+}
+
+/**
  * Convert legacy isActive/removedAt to the new status enum.
  * Used during migration and for backward compatibility.
  */

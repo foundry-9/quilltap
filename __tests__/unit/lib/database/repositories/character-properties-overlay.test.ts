@@ -23,16 +23,31 @@ jest.mock('@/lib/logger', () => {
 
 jest.mock('@/lib/repositories/factory');
 
-jest.mock('@/lib/mount-index/database-store', () => ({
-  readDatabaseDocument: jest.fn(),
-  writeDatabaseDocument: jest.fn().mockResolvedValue(undefined),
-  deleteDatabaseDocument: jest.fn().mockResolvedValue(undefined),
-  DatabaseStoreError: class DatabaseStoreError extends Error {
+jest.mock('@/lib/mount-index/database-store', () => {
+  class DatabaseStoreError extends Error {
     constructor(message: string, public code: string) {
       super(message);
     }
-  },
-}));
+  }
+  const readDatabaseDocument = jest.fn();
+  // Mirror the real helper's contract over the mocked primitive so the stubs
+  // below (NOT_FOUND vs. every other failure) keep driving both read paths.
+  const readDatabaseDocumentIfExists = async (mountPointId: string, relativePath: string) => {
+    try {
+      return (await readDatabaseDocument(mountPointId, relativePath)).content;
+    } catch (error) {
+      if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') return null;
+      throw error;
+    }
+  };
+  return {
+    readDatabaseDocument,
+    readDatabaseDocumentIfExists,
+    writeDatabaseDocument: jest.fn().mockResolvedValue(undefined),
+    deleteDatabaseDocument: jest.fn().mockResolvedValue(undefined),
+    DatabaseStoreError,
+  };
+});
 
 jest.mock('@/lib/mount-index/folder-paths', () => ({
   ensureFolderPath: jest.fn().mockResolvedValue(undefined),

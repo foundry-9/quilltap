@@ -21,6 +21,7 @@ import { notFound, serverError, created, conflict, successResponse } from '@/lib
 import { readIncludeArchived } from '@/lib/api/query-params';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
 import { createWardrobeSchema } from '@/lib/schemas/wardrobe.types';
+import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body';
 import { resolveWardrobeMount } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { CharacterArchivedError } from '@/lib/database/repositories/characters.repository';
 import {
@@ -133,18 +134,7 @@ export const POST = createContextParamsHandler<{ id: string }>(
     const body = await req.json();
     const validatedData = createWardrobeSchema.parse(body);
 
-    const item = await repos.wardrobe.create({
-      characterId: id,
-      title: validatedData.title,
-      description: validatedData.description ?? null,
-      imagePrompt: validatedData.imagePrompt ?? null,
-      types: validatedData.types,
-      componentItemIds: validatedData.componentItemIds ?? [],
-      appropriateness: validatedData.appropriateness ?? null,
-      isDefault: validatedData.isDefault ?? false,
-      replace: validatedData.replace ?? false,
-      migratedFromClothingRecordId: null,
-    });
+    const item = await repos.wardrobe.create(wardrobeItemFromCreateBody(validatedData, id));
 
     if (!item) {
       return serverError('Failed to create wardrobe item');

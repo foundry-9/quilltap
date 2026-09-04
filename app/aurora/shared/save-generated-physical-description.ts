@@ -13,10 +13,11 @@ export async function saveGeneratedPhysicalDescription(
   characterId: string,
   pd: GeneratedPhysicalDescription,
   opts: {
-    /** Error-toast text when the save fails; the two views word it differently. */
+    /**
+     * Error-toast text when the save fails and the server sent no `error`;
+     * the two views word it differently.
+     */
     failureMessage: string
-    /** Prefer the server's error message in the toast (edit view) over the fixed `failureMessage` (new view). */
-    preferServerErrorInToast?: boolean
   }
 ): Promise<void> {
   try {
@@ -40,12 +41,8 @@ export async function saveGeneratedPhysicalDescription(
       showSuccessToast('Physical description saved')
     } else {
       const errorData = await res.json().catch(() => ({}))
-      if (opts.preferServerErrorInToast) {
-        showErrorToast(errorData.error || opts.failureMessage)
-      } else {
-        console.error('Failed to save physical description', errorData.error || 'Unknown error')
-        showErrorToast(opts.failureMessage)
-      }
+      console.error('Failed to save physical description', errorData.error || 'Unknown error')
+      showErrorToast(errorData.error || opts.failureMessage)
     }
   } catch (err) {
     console.error('Failed to save physical description', {

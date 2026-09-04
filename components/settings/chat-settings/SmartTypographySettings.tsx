@@ -15,6 +15,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import { smartTypographyStep } from '@/lib/smart-typography/engine'
 import type { ChatSettings, SmartTypographySettings as SmartTypographySettingsValue } from './types'
 import { DEFAULT_SMART_TYPOGRAPHY_SETTINGS } from './types'
+import { SettingsToggleRow } from './components/SettingsToggleRow'
 
 export interface SmartTypographySettingsProps {
   settings: ChatSettings
@@ -87,27 +88,18 @@ export function SmartTypographySettings({
   return (
     <div className="space-y-4">
       {/* Part A — render time */}
-      <label className="qt-settings-toggle-row">
-        <input
-          type="checkbox"
-          checked={displayQuotes}
-          onChange={(e) => onUpdate({ displayQuotes: e.target.checked })}
-          disabled={saving}
-          className="qt-checkbox mt-1"
-        />
-        <div className="flex-1">
-          <div className="qt-settings-section-heading">
-            Curly quotes when displaying messages
-          </div>
-          <div className="qt-text-small mt-1">
-            Shows <span className="qt-code-inline">&ldquo;curly quotes&rdquo;</span> in the
-            conversation. What you typed is stored and sent to the model exactly as you typed
-            it — this only changes how it looks, and turning it off puts everything back.
-            Code, math and link addresses are never touched. A roleplay template that claims
-            a quote character as one of its own delimiters keeps its straight quotes.
-          </div>
-        </div>
-      </label>
+      <SettingsToggleRow
+        checked={displayQuotes}
+        disabled={saving}
+        onChange={(value) => onUpdate({ displayQuotes: value })}
+        heading="Curly quotes when displaying messages"
+      >
+        Shows <span className="qt-code-inline">&ldquo;curly quotes&rdquo;</span> in the
+        conversation. What you typed is stored and sent to the model exactly as you typed
+        it — this only changes how it looks, and turning it off puts everything back.
+        Code, math and link addresses are never touched. A roleplay template that claims
+        a quote character as one of its own delimiters keeps its straight quotes.
+      </SettingsToggleRow>
 
       {/* Part B — type time */}
       <div className="qt-settings-shell qt-settings-field-group">

@@ -19,9 +19,9 @@ import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import {
   isSQLiteBackend,
-  getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
 
 export const addCommonplaceRecallHistoryMigration: Migration = {
@@ -39,16 +39,14 @@ export const addCommonplaceRecallHistoryMigration: Migration = {
       return false;
     }
 
-    const cols = getSQLiteTableColumns('chats').map((c) => c.name);
-    return !cols.includes('commonplaceRecallHistory');
+    return !sqliteColumnExists('chats', 'commonplaceRecallHistory');
   },
 
   async run(): Promise<MigrationResult> {
     const startTime = Date.now();
 
     try {
-      const db = getSQLiteDatabase();
-      db.exec(`ALTER TABLE "chats" ADD COLUMN "commonplaceRecallHistory" TEXT DEFAULT NULL`);
+      const added = addColumnIfMissing('chats', 'commonplaceRecallHistory', 'TEXT DEFAULT NULL');
 
       logger.info('Added commonplaceRecallHistory column to chats', {
         context: 'migration.add-commonplace-recall-history',
@@ -57,7 +55,7 @@ export const addCommonplaceRecallHistoryMigration: Migration = {
       return {
         id: 'add-commonplace-recall-history-v1',
         success: true,
-        itemsAffected: 1,
+        itemsAffected: added ? 1 : 0,
         message: 'Added commonplaceRecallHistory column to chats',
         durationMs: Date.now() - startTime,
         timestamp: new Date().toISOString(),

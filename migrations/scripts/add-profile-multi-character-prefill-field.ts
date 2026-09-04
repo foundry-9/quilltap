@@ -31,7 +31,8 @@ import {
   isSQLiteBackend,
   getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
 
 export const addProfileMultiCharacterPrefillFieldMigration: Migration = {
@@ -50,9 +51,7 @@ export const addProfileMultiCharacterPrefillFieldMigration: Migration = {
       return false;
     }
 
-    const columns = getSQLiteTableColumns('connection_profiles');
-    const hasColumn = columns.some((col) => col.name === 'multiCharacterPrefill');
-    return !hasColumn;
+    return !sqliteColumnExists('connection_profiles', 'multiCharacterPrefill');
   },
 
   async run(): Promise<MigrationResult> {
@@ -61,9 +60,7 @@ export const addProfileMultiCharacterPrefillFieldMigration: Migration = {
     try {
       const db = getSQLiteDatabase();
 
-      db.exec(
-        'ALTER TABLE "connection_profiles" ADD COLUMN "multiCharacterPrefill" INTEGER DEFAULT 1'
-      );
+      addColumnIfMissing('connection_profiles', 'multiCharacterPrefill', 'INTEGER DEFAULT 1');
 
       // Preserve the pre-migration behaviour exactly: Anthropic was the sole
       // provider that never received the prefill, because it 400s on a request
@@ -84,10 +81,7 @@ export const addProfileMultiCharacterPrefillFieldMigration: Migration = {
       const itemsAffected = (anthropic.changes ?? 0) + (rest.changes ?? 0);
 
       // Verify
-      const columns = getSQLiteTableColumns('connection_profiles');
-      const hasColumn = columns.some((col) => col.name === 'multiCharacterPrefill');
-
-      if (!hasColumn) {
+      if (!sqliteColumnExists('connection_profiles', 'multiCharacterPrefill')) {
         throw new Error('Column was not added successfully');
       }
 

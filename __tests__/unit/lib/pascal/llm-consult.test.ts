@@ -19,9 +19,6 @@ jest.mock('@/lib/repositories/factory', () => ({
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
   resolveUncensoredCheapLLMSelection: jest.fn(),
-}))
-
-jest.mock('@/lib/wardrobe/apply-outfit-selections', () => ({
   buildCheapLLMConfig: jest.fn(() => ({ cheap: true })),
 }))
 

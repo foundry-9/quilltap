@@ -178,6 +178,16 @@ export function parseSSEData(rawData: string): SSEEvent | null {
   }
 }
 
+/**
+ * Append a server-posted message to the live list unless it is already there.
+ * Messages surfaced mid-turn (Carina answers, Host turn-pass notes, Pascal
+ * outcomes, Librarian announcements) are inserted optimistically and later
+ * reconciled by the post-turn `fetchChat()`, so the same id can arrive twice.
+ */
+export function appendMessageOnce(messages: Message[], message: Message): Message[] {
+  return messages.some(m => m.id === message.id) ? messages : [...messages, message]
+}
+
 interface UseSSEStreamingParams {
   chatId: string
   chat: Chat | null
@@ -338,6 +348,22 @@ export function useSSEStreaming({
     setStreamingReasoning('')
   }, [])
 
+  /** Insert a mid-turn surfaced message (deduped by id) and keep the view pinned. */
+  const surfaceMessage = useCallback((message: Message) => {
+    setMessages(prev => appendMessageOnce(prev, message))
+    scrollOnStreamComplete()
+  }, [setMessages, scrollOnStreamComplete])
+
+  /**
+   * "Nothing to add" turn-pass: the Host note already surfaced via
+   * `surfaceMessage`. Reset the streaming buffer without appending a phantom
+   * bubble or toasting; the chain (or chainComplete) drives the rest.
+   */
+  const finishSkippedTurn = useCallback(() => {
+    resetStreamingContent()
+    setStreaming(false)
+  }, [resetStreamingContent])
+
   // Patch a message in place with its resolved answer-confirmation state. On a
   // re-affirmation rewrite (`content` present) the optimistic bubble text is
   // replaced with the corrected reply — a deliberate, visible transparency swap.
@@ -466,12 +492,13 @@ export function useSSEStreaming({
       onToolsDetected?: (data: SSEEvent, offset: number) => void
       onToolResult?: (data: SSEEvent) => void
       onDone: (fullContent: string, data: SSEEvent) => void | Promise<void>
-      /** Called when a Carina reference answer is surfaced mid-turn */
-      onCarinaAnswer?: (message: Message) => void
-      /** Called when a Host announcement (e.g. a turn-pass note) is surfaced mid-turn */
-      onHostAnnouncement?: (message: Message) => void
-      /** Called when a Pascal custom-tool outcome is surfaced mid-turn */
-      onPascalResult?: (message: Message) => void
+      /**
+       * Called for each full message surfaced mid-turn — a Carina reference
+       * answer, a Host announcement (e.g. a turn-pass note), or a Pascal
+       * custom-tool outcome — so it lands in the flow immediately rather than
+       * waiting for the post-turn fetchChat().
+       */
+      onSurfacedMessage?: (message: Message) => void
       /** Called when an answer-confirmation result resolves for a message */
       onConfirmationResult?: (result: NonNullable<SSEEvent['confirmationResult']>) => void
       /** Called for intermediate done events during a chain (not the final one) */
@@ -556,22 +583,14 @@ export function useSSEStreaming({
           opts.onToolResult(data)
         }
 
-        // Handle a Carina reference answer surfaced mid-turn — insert it into the
-        // flow immediately rather than waiting for the post-turn fetchChat().
-        if (data.carinaAnswer && opts.onCarinaAnswer) {
-          opts.onCarinaAnswer(data.carinaAnswer)
-        }
-
-        // Handle a Host announcement surfaced mid-turn (turn-pass note) — insert
-        // it immediately, deduped by id, same as Carina answers.
-        if (data.hostAnnouncement && opts.onHostAnnouncement) {
-          opts.onHostAnnouncement(data.hostAnnouncement)
-        }
-
-        // Handle a Pascal custom-tool outcome surfaced mid-turn — insert it
-        // immediately, deduped by id, same as Carina answers.
-        if (data.pascalResult && opts.onPascalResult) {
-          opts.onPascalResult(data.pascalResult)
+        // Messages surfaced mid-turn — a Carina reference answer, a Host
+        // announcement (turn-pass note), a Pascal custom-tool outcome — are
+        // inserted into the flow immediately (deduped by id) rather than
+        // waiting for the post-turn fetchChat().
+        if (opts.onSurfacedMessage) {
+          for (const surfaced of [data.carinaAnswer, data.hostAnnouncement, data.pascalResult]) {
+            if (surfaced) opts.onSurfacedMessage(surfaced)
+          }
         }
 
         // Handle an answer-confirmation result — update the badge and, on a
@@ -793,26 +812,11 @@ export function useSSEStreaming({
         participantId: firstCharParticipant?.id || null,
         onToolsDetected: trackToolsDetected,
         onToolResult: trackToolResult,
-        onCarinaAnswer: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
-        onHostAnnouncement: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
-        onPascalResult: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
+        onSurfacedMessage: surfaceMessage,
         onConfirmationResult: applyConfirmationResult,
         onDone: async (fullContent, data) => {
-          // "Nothing to add" turn-pass: the Host note already surfaced via
-          // onHostAnnouncement. Reset streaming without appending a bubble or
-          // toasting; the chain (or chainComplete) drives the rest.
           if (data.skipped) {
-            resetStreamingContent()
-            setStreaming(false)
+            finishSkippedTurn()
             return
           }
 
@@ -874,11 +878,8 @@ export function useSSEStreaming({
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
-          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
-          // reset streaming without appending a bubble.
           if (data.skipped) {
-            resetStreamingContent()
-            setStreaming(false)
+            finishSkippedTurn()
             return
           }
           if (data.emptyResponse || !fullContent) return
@@ -960,7 +961,7 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
@@ -1023,28 +1024,14 @@ export function useSSEStreaming({
         participantId,
         onToolsDetected: trackToolsDetected,
         onToolResult: trackToolResult,
-        onCarinaAnswer: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
-        onHostAnnouncement: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
-        onPascalResult: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
+        onSurfacedMessage: surfaceMessage,
         onConfirmationResult: applyConfirmationResult,
         onDone: (fullContent, data) => {
           setResponseStatus(null)
           clearPendingToolExecutionStatus()
 
-          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
-          // reset streaming without appending a bubble or toasting.
           if (data.skipped) {
-            resetStreamingContent()
-            setStreaming(false)
+            finishSkippedTurn()
             return
           }
 
@@ -1069,11 +1056,8 @@ export function useSSEStreaming({
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
-          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
-          // reset streaming without appending a bubble.
           if (data.skipped) {
-            resetStreamingContent()
-            setStreaming(false)
+            finishSkippedTurn()
             return
           }
           if (!fullContent.trim()) return
@@ -1138,7 +1122,7 @@ export function useSSEStreaming({
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {

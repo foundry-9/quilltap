@@ -137,6 +137,24 @@ export function escapeControlCharsInStrings(text: string): string {
 }
 
 /**
+ * Pull the JSON *object* out of a response that may wrap it in prose and/or a
+ * code fence anywhere in the text (a verdict such as "Here you go: ```json
+ * {...}``` hope that helps"). `stripCodeFences` only recognises a fence at the
+ * very start; this matches one anywhere, then slices from the first `{` to the
+ * last `}` before handing off to {@link parseLLMJson} for the usual repairs.
+ * Throws when nothing parses.
+ */
+export function parseLLMJsonObject<T>(text: string): T {
+  const trimmed = text.trim();
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const body = fenceMatch ? fenceMatch[1].trim() : trimmed;
+  const start = body.indexOf('{');
+  const end = body.lastIndexOf('}');
+  const jsonText = start >= 0 && end > start ? body.slice(start, end + 1) : body;
+  return parseLLMJson<T>(jsonText);
+}
+
+/**
  * Parse JSON from LLM output, handling code fences, truncated output,
  * and common formatting issues from LLM responses.
  */

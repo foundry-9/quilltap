@@ -234,9 +234,19 @@ export type OutfitSelection = z.infer<typeof OutfitSelectionSchema>;
 // HELPERS
 // ============================================================================
 
+/**
+ * Build a full per-slot record by asking `fn` for each slot's value, in
+ * canonical slot order. The one place a `Record<WardrobeItemType, T>` is
+ * assembled — every "empty slots" / "clone slots" / "titles per slot" builder
+ * is a one-line call to this, so a new slot appears everywhere at once.
+ */
+export function bySlot<T>(fn: (slot: WardrobeItemType) => T): Record<WardrobeItemType, T> {
+  return Object.fromEntries(WARDROBE_SLOT_TYPES.map((s) => [s, fn(s)])) as Record<WardrobeItemType, T>;
+}
+
 /** Fresh all-empty equipped slots. Prefer this over spreading EMPTY_EQUIPPED_SLOTS. */
 export function makeEmptyEquippedSlots(): EquippedSlots {
-  return Object.fromEntries(WARDROBE_SLOT_TYPES.map((s) => [s, []])) as unknown as EquippedSlots;
+  return bySlot<string[]>(() => []);
 }
 
 /** Empty equipped slots (all empty arrays) — kept for existing call sites. */
@@ -244,9 +254,7 @@ export const EMPTY_EQUIPPED_SLOTS: EquippedSlots = makeEmptyEquippedSlots();
 
 /** Deep-ish clone (fresh arrays per slot). Tolerates missing keys on raw JSON. */
 export function cloneEquippedSlots(slots: EquippedSlots): EquippedSlots {
-  return Object.fromEntries(
-    WARDROBE_SLOT_TYPES.map((s) => [s, [...(slots[s] ?? [])]]),
-  ) as unknown as EquippedSlots;
+  return bySlot((s) => [...(slots[s] ?? [])]);
 }
 
 /** Every item id equipped in any slot, deduplicated. Tolerates missing keys. */
@@ -275,11 +283,9 @@ export function normalizeEquippedSlots(raw: unknown): EquippedSlots {
   }
 
   const bag = (raw ?? {}) as Record<string, unknown>;
-  return Object.fromEntries(
-    WARDROBE_SLOT_TYPES.map((slot) => {
-      const value = bag[slot];
-      return [slot, Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []];
-    }),
-  ) as unknown as EquippedSlots;
+  return bySlot((slot) => {
+    const value = bag[slot];
+    return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [];
+  });
 }
 

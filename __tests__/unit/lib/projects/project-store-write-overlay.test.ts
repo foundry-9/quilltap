@@ -16,9 +16,8 @@
 import { applyProjectStoreWriteOverlay } from '@/lib/projects/project-store/write-overlay';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
-  readDatabaseDocument,
+  readDatabaseDocumentIfExists,
   writeDatabaseDocument,
-  DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 import { ProjectStoreUnavailableError } from '@/lib/projects/project-store/schema';
 import type { Project } from '@/lib/schemas/project.types';
@@ -26,12 +25,12 @@ import type { Project } from '@/lib/schemas/project.types';
 jest.mock('@/lib/repositories/factory');
 jest.mock('@/lib/mount-index/database-store', () => ({
   ...jest.requireActual('@/lib/mount-index/database-store'),
-  readDatabaseDocument: jest.fn(),
+  readDatabaseDocumentIfExists: jest.fn(),
   writeDatabaseDocument: jest.fn(),
 }));
 
 const mockGetRepositories = jest.mocked(getRepositories);
-const mockRead = jest.mocked(readDatabaseDocument);
+const mockRead = jest.mocked(readDatabaseDocumentIfExists);
 const mockWrite = jest.mocked(writeDatabaseDocument);
 
 const MOUNT = 'm1';
@@ -84,11 +83,7 @@ describe('applyProjectStoreWriteOverlay — properties read-modify-write', () =>
   });
 
   it('preserves untouched keys when the patch names a single property', async () => {
-    mockRead.mockResolvedValue({
-      content: JSON.stringify(STORED_PROPERTIES),
-      mtime: 0,
-      size: 0,
-    });
+    mockRead.mockResolvedValue(JSON.stringify(STORED_PROPERTIES));
 
     await applyProjectStoreWriteOverlay(PROJECT_ID, {
       answerConfirmationOverride: 'ON',
@@ -115,7 +110,7 @@ describe('applyProjectStoreWriteOverlay — properties read-modify-write', () =>
   });
 
   it('throws and writes nothing when properties.json is unparseable', async () => {
-    mockRead.mockResolvedValue({ content: '{ not json', mtime: 0, size: 0 });
+    mockRead.mockResolvedValue('{ not json');
 
     await expect(
       applyProjectStoreWriteOverlay(PROJECT_ID, {
@@ -127,11 +122,7 @@ describe('applyProjectStoreWriteOverlay — properties read-modify-write', () =>
   });
 
   it('throws and writes nothing when the stored body fails schema validation', async () => {
-    mockRead.mockResolvedValue({
-      content: JSON.stringify({ ...STORED_PROPERTIES, defaultImageProfileId: 'not-a-uuid' }),
-      mtime: 0,
-      size: 0,
-    });
+    mockRead.mockResolvedValue(JSON.stringify({ ...STORED_PROPERTIES, defaultImageProfileId: 'not-a-uuid' }));
 
     await expect(
       applyProjectStoreWriteOverlay(PROJECT_ID, {
@@ -143,9 +134,7 @@ describe('applyProjectStoreWriteOverlay — properties read-modify-write', () =>
   });
 
   it('seeds from defaults only when properties.json is genuinely absent', async () => {
-    mockRead.mockRejectedValue(
-      new DatabaseStoreError('Document not found in database-backed store', 'NOT_FOUND'),
-    );
+    mockRead.mockResolvedValue(null);
 
     await applyProjectStoreWriteOverlay(PROJECT_ID, {
       answerConfirmationOverride: 'ON',
@@ -161,11 +150,7 @@ describe('applyProjectStoreWriteOverlay — properties read-modify-write', () =>
     // A pre-4.9 .qtap import or backup restore can hand us 'project'/'static'.
     // Writes route through ProjectPropertiesSchema.parse, so the retired value
     // must land on disk already coerced rather than being persisted afresh.
-    mockRead.mockResolvedValue({
-      content: JSON.stringify(STORED_PROPERTIES),
-      mtime: 0,
-      size: 0,
-    });
+    mockRead.mockResolvedValue(JSON.stringify(STORED_PROPERTIES));
 
     await applyProjectStoreWriteOverlay(PROJECT_ID, {
       backgroundDisplayMode: 'static',
@@ -175,11 +160,7 @@ describe('applyProjectStoreWriteOverlay — properties read-modify-write', () =>
   });
 
   it('strips store-resident keys from the DB-bound patch', async () => {
-    mockRead.mockResolvedValue({
-      content: JSON.stringify(STORED_PROPERTIES),
-      mtime: 0,
-      size: 0,
-    });
+    mockRead.mockResolvedValue(JSON.stringify(STORED_PROPERTIES));
 
     const dbPatch = await applyProjectStoreWriteOverlay(PROJECT_ID, {
       name: 'Renamed',

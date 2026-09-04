@@ -33,6 +33,14 @@ import {
 import type { ConnectionProfile, Character } from '@/lib/schemas/types'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
 
+/**
+ * Reads only. `findApiKeyById` is needed on top of the engine's own surface
+ * because an understudy's key has to be decrypted before its call goes out.
+ */
+export type FailoverRepos = FallbackRepos & {
+  connections: { findApiKeyById(id: string): Promise<{ key_value: string } | null> }
+}
+
 import {
   streamMessage,
   encodeStatusEvent,
@@ -76,9 +84,7 @@ export interface AttemptEmptyResponseRecoveryOptions {
    * repository handle (tests, and any future path that only wants the local
    * retries) keeps today's two-step behaviour.
    */
-  repos?: FallbackRepos & {
-    connections: { findApiKeyById(id: string): Promise<{ key_value: string } | null> }
-  }
+  repos?: FailoverRepos
   /** Capability flags for the chain. Required alongside `repos`. */
   fallbackContext?: Omit<FallbackContext, 'userId' | 'purpose' | 'alreadyTried'>
   /** Provider stop sequences to carry into a chain attempt. */
@@ -507,9 +513,7 @@ export interface WalkFallbackChainOptions {
    * Reads only. `findApiKeyById` is needed on top of the engine's own surface
    * because an understudy's key has to be decrypted before its call goes out.
    */
-  repos: FallbackRepos & {
-    connections: { findApiKeyById(id: string): Promise<{ key_value: string } | null> }
-  }
+  repos: FailoverRepos
   /**
    * Everything a stand-in needs from this call.
    *

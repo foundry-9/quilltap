@@ -23,8 +23,7 @@
 import { getErrorMessage } from '@/lib/error-utils';
 import { withTimeout } from '@/lib/promise-timeout';
 import { getRepositories } from '@/lib/repositories/factory';
-import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
-import { buildCheapLLMConfig } from '@/lib/wardrobe/apply-outfit-selections';
+import { buildCheapLLMConfig, getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';

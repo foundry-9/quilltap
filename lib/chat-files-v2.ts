@@ -8,7 +8,7 @@ import { transcodeToWebP } from './mount-index/blob-transcode';
 import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
 import { fileStorageManager } from './file-storage/manager';
-import { writeUserUploadToMountStore } from './file-storage/user-uploads-bridge';
+import { writeLibraryFileBytes } from './file-storage/library-file-writer';
 import { detectTextContent, getBestMimeType } from './files/text-detection';
 import type { FileEntry, FileCategory, Provider } from './schemas/types';
 import { logger } from '@/lib/logger';
@@ -359,46 +359,27 @@ async function uploadFileToProject(
   // Route project-bound attachments through the project mount (via FSM, which
   // resolves to project-store-bridge). Project-less attachments land in the
   // Quilltap Uploads mount under chat/, not the catch-all _general/.
-  let storageKey: string;
-  let fileFolderPath: string | null;
-  let fileProjectId: string | null;
   // The bridges may transcode bitmap uploads to WebP; the FileEntry must
   // record the stored mimeType/size/sha256 — all three — not the input.
   // mimeType and size were always taken from here; sha256 was not, and that
   // one omission is bug 117: `files.sha256` named bytes that were never
   // stored, so every join to `doc_mount_files.sha256` was between two
   // different languages and returned an empty result nobody logged.
-  let storedMimeType: string;
-  let storedSize: number;
-  let storedSha256: string;
-  if (projectId) {
-    const uploaded = await fileStorageManager.uploadFile({
-      filename,
-      content: buffer,
-      contentType: mimeType,
-      projectId,
-      folderPath: '/',
-    });
-    storageKey = uploaded.storageKey;
-    storedMimeType = uploaded.storedMimeType;
-    storedSize = uploaded.sizeBytes;
-    storedSha256 = uploaded.sha256;
-    fileFolderPath = '/';
-    fileProjectId = projectId;
-  } else {
-    const written = await writeUserUploadToMountStore({
-      filename,
-      content: buffer,
-      contentType: mimeType,
-      subfolder: 'chat',
-    });
-    storageKey = written.storageKey;
-    storedMimeType = written.storedMimeType;
-    storedSize = written.sizeBytes;
-    storedSha256 = written.sha256;
-    fileFolderPath = null;
-    fileProjectId = null;
-  }
+  const {
+    storageKey,
+    storedMimeType,
+    sizeBytes: storedSize,
+    sha256: storedSha256,
+  } = await writeLibraryFileBytes({
+    filename,
+    content: buffer,
+    contentType: mimeType,
+    projectId,
+    folderPath: '/',
+    subfolder: 'chat',
+  });
+  const fileFolderPath: string | null = projectId ? '/' : null;
+  const fileProjectId: string | null = projectId || null;
 
   // The caller pre-ran the bridge's own transcode, so these agree by
   // construction. If they ever stop agreeing, a bridge has changed its

@@ -23,8 +23,14 @@ import {
   isSQLiteBackend,
   getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
+
+const COLUMNS: Array<{ name: string; ddl: string }> = [
+  { name: 'fallbackProfileId', ddl: 'TEXT' },
+  { name: 'allowTierFallback', ddl: 'INTEGER DEFAULT 0' },
+];
 
 export const addProfileFallbackFieldsMigration: Migration = {
   id: 'add-profile-fallback-fields-v1',
@@ -42,10 +48,7 @@ export const addProfileFallbackFieldsMigration: Migration = {
       return false;
     }
 
-    const columns = getSQLiteTableColumns('connection_profiles');
-    const hasFallbackProfileId = columns.some((col) => col.name === 'fallbackProfileId');
-    const hasAllowTierFallback = columns.some((col) => col.name === 'allowTierFallback');
-    return !hasFallbackProfileId || !hasAllowTierFallback;
+    return COLUMNS.some((col) => !sqliteColumnExists('connection_profiles', col.name));
   },
 
   async run(): Promise<MigrationResult> {
@@ -53,20 +56,12 @@ export const addProfileFallbackFieldsMigration: Migration = {
 
     try {
       const db = getSQLiteDatabase();
-      const columns = getSQLiteTableColumns('connection_profiles');
 
       let columnsAdded = 0;
-
-      if (!columns.some((col) => col.name === 'fallbackProfileId')) {
-        db.exec('ALTER TABLE "connection_profiles" ADD COLUMN "fallbackProfileId" TEXT');
-        columnsAdded += 1;
-      }
-
-      if (!columns.some((col) => col.name === 'allowTierFallback')) {
-        db.exec(
-          'ALTER TABLE "connection_profiles" ADD COLUMN "allowTierFallback" INTEGER DEFAULT 0'
-        );
-        columnsAdded += 1;
+      for (const col of COLUMNS) {
+        if (addColumnIfMissing('connection_profiles', col.name, col.ddl)) {
+          columnsAdded += 1;
+        }
       }
 
       // Backfill any row the column default may have missed.
@@ -77,11 +72,7 @@ export const addProfileFallbackFieldsMigration: Migration = {
         .run();
 
       // Verify
-      const after = getSQLiteTableColumns('connection_profiles');
-      const hasFallbackProfileId = after.some((col) => col.name === 'fallbackProfileId');
-      const hasAllowTierFallback = after.some((col) => col.name === 'allowTierFallback');
-
-      if (!hasFallbackProfileId || !hasAllowTierFallback) {
+      if (COLUMNS.some((col) => !sqliteColumnExists('connection_profiles', col.name))) {
         throw new Error('Columns were not added successfully');
       }
 

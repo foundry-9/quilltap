@@ -12,6 +12,7 @@ import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
 import { resolveScenarioSelection } from '@/lib/chat/scenario-selection';
+import { pickWeightedRandom } from '@/lib/chat/turn-manager/selection';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
 import { profileParams } from '@/lib/llm/cheap-llm';
@@ -29,7 +30,6 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { z } from 'zod';
 import type { ChatEvent, ChatMetadata, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';
-import { Cron } from 'croner';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   OutfitSelectionSchema,
@@ -39,9 +39,9 @@ import {
 import { buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description';
 import {
   applyOutfitSelections,
-  buildCheapLLMConfig,
   type OutfitSelectionContext,
 } from '@/lib/wardrobe/apply-outfit-selections';
+import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { createCreationProgressEmitter, type CreationProgressEmitter } from '@/lib/chat/creation-progress';
 import { notFound, badRequest, serverError, successResponse, created } from '@/lib/api/responses';
@@ -73,6 +73,7 @@ import {
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
 import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonomous-room.service';
+import { computeNextRunFromCron } from '@/lib/services/chat-message/autonomous-room-cron';
 
 type Repos = RepositoryContainer;
 const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
@@ -309,12 +310,12 @@ async function buildAllParticipants(
     return { error: 'At least one LLM-controlled CHARACTER participant is required' };
   }
 
-  // Pick the opening character by weighted-random on talkativeness, matching the
-  // algorithm used by selectNextSpeaker for subsequent turns. Without this the
-  // first character in the list always delivered the greeting, which biased
+  // Pick the opening character by weighted-random on talkativeness — the same
+  // draw selectNextSpeaker uses for subsequent turns. Without this the first
+  // character in the list always delivered the greeting, which biased
   // multi-character chats toward whichever participant the UI happened to list
   // first.
-  const chosen = pickWeightedByTalkativeness(llmCandidates);
+  const chosen = pickWeightedRandom(llmCandidates, (c) => c.talkativeness).item;
 
   const firstLLMCharacter = {
     characterId: chosen.characterId,
@@ -323,21 +324,6 @@ async function buildAllParticipants(
   };
 
   return { participants: builtParticipants, tags: allTagIds, firstCharacter: firstLLMCharacter, firstImageProfileId };
-}
-
-function pickWeightedByTalkativeness<T extends { talkativeness: number }>(candidates: T[]): T {
-  let totalWeight = 0;
-  for (const c of candidates) totalWeight += c.talkativeness;
-  if (totalWeight <= 0) {
-    return candidates[Math.floor(Math.random() * candidates.length)];
-  }
-  const r = Math.random() * totalWeight;
-  let cumulative = 0;
-  for (const c of candidates) {
-    cumulative += c.talkativeness;
-    if (r < cumulative) return c;
-  }
-  return candidates[candidates.length - 1];
 }
 
 /**
@@ -391,10 +377,17 @@ async function applyRequestedConciergeState(
 interface ScenarioAndStaffOptions {
   /**
    * Skip the auto-generated first character message. Set true on the
-   * continuation flow — a chat that's "picking up where the last one left
-   * off" should not open with a fresh "Hello, ${userName}!" greeting.
+   * continuation and autonomous flows — a chat that's "picking up where the
+   * last one left off" should not open with a fresh "Hello, ${userName}!"
+   * greeting, and an autonomous room has no user to greet.
    */
   skipFirstMessage?: boolean;
+  /**
+   * Project-tier shared wardrobe stores for the chat's project (see
+   * `resolveProjectMountPointIds`), resolved once by the caller and reused for
+   * every participant's equipped-item lookup.
+   */
+  projectMountPointIds: string[];
 }
 
 async function createInitialMessagesScenarioAndStaff(
@@ -403,9 +396,9 @@ async function createInitialMessagesScenarioAndStaff(
   participants: ChatParticipantBaseInput[],
   userId: string,
   repos: Repos,
-  projectId?: string | null,
-  scenarioText?: string | null,
-  options: ScenarioAndStaffOptions = {},
+  projectId: string | null,
+  scenarioText: string | null,
+  options: ScenarioAndStaffOptions,
 ): Promise<void> {
   // Phase E: emit Prospero project-and-general-context whisper at chat-start.
   // When a project is attached, the project's description / instructions /
@@ -503,7 +496,7 @@ async function createInitialMessagesScenarioAndStaff(
   );
   // Project tier for tri-tier wardrobe resolution — shared with every
   // participant's equipped-item lookup below.
-  const equippedProjectMountPointIds = await resolveProjectMountPointIds(projectId);
+  const equippedProjectMountPointIds = options.projectMountPointIds;
   for (const participant of allCharacterParticipants) {
     try {
       const characterId = participant.characterId as string;
@@ -983,6 +976,104 @@ async function handleHasDangerous(context: RequestContext) {
   }
 }
 
+type CreateChatInput = z.infer<typeof createChatSchema>;
+
+/**
+ * Autonomous-room preconditions on a create request: no user-controlled seats,
+ * at least two LLM-controlled characters, and a parseable `scheduleCron` (an
+ * all-whitespace expression means "no schedule", i.e. manual-only). Yields the
+ * first scheduled run to stamp on the row, or the 400 to send back.
+ */
+function validateAutonomousRoomRequest(
+  validatedData: CreateChatInput,
+  userId: string,
+): { ok: true; nextRunAt: string | null } | { ok: false; response: NextResponse } {
+  const userParticipants = validatedData.participants.filter((p) => p.controlledBy === 'user');
+  if (userParticipants.length > 0) {
+    return { ok: false, response: badRequest('Autonomous rooms cannot include user-controlled participants') };
+  }
+  const llmCharacterParticipants = validatedData.participants.filter(
+    (p) => p.type === 'CHARACTER' && (!p.controlledBy || p.controlledBy === 'llm'),
+  );
+  if (llmCharacterParticipants.length < 2) {
+    return { ok: false, response: badRequest('Autonomous rooms require at least two LLM-controlled characters') };
+  }
+
+  const expr = validatedData.scheduleCron?.trim() ?? '';
+  if (expr.length === 0) {
+    return { ok: true, nextRunAt: null };
+  }
+  const nextRun = computeNextRunFromCron(expr);
+  if (!nextRun.ok) {
+    logger.warn('[Chats v1] Invalid cron expression on autonomous-room create', {
+      userId,
+      scheduleCron: expr,
+      error: nextRun.error,
+    });
+    return { ok: false, response: badRequest(nextRun.message) };
+  }
+  return { ok: true, nextRunAt: nextRun.nextRunAt };
+}
+
+interface ProjectChatDefaults {
+  toolDefaults: { disabledTools: string[]; disabledToolGroups: string[] };
+  avatarGenerationDefault: boolean | null;
+  defaultImageProfileId: string | null;
+  defaultRoleplayTemplateId: string | null;
+}
+
+/**
+ * The defaults a new chat inherits from its project — tool settings, avatar
+ * generation, image profile, roleplay template — and, as a side effect, the
+ * roster update: a project that does not `allowAnyCharacter` adopts every
+ * character participant it has not met before. Without a project every
+ * default is empty/null. A missing project is the caller's 404.
+ */
+async function resolveProjectDefaults(
+  repos: Repos,
+  projectId: string | undefined,
+  participants: ChatParticipantBaseInput[],
+): Promise<({ ok: true } & ProjectChatDefaults) | { ok: false; response: NextResponse }> {
+  if (!projectId) {
+    return {
+      ok: true,
+      toolDefaults: { disabledTools: [], disabledToolGroups: [] },
+      avatarGenerationDefault: null,
+      defaultImageProfileId: null,
+      defaultRoleplayTemplateId: null,
+    };
+  }
+
+  const project = await repos.projects.findById(projectId);
+  if (!project) {
+    return { ok: false, response: notFound('Project') };
+  }
+
+  if (!project.allowAnyCharacter) {
+    const characterIds = participants
+      .filter((p) => p.type === 'CHARACTER' && p.characterId)
+      .map((p) => p.characterId as string);
+
+    const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
+    if (newCharacterIds.length > 0) {
+      await repos.projects.update(projectId, {
+        characterRoster: [...project.characterRoster, ...newCharacterIds],
+      });
+    }
+  }
+
+  return {
+    ok: true,
+    toolDefaults: {
+      disabledTools: project.defaultDisabledTools || [],
+      disabledToolGroups: project.defaultDisabledToolGroups || [],
+    },
+    avatarGenerationDefault: project.defaultAvatarGenerationEnabled ?? null,
+    defaultImageProfileId: project.defaultImageProfileId ?? null,
+    defaultRoleplayTemplateId: project.defaultRoleplayTemplateId ?? null,
+  };
+}
+
 /**
  * Create chat
  */
@@ -1017,35 +1108,11 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   // Autonomous-room preconditions (validated before participant-build to fail fast).
   let autonomousNextRunAt: string | null = null;
   if (isAutonomous) {
-    const userParticipants = validatedData.participants.filter((p) => p.controlledBy === 'user');
-    if (userParticipants.length > 0) {
-      return badRequest('Autonomous rooms cannot include user-controlled participants');
+    const autonomous = validateAutonomousRoomRequest(validatedData, user.id);
+    if (!autonomous.ok) {
+      return autonomous.response;
     }
-    const llmCharacterParticipants = validatedData.participants.filter(
-      (p) => p.type === 'CHARACTER' && (!p.controlledBy || p.controlledBy === 'llm'),
-    );
-    if (llmCharacterParticipants.length < 2) {
-      return badRequest('Autonomous rooms require at least two LLM-controlled characters');
-    }
-    if (validatedData.scheduleCron) {
-      const expr = validatedData.scheduleCron.trim();
-      if (expr.length === 0) {
-        // Treat all-whitespace as "no schedule" (manual-only).
-      } else {
-        try {
-          const job = new Cron(expr);
-          const next = job.nextRun(new Date());
-          autonomousNextRunAt = next ? next.toISOString() : null;
-        } catch (error) {
-          logger.warn('[Chats v1] Invalid cron expression on autonomous-room create', {
-            userId: user.id,
-            scheduleCron: expr,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return badRequest(`Invalid cron expression: ${expr}`);
-        }
-      }
-    }
+    autonomousNextRunAt = autonomous.nextRunAt;
   }
 
   const buildResult = await buildAllParticipants(validatedData.participants, user.id, repos);
@@ -1093,42 +1160,16 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   }));
 
   // Default tool settings and avatar generation from project (if creating chat within a project)
-  let projectToolDefaults = {
-    disabledTools: [] as string[],
-    disabledToolGroups: [] as string[],
-  };
-  let projectAvatarGenerationDefault: boolean | null = null;
-  let projectDefaultImageProfileId: string | null = null;
-  let projectDefaultRoleplayTemplateId: string | null = null;
-
-  if (validatedData.projectId) {
-    const project = await repos.projects.findById(validatedData.projectId);
-    if (!project) {
-      return notFound('Project');
-    }
-
-    // Extract default tool settings from project
-    projectToolDefaults = {
-      disabledTools: project.defaultDisabledTools || [],
-      disabledToolGroups: project.defaultDisabledToolGroups || [],
-    };
-    projectAvatarGenerationDefault = project.defaultAvatarGenerationEnabled ?? null;
-    projectDefaultImageProfileId = project.defaultImageProfileId ?? null;
-    projectDefaultRoleplayTemplateId = project.defaultRoleplayTemplateId ?? null;
-
-    if (!project.allowAnyCharacter) {
-      const characterIds = participantsWithTimestamps
-        .filter((p) => p.type === 'CHARACTER' && p.characterId)
-        .map((p) => p.characterId as string);
-
-      const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
-      if (newCharacterIds.length > 0) {
-        await repos.projects.update(validatedData.projectId, {
-          characterRoster: [...project.characterRoster, ...newCharacterIds],
-        });
-      }
-    }
+  const projectDefaults = await resolveProjectDefaults(repos, validatedData.projectId, participantsWithTimestamps);
+  if (!projectDefaults.ok) {
+    return projectDefaults.response;
   }
+  const {
+    toolDefaults: projectToolDefaults,
+    avatarGenerationDefault: projectAvatarGenerationDefault,
+    defaultImageProfileId: projectDefaultImageProfileId,
+    defaultRoleplayTemplateId: projectDefaultRoleplayTemplateId,
+  } = projectDefaults;
 
   // Resolve timestamp config with fallback chain: request > character default > global default.
   // Anchor a fictional clock to now as it lands on the chat — this is the moment the config stops
@@ -1204,11 +1245,13 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
 
   // Apply outfit selections to the newly created chat
   // If no selections provided, apply 'default' mode for all LLM-controlled participants
+  // Shared wardrobe tiers in scope for this chat's project — General is always
+  // folded in by the repository; these add the project stores. Resolved once
+  // for both the outfit selection here and the opening-outfit whispers below.
+  const projectMountPointIds = await resolveProjectMountPointIds(validatedData.projectId || null);
   const outfitContext: OutfitSelectionContext = {
     userId: user.id,
-    // Shared wardrobe tiers in scope for this chat's project — General is
-    // always folded in by the repository; these add the project stores.
-    projectMountPointIds: await resolveProjectMountPointIds(validatedData.projectId || null),
+    projectMountPointIds,
     scenarioText: resolvedScenario,
     cheapLLMConfig: buildCheapLLMConfig(chatSettings),
     sourceChatId: validatedData.continuationFromChatId ?? null,
@@ -1268,14 +1311,24 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     });
   }
 
-  if (validatedData.continuationFromChatId) {
-    // Continuation flow: prelude (system prompt) → backfill from source +
-    // turn-state replication + cross-link bubbles → scenario/staff
-    // (Prospero, Host scenario, Host adds, Aurora outfits, avatar gen),
-    // skipping the auto first message.
+  // One opening sequence for every flavour of chat: system prompt → the
+  // Concierge's note (when a non-Monitored state was picked on the New Chat
+  // form) → [continuation only: backfill from source + turn-state replication
+  // + cross-link bubbles] → scenario/staff (Prospero, Host scenario, Host adds,
+  // Aurora outfits, avatar gen) and, for an ordinary chat, the greeting
+  // generated under the chosen state. A continuation is "picking up where the
+  // last one left off" and an autonomous room has no user to greet — neither
+  // gets the auto first message; the room's first turn comes from the per-room
+  // procedure when the run starts.
+  const isContinuation = Boolean(validatedData.continuationFromChatId);
+  if (isContinuation) {
     progress.status('Recalling the previous chapter…');
-    await writeSystemPromptMessage(chat.id, chatContext, repos);
-    await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
+  } else if (!isAutonomous) {
+    progress.status('Setting the opening scene…');
+  }
+  await writeSystemPromptMessage(chat.id, chatContext, repos);
+  await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
+  if (validatedData.continuationFromChatId) {
     try {
       await applyChatContinuation({
         newChatId: chat.id,
@@ -1290,50 +1343,17 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
         error: getErrorMessage(error),
       }, error instanceof Error ? error : undefined);
     }
-    await createInitialMessagesScenarioAndStaff(
-      chat.id,
-      chatContext,
-      participantsWithTimestamps,
-      user.id,
-      repos,
-      validatedData.projectId || null,
-      resolvedScenario || null,
-      { skipFirstMessage: true },
-    );
-  } else if (isAutonomous) {
-    // Autonomous rooms: seed system-prompt + scenario/Host whispers (so the
-    // participating characters know the scene), but skip the auto first
-    // "Hello!" message — there's no user to greet, and the first turn is
-    // produced by the per-room procedure when the run starts.
-    await writeSystemPromptMessage(chat.id, chatContext, repos);
-    await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
-    await createInitialMessagesScenarioAndStaff(
-      chat.id,
-      chatContext,
-      participantsWithTimestamps,
-      user.id,
-      repos,
-      validatedData.projectId || null,
-      resolvedScenario || null,
-      { skipFirstMessage: true },
-    );
-  } else {
-    // Ordinary flow: system prompt → the Concierge's note (when a non-Monitored
-    // state was picked on the New Chat form) → the scene and the greeting, which
-    // is then generated under the chosen state.
-    progress.status('Setting the opening scene…');
-    await writeSystemPromptMessage(chat.id, chatContext, repos);
-    await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
-    await createInitialMessagesScenarioAndStaff(
-      chat.id,
-      chatContext,
-      participantsWithTimestamps,
-      user.id,
-      repos,
-      validatedData.projectId || null,
-      resolvedScenario || null,
-    );
   }
+  await createInitialMessagesScenarioAndStaff(
+    chat.id,
+    chatContext,
+    participantsWithTimestamps,
+    user.id,
+    repos,
+    validatedData.projectId || null,
+    resolvedScenario || null,
+    { skipFirstMessage: isContinuation || isAutonomous, projectMountPointIds },
+  );
 
   const enrichedParticipants = await Promise.all(
     chat.participants.map((p) => enrichParticipantSummary(p, repos))

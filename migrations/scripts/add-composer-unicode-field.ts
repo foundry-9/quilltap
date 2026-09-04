@@ -14,9 +14,9 @@ import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import {
   isSQLiteBackend,
-  getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
 
 export const addComposerUnicodeFieldMigration: Migration = {
@@ -35,10 +35,7 @@ export const addComposerUnicodeFieldMigration: Migration = {
       return false;
     }
 
-    const columns = getSQLiteTableColumns('chat_settings');
-    const columnNames = columns.map((col) => col.name);
-
-    return !columnNames.includes('composerUnicode');
+    return !sqliteColumnExists('chat_settings', 'composerUnicode');
   },
 
   async run(): Promise<MigrationResult> {
@@ -46,13 +43,7 @@ export const addComposerUnicodeFieldMigration: Migration = {
     let columnsAdded = 0;
 
     try {
-      const db = getSQLiteDatabase();
-
-      const columns = getSQLiteTableColumns('chat_settings');
-      const columnNames = columns.map((col) => col.name);
-
-      if (!columnNames.includes('composerUnicode')) {
-        db.exec(`ALTER TABLE "chat_settings" ADD COLUMN "composerUnicode" INTEGER DEFAULT 1`);
+      if (addColumnIfMissing('chat_settings', 'composerUnicode', 'INTEGER DEFAULT 1')) {
         columnsAdded++;
         logger.info('Added composerUnicode column to chat_settings table', {
           context: 'migration.add-composer-unicode-field',

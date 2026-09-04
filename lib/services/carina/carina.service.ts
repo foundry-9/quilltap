@@ -525,28 +525,14 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
     // `instructions` of every group the answerer belongs to. Mirrors the
     // Salon insertion (identity → world → who's asking → what you remember);
     // template-processed like the Salon path so `{{char}}` resolves to the
-    // answerer. Fails soft: a broken store never loses the query.
-    try {
-      const standingInstructions = await resolveStandingInstructionsSection({
-        projectId: chat.projectId ?? null,
-        characterId: answerer.id,
-      });
-      if (standingInstructions) {
-        systemPrompt += `\n\n${processTemplate(standingInstructions, { char: answerer.name, user: 'User' })}`;
-        logger.debug('[Carina] Standing instructions applied to query prompt', {
-          context: 'carina',
-          chatId,
-          answererId: answerer.id,
-          sectionLength: standingInstructions.length,
-        });
-      }
-    } catch (error) {
-      logger.warn('[Carina] Failed to resolve standing instructions — continuing without them', {
-        context: 'carina',
-        chatId,
-        answererId: answerer.id,
-        error: getErrorMessage(error),
-      });
+    // answerer. The resolver fails soft internally (never throws): a broken
+    // store never loses the query.
+    const standingInstructions = await resolveStandingInstructionsSection({
+      projectId: chat.projectId ?? null,
+      characterId: answerer.id,
+    });
+    if (standingInstructions) {
+      systemPrompt += `\n\n${processTemplate(standingInstructions, { char: answerer.name, user: 'User' })}`;
     }
     // Tell the answerer who is consulting them — the surface-level view any
     // character would have of someone addressing them (name/title/pronouns/

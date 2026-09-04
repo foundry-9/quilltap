@@ -16,9 +16,16 @@
  * closed vocabularies — the extraction path imports the Sets from here, so the
  * two sides can never drift.
  *
+ * It also assembles the per-turn {@link RecallContext} and the retrospective
+ * multi-probe list ({@link buildTurnRecallContext}, {@link buildRetrospectiveProbes})
+ * so the proactive path, the dynamic head, and the recall replay cannot drift.
+ *
  * Pure + I/O-free — no logging, no DB, no LLM — so it is trivially unit-testable
  * and safe to import from the forked job child.
  */
+
+import type { MemorySearchExtraction } from './cheap-llm-tasks/memory-tasks'
+import { recentlyWhisperedIdSet } from './recall-history'
 
 export type TemporalTag = 'past' | 'moment' | 'present' | 'future'
 export type ScopeTag = 'narrow' | 'wide'
@@ -531,4 +538,83 @@ export function combineRecallMultipliers(
     fired: [...scope.fired, ...temporal.fired, ...context.fired, ...participant.fired, ...recent.fired, ...window.fired, ...fresh.fired],
     exclude: false,
   }
+}
+
+// ============================================================================
+// Per-turn context assembly — shared by the proactive recall path
+// (pre-compute.service), the dynamic head (context-manager), and the recall
+// replay (recall-replay), so all three probe the corpus identically.
+// ============================================================================
+
+/** Inputs for {@link buildTurnRecallContext}. */
+export interface TurnRecallContextInput {
+  /**
+   * The chat this turn belongs to: `projectId` is the rename-proof scope
+   * comparand, `id` the fresh-event echo guard, and `commonplaceRecallHistory`
+   * feeds the anti-repetition set.
+   */
+  chat: { id: string; projectId?: string | null; commonplaceRecallHistory?: unknown }
+  /** Instance-wide recall settings (`getMemoryRecallSettings()`). */
+  recallSettings: { scopePolicy: ScopePolicy; expandRelated: boolean }
+  /** The turn's dominant `context` axis from the keyword distillation, or null. */
+  turnContext: ContextTag | null
+  /** The turn's dominant `temporal` axis from the keyword distillation, or null. */
+  turnTemporal: TemporalTag | null
+  /**
+   * Whether the distillation judged the turn retrospective. Omit to leave the
+   * episodic flag off the context entirely (the replay's inert "old path").
+   */
+  turnRetrospective?: boolean
+  /** Characters present in the room this turn (participant boost, item 4). */
+  presentAboutCharacterIds?: readonly string[]
+  /** Reference clock for the fresh-event boost, ms since epoch. */
+  nowMs: number
+}
+
+/**
+ * Assemble the full per-turn {@link RecallContext}: scope gating, temporal
+ * down-weighting, context steering, participant boost, one-hop expansion,
+ * anti-repetition, and the fresh-event boost (whose echo guard is the chat id
+ * — this chat's own memories are already in context).
+ */
+export function buildTurnRecallContext(input: TurnRecallContextInput): RecallContext {
+  const ctx: RecallContext = {
+    currentProjectId: input.chat.projectId ?? null,
+    scopePolicy: input.recallSettings.scopePolicy,
+    turnContext: input.turnContext,
+    turnTemporal: input.turnTemporal,
+    presentAboutCharacterIds: input.presentAboutCharacterIds,
+    expandRelated: input.recallSettings.expandRelated,
+    recentlyWhisperedIds: recentlyWhisperedIdSet(input.chat.commonplaceRecallHistory),
+    currentChatId: input.chat.id,
+    nowMs: input.nowMs,
+  }
+  if (input.turnRetrospective !== undefined) ctx.turnRetrospective = input.turnRetrospective
+  return ctx
+}
+
+/**
+ * Retrospective multi-probe: extra embedding queries for a turn that references
+ * past shared events, so "remember Lighthouse Point last week?" probes the
+ * vector space from every angle the reference offers — the bare entity string,
+ * and the paraphrase pinned to its resolved date window.
+ *
+ * Returns `undefined` (never an empty array) when the turn is not
+ * retrospective, has no signals, or offers nothing to probe, so the result
+ * passes straight through as `searchMemoriesSemantic`'s `extraProbes` option.
+ */
+export function buildRetrospectiveProbes(
+  signals: Pick<MemorySearchExtraction, 'entities' | 'paraphrase' | 'timeRange'> | null | undefined,
+  retrospective: boolean,
+): string[] | undefined {
+  if (!retrospective || !signals) return undefined
+  const probes: string[] = []
+  const entityProbe = (signals.entities ?? []).join(' ').trim()
+  if (entityProbe) probes.push(entityProbe)
+  if (signals.paraphrase && signals.timeRange) {
+    probes.push(
+      `${signals.paraphrase} (around ${signals.timeRange.from.slice(0, 10)} to ${signals.timeRange.to.slice(0, 10)})`,
+    )
+  }
+  return probes.length > 0 ? probes : undefined
 }

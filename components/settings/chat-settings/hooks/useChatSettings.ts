@@ -250,27 +250,13 @@ export function useChatSettings(): UseChatSettingsReturn {
    */
   const handleImageDescriptionProfileChange = useCallback(
     async (profileId: string | null) => {
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageDescriptionProfileId: profileId }),
-        })
-
-        if (!res.ok) throw new Error('Failed to update settings')
-
-        await mutateSettings()
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to save'
-        console.error('Failed to update image description profile', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { imageDescriptionProfileId: profileId },
+        'Failed to update settings',
+        'Failed to update image description profile'
+      )
     },
-    [mutateSettings, showSuccess]
+    [patchChatSettings]
   )
 
   /**
@@ -278,27 +264,13 @@ export function useChatSettings(): UseChatSettingsReturn {
    */
   const handleUncensoredImageDescriptionProfileChange = useCallback(
     async (profileId: string | null) => {
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uncensoredImageDescriptionProfileId: profileId }),
-        })
-
-        if (!res.ok) throw new Error('Failed to update settings')
-
-        await mutateSettings()
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to save'
-        console.error('Failed to update uncensored image description profile', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { uncensoredImageDescriptionProfileId: profileId },
+        'Failed to update settings',
+        'Failed to update uncensored image description profile'
+      )
     },
-    [mutateSettings, showSuccess]
+    [patchChatSettings]
   )
 
   /**

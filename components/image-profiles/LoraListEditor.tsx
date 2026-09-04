@@ -25,6 +25,8 @@ import { useState } from 'react'
 import type { ImageLoraSpec, ImageLoraSupport } from '@quilltap/plugin-types'
 import type { HuggingFaceLookupResult } from '@/lib/image-gen/huggingface-lookup'
 import { extractHuggingFaceRepoId } from '@/lib/image-gen/huggingface-repo-id'
+import { resolveLoraScaleBounds } from '@/lib/image-gen/lora-scale'
+import { apiFetch } from '@/lib/query/fetcher'
 import { LoraQueryResult } from './LoraQueryResult'
 
 interface LoraListEditorProps {
@@ -47,20 +49,6 @@ interface RowQuery {
   result: HuggingFaceLookupResult | null
 }
 
-/** Mirrors `DEFAULT_LORA_SCALE` in lib/image-gen/lora-support.ts. */
-const DEFAULT_SCALE = { min: 0, max: 2, default: 1, step: 0.05 }
-
-function scaleBounds(support: ImageLoraSupport) {
-  const declared = support.scale
-  if (!declared) return DEFAULT_SCALE
-  return {
-    min: declared.min,
-    max: declared.max,
-    default: declared.default,
-    step: declared.step ?? DEFAULT_SCALE.step,
-  }
-}
-
 function sourceHint(support: ImageLoraSupport): string {
   const kinds = support.sourceKinds
   const parts: string[] = []
@@ -77,7 +65,7 @@ export function LoraListEditor({ support, loras, onChange, hfToken }: LoraListEd
 
   if (!support) return null
 
-  const bounds = scaleBounds(support)
+  const bounds = resolveLoraScaleBounds(support)
   const max = support.maxLoras
   const atCap = loras.length >= max
 
@@ -117,13 +105,11 @@ export function LoraListEditor({ support, loras, onChange, hfToken }: LoraListEd
   const query = async (index: number, source: string) => {
     setQueries(prev => ({ ...prev, [index]: { loading: true, result: null } }))
     try {
-      const res = await fetch('/api/v1/image-profiles?action=lora-metadata', {
+      const data = await apiFetch<HuggingFaceLookupResult>('/api/v1/image-profiles?action=lora-metadata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source, ...(hfToken ? { hfToken } : {}) }),
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = (await res.json()) as HuggingFaceLookupResult
       setQueries(prev => ({ ...prev, [index]: { loading: false, result: data } }))
     } catch {
       // A failed request is reported in the same panel as a failed lookup —

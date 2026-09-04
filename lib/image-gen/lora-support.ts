@@ -33,13 +33,6 @@ import { matchModel } from './orientation';
 import type { ImageLoraSpec, ImageLoraSupport } from '@quilltap/plugin-types';
 
 /**
- * Scale bounds used when a plugin declares `loraSupport` but no `scale` block.
- * Permissive on purpose — the provider's own default applies when the user
- * leaves the slider alone, and every provider surveyed tops out at or below 4.
- */
-export const DEFAULT_LORA_SCALE = { min: 0, max: 2, default: 1, step: 0.05 } as const;
-
-/**
  * Resolve LoRA support for a provider/model pair. Returns `null` when neither
  * the model nor the provider declares any — the signal every caller reads as
  * "this profile has no LoRA story; do not offer one, do not send one."
@@ -53,22 +46,6 @@ export function resolveLoraSupport(
     return perModel;
   }
   return getImageProviderConstraints(provider)?.loraSupport ?? null;
-}
-
-/** The scale bounds the editor and the capper should use for this support. */
-export function resolveLoraScaleBounds(
-  support: ImageLoraSupport,
-): { min: number; max: number; default: number; step: number } {
-  const declared = support.scale;
-  if (!declared) {
-    return { ...DEFAULT_LORA_SCALE };
-  }
-  return {
-    min: declared.min,
-    max: declared.max,
-    default: declared.default,
-    step: declared.step ?? DEFAULT_LORA_SCALE.step,
-  };
 }
 
 /**

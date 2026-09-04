@@ -3,7 +3,6 @@ import {
   supportsNameField,
   formatParticipantName,
   formatMessagesForProvider,
-  buildMultiCharacterContextSection,
   normalizeContentBlockFormat,
   truncateAtForeignSpeaker,
 } from '@/lib/llm/message-formatter'
@@ -110,23 +109,6 @@ describe('message formatter utilities', () => {
           expect(JSON.stringify(m)).not.toContain('secret chain-of-thought')
         }
       }
-    })
-  })
-
-  describe('buildMultiCharacterContextSection', () => {
-    it('lists other participants and provides guidance text', () => {
-      const section = buildMultiCharacterContextSection(
-        [
-          { name: 'Iris', description: 'Navigator', type: 'CHARACTER' },
-          { name: 'User', description: 'Curious human', type: 'CHARACTER' },
-        ],
-        'Lyra'
-      )
-
-      expect(section).toContain('Iris')
-      expect(section).toContain('User')
-      expect(section).toContain('(the user)')
-      expect(section).toContain('You are Lyra')
     })
   })
 

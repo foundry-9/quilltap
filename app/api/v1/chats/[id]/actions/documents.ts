@@ -20,26 +20,34 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { successResponse, badRequest, conflict, notFound, serverError, errorResponse } from '@/lib/api/responses';
+import { successResponse, badRequest, notFound, serverError, errorResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
-import { readFileWithMtime, type DocEditScope } from '@/lib/doc-edit';
+import type { DocEditScope } from '@/lib/doc-edit';
 import { resolveGroupMountPointIdsForCharacter } from '@/lib/mount-index/tiered-mount-pool';
-import { DatabaseStoreError } from '@/lib/mount-index/database-store';
 import {
   resolveOperatorDocPath,
   resolvedPathExists,
   classifyResolvedTarget,
   openDocumentFile,
-  writeDocumentFile,
-  computeRenameTarget,
-  renameDocumentFile,
-  deleteDocumentFile,
   listAllEnabledStores,
-  DocumentConflictError,
+  documentAccessContextForChat,
   DocumentMissingError,
   type DocumentAccessContext,
   type AccessibleStoreOption,
 } from '@/lib/documents/operator-doc-actions';
+import {
+  documentTargetFields,
+  openDocumentFields,
+  writeDocumentFields,
+  readDocumentResponse,
+  writeDocumentResponse,
+  resolveRenameTarget,
+  renameDocumentResponse,
+  sweepRenamedDocumentTracking,
+  deleteDocumentResponse,
+  dedupeRecentDocuments,
+  type DocumentHttpLog,
+} from '@/lib/documents/operator-doc-http';
 import {
   postLibrarianOpenAnnouncement,
   postLibrarianRenameAnnouncement,
@@ -64,32 +72,19 @@ export type {
 // Schemas
 // ============================================================================
 
+// A chat has a project to resolve the legacy on-disk `project` scope against,
+// and it is the default: the standalone route cannot offer it.
+const chatScopeSchema = z.enum(['project', 'document_store', 'general']).default('project');
+
 const openDocumentSchema = z.object({
-  filePath: z.string().optional(),
-  title: z.string().optional(),
-  scope: z.enum(['project', 'document_store', 'general']).default('project'),
-  mountPoint: z.string().optional(),
+  ...openDocumentFields(chatScopeSchema),
   mode: z.enum(['split', 'focus']).default('split'),
-  /**
-   * Folder (relative to scope root) where a new blank document should land.
-   * Forward-slash separated; ignored when `filePath` is provided. Empty/unset
-   * means scope root.
-   */
-  targetFolder: z.string().optional(),
 });
 
-const readDocumentSchema = z.object({
-  filePath: z.string(),
-  scope: z.enum(['project', 'document_store', 'general']).default('project'),
-  mountPoint: z.string().optional(),
-});
+const readDocumentSchema = z.object(documentTargetFields(chatScopeSchema));
 
 const writeDocumentSchema = z.object({
-  filePath: z.string(),
-  scope: z.enum(['project', 'document_store', 'general']).default('project'),
-  mountPoint: z.string().optional(),
-  content: z.string(),
-  mtime: z.number().optional(),
+  ...writeDocumentFields(chatScopeSchema),
   /** Pre-formatted diff content from the client; when present, a Librarian save announcement is posted */
   diffContent: z.string().optional(),
 });
@@ -118,20 +113,6 @@ async function resolveTargetDocument(
   return repos.chatDocuments.findActiveForChat(chatId);
 }
 
-function getProjectId(chat: unknown): string | undefined {
-  return (chat as Record<string, unknown>).projectId as string | undefined;
-}
-
-function getParticipantCharacterIds(chat: unknown): string[] {
-  const participants = (chat as { participants?: Array<{ characterId?: string | null }> }).participants;
-  if (!Array.isArray(participants)) return [];
-  const ids = new Set<string>();
-  for (const p of participants) {
-    if (p?.characterId) ids.add(p.characterId);
-  }
-  return Array.from(ids);
-}
-
 async function getChatContext(
   chatId: string,
   { repos }: RequestContext
@@ -140,11 +121,12 @@ async function getChatContext(
   if (!chat) {
     return null;
   }
+  return documentAccessContextForChat(chat);
+}
 
-  return {
-    projectId: getProjectId(chat),
-    characterIds: getParticipantCharacterIds(chat),
-  };
+/** How this route's log lines name the file, and the chat they belong to. */
+function documentLog(chatId: string): DocumentHttpLog {
+  return { subject: 'document', fields: { chatId } };
 }
 
 // ============================================================================
@@ -182,15 +164,7 @@ export async function handleRecentDocuments(
 
     // Dedupe over the concatenation (this-chat ahead of others) so a file opened
     // in both this chat and elsewhere keeps its "this chat first" placement.
-    const seen = new Set<string>();
-    const ordered: ChatDocument[] = [];
-    for (const doc of [...thisChat, ...otherChats]) {
-      const key = `${doc.scope} ${doc.mountPoint ?? ''} ${doc.filePath}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      ordered.push(doc);
-      if (ordered.length >= MAX_RECENT_DOCUMENTS) break;
-    }
+    const ordered = dedupeRecentDocuments([...thisChat, ...otherChats], MAX_RECENT_DOCUMENTS);
 
     const thisChatReturned = ordered.filter(doc => doc.chatId === chatId).length;
     logger.debug('Resolved recent documents for picker', {
@@ -641,52 +615,11 @@ export async function handleReadDocument(
     return badRequest('Chat not found');
   }
 
-  let resolved;
-  try {
-    resolved = await resolveOperatorDocPath(chatContext, {
-      scope: data.scope as DocEditScope,
-      filePath: data.filePath,
-      mountPoint: data.mountPoint,
-    });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    logger.warn('Failed to resolve document path for read', {
-      chatId,
-      filePath: data.filePath,
-      scope: data.scope,
-      mountPoint: data.mountPoint,
-      error: message,
-    });
-    return badRequest(`Could not resolve ${data.filePath}: ${message}`);
-  }
-
-  try {
-    const fileData = await readFileWithMtime(resolved);
-
-    return successResponse({
-      content: fileData.content,
-      mtime: fileData.mtime,
-    });
-  } catch (error) {
-    const code = error instanceof Error && 'code' in error ? (error as NodeJS.ErrnoException).code : undefined;
-    const message = getErrorMessage(error);
-
-    if (code === 'ENOENT') {
-      // notFound() appends "not found" to its argument, which would produce
-      // "File not found: X not found" — use errorResponse so the client sees
-      // the same shape as open-document's missing-file response.
-      return errorResponse(`File not found: ${data.filePath}`, 404);
-    }
-
-    logger.error('Failed to read document', {
-      chatId,
-      filePath: data.filePath,
-      scope: data.scope,
-      code,
-      error: message,
-    });
-    return serverError(`Failed to read document: ${message}`);
-  }
+  return readDocumentResponse(
+    chatContext,
+    { scope: data.scope as DocEditScope, filePath: data.filePath, mountPoint: data.mountPoint },
+    documentLog(chatId),
+  );
 }
 
 /**
@@ -757,49 +690,37 @@ export async function handleWriteDocument(
     return badRequest('Chat not found');
   }
 
-  try {
-    const { mtime } = await writeDocumentFile(chatContext, context.repos, {
+  const written = await writeDocumentResponse(
+    chatContext,
+    context.repos,
+    {
       filePath: data.filePath,
       scope: data.scope as DocEditScope,
       mountPoint: data.mountPoint,
       content: data.content,
       mtime: data.mtime,
-    });
-
-    const librarianMessage = data.diffContent
-      ? await postLibrarianSaveAnnouncement({
-          chatId,
-          diffContent: data.diffContent,
-          // Derive from the content just written — its frontmatter is the
-          // authority, and a brand-new hidden file isn't indexed yet.
-          hiddenFromCharacters: contentHiddenFromCharacters(data.content),
-        })
-      : null;
-
-    return successResponse({
-      success: true,
-      mtime,
-      librarianMessage: librarianMessage ?? null,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    if (message.includes('mtime mismatch') || message.includes('modified by another process')) {
-      logger.warn('Document save conflict detected', {
-        chatId,
-        filePath: data.filePath,
-        error: message,
-      });
-      return conflict('Document changed elsewhere. Reload it and try again.');
-    }
-
-    logger.error('Failed to write document', {
-      chatId,
-      filePath: data.filePath,
-      error: message,
-    });
-    return serverError(`Failed to write document: ${message}`);
+    },
+    documentLog(chatId),
+  );
+  if (!written.ok) {
+    return written.response;
   }
+
+  const librarianMessage = data.diffContent
+    ? await postLibrarianSaveAnnouncement({
+        chatId,
+        diffContent: data.diffContent,
+        // Derive from the content just written — its frontmatter is the
+        // authority, and a brand-new hidden file isn't indexed yet.
+        hiddenFromCharacters: contentHiddenFromCharacters(data.content),
+      })
+    : null;
+
+  return successResponse({
+    success: true,
+    mtime: written.mtime,
+    librarianMessage: librarianMessage ?? null,
+  });
 }
 
 /**
@@ -825,13 +746,13 @@ export async function handleRenameDocument(
     return badRequest('No active document to rename');
   }
 
-  const target = computeRenameTarget(doc.filePath, data.newTitle);
+  const target = resolveRenameTarget(doc.filePath, data.newTitle);
   if (!target.ok) {
-    return badRequest(target.reason);
+    return target.response;
   }
   const { newFilePath, newDisplayTitle } = target;
 
-  if (newFilePath === doc.filePath) {
+  if (target.unchanged) {
     return successResponse({
       document: {
         id: doc.id,
@@ -872,28 +793,19 @@ export async function handleRenameDocument(
     resolvedOld.relativePath,
   );
 
-  try {
-    await renameDocumentFile(chatContext, repos, {
+  const renamed = await renameDocumentResponse(
+    chatContext,
+    repos,
+    {
       scope: doc.scope as DocEditScope,
       mountPoint: doc.mountPoint ?? undefined,
       oldFilePath: doc.filePath,
       newFilePath,
-    });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    if (error instanceof DocumentConflictError) {
-      return conflict(`A file already exists at that name.`);
-    }
-    if (error instanceof DatabaseStoreError && error.code === 'UNSUPPORTED') {
-      return badRequest(message);
-    }
-    logger.error('Failed to rename document', {
-      chatId,
-      from: doc.filePath,
-      to: newFilePath,
-      error: message,
-    });
-    return serverError(`Failed to rename document: ${message}`);
+    },
+    documentLog(chatId),
+  );
+  if (!renamed.ok) {
+    return renamed.response;
   }
 
   const oldDisplayTitle = doc.displayTitle || path.basename(doc.filePath);
@@ -903,27 +815,19 @@ export async function handleRenameDocument(
   });
 
   // Sweep any other chats' (or the standalone) recent-document rows still
-  // pointing at the old path so the shared recent list stays consistent. The
-  // row above is already at newFilePath, so it won't re-match here. Best-effort:
-  // the rename already succeeded on disk. Mirrors syncChatDocumentsAfterFileMove.
-  try {
-    await repos.chatDocuments.renameFilePathInStore(
-      doc.scope,
-      doc.mountPoint ?? null,
-      doc.filePath,
-      newFilePath,
-      newDisplayTitle,
-    );
-  } catch (trackError) {
-    logger.warn('Failed to sweep recent-document tracking after rename', {
-      chatId,
-      from: doc.filePath,
-      to: newFilePath,
+  // pointing at the old path. The row above is already at newFilePath, so it
+  // won't re-match here.
+  await sweepRenamedDocumentTracking(
+    repos,
+    {
       scope: doc.scope,
       mountPoint: doc.mountPoint,
-      error: getErrorMessage(trackError),
-    });
-  }
+      oldFilePath: doc.filePath,
+      newFilePath,
+      newDisplayTitle,
+    },
+    documentLog(chatId),
+  );
 
   const librarianMessage = await postLibrarianRenameAnnouncement({
     chatId,
@@ -998,26 +902,17 @@ export async function handleDeleteDocument(
     resolved.relativePath,
   );
 
-  try {
-    const outcome = await deleteDocumentFile(chatContext, {
+  const deleted = await deleteDocumentResponse(
+    chatContext,
+    {
       scope: doc.scope as DocEditScope,
       mountPoint: doc.mountPoint ?? undefined,
       filePath: doc.filePath,
-    });
-    if (outcome === 'not-found') {
-      return notFound('File not found');
-    }
-    if (outcome === 'not-a-file') {
-      return badRequest(`Path is not a file: ${doc.filePath}`);
-    }
-  } catch (error) {
-    const message = getErrorMessage(error);
-    logger.error('Failed to delete document', {
-      chatId,
-      filePath: doc.filePath,
-      error: message,
-    });
-    return serverError(`Failed to delete document: ${message}`);
+    },
+    documentLog(chatId),
+  );
+  if (!deleted.ok) {
+    return deleted.response;
   }
 
   await repos.chatDocuments.closeDocumentById(chatId, doc.id);

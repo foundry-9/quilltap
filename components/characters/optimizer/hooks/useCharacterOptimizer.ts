@@ -10,6 +10,7 @@
 
 import { useState, useCallback, useRef } from 'react';
 import { applyCharacterFieldUpdates } from '../../apply-character-field-updates';
+import { wardrobeCollectionUrl, wardrobeItemUrl } from '@/lib/wardrobe/wardrobe-container';
 import type {
   OptimizerPhase,
   SuggestionDecision,
@@ -458,7 +459,7 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
         const wardrobeErrors: string[] = [];
         for (const { subId, finalValue } of wardrobeUpdates) {
           try {
-            const res = await fetch(`/api/v1/characters/${characterId}/wardrobe/${subId}`, {
+            const res = await fetch(wardrobeItemUrl({ scope: 'character', id: characterId }, subId), {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ description: finalValue }),
@@ -478,7 +479,7 @@ export function useCharacterOptimizer(): UseCharacterOptimizerReturn {
           const description =
             decisions.get(suggestion.id) === 'edited' ? finalValue : item.description;
           try {
-            const res = await fetch(`/api/v1/characters/${characterId}/wardrobe`, {
+            const res = await fetch(wardrobeCollectionUrl({ scope: 'character', id: characterId }), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

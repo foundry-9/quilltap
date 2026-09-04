@@ -17,7 +17,11 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logger } from '@/lib/logger';
 import { parseLLMJson } from '@/lib/llm/llm-json';
-import { sanitizePronouns } from '@/lib/characters/sanitize-pronouns';
+import {
+  describeGeneratedProperties,
+  parseGeneratedProperties,
+  type GeneratedProperties,
+} from '@/lib/characters/generated-properties';
 import {
   FIELD_SEMANTICS_PREAMBLE,
   PROMPT_SEMANTICS,
@@ -85,10 +89,7 @@ export interface GeneratedPhysicalDescription {
   fullDescription: string;
 }
 
-export interface GeneratedProperties {
-  pronouns: { subject: string; object: string; possessive: string } | null;
-  aliases: string[];
-}
+export type { GeneratedProperties };
 
 export interface WizardResult {
   success: boolean;
@@ -680,16 +681,7 @@ export async function generateProperties(
     profileParameters
   );
 
-  const parsed = parseLLMJson<{ pronouns?: unknown; aliases?: unknown }>(content);
-  const aliases = Array.isArray(parsed?.aliases)
-    ? parsed.aliases
-        .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
-        .map((a) => a.trim())
-    : [];
-  return {
-    pronouns: sanitizePronouns(parsed?.pronouns) ?? null,
-    aliases,
-  };
+  return parseGeneratedProperties(content);
 }
 
 // ============================================================================
@@ -1157,11 +1149,11 @@ export async function runCharacterWizardStreaming(
             profileParams(primaryProfile)
           );
           generated.properties = props;
-          const pronounText = props.pronouns
-            ? `${props.pronouns.subject}/${props.pronouns.object}/${props.pronouns.possessive}`
-            : 'no pronouns found';
-          const aliasText = props.aliases.length > 0 ? `aliases: ${props.aliases.join(', ')}` : 'no aliases';
-          onProgress({ type: 'field_complete', field, snippet: `${pronounText}; ${aliasText}` });
+          onProgress({
+            type: 'field_complete',
+            field,
+            snippet: describeGeneratedProperties(props, 'no pronouns found'),
+          });
         } else {
           const fieldPrompt = FIELD_PROMPTS[field];
           const maxTokens =

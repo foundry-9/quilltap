@@ -21,9 +21,13 @@ import {
   type SemanticSearchResult,
   type SearchQueryEmbedding,
 } from '@/lib/memory/memory-service'
-import type { RecallContext, ContextTag, TemporalTag } from '@/lib/memory/recall-tags'
 import {
-  recentlyWhisperedIdSet,
+  buildRetrospectiveProbes,
+  buildTurnRecallContext,
+  type ContextTag,
+  type TemporalTag,
+} from '@/lib/memory/recall-tags'
+import {
   appendRecallTurn,
   appendRetroSignature,
   parseRetroSignatures,
@@ -926,27 +930,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // `instructions` of every group the responding character belongs to.
   // Resolved here (async), rendered once, and handed to the synchronous
   // builder — same shape as the Taboo read above. The resolver fails soft
-  // internally; this catch is a final backstop so the turn never dies for a
-  // section that is guidance, not payload.
-  let standingInstructions: string | null = null
-  try {
-    standingInstructions = await resolveStandingInstructionsSection({
-      projectId: chat.projectId ?? null,
-      characterId: character.id,
-    })
-    if (standingInstructions) {
-      logger.debug('[ContextManager] Standing instructions applied to system prompt', {
-        chatId: chat.id,
-        characterId: character.id,
-        sectionLength: standingInstructions.length,
-      })
-    }
-  } catch (error) {
-    logger.warn('[ContextManager] Failed to resolve standing instructions — continuing without them', {
-      chatId: chat.id,
-      error: getErrorMessage(error),
-    })
-  }
+  // internally (never throws), so the turn cannot die for a section that is
+  // guidance, not payload.
+  const standingInstructions = await resolveStandingInstructionsSection({
+    projectId: chat.projectId ?? null,
+    characterId: character.id,
+  })
 
   const systemPrompt = buildSystemPrompt({
     character,
@@ -1442,37 +1431,21 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           ),
         )
 
-        // Read the instance-wide recall settings and assemble the full per-turn
-        // recall context so the dynamic head reads the targeting tags back
-        // (see lib/memory/recall-tags.ts). chat.projectId is the rename-proof
-        // comparand for scope: narrow gating.
+        // Assemble the full per-turn recall context — the same assembly the
+        // proactive path uses (see lib/memory/recall-tags.ts) — so the dynamic
+        // head reads the targeting tags back identically.
         const fallbackRetro = turnRecallSignals?.retrospective === true
-        const recallContext: RecallContext = {
-          currentProjectId: chat.projectId ?? null,
-          scopePolicy: recallSettings.scopePolicy,
+        const recallContext = buildTurnRecallContext({
+          chat,
+          recallSettings,
           turnContext,
           turnTemporal,
           turnRetrospective: fallbackRetro,
           presentAboutCharacterIds,
-          expandRelated: recallSettings.expandRelated,
-          recentlyWhisperedIds: recentlyWhisperedIdSet(chat.commonplaceRecallHistory),
-          // Fresh-event boost (mirrors the proactive path): recent events keep
-          // their footing against evergreen memories whatever the retrospective
-          // classifier decided; the chat id is the echo guard.
-          currentChatId: chat.id,
           nowMs: Date.now(),
-        }
+        })
         // Retrospective multi-probe (mirrors the proactive path).
-        const extraProbes: string[] = []
-        if (fallbackRetro && turnRecallSignals) {
-          const entityProbe = (turnRecallSignals.entities ?? []).join(' ').trim()
-          if (entityProbe) extraProbes.push(entityProbe)
-          if (turnRecallSignals.paraphrase && turnRecallSignals.timeRange) {
-            extraProbes.push(
-              `${turnRecallSignals.paraphrase} (around ${turnRecallSignals.timeRange.from.slice(0, 10)} to ${turnRecallSignals.timeRange.to.slice(0, 10)})`,
-            )
-          }
-        }
+        const extraProbes = buildRetrospectiveProbes(turnRecallSignals, fallbackRetro)
         const memoryResults = await searchMemoriesSemantic(
           character.id,
           distilledQuery,
@@ -1495,7 +1468,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             // boost) makes it starvation-safe. The flag still gates the
             // temporal flip, anti-repetition suspension, and the probes above.
             occurredWithin: turnRecallSignals?.timeRange ?? null,
-            extraProbes: extraProbes.length > 0 ? extraProbes : undefined,
+            extraProbes,
           },
         )
         dynamicHeadResults = memoryResults.filter(r => !archiveIds.has(r.memory.id))
@@ -2684,43 +2657,3 @@ export function willExceedContextLimit(
   }
 }
 
-/**
- * Get context usage status for UI display
- */
-export function getContextStatus(
-  usedTokens: number,
-  totalLimit: number
-): {
-  level: 'ok' | 'warning' | 'critical'
-  percentUsed: number
-  remainingTokens: number
-  message: string
-} {
-  const percentUsed = Math.round((usedTokens / totalLimit) * 100)
-  const remainingTokens = totalLimit - usedTokens
-
-  if (percentUsed >= 95) {
-    return {
-      level: 'critical',
-      percentUsed,
-      remainingTokens,
-      message: 'Context nearly full. Consider starting a new conversation or generating a summary.',
-    }
-  }
-
-  if (percentUsed >= 80) {
-    return {
-      level: 'warning',
-      percentUsed,
-      remainingTokens,
-      message: 'Context filling up. Older messages may be dropped soon.',
-    }
-  }
-
-  return {
-    level: 'ok',
-    percentUsed,
-    remainingTokens,
-    message: `Using ${percentUsed}% of context window.`,
-  }
-}

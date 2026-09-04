@@ -34,8 +34,7 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
   writeDatabaseDocument,
-  readDatabaseDocument,
-  DatabaseStoreError,
+  readDatabaseDocumentIfExists,
 } from '@/lib/mount-index/database-store';
 
 /** The minimal shape a store-backed row must expose to the overlay engine. */
@@ -268,17 +267,10 @@ export function createDocumentStoreOverlay<T extends StoreBackedRow, P>(
     mountPointId: string,
     entityId = '(unknown)',
   ): Promise<P | null> {
-    let content: string;
+    let content: string | null;
     try {
-      ({ content } = await readDatabaseDocument(mountPointId, paths.properties));
+      content = await readDatabaseDocumentIfExists(mountPointId, paths.properties);
     } catch (err) {
-      if (err instanceof DatabaseStoreError && err.code === 'NOT_FOUND') {
-        logger.debug(`${Label} ${paths.properties} absent — caller may seed defaults`, {
-          [idLogKey]: entityId,
-          officialMountPointId: mountPointId,
-        });
-        return null;
-      }
       const detail = err instanceof Error ? err.message : String(err);
       logger.error(`${Label} ${paths.properties} unreadable — refusing to treat as absent`, {
         [idLogKey]: entityId,
@@ -290,6 +282,13 @@ export function createDocumentStoreOverlay<T extends StoreBackedRow, P>(
         mountPointId,
         `${paths.properties} unreadable: ${detail}`,
       );
+    }
+    if (content === null) {
+      logger.debug(`${Label} ${paths.properties} absent — caller may seed defaults`, {
+        [idLogKey]: entityId,
+        officialMountPointId: mountPointId,
+      });
+      return null;
     }
 
     try {

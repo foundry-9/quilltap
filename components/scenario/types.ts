@@ -24,11 +24,12 @@ export interface CharacterScenario {
 }
 
 /**
- * Project-scoped scenario sourced from the project's `Scenarios/` folder
- * (`/api/v1/projects/[id]/scenarios`). Identified by relativePath rather
- * than UUID, since the file system is the source of truth.
+ * A file-backed scenario (a `Scenarios/` folder entry), identified by
+ * relativePath rather than UUID since the file system is the source of truth.
+ * The wire shape every file-backed tier returns, and the option shape the
+ * pickers consume.
  */
-export interface ProjectScenarioOption {
+export interface ScenarioOption {
   path: string
   filename: string
   name: string
@@ -40,20 +41,17 @@ export interface ProjectScenarioOption {
 }
 
 /**
+ * Project-scoped scenario sourced from the project's `Scenarios/` folder
+ * (`/api/v1/projects/[id]/scenarios`).
+ */
+export type ProjectScenarioOption = ScenarioOption
+
+/**
  * Instance-wide scenario sourced from the "Quilltap General" mount's
  * `Scenarios/` folder (`/api/v1/scenarios`). Same shape as a project
  * scenario, but applies to every non-help chat regardless of project.
  */
-export interface GeneralScenarioOption {
-  path: string
-  filename: string
-  name: string
-  description?: string
-  isDefault: boolean
-  /** Hidden from the picker unless the surface asked for archived entries. */
-  archived?: boolean
-  body: string
-}
+export type GeneralScenarioOption = ScenarioOption
 
 /**
  * Group-scoped scenario sourced from a group's `Scenarios/` folder
@@ -61,36 +59,17 @@ export interface GeneralScenarioOption {
  * scenarios, but applies when specific participant character IDs
  * belong to the group.
  */
-export interface GroupScenarioOption {
+export interface GroupScenarioOption extends ScenarioOption {
   groupId: string
   groupName: string
-  path: string
-  filename: string
-  name: string
-  description?: string
-  isDefault: boolean
-  /** Hidden from the picker unless the surface asked for archived entries. */
-  archived?: boolean
-  body: string
-}
-
-/** The wire shape every file-backed scenario tier returns. */
-export interface ScenarioPayload {
-  path: string
-  filename: string
-  name: string
-  description?: string
-  isDefault: boolean
-  archived?: boolean
-  body: string
 }
 
 /**
- * Map a wire payload onto the option shape the pickers consume. Project and
- * general options share this shape verbatim; a group option spreads it and
- * adds its `groupId`/`groupName`.
+ * Map a wire payload onto the option shape the pickers consume, normalising
+ * `archived` to a boolean. Project and general options share this shape
+ * verbatim; a group option spreads it and adds its `groupId`/`groupName`.
  */
-export function toScenarioOption(s: ScenarioPayload): ProjectScenarioOption {
+export function toScenarioOption(s: ScenarioOption): ScenarioOption {
   return {
     path: s.path,
     filename: s.filename,
@@ -100,6 +79,23 @@ export function toScenarioOption(s: ScenarioPayload): ProjectScenarioOption {
     archived: s.archived === true,
     body: s.body,
   }
+}
+
+/**
+ * The text of a picker `<option>`: the name, then the tier's default marker
+ * (`defaultSuffix`, when the entry is that tier's default), the archived
+ * marker, and the description after an em dash.
+ */
+export function scenarioOptionLabel(
+  s: { name: string; isDefault: boolean; archived?: boolean; description?: string },
+  defaultSuffix: string
+): string {
+  return (
+    s.name +
+    (s.isDefault ? defaultSuffix : '') +
+    (s.archived ? ARCHIVED_OPTION_SUFFIX : '') +
+    (s.description ? ` — ${s.description}` : '')
+  )
 }
 
 export const CUSTOM_SCENARIO_VALUE = '__custom__'
