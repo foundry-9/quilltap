@@ -51,8 +51,6 @@ import {
   buildScenarioOpaqueContent,
   buildUserCharacterContent,
   buildUserCharacterOpaqueContent,
-  buildMultiCharacterRosterContent,
-  buildMultiCharacterRosterOpaqueContent,
   buildSilentModeEntryContent,
   buildSilentModeEntryOpaqueContent,
   buildSilentModeExitContent,
@@ -177,13 +175,6 @@ describe('Host opaque builders', () => {
     const opaque = buildUserCharacterOpaqueContent('Charles', 'a writer')
     expect(opaque).toContain("Charles is the user's voice")
     expect(opaque).toContain('a writer')
-    expectNoPersonaNames(opaque)
-  })
-
-  it('roster (empty)', () => {
-    expect(buildMultiCharacterRosterContent('Beatrice', [])).toContain('The Host notes')
-    const opaque = buildMultiCharacterRosterOpaqueContent('Beatrice', [])
-    expect(opaque).toContain('Beatrice stands alone')
     expectNoPersonaNames(opaque)
   })
 

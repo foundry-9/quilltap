@@ -8,9 +8,6 @@ import { describe, it, expect } from '@jest/globals'
 import {
   getCheapLLMProvider,
   getCheapestModel,
-  isCheapModel,
-  estimateModelCost,
-  validateCheapLLMConfig,
   resolveUncensoredCheapLLMSelection,
   profileParams,
   DEFAULT_CHEAP_LLM_CONFIG,
@@ -399,127 +396,6 @@ describe('Cheap LLM Provider Selection', () => {
 
         expect(onNoCheapLLMCallback).not.toHaveBeenCalled()
       })
-    })
-  })
-
-  describe('isCheapModel', () => {
-    it('should recognize recommended cheap models', () => {
-      expect(isCheapModel('ANTHROPIC', 'claude-haiku-4-5-20251001')).toBe(true)
-      expect(isCheapModel('OPENAI', 'gpt-4o-mini')).toBe(true)
-      expect(isCheapModel('GOOGLE', 'gemini-2.0-flash')).toBe(true)
-    })
-
-    it('should recognize models with cheap indicators in name', () => {
-      expect(isCheapModel('ANTHROPIC', 'claude-3-haiku')).toBe(true)
-      expect(isCheapModel('OPENAI', 'gpt-3.5-turbo')).toBe(true)
-      expect(isCheapModel('OLLAMA', 'phi3:mini')).toBe(true)
-      expect(isCheapModel('OLLAMA', 'llama3.2:3b')).toBe(true)
-      expect(isCheapModel('GOOGLE', 'gemini-flash')).toBe(true)
-    })
-
-    it('should not recognize expensive models as cheap', () => {
-      expect(isCheapModel('ANTHROPIC', 'claude-opus-4-1-20250805')).toBe(false)
-      expect(isCheapModel('OPENAI', 'gpt-4o')).toBe(false)
-      expect(isCheapModel('GOOGLE', 'gemini-2.0-pro')).toBe(false)
-    })
-  })
-
-  describe('estimateModelCost', () => {
-    it('should rate local models as cheapest (1)', () => {
-      expect(estimateModelCost('OLLAMA', 'llama3.2:70b')).toBe(1)
-      expect(estimateModelCost('OLLAMA', 'mistral:7b')).toBe(1)
-    })
-
-    it('should rate mini/flash models as cheap (2)', () => {
-      expect(estimateModelCost('OPENAI', 'gpt-4o-mini')).toBe(2)
-      expect(estimateModelCost('ANTHROPIC', 'claude-haiku-4-5-20251001')).toBe(2)
-      expect(estimateModelCost('GOOGLE', 'gemini-2.0-flash')).toBe(2)
-    })
-
-    it('should rate standard models as mid-tier (3)', () => {
-      expect(estimateModelCost('ANTHROPIC', 'claude-sonnet-4-5-20250929')).toBe(3)
-      expect(estimateModelCost('OPENAI', 'gpt-4o')).toBe(3)
-      expect(estimateModelCost('GOOGLE', 'gemini-1.5-pro')).toBe(3)
-    })
-
-    it('should rate premium models as expensive (5)', () => {
-      expect(estimateModelCost('ANTHROPIC', 'claude-opus-4-1-20250805')).toBe(5)
-      expect(estimateModelCost('OPENAI', 'o1-preview')).toBe(5)
-    })
-  })
-
-  describe('validateCheapLLMConfig', () => {
-    const profiles = [
-      createMockProfile('cheap-profile', 'OPENAI', 'gpt-4o-mini'),
-      createMockProfile('expensive-profile', 'ANTHROPIC', 'claude-opus-4-1-20250805'),
-    ]
-
-    it('should validate PROVIDER_CHEAPEST strategy', () => {
-      const config: CheapLLMConfig = {
-        strategy: 'PROVIDER_CHEAPEST',
-        fallbackToLocal: true,
-      }
-
-      const result = validateCheapLLMConfig(config, profiles)
-      expect(result.valid).toBe(true)
-      expect(result.error).toBeUndefined()
-    })
-
-    it('should validate LOCAL_FIRST strategy', () => {
-      const config: CheapLLMConfig = {
-        strategy: 'LOCAL_FIRST',
-        fallbackToLocal: true,
-      }
-
-      const result = validateCheapLLMConfig(config, profiles)
-      expect(result.valid).toBe(true)
-    })
-
-    it('should require userDefinedProfileId for USER_DEFINED strategy', () => {
-      const config: CheapLLMConfig = {
-        strategy: 'USER_DEFINED',
-        fallbackToLocal: false,
-      }
-
-      const result = validateCheapLLMConfig(config, profiles)
-      expect(result.valid).toBe(false)
-      expect(result.error).toContain('requires userDefinedProfileId')
-    })
-
-    it('should fail if user-defined profile not found', () => {
-      const config: CheapLLMConfig = {
-        strategy: 'USER_DEFINED',
-        userDefinedProfileId: 'non-existent',
-        fallbackToLocal: false,
-      }
-
-      const result = validateCheapLLMConfig(config, profiles)
-      expect(result.valid).toBe(false)
-      expect(result.error).toContain('not found')
-    })
-
-    it('should warn if user-defined profile uses expensive model', () => {
-      const config: CheapLLMConfig = {
-        strategy: 'USER_DEFINED',
-        userDefinedProfileId: 'expensive-profile',
-        fallbackToLocal: false,
-      }
-
-      const result = validateCheapLLMConfig(config, profiles)
-      expect(result.valid).toBe(true) // Still valid, just a warning
-      expect(result.error).toContain('not a recommended cheap model')
-    })
-
-    it('should validate user-defined profile with cheap model', () => {
-      const config: CheapLLMConfig = {
-        strategy: 'USER_DEFINED',
-        userDefinedProfileId: 'cheap-profile',
-        fallbackToLocal: false,
-      }
-
-      const result = validateCheapLLMConfig(config, profiles)
-      expect(result.valid).toBe(true)
-      expect(result.error).toBeUndefined()
     })
   })
 

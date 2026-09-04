@@ -291,26 +291,4 @@ describe('lib/paths', () => {
     });
   });
 
-  describe('hasShellCapability', () => {
-    it('should return true for a present capability', async () => {
-      process.env.QUILLTAP_SHELL_CAPABILITIES = 'OPENS_FS_PATH,DOWNLOADS_FILE';
-
-      const { hasShellCapability } = await import('@/lib/paths');
-      expect(hasShellCapability('OPENS_FS_PATH')).toBe(true);
-    });
-
-    it('should return false for a missing capability', async () => {
-      process.env.QUILLTAP_SHELL_CAPABILITIES = 'OPENS_FS_PATH';
-
-      const { hasShellCapability } = await import('@/lib/paths');
-      expect(hasShellCapability('DOWNLOADS_FILE')).toBe(false);
-    });
-
-    it('should return false when env var is not set', async () => {
-      delete process.env.QUILLTAP_SHELL_CAPABILITIES;
-
-      const { hasShellCapability } = await import('@/lib/paths');
-      expect(hasShellCapability('OPENS_FS_PATH')).toBe(false);
-    });
-  });
 });

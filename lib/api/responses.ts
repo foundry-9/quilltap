@@ -448,14 +448,3 @@ export function buildRedirectUrl(
 
   return newUrl.pathname + newUrl.search;
 }
-
-/**
- * Deprecation info for the v1 API migration (completed in v2.8)
- *
- * Legacy routes have been removed. This constant is retained for reference
- * and potential use with any future deprecation headers.
- */
-export const V1_MIGRATION_DEPRECATION: DeprecationInfo = {
-  sunsetDate: '2026-01-30', // Migration completed
-  docsUrl: '/docs/api-v1-migration',
-};

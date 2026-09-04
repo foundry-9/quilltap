@@ -24,7 +24,6 @@ import type { MessageEvent } from '@/lib/schemas/types';
 import type { Character } from '@/lib/schemas/character.types';
 import type { ChatParticipantBase, ParticipantStatus } from '@/lib/schemas/chat.types';
 import type { OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
-import { buildMultiCharacterContextSection } from '@/lib/llm/message-formatter';
 
 /**
  * Replace `{{char}}` and `{{user}}` template tokens in a character-derived
@@ -482,36 +481,6 @@ export function buildUserCharacterOpaqueContent(
     `${userCharacterName} is the user's voice in this conversation:`,
     '',
     applyHostTemplates(desc, null, userCharacterName),
-  ].join('\n');
-}
-
-export function buildMultiCharacterRosterContent(
-  respondingCharacterName: string,
-  others: OtherParticipantInfo[],
-): string {
-  const section = buildMultiCharacterContextSection(others, respondingCharacterName);
-  if (!section) {
-    return `The Host notes that, for the moment, ${respondingCharacterName} stands alone in the Salon.`;
-  }
-  return [
-    'The Host outlines the company present in the Salon:',
-    '',
-    section,
-  ].join('\n');
-}
-
-export function buildMultiCharacterRosterOpaqueContent(
-  respondingCharacterName: string,
-  others: OtherParticipantInfo[],
-): string {
-  const section = buildMultiCharacterContextSection(others, respondingCharacterName);
-  if (!section) {
-    return `For the moment, ${respondingCharacterName} stands alone in the scene.`;
-  }
-  return [
-    'The company present in the scene:',
-    '',
-    section,
   ].join('\n');
 }
 

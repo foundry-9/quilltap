@@ -51,7 +51,3 @@ export const updateToolSettingsSchema = z.object({
   defaultDisabledTools: z.array(z.string()),
   defaultDisabledToolGroups: z.array(z.string()),
 });
-
-export const setStateSchema = z.object({
-  state: z.record(z.string(), z.unknown()),
-});

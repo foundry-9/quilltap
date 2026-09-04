@@ -11,7 +11,6 @@ import {
   parsePlaceholders,
   resolvePlaceholders,
   getAllDescriptionTiers,
-  calculateAvailableSpace,
   buildExpansionContext,
   preparePromptExpansion,
 } from '@/lib/image-gen/prompt-expansion'
@@ -189,11 +188,6 @@ describe('image prompt expansion utilities', () => {
       entityName: 'Mirel',
       usageContext: 'adventuring in the wilderness',
     })
-  })
-
-  it('allocates space per placeholder with a reasonable minimum', () => {
-    const space = calculateAvailableSpace('Base text {{Hero}} meets {{Villain}}', 2, 'GROK')
-    expect(space).toBeGreaterThanOrEqual(50)
   })
 
   it('builds expansion context payloads for the cheap LLM worker', () => {

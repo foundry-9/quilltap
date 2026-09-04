@@ -374,25 +374,4 @@ export interface PendingToolResult {
   createdAt: string
 }
 
-export interface ChatParticipantData {
-  id: string
-  type: 'CHARACTER'
-  controlledBy?: 'llm' | 'user'
-  displayOrder: number
-  isActive: boolean
-  /** Four-state participation status */
-  status?: 'active' | 'silent' | 'absent' | 'removed'
-  character: {
-    id: string
-    name: string
-    title?: string | null
-    avatarUrl?: string
-    defaultImage?: {
-      url?: string
-      filepath?: string
-    } | null
-  } | null
-  connectionProfile?: ConnectionProfileData | null
-}
-
 export type Character = CharacterData

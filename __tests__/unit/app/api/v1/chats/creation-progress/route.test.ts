@@ -47,12 +47,14 @@ jest.mock('@/lib/services/chat-message/streaming.service', () => ({
 
 import { GET } from '@/app/api/v1/chats/creation-progress/route';
 import {
-  publishCreationProgress,
-  finishCreationProgress,
-  failCreationProgress,
   __resetCreationProgressForTests,
   type CreationProgressEvent,
 } from '@/lib/chat/creation-progress';
+import {
+  publishOperationProgress,
+  finishOperationProgress,
+  failOperationProgress,
+} from '@/lib/progress/operation-progress';
 
 /** The route's `sseStreamResponse` stub returns the stream on the response. */
 type StreamResponse = { status: number; stream: ReadableStream<Uint8Array> };
@@ -145,9 +147,9 @@ describe('GET /api/v1/chats/creation-progress', () => {
   });
 
   it('replays the backlog to a subscriber that connects late', async () => {
-    publishCreationProgress('p1', status('Warming the boiler'));
-    publishCreationProgress('p1', status('Rousing the staff'));
-    finishCreationProgress('p1');
+    publishOperationProgress('p1', status('Warming the boiler'));
+    publishOperationProgress('p1', status('Rousing the staff'));
+    finishOperationProgress('p1');
 
     const res = (await GET(req('p1'))) as never as StreamResponse;
     const events = await drain(res.stream);
@@ -157,7 +159,7 @@ describe('GET /api/v1/chats/creation-progress', () => {
   });
 
   it('closes the stream immediately when the backlog already ends in done', async () => {
-    finishCreationProgress('p2');
+    finishOperationProgress('p2');
 
     const res = (await GET(req('p2'))) as never as StreamResponse;
 
@@ -167,7 +169,7 @@ describe('GET /api/v1/chats/creation-progress', () => {
   });
 
   it('closes the stream when the backlog ends in error', async () => {
-    failCreationProgress('p3', 'The boiler burst');
+    failOperationProgress('p3', 'The boiler burst');
 
     const res = (await GET(req('p3'))) as never as StreamResponse;
     const events = await drain(res.stream);
@@ -180,8 +182,8 @@ describe('GET /api/v1/chats/creation-progress', () => {
   it('relays events published after the subscriber attaches', async () => {
     const res = (await GET(req('p4'))) as never as StreamResponse;
 
-    publishCreationProgress('p4', status('Laying the table'));
-    finishCreationProgress('p4');
+    publishOperationProgress('p4', status('Laying the table'));
+    finishOperationProgress('p4');
 
     const events = await drain(res.stream);
     expect(events.map((e) => e.kind)).toEqual(['status', 'done']);
@@ -191,14 +193,14 @@ describe('GET /api/v1/chats/creation-progress', () => {
     const controller = new AbortController();
     const res = (await GET(req('p5', controller.signal))) as never as StreamResponse;
 
-    publishCreationProgress('p5', status('Still going'));
+    publishOperationProgress('p5', status('Still going'));
     const before = await readAvailable(res.stream, 1);
     expect(before).toHaveLength(1);
 
     controller.abort();
     // The subscription is torn down, so this never reaches the stream — and the
     // stream is already closed, so draining it terminates.
-    publishCreationProgress('p5', status('Unheard'));
+    publishOperationProgress('p5', status('Unheard'));
 
     const all = await drain(res.stream);
     expect(all.map((e) => (e as { message?: string }).message)).not.toContain('Unheard');
@@ -225,7 +227,7 @@ describe('GET /api/v1/chats/creation-progress', () => {
   it('arms no keep-alive when the backlog already closed the stream', async () => {
     jest.useFakeTimers();
     try {
-      finishCreationProgress('p10');
+      finishOperationProgress('p10');
       const res = (await GET(req('p10'))) as never as StreamResponse;
 
       // The stream closed during replay, so the keep-alive was never armed —
@@ -246,14 +248,14 @@ describe('GET /api/v1/chats/creation-progress', () => {
     await res.stream.cancel();
 
     // With no listeners left, a later publish must not throw.
-    expect(() => publishCreationProgress('p6', status('Nobody home'))).not.toThrow();
+    expect(() => publishOperationProgress('p6', status('Nobody home'))).not.toThrow();
   });
 
   it('keeps separate progress ids isolated', async () => {
-    publishCreationProgress('p7', status('For seven'));
-    finishCreationProgress('p7');
-    publishCreationProgress('p8', status('For eight'));
-    finishCreationProgress('p8');
+    publishOperationProgress('p7', status('For seven'));
+    finishOperationProgress('p7');
+    publishOperationProgress('p8', status('For eight'));
+    finishOperationProgress('p8');
 
     const seven = await drain(((await GET(req('p7'))) as never as StreamResponse).stream);
     const eight = await drain(((await GET(req('p8'))) as never as StreamResponse).stream);

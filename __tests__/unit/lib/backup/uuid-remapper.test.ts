@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from 'crypto'
-import { UuidRemapper, createUuidRemapper } from '@/lib/backup/uuid-remapper'
+import { UuidRemapper } from '@/lib/backup/uuid-remapper'
 import { remapBackupData } from '@/lib/backup/restore/uuid-remap'
 import type { BackupData } from '@/lib/backup/types'
 import type { Project } from '@/lib/schemas/types'
@@ -444,29 +444,6 @@ describe('UuidRemapper', () => {
     })
   })
 
-  describe('createUuidRemapper()', () => {
-    it('creates a new remapper instance via helper', () => {
-      const instance = createUuidRemapper()
-      expect(instance).toBeInstanceOf(UuidRemapper)
-    })
-
-    it('creates independent instances', () => {
-      randomUUIDMock
-        .mockReturnValueOnce('uuid-1')
-        .mockReturnValueOnce('uuid-2')
-
-      const remapper1 = createUuidRemapper()
-      const remapper2 = createUuidRemapper()
-
-      remapper1.remap('id')
-      remapper2.remap('id')
-
-      expect(remapper1.getMapping()).toEqual({ id: 'uuid-1' })
-      expect(remapper2.getMapping()).toEqual({ id: 'uuid-2' })
-      expect(remapper1.getSize()).toBe(1)
-      expect(remapper2.getSize()).toBe(1)
-    })
-  })
 })
 
 describe('remapBackupData() - project FK remapping', () => {

@@ -30,12 +30,7 @@ import {
 } from '@/lib/plugins/provider-registry';
 import { logger } from '@/lib/logger';
 import { matchModel } from './orientation';
-import { resolveLoraScaleBounds } from './lora-scale';
 import type { ImageLoraSpec, ImageLoraSupport } from '@quilltap/plugin-types';
-
-// The scale bounds live in the dependency-free `lora-scale` so the browser-side
-// editor can share them; re-exported here for the server-side callers.
-export { DEFAULT_LORA_SCALE, resolveLoraScaleBounds } from './lora-scale';
 
 /**
  * Resolve LoRA support for a provider/model pair. Returns `null` when neither

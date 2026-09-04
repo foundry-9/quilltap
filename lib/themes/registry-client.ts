@@ -222,26 +222,6 @@ export async function removeSource(name: string): Promise<boolean> {
 }
 
 /**
- * Enable or disable a registry source.
- * @returns true if the source was found and updated
- */
-export async function toggleSource(name: string, enabled: boolean): Promise<boolean> {
-  const sources = await loadSources();
-  const source = sources.sources.find(s => s.name === name);
-
-  if (!source) {
-    registryLogger.debug('Registry source not found for toggle', { name });
-    return false;
-  }
-
-  source.enabled = enabled;
-  await saveSources(sources);
-
-  registryLogger.info('Toggled registry source', { name, enabled });
-  return true;
-}
-
-/**
  * Get all registry sources.
  */
 export async function getSources(): Promise<RegistrySource[]> {

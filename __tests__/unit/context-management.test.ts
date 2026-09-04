@@ -9,8 +9,6 @@ import {
   countMessagesTokens,
   formatTokenCount,
   truncateToTokenLimit,
-  getContextUsagePercent,
-  getContextWarningLevel,
 } from '@/lib/tokens/token-counter'
 
 import {
@@ -31,7 +29,6 @@ import {
   formatSummaryForContext,
   selectRecentMessages,
   willExceedContextLimit,
-  getContextStatus,
   filterMessagesByHistoryAccess,
   getParticipantName,
   attributeMessagesForCharacter,
@@ -157,33 +154,6 @@ describe('Token Counter', () => {
     })
   })
 
-  describe('getContextUsagePercent', () => {
-    it('should calculate percentage correctly', () => {
-      expect(getContextUsagePercent(50000, 100000)).toBe(50)
-    })
-
-    it('should handle zero limit', () => {
-      expect(getContextUsagePercent(100, 0)).toBe(100)
-    })
-
-    it('should cap at 100%', () => {
-      expect(getContextUsagePercent(150000, 100000)).toBe(100)
-    })
-  })
-
-  describe('getContextWarningLevel', () => {
-    it('should return ok for low usage', () => {
-      expect(getContextWarningLevel(50000, 100000)).toBe('ok')
-    })
-
-    it('should return warning for high usage', () => {
-      expect(getContextWarningLevel(85000, 100000)).toBe('warning')
-    })
-
-    it('should return critical for very high usage', () => {
-      expect(getContextWarningLevel(96000, 100000)).toBe('critical')
-    })
-  })
 })
 
 describe('Model Context Data', () => {
@@ -638,28 +608,6 @@ describe('Context Manager', () => {
       const result = willExceedContextLimit(messages, 'Hi', 'OPENAI', 'gpt-4o')
       expect(result.percentUsed).toBeGreaterThan(0)
       expect(result.percentUsed).toBeLessThan(100)
-    })
-  })
-
-  describe('getContextStatus', () => {
-    it('should return ok status for low usage', () => {
-      const status = getContextStatus(50000, 200000)
-      expect(status.level).toBe('ok')
-    })
-
-    it('should return warning status for high usage', () => {
-      const status = getContextStatus(170000, 200000)
-      expect(status.level).toBe('warning')
-    })
-
-    it('should return critical status for near-full', () => {
-      const status = getContextStatus(195000, 200000)
-      expect(status.level).toBe('critical')
-    })
-
-    it('should include helpful message', () => {
-      const status = getContextStatus(100000, 200000)
-      expect(status.message).toBeTruthy()
     })
   })
 
