@@ -43,6 +43,45 @@ export type TabKind =
   | 'settings-wizard' // the provider setup wizard, re-entered from Settings
   | 'custom-tools' // Pascal's Workbench — payload: CustomToolsTabPayload (absent = library view)
 
+/**
+ * Every `TabKind`, as a runtime list. The one source for the persistence
+ * schema's `z.enum` and the `?open=` intent's allow-list. The `satisfies`
+ * clause rejects typos/removed kinds, and the exhaustiveness assertion below
+ * rejects a `TabKind` added to the type but forgotten here — either would
+ * otherwise let a valid persisted tab fail validation, or a valid deep link
+ * be refused.
+ */
+export const TAB_KINDS = [
+  'home',
+  'salon',
+  'salon-list',
+  'terminal',
+  'document',
+  'aurora',
+  'prospero',
+  'scriptorium',
+  'settings',
+  'files',
+  'photos',
+  'scenarios',
+  'brahma',
+  'wardrobe',
+  'profile',
+  'about',
+  'generate-image',
+  'document-standalone',
+  'character-new',
+  'character-edit',
+  'character-view',
+  'settings-wizard',
+  'custom-tools',
+] as const satisfies readonly TabKind[]
+
+// Compile-time exhaustiveness: errors if any `TabKind` is missing above.
+type _MissingTabKinds = Exclude<TabKind, (typeof TAB_KINDS)[number]>
+const _assertAllTabKindsListed: _MissingTabKinds extends never ? true : never = true
+void _assertAllTabKindsListed
+
 /** Kind-specific tab payloads. */
 export interface SalonTabPayload {
   chatId: string

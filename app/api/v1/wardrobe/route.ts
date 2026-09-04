@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { serverError, created, successResponse } from '@/lib/api/responses';
 import { readIncludeArchived } from '@/lib/api/query-params';
 import { createWardrobeSchema } from '@/lib/schemas/wardrobe.types';
+import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { ensureGeneralWardrobeFolder } from '@/lib/mount-index/general-wardrobe';
 import {
@@ -77,18 +78,7 @@ export const POST = createContextHandler(
     const body = await req.json();
     const validatedData = createWardrobeSchema.parse(body);
 
-    const item = await repos.wardrobe.create({
-      characterId: null,
-      title: validatedData.title,
-      description: validatedData.description ?? null,
-      imagePrompt: validatedData.imagePrompt ?? null,
-      types: validatedData.types,
-      componentItemIds: validatedData.componentItemIds ?? [],
-      appropriateness: validatedData.appropriateness ?? null,
-      isDefault: validatedData.isDefault ?? false,
-      replace: validatedData.replace ?? false,
-      migratedFromClothingRecordId: null,
-    });
+    const item = await repos.wardrobe.create(wardrobeItemFromCreateBody(validatedData, null));
 
     if (!item) {
       return serverError('Failed to create archetype wardrobe item');

@@ -17,14 +17,9 @@ import {
   type SalonChatShape,
 } from '@/lib/chat-utils'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 
 type Chat = SalonChatShape
-
-interface ChatSettingsResponse {
-  autonomousRoomSettings?: {
-    visibilityDefault?: 'owner_only' | 'household' | 'open'
-  }
-}
 
 interface AutonomousRoomsListResponse {
   rooms: Array<{ id: string }>
@@ -37,11 +32,10 @@ export function SalonListView() {
   const { shouldHideChat, includeAutonomousRooms } = useQuickHide()
   const bgStyle = useSubsystemBackgroundStyle('salon')
 
-  const { data: chatSettings } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
-  })
-  const visibilityDefault = chatSettings?.autonomousRoomSettings?.visibilityDefault ?? 'owner_only'
+  const { data: visibilityDefaultSetting } = useChatSettingsQuery(
+    (settings) => settings.autonomousRoomSettings?.visibilityDefault,
+  )
+  const visibilityDefault = visibilityDefaultSetting ?? 'owner_only'
   const wantsAutonomousByDefault = visibilityDefault !== 'owner_only'
   const effectiveIncludeAutonomous = wantsAutonomousByDefault || includeAutonomousRooms
 

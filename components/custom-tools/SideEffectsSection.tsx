@@ -15,7 +15,7 @@
 
 import { Icon } from '@/components/ui/icon'
 import { MAX_EFFECTS, MAX_EFFECT_TARGET_LENGTH, type OutcomeState } from '@/lib/pascal/custom-tool.types'
-import type { DraftEffect, DraftIssue, ToolDraft } from '@/lib/pascal/tool-draft'
+import { nextDraftId, type DraftEffect, type DraftIssue, type ToolDraft } from '@/lib/pascal/tool-draft'
 
 interface SideEffectsSectionProps {
   draft: ToolDraft
@@ -23,8 +23,6 @@ interface SideEffectsSectionProps {
   onChange: (next: ToolDraft) => void
   disabled?: boolean
 }
-
-let effectIdCounter = 0
 
 const OUTCOME_STATES: readonly OutcomeState[] = ['success', 'partial', 'failure', 'info'] as const
 
@@ -44,12 +42,11 @@ export function SideEffectsSection({ draft, issues, onChange, disabled = false }
     update({ effects: draft.effects.map((effect) => (effect.id === id ? { ...effect, ...partial } : effect)) })
 
   const addEffect = () => {
-    effectIdCounter += 1
     update({
       effects: [
         ...draft.effects,
         {
-          id: `new-effect-${effectIdCounter}`,
+          id: nextDraftId('new-effect'),
           when: { kind: 'always' },
           target: '',
           valueKind: 'expression',

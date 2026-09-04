@@ -12,12 +12,12 @@
 
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
-import { Cron } from 'croner';
 import { randomUUID } from 'node:crypto';
 import type { ChatMetadataBase } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
 import { enqueueAutonomousRoomTurn } from '../queue-service';
 import { startScheduledAutonomousRun } from './autonomous-run-start';
+import { computeNextRunFromCron } from '@/lib/services/chat-message/autonomous-room-cron';
 
 const HANDLER = 'background-jobs.autonomous-room-schedule-tick';
 const DEFAULT_FRESHNESS_WINDOW_MS = 12 * 60 * 60 * 1000; // 12h
@@ -34,23 +34,22 @@ function freshnessWindowFor(chat: ChatMetadataBase, fallbackMs: number): number 
 }
 
 /**
- * Compute the next cron occurrence strictly after the given anchor time.
- * Returns null on parse errors (treated as "this room is mis-configured —
- * skip it for now"). croner accepts the standard 5-field cron syntax.
+ * Compute the next cron occurrence strictly after the given anchor time, as an
+ * ISO timestamp. Returns null on parse errors (treated as "this room is
+ * mis-configured — skip it for now"). croner accepts the standard 5-field cron
+ * syntax.
  */
-function nextCronFireFrom(cronExpr: string, anchor: Date): Date | null {
-  try {
-    const job = new Cron(cronExpr);
-    const next = job.nextRun(anchor);
-    return next ?? null;
-  } catch (error) {
+function nextCronFireFrom(cronExpr: string, anchor: Date): string | null {
+  const next = computeNextRunFromCron(cronExpr, anchor);
+  if (!next.ok) {
     logger.warn('Autonomous-room schedule tick: invalid cron expression', {
       context: HANDLER,
       cronExpr,
-      error: error instanceof Error ? error.message : String(error),
+      error: next.error,
     });
     return null;
   }
+  return next.nextRunAt;
 }
 
 export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Promise<void> {
@@ -82,7 +81,7 @@ export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Prom
       const seeded = nextCronFireFrom(chat.scheduleCron, nowDate);
       if (seeded) {
         await repos.chats.update(chat.id, {
-          scheduleNextRunAt: seeded.toISOString(),
+          scheduleNextRunAt: seeded,
         } as unknown as Partial<ChatMetadataBase>);
       }
       continue;
@@ -109,7 +108,7 @@ export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Prom
       const advanced = nextCronFireFrom(chat.scheduleCron, nowDate);
       if (advanced) {
         await repos.chats.update(chat.id, {
-          scheduleNextRunAt: advanced.toISOString(),
+          scheduleNextRunAt: advanced,
         } as unknown as Partial<ChatMetadataBase>);
       }
       staleCount++;
@@ -133,7 +132,7 @@ export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Prom
       runId,
       nowIso,
       scheduleLastRunAt: nowIso,
-      scheduleNextRunAt: nextNext ? nextNext.toISOString() : null,
+      scheduleNextRunAt: nextNext,
       onEnqueueFailure: 'idle',
     });
     if (result.ok) {
@@ -142,7 +141,7 @@ export async function handleAutonomousRoomScheduleTick(job: BackgroundJob): Prom
         context: HANDLER,
         chatId: chat.id,
         runId,
-        nextRunAt: nextNext?.toISOString() ?? null,
+        nextRunAt: nextNext,
       });
     } else {
       // The core already rolled the row back (to 'idle') on an enqueue failure;

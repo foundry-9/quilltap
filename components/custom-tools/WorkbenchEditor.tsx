@@ -26,7 +26,6 @@ import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
 import {
-  QtapCustomToolSchema,
   TOOLS_FOLDER,
   TOOL_FILE_SUFFIX,
   collectUnknownKeys,
@@ -37,6 +36,7 @@ import {
   draftFromDefinition,
   draftIsValid,
   newDraft,
+  parseDefinitionText,
   serializeDraft,
   validateDraft,
   type ToolDraft,
@@ -83,7 +83,7 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
   // -- Load -----------------------------------------------------------------
 
   const fileQuery = useQuery({
-    queryKey: source ? ['custom-tools', 'file', source.mountPointId, source.path] : ['custom-tools', 'file', 'new'],
+    queryKey: queryKeys.customTools.file(source ?? null),
     queryFn: ({ signal }) =>
       apiFetch<FileEnvelope>(buildMountFileItemUrl(source!.mountPointId, source!.path), { signal }),
     enabled: Boolean(source),
@@ -109,40 +109,38 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
   const [flashOutcomeId, setFlashOutcomeId] = useState<string | null>(null)
   const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  /**
+   * Repair mode: a file already broken on disk opens as raw JSON with the
+   * reason on show, and may be saved broken again after an explicit confirm.
+   */
+  const enterRepairMode = (content: string, reason: string, fileMtime: number | null) => {
+    setRepairReason(reason)
+    setJsonText(content)
+    setDraft(null)
+    setEditorMode('json')
+    setMtime(fileMtime)
+    setDirty(false)
+    setInitialized(true)
+  }
+
   /** Seed editor state from raw file bytes (also used by reload-theirs). */
   const initializeFromContent = (content: string, fileMtime: number | null) => {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(content)
-    } catch (error) {
-      setRepairReason(`This file is not valid JSON: ${error instanceof Error ? error.message : String(error)}`)
-      setJsonText(content)
-      setDraft(null)
-      setEditorMode('json')
-      setMtime(fileMtime)
-      setDirty(false)
-      setInitialized(true)
+    const parsed = parseDefinitionText(content)
+    if (!parsed.ok) {
+      enterRepairMode(
+        content,
+        parsed.stage === 'json' ? `This file is not valid JSON: ${parsed.reason}` : formatDefinitionIssues(parsed.error),
+        fileMtime
+      )
       return
     }
 
-    const validated = QtapCustomToolSchema.safeParse(parsed)
-    if (!validated.success) {
-      setRepairReason(formatDefinitionIssues(validated.error))
-      setJsonText(content)
-      setDraft(null)
-      setEditorMode('json')
-      setMtime(fileMtime)
-      setDirty(false)
-      setInitialized(true)
-      return
-    }
-
-    const loaded = draftFromDefinition(parsed)
+    const loaded = draftFromDefinition(parsed.raw)
     setRepairReason(null)
     setDraft(loaded)
     setJsonText(content)
     setEditorMode('form')
-    setLoadedName(validated.data.name)
+    setLoadedName(parsed.definition.name)
     setMtime(fileMtime)
     setDirty(false)
     setInitialized(true)
@@ -170,24 +168,21 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
   const debouncedJson = useDebounced(jsonText, 300)
   const jsonState = useMemo(() => {
     if (editorMode !== 'json') return null
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(debouncedJson)
-    } catch (error) {
-      return { valid: false as const, issues: [`Not valid JSON: ${error instanceof Error ? error.message : String(error)}`], unknownKeys: [] as string[] }
+    const parsed = parseDefinitionText(debouncedJson)
+    if (!parsed.ok && parsed.stage === 'json') {
+      return { valid: false as const, issues: [`Not valid JSON: ${parsed.reason}`], unknownKeys: [] as string[] }
     }
-    const validated = QtapCustomToolSchema.safeParse(parsed)
-    if (!validated.success) {
+    if (!parsed.ok) {
       return {
         valid: false as const,
-        issues: validated.error.issues.map(
+        issues: parsed.error.issues.map(
           (issue) => `${issue.path.length ? `${issue.path.join('.')}: ` : ''}${issue.message}`
         ),
-        summary: formatDefinitionIssues(validated.error),
-        unknownKeys: collectUnknownKeys(parsed),
+        summary: formatDefinitionIssues(parsed.error),
+        unknownKeys: collectUnknownKeys(parsed.raw),
       }
     }
-    return { valid: true as const, issues: [], unknownKeys: collectUnknownKeys(parsed) }
+    return { valid: true as const, issues: [], unknownKeys: collectUnknownKeys(parsed.raw) }
   }, [editorMode, debouncedJson])
 
   const unknownKeysInDraft = draft?.unknownKeys.map(([key]) => key) ?? []
@@ -201,13 +196,9 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
   const switchToForm = () => {
     if (editorMode === 'form') return
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(jsonText)
-    } catch {
-      return
-    }
-    const loaded = draftFromDefinition(parsed)
+    const parsed = parseDefinitionText(jsonText)
+    if (!parsed.ok) return
+    const loaded = draftFromDefinition(parsed.raw)
     if (!loaded) return
     setDraft(loaded)
     setRepairReason(null)
@@ -230,12 +221,8 @@ export function WorkbenchEditor({ source, create, onBack, onOpenOther }: Readonl
 
   const currentName = (): string | null => {
     if (editorMode === 'form') return draft?.name ?? null
-    try {
-      const parsed = QtapCustomToolSchema.safeParse(JSON.parse(jsonText))
-      return parsed.success ? parsed.data.name : null
-    } catch {
-      return null
-    }
+    const parsed = parseDefinitionText(jsonText)
+    return parsed.ok ? parsed.definition.name : null
   }
 
   const saveIsBlocked = editorMode === 'form' ? !formValid : jsonState ? !jsonState.valid && repairReason === null : true

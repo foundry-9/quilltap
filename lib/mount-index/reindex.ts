@@ -19,11 +19,11 @@ import type {
   DocMountPoint,
   DocMountFileLinkWithContent,
 } from '@/lib/schemas/mount-index.types';
+import { isTextDocumentFileType } from '@/lib/schemas/mount-index.types';
 import { sha256OfString } from '@/lib/utils/sha256';
 
 const logger = createServiceLogger('MountIndex:Reindex');
 
-const TEXT_NATIVE = new Set(['markdown', 'txt', 'json', 'jsonl']);
 const EXTRACTABLE = new Set(['pdf', 'docx', 'markdown', 'txt', 'json', 'jsonl']);
 
 export interface ReindexOptions {
@@ -66,7 +66,7 @@ function linkMatchesScope(link: DocMountFileLinkWithContent, scope: string | nul
 function shouldProcess(link: DocMountFileLinkWithContent, force: boolean): boolean {
   if (force) return EXTRACTABLE.has(link.fileType);
   // Text-native: only if no chunks exist yet (rare; usually they're chunked at scan time).
-  if (TEXT_NATIVE.has(link.fileType)) {
+  if (isTextDocumentFileType(link.fileType)) {
     return (link.chunkCount ?? 0) === 0;
   }
   // Non-text-native: only PDFs / DOCX get extraction. Other types are 'blob' and have nothing to extract.
@@ -85,7 +85,7 @@ async function readSourceBytes(
   }
   // Database-backed: bytes live in doc_mount_blobs or doc_mount_documents.
   const repos = getRepositories();
-  if (TEXT_NATIVE.has(link.fileType)) {
+  if (isTextDocumentFileType(link.fileType)) {
     const doc = await repos.docMountDocuments.findByFileId(link.fileId);
     if (!doc) throw new Error(`No document content for fileId ${link.fileId}`);
     return Buffer.from(doc.content, 'utf8');
@@ -154,10 +154,11 @@ export async function reindexLinks(
           })),
         );
       }
+      const isTextNative = isTextDocumentFileType(link.fileType);
       await repos.docMountFileLinks.update(link.id, {
-        extractedText: TEXT_NATIVE.has(link.fileType) ? null : plainText,
-        extractedTextSha256: TEXT_NATIVE.has(link.fileType) ? null : sha256OfString(plainText),
-        extractionStatus: TEXT_NATIVE.has(link.fileType) ? 'none' : 'converted',
+        extractedText: isTextNative ? null : plainText,
+        extractedTextSha256: isTextNative ? null : sha256OfString(plainText),
+        extractionStatus: isTextNative ? 'none' : 'converted',
         extractionError: null,
         plainTextLength: plainText.length,
         chunkCount: chunks.length,

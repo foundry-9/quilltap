@@ -16,7 +16,8 @@ import {
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { craftStoryBackgroundPrompt, deriveSceneContext, extractVisibleConversation, throwIfLostToTimeout, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
 import { SceneStateSchema, isParticipantPresent } from '@/lib/schemas/chat.types';
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { StoryBackgroundGenerationPayload } from '../queue-service';
@@ -187,12 +188,12 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
   // 5. Get user's chat settings for cheap LLM configuration
   const chatSettings = await repos.chatSettings.findByUserId(job.userId);
 
-  // 6. Get cheap LLM selection for prompt crafting
-  // Prioritize the Image Prompt Expansion LLM if configured
-  const allProfiles = await repos.connections.findByUserId(job.userId);
-  const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
+  // 6. Get cheap LLM selection for prompt crafting. The standard cheap LLM
+  // makes the initial attempt at story backgrounds (imagePromptProfileId is
+  // used as a retry fallback if the safe provider returns empty).
+  const resolvedCheapLLM = await resolveCheapLLMSelectionForUser(repos, job.userId, chatSettings);
 
-  if (!defaultProfile) {
+  if (!resolvedCheapLLM) {
     logger.warn('[StoryBackground] No connection profiles available for prompt crafting', {
       context: 'background-jobs.story-background',
       jobId: job.id,
@@ -200,24 +201,8 @@ export async function handleStoryBackgroundGeneration(job: BackgroundJob): Promi
     return;
   }
 
-  // Use the standard cheap LLM for the initial attempt at story backgrounds
-  // (imagePromptProfileId is used as a retry fallback if the safe provider returns empty)
-  let cheapLLMSelection: CheapLLMSelection | null = null;
-  {
-    const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
-      strategy: chatSettings.cheapLLMSettings.strategy,
-      userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
-      defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
-      fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
-    } : DEFAULT_CHEAP_LLM_CONFIG;
-
-    cheapLLMSelection = getCheapLLMProvider(
-      defaultProfile,
-      cheapLLMConfig,
-      allProfiles,
-      false
-    );
-  }
+  const { allProfiles } = resolvedCheapLLM;
+  let cheapLLMSelection: CheapLLMSelection | null = resolvedCheapLLM.selection;
 
   // Resolve the Concierge settings early (needed for uncensored routing and appearance sanitization)
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);

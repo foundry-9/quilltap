@@ -12,7 +12,7 @@ import { apiFetch } from '@/lib/query/fetcher';
 import { queryKeys } from '@/lib/query/keys';
 import { showConfirmation } from '@/lib/alert';
 import { showErrorToast } from '@/lib/toast';
-import { triggerDownload } from '@/lib/download-utils';
+import { downloadFetchedFile } from '@/lib/download-utils';
 import DeletedImagePlaceholder from './DeletedImagePlaceholder';
 
 export interface ImageData {
@@ -117,10 +117,7 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
   const handleDownloadImage = async (image: ImageData) => {
     const src = image.url || (image.filepath.startsWith('/') ? image.filepath : `/${image.filepath}`)
     try {
-      const response = await fetch(src)
-      if (!response.ok) throw new Error(`Failed to fetch image (${response.status})`)
-      const blob = await response.blob()
-      await triggerDownload(blob, image.filename)
+      await downloadFetchedFile(src, image.filename)
     } catch (err) {
       console.error('Failed to download gallery image:', { error: err instanceof Error ? err.message : String(err) })
       showErrorToast('Failed to download image')

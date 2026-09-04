@@ -50,6 +50,7 @@ jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
   resolveUncensoredCheapLLMSelection: jest.fn(),
+  buildCheapLLMConfig: jest.fn(() => ({})),
   DEFAULT_CHEAP_LLM_CONFIG: {},
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({

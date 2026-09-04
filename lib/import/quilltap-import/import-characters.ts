@@ -179,9 +179,7 @@ export async function importCharacters(
       const createData = options.preserveIds ? { ...charData, id: character.id } : charData;
       const createOptions = getPreserveIdsCreateOptions(character.id, options);
       // create() provisions vault + projects managed fields atomically.
-      const newCharacter = options.preserveIds
-        ? await repos.characters.create(createData, createOptions)
-        : await repos.characters.create(createData);
+      const newCharacter = await repos.characters.create(createData, createOptions);
       idMaps.characters.set(character.id, newCharacter.id);
       rememberBundleVault(idMaps, character, newCharacter.id);
 

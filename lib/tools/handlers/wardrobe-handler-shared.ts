@@ -1,5 +1,5 @@
 import { logger } from '@/lib/logger';
-import { EMPTY_EQUIPPED_SLOTS, WARDROBE_SLOT_TYPES, isSlotReportedWhenEmpty } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, isSlotReportedWhenEmpty, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
@@ -9,7 +9,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor';
 
-type WardrobeRepos = ReturnType<typeof getRepositories>;
+/** The full repository container the wardrobe tool handlers operate on. */
+export type WardrobeRepos = ReturnType<typeof getRepositories>;
 
 /**
  * Sentinels an LLM sometimes emits for "no item". Treated as undefined so a
@@ -85,8 +86,9 @@ interface WardrobeReposForSummary {
   };
 }
 
+/** Fresh all-empty equipped state (fresh arrays per slot). */
 export function emptyEquippedState(): EquippedSlots {
-  return { ...EMPTY_EQUIPPED_SLOTS };
+  return makeEmptyEquippedSlots();
 }
 
 /**

@@ -4,6 +4,8 @@
  * Thin wrapper around the Terminals + Chats APIs for the salon Terminal Mode.
  */
 
+import { patchChat } from '@/lib/chat/patch-chat'
+
 const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 export type TerminalMode = 'normal' | 'split' | 'focus'
@@ -58,12 +60,7 @@ export async function persistChatTerminalState(
     rightPaneVerticalSplit: number
   }>,
 ): Promise<void> {
-  const response = await fetch(`/api/v1/chats/${chatId}`, {
-    method: 'PUT',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ chat: updates }),
-  })
-  await expectOk(response, 'Failed to persist terminal mode state')
+  await patchChat(chatId, updates)
 }
 
 export async function listTerminalSessions(chatId: string): Promise<TerminalSessionMeta[]> {

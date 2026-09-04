@@ -13,20 +13,32 @@
 
 import { useRef, useState } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { MAX_MESSAGE_LENGTH, MAX_OUTCOMES, type OutcomeState } from '@/lib/pascal/custom-tool.types'
 import {
-  CONTAINMENT_COMPARATORS,
-  ORDERING_COMPARATORS,
-  conditionSlotKey,
+  CONTAINMENT_KEYS,
+  MAX_MESSAGE_LENGTH,
+  MAX_OUTCOMES,
+  ORDERING_KEYS,
+  PLACEHOLDER_PATTERN,
+  valueTypeOf,
   type ComparatorKey,
+  type OutcomeState,
+  type ValueType,
+} from '@/lib/pascal/custom-tool.types'
+import {
+  conditionSlotKey,
+  nextDraftId,
+  reseatOperandForComparator,
+  subjectValueType,
   type ConditionOperand,
   type ConditionSubject,
   type DraftCondition,
   type DraftIssue,
   type DraftOutcome,
+  type LiteralOperand,
   type ToolDraft,
 } from '@/lib/pascal/tool-draft'
 import { COMPARATOR_LABELS } from './comparator-labels'
+import { LiteralOperandField } from './LiteralOperandField'
 
 interface OutcomesSectionProps {
   draft: ToolDraft
@@ -43,9 +55,6 @@ const STATE_OPTIONS: Array<{ state: OutcomeState; label: string; badge: string }
   { state: 'failure', label: 'failure', badge: 'qt-badge qt-badge-destructive' },
   { state: 'info', label: 'info', badge: 'qt-badge qt-badge-info' },
 ]
-
-let conditionIdCounter = 0
-let outcomeIdCounter = 0
 
 /** Serialize a subject select value; `param:` and `metadata` carry extra state. */
 function subjectSelectValue(subject: ConditionSubject): string {
@@ -98,9 +107,8 @@ export function OutcomesSection({
     setOutcomes(outcomes.map((o) => (o.id === id ? { ...o, ...partial } : o)))
 
   const addOutcome = () => {
-    outcomeIdCounter += 1
     const fresh: DraftOutcome = {
-      id: `new-outcome-${outcomeIdCounter}`,
+      id: nextDraftId('new-outcome'),
       catchAll: false,
       conditions: [],
       state: 'success',
@@ -343,9 +351,8 @@ function ConditionList({ outcome, draft, conditionErrorIds, disabled, onUpdate }
   }
 
   const addCondition = () => {
-    conditionIdCounter += 1
     const base: DraftCondition = {
-      id: `new-cond-${conditionIdCounter}`,
+      id: nextDraftId('new-cond'),
       subject: { kind: 'value' },
       comparator: 'gte',
       operand: { kind: 'number', text: '' },
@@ -433,27 +440,9 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
   const paramByName = new Map(draft.parameters.map((p) => [p.name, p] as const))
   const subject = condition.subject
 
-  /**
-   * The value type a subject carries, or null where it is unknowable at
-   * authoring time — a metadata key's stored value, or whatever the consulted
-   * model chooses to answer.
-   */
-  const typeOfSubject = (s: ConditionSubject): 'number' | 'string' | 'boolean' | null => {
-    switch (s.kind) {
-      case 'value':
-      case 'roll':
-        return 'number'
-      case 'param': {
-        const p = paramByName.get(s.name)
-        return p ? (p.type === 'integer' ? 'number' : p.type) : null
-      }
-      case 'llm-ok':
-        return 'boolean'
-      case 'metadata':
-      case 'llm':
-        return null
-    }
-  }
+  // null where the type is unknowable at authoring time — a metadata key's
+  // stored value, or whatever the consulted model chooses to answer.
+  const typeOfSubject = (s: ConditionSubject): ValueType | null => subjectValueType(s, paramByName)
 
   const subjectType = typeOfSubject(subject)
 
@@ -469,8 +458,8 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
           ? ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains']
           : ['gt', 'gte', 'lt', 'lte', 'eq', 'neq']
 
-  const ordering = ORDERING_COMPARATORS.has(condition.comparator)
-  const containment = CONTAINMENT_COMPARATORS.has(condition.comparator)
+  const ordering = ORDERING_KEYS.has(condition.comparator)
+  const containment = CONTAINMENT_KEYS.has(condition.comparator)
 
   /** Parameters an operand reference may name, mirroring `validateComparator`. */
   const eligibleOperandParams = draft.parameters
@@ -483,7 +472,7 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
         // incompatible — ordering still demands a number, though.
         return !ordering || p.type === 'number' || p.type === 'integer'
       }
-      const paramType = p.type === 'integer' ? 'number' : p.type
+      const paramType = valueTypeOf(p.type)
       if (ordering) return paramType === 'number'
       return subjectType === null || paramType === subjectType
     })
@@ -501,10 +490,10 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
     // Re-legalize the comparator and operand for the new subject's type.
     let nextComparator = condition.comparator
     const nextType = typeOfSubject(nextSubject)
-    if ((nextType === 'string' || nextType === 'boolean') && ORDERING_COMPARATORS.has(nextComparator)) {
+    if ((nextType === 'string' || nextType === 'boolean') && ORDERING_KEYS.has(nextComparator)) {
       nextComparator = 'eq'
     }
-    if ((nextType === 'number' || nextType === 'boolean') && CONTAINMENT_COMPARATORS.has(nextComparator)) {
+    if ((nextType === 'number' || nextType === 'boolean') && CONTAINMENT_KEYS.has(nextComparator)) {
       nextComparator = 'eq'
     }
     let nextOperand: ConditionOperand = condition.operand
@@ -517,24 +506,8 @@ function ConditionChip({ condition, draft, hasError, disabled, onChange, onDelet
     onChange({ ...condition, subject: nextSubject, comparator: nextComparator, operand: nextOperand })
   }
 
-  const handleComparatorChange = (comparator: ComparatorKey) => {
-    let nextOperand = condition.operand
-    if (
-      ORDERING_COMPARATORS.has(comparator) &&
-      (nextOperand.kind === 'string' || nextOperand.kind === 'boolean')
-    ) {
-      // Ordering takes a number (or a numeric-param reference) everywhere.
-      nextOperand = { kind: 'number', text: nextOperand.kind === 'string' ? nextOperand.text : '' }
-    }
-    if (
-      CONTAINMENT_COMPARATORS.has(comparator) &&
-      (nextOperand.kind === 'number' || nextOperand.kind === 'boolean')
-    ) {
-      // Containment looks for text (or a string-param reference) everywhere.
-      nextOperand = { kind: 'string', text: nextOperand.kind === 'number' ? nextOperand.text : '' }
-    }
-    onChange({ ...condition, comparator, operand: nextOperand })
-  }
+  const handleComparatorChange = (comparator: ComparatorKey) =>
+    onChange({ ...condition, comparator, operand: reseatOperandForComparator(condition.operand, comparator) })
 
   return (
     <div className={`flex items-center gap-1 flex-wrap rounded border px-2 py-1 ${hasError ? 'qt-input-error' : ''}`}>
@@ -659,8 +632,8 @@ interface OperandFieldProps {
 
 function OperandField({ condition, subjectType, eligibleParams, disabled, onChange }: Readonly<OperandFieldProps>) {
   const operand = condition.operand
-  const ordering = ORDERING_COMPARATORS.has(condition.comparator)
-  const containment = CONTAINMENT_COMPARATORS.has(condition.comparator)
+  const ordering = ORDERING_KEYS.has(condition.comparator)
+  const containment = CONTAINMENT_KEYS.has(condition.comparator)
   const typeUnknowable = condition.subject.kind === 'metadata' || condition.subject.kind === 'llm'
 
   const setOperand = (next: ConditionOperand) => onChange({ ...condition, operand: next })
@@ -671,27 +644,17 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
   const showTypePicker =
     typeUnknowable && !ordering && !containment && operand.kind !== 'param' && operand.kind !== 'state'
 
+  /**
+   * The literal the shared widget renders. A string operand against a numeric
+   * subject (no containment) shows as a blank number field rather than text —
+   * the subject's declared type steers the widget, and typing into it re-seats
+   * the operand as a number.
+   */
+  const literal = (o: LiteralOperand): LiteralOperand =>
+    o.kind === 'string' && !(containment || subjectType !== 'number') ? { kind: 'number', text: '' } : o
+
   return (
     <div className="flex items-center gap-1">
-      {showTypePicker && (
-        <select
-          value={operand.kind}
-          onChange={(e) => {
-            const kind = e.target.value as 'number' | 'string' | 'boolean'
-            if (kind === 'number') setOperand({ kind: 'number', text: operand.kind === 'string' ? operand.text : '' })
-            else if (kind === 'string') setOperand({ kind: 'string', text: operand.kind === 'number' ? operand.text : '' })
-            else setOperand({ kind: 'boolean', value: true })
-          }}
-          disabled={disabled}
-          className="qt-select qt-select-sm"
-          aria-label="Literal type"
-        >
-          <option value="number">number</option>
-          <option value="string">text</option>
-          <option value="boolean">true/false</option>
-        </select>
-      )}
-
       {operand.kind === 'state' ? (
         <span
           className="qt-text-xs qt-text-secondary font-mono rounded qt-bg-muted px-2 py-1"
@@ -714,35 +677,12 @@ function OperandField({ condition, subjectType, eligibleParams, disabled, onChan
             </option>
           ))}
         </select>
-      ) : operand.kind === 'boolean' ? (
-        <select
-          value={operand.value ? 'true' : 'false'}
-          onChange={(e) => setOperand({ kind: 'boolean', value: e.target.value === 'true' })}
-          disabled={disabled}
-          className="qt-select qt-select-sm w-20"
-          aria-label="Operand value"
-        >
-          <option value="true">true</option>
-          <option value="false">false</option>
-        </select>
-      ) : operand.kind === 'string' && (containment || subjectType !== 'number') ? (
-        <input
-          type="text"
-          value={operand.text}
-          onChange={(e) => setOperand({ kind: 'string', text: e.target.value })}
-          disabled={disabled}
-          className="qt-input w-28 text-sm"
-          aria-label="Operand text"
-        />
       ) : (
-        <input
-          type="number"
-          step="any"
-          value={operand.kind === 'number' ? operand.text : ''}
-          onChange={(e) => setOperand({ kind: 'number', text: e.target.value })}
+        <LiteralOperandField
+          operand={literal(operand)}
+          onChange={setOperand}
           disabled={disabled}
-          className="qt-input w-24 text-sm"
-          aria-label="Operand number"
+          showTypePicker={showTypePicker}
         />
       )}
 
@@ -828,7 +768,7 @@ function MessageEditor({ outcome, draft, disabled, onUpdate }: Readonly<MessageE
   }
 
   /** Placeholders present in the text, for the visibility strip. */
-  const placeholders = [...outcome.message.matchAll(/\{\{[^}]+\}\}/g)].map((m) => m[0])
+  const placeholders = [...outcome.message.matchAll(PLACEHOLDER_PATTERN)].map((m) => m[0])
 
   return (
     <div className="space-y-1">

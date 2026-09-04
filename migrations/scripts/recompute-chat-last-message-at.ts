@@ -113,18 +113,17 @@ export const recomputeChatLastMessageAtMigration: Migration = {
         drifted: drifted.length,
       });
 
-      let cleared = 0;
-      for (let i = 0; i < drifted.length; i++) {
-        reportProgress(i + 1, drifted.length, 'chats');
-        if (drifted[i].correct === null) cleared++;
-      }
+      const cleared = drifted.filter((row) => row.correct === null).length;
 
       if (drifted.length > 0) {
         const statement = db.prepare(`UPDATE "chats" SET "lastMessageAt" = ? WHERE "id" = ?`);
+        // One synchronous transaction: nothing reaches the loading screen
+        // mid-flight, so the progress tick lands once the rows are written.
         const applyAll = db.transaction((rows: DriftRow[]) => {
           for (const row of rows) statement.run(row.correct, row.id);
         });
         applyAll(drifted);
+        reportProgress(drifted.length, drifted.length, 'chats');
       }
 
       logger.info('Recomputed chat last-activity timestamps', {

@@ -31,12 +31,12 @@ import type {
   WardrobeItem,
   WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types';
-import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import {
-  getCheapLLMProvider,
+  buildCheapLLMConfig,
   DEFAULT_CHEAP_LLM_CONFIG,
   type CheapLLMConfig,
 } from '@/lib/llm/cheap-llm';
+import { selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
 import { resolveWardrobeInstructions } from '@/lib/wardrobe/wardrobe-instructions';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
@@ -347,16 +347,13 @@ export async function applyOutfitSelections(
             const wardrobeItems = await getPool(characterId);
 
             if (character && wardrobeItems.length > 0) {
-              const allProfiles = await repos.connections.findAll();
-              const defaultProfile = allProfiles.find((p) => p.isDefault) || allProfiles[0];
+              const resolved = selectCheapLLMFromProfiles(
+                await repos.connections.findAll(),
+                context.cheapLLMConfig || DEFAULT_CHEAP_LLM_CONFIG,
+              );
 
-              if (defaultProfile) {
-                const cheapSelection = getCheapLLMProvider(
-                  defaultProfile,
-                  context.cheapLLMConfig || DEFAULT_CHEAP_LLM_CONFIG,
-                  allProfiles,
-                  false, // ollamaAvailable
-                );
+              if (resolved) {
+                const cheapSelection = resolved.selection;
 
                 // Narrate the slow bit: the dialog shows "Consulting the
                 // wardrobe for <name>…" until the result lands.
@@ -517,22 +514,4 @@ export async function applyOutfitSelections(
       });
     }
   }
-}
-
-/**
- * Build a CheapLLMConfig from a chatSettings row (or fall back to defaults).
- * Shared so callers don't have to repeat the same merge.
- */
-export function buildCheapLLMConfig(
-  chatSettings: { cheapLLMSettings?: CheapLLMSettings | null } | null | undefined,
-): CheapLLMConfig {
-  const settings = chatSettings?.cheapLLMSettings;
-  if (!settings) return DEFAULT_CHEAP_LLM_CONFIG;
-  return {
-    ...DEFAULT_CHEAP_LLM_CONFIG,
-    strategy: settings.strategy,
-    fallbackToLocal: settings.fallbackToLocal,
-    userDefinedProfileId: settings.userDefinedProfileId ?? undefined,
-    defaultCheapProfileId: settings.defaultCheapProfileId ?? undefined,
-  };
 }

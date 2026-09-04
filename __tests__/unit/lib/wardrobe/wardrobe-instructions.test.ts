@@ -32,7 +32,7 @@ jest.mock('@/lib/instance-settings', () => ({
 }));
 
 const writeDatabaseDocumentMock = jest.fn();
-const deleteDatabaseDocumentMock = jest.fn();
+const deleteDatabaseDocumentIfExistsMock = jest.fn();
 jest.mock('@/lib/mount-index/database-store', () => {
   class DatabaseStoreError extends Error {
     code: string;
@@ -45,7 +45,7 @@ jest.mock('@/lib/mount-index/database-store', () => {
   return {
     DatabaseStoreError,
     writeDatabaseDocument: (...args: unknown[]) => writeDatabaseDocumentMock(...args),
-    deleteDatabaseDocument: (...args: unknown[]) => deleteDatabaseDocumentMock(...args),
+    deleteDatabaseDocumentIfExists: (...args: unknown[]) => deleteDatabaseDocumentIfExistsMock(...args),
   };
 });
 
@@ -75,7 +75,7 @@ beforeEach(() => {
   readVaultTextFileMock.mockReset();
   getGeneralMountPointIdMock.mockReset().mockResolvedValue('m-general');
   writeDatabaseDocumentMock.mockReset().mockResolvedValue({ mtime: 1 });
-  deleteDatabaseDocumentMock.mockReset().mockResolvedValue(undefined);
+  deleteDatabaseDocumentIfExistsMock.mockReset().mockResolvedValue(true);
   ensureFolderPathMock.mockReset().mockResolvedValue('folder-id');
 });
 
@@ -161,19 +161,20 @@ describe('writeWardrobeInstructionsFile', () => {
     await writeWardrobeInstructionsFile('m-1', '  You wear tweed.  ');
     expect(ensureFolderPathMock).toHaveBeenCalledWith('m-1', 'Wardrobe');
     expect(writeDatabaseDocumentMock).toHaveBeenCalledWith('m-1', PATH, 'You wear tweed.');
-    expect(deleteDatabaseDocumentMock).not.toHaveBeenCalled();
+    expect(deleteDatabaseDocumentIfExistsMock).not.toHaveBeenCalled();
   });
 
   it('clears by deleting, tolerating a missing file', async () => {
-    deleteDatabaseDocumentMock.mockRejectedValue(new DatabaseStoreError('nope', 'NOT_FOUND'));
+    deleteDatabaseDocumentIfExistsMock.mockResolvedValue(false);
     await expect(writeWardrobeInstructionsFile('m-1', null)).resolves.toBeUndefined();
     await expect(writeWardrobeInstructionsFile('m-1', '   ')).resolves.toBeUndefined();
-    expect(deleteDatabaseDocumentMock).toHaveBeenCalledTimes(2);
+    expect(deleteDatabaseDocumentIfExistsMock).toHaveBeenCalledTimes(2);
+    expect(deleteDatabaseDocumentIfExistsMock).toHaveBeenCalledWith('m-1', PATH);
     expect(writeDatabaseDocumentMock).not.toHaveBeenCalled();
   });
 
-  it('rethrows non-NOT_FOUND delete failures', async () => {
-    deleteDatabaseDocumentMock.mockRejectedValue(new DatabaseStoreError('locked', 'IO_ERROR'));
+  it('rethrows delete failures', async () => {
+    deleteDatabaseDocumentIfExistsMock.mockRejectedValue(new DatabaseStoreError('locked', 'IO_ERROR'));
     await expect(writeWardrobeInstructionsFile('m-1', null)).rejects.toThrow('locked');
   });
 });

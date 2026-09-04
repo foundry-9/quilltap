@@ -13,6 +13,8 @@
  * @module lib/wardrobe/wardrobe-container
  */
 
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
+
 export type WardrobeContainerScope = 'character' | 'general' | 'project' | 'group'
 
 export interface WardrobeContainer {
@@ -22,6 +24,19 @@ export interface WardrobeContainer {
 }
 
 export const GENERAL_CONTAINER: WardrobeContainer = { scope: 'general', id: null }
+
+/**
+ * The container an item is addressed through in the *character view*, where
+ * the list is a merge of every tier the character can reach: a
+ * character-owned item lives in that character's vault; anything else is
+ * treated as a Quilltap General archetype (the only shared tier whose items
+ * the character view offers full management on).
+ */
+export function homeContainerForItem(
+  item: Pick<WardrobeItem, 'characterId'>,
+): WardrobeContainer {
+  return item.characterId ? { scope: 'character', id: item.characterId } : GENERAL_CONTAINER
+}
 
 /** Serialize a container for use as a `<select>` option value (`scope:id`). */
 export function encodeWardrobeContainer(container: WardrobeContainer): string {

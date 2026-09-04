@@ -14,6 +14,7 @@ import { createLLMProvider } from '@/lib/llm'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
 import { resizeImageForProvider, canResizeImage } from '@/lib/files/image-processing'
 import { getErrorMessage } from '@/lib/error-utils'
+import { withTimeout } from '@/lib/promise-timeout'
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import { profileParams } from '@/lib/llm/cheap-llm'
@@ -153,7 +154,7 @@ async function getImageDescriptionProfile(
   // the describer would produce a confident description of an image the model
   // never received (bug 91).
   const visionProfiles = availableProfiles.filter((p: ConnectionProfile) =>
-    profileSupportsMimeType(p, 'image/jpeg') && providerCanTransportImages(p.provider)
+    profileCanReceiveAttachment(p, 'image/jpeg')
   )
 
   if (visionProfiles.length === 0) {
@@ -320,6 +321,55 @@ export async function convertTextFileToInline(
 }
 
 /**
+ * The failure shape every describe attempt shares: which describer was asked,
+ * which file, and what went wrong.
+ */
+function unsupportedResult(
+  profile: ConnectionProfile,
+  file: FileAttachment,
+  error: string
+): FallbackResult {
+  return {
+    type: 'unsupported',
+    error,
+    processingMetadata: {
+      originalFilename: file.filename,
+      originalMimeType: file.mimeType,
+      descriptionProfileId: profile.id,
+      descriptionProvider: profile.provider,
+      descriptionModel: profile.modelName,
+    },
+  }
+}
+
+/**
+ * Record a describe call in llm_logs like every other model call, so its
+ * latency and token usage are diagnosable (this path was once invisible).
+ * Best-effort: logging must never break — or mask — the description itself.
+ */
+async function logImageDescriptionCall(
+  userId: string,
+  profile: ConnectionProfile,
+  startedAt: number,
+  call: Pick<Parameters<typeof logLLMCall>[0], 'request' | 'response' | 'usage'>
+): Promise<void> {
+  try {
+    await logLLMCall({
+      userId,
+      type: 'IMAGE_DESCRIPTION',
+      provider: profile.provider,
+      modelName: profile.modelName,
+      ...call,
+      durationMs: Date.now() - startedAt,
+    })
+  } catch (logErr) {
+    logger.warn('[Image Fallback] Failed to record IMAGE_DESCRIPTION llm log', {
+      error: getErrorMessage(logErr),
+    })
+  }
+}
+
+/**
  * Run one describe attempt against a specific vision profile. Pure helper:
  * does not consult chat settings or pick a profile. Caller is responsible for
  * deciding whether to retry against a fallback profile.
@@ -336,17 +386,11 @@ async function describeImageWithProfile(
     // needsFallbackProcessing. A describer whose plugin drops the bytes would
     // answer from the prompt alone and invent a picture.
     if (!profileSupportsMimeType(imageDescProfile, file.mimeType)) {
-      return {
-        type: 'unsupported',
-        error: `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) does not support image files`,
-        processingMetadata: {
-          originalFilename: file.filename,
-          originalMimeType: file.mimeType,
-          descriptionProfileId: imageDescProfile.id,
-          descriptionProvider: imageDescProfile.provider,
-          descriptionModel: imageDescProfile.modelName,
-        },
-      }
+      return unsupportedResult(
+        imageDescProfile,
+        file,
+        `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) does not support image files`
+      )
     }
 
     // The provider list in the message below names every entry in
@@ -357,17 +401,11 @@ async function describeImageWithProfile(
     // the map; __tests__/unit/lib/llm/image-transport.test.ts now holds the two
     // sources together.
     if (!providerCanTransportImages(imageDescProfile.provider)) {
-      return {
-        type: 'unsupported',
-        error: `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) cannot send images — the ${imageDescProfile.provider} plugin does not forward image attachments. Pick a describer on a provider that does (OpenAI, Anthropic, Google, Grok, OpenRouter, NanoGPT, Z.AI).`,
-        processingMetadata: {
-          originalFilename: file.filename,
-          originalMimeType: file.mimeType,
-          descriptionProfileId: imageDescProfile.id,
-          descriptionProvider: imageDescProfile.provider,
-          descriptionModel: imageDescProfile.modelName,
-        },
-      }
+      return unsupportedResult(
+        imageDescProfile,
+        file,
+        `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) cannot send images — the ${imageDescProfile.provider} plugin does not forward image attachments. Pick a describer on a provider that does (OpenAI, Anthropic, Google, Grok, OpenRouter, NanoGPT, Z.AI).`
+      )
     }
 
     // Get API key for image description profile (verify ownership)
@@ -460,52 +498,28 @@ async function describeImageWithProfile(
 
     // Send message to vision-capable LLM asking for description, under a hard
     // timeout so a slow/degraded describer can never wedge the inline reply.
-    let timer: ReturnType<typeof setTimeout> | undefined
-    let response
-    try {
-      response = await Promise.race([
-        provider.sendMessage(messageParams, apiKeyValue || ''),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(
-            () => reject(new Error(`Image description timed out after ${IMAGE_DESCRIPTION_TIMEOUT_MS}ms`)),
-            IMAGE_DESCRIPTION_TIMEOUT_MS,
-          )
-        }),
-      ])
-    } finally {
-      if (timer) clearTimeout(timer)
-    }
+    const response = await withTimeout(
+      provider.sendMessage(messageParams, apiKeyValue || ''),
+      IMAGE_DESCRIPTION_TIMEOUT_MS,
+      `Image description timed out after ${IMAGE_DESCRIPTION_TIMEOUT_MS}ms`,
+    )
 
-    // Record the call in llm_logs like every other model call, so its latency
-    // and token usage are diagnosable (this path was previously invisible).
-    // Logging must never break description generation, so it's best-effort.
-    try {
-      await logLLMCall({
-        userId,
-        type: 'IMAGE_DESCRIPTION',
-        provider: imageDescProfile.provider,
-        modelName: imageDescProfile.modelName,
-        request: {
-          messages: [{
-            role: 'user',
-            content: IMAGE_DESCRIPTION_INSTRUCTION,
-            attachments: [{ filename: file.filename, mimeType: attachmentForLLM.mimeType }],
-          }],
-          temperature,
-          maxTokens,
-        },
-        response: {
-          content: response.content ?? '',
-          finishReason: response.finishReason ?? null,
-        },
-        usage: response.usage,
-        durationMs: Date.now() - describeStart,
-      })
-    } catch (logErr) {
-      logger.warn('[Image Fallback] Failed to record IMAGE_DESCRIPTION llm log', {
-        error: getErrorMessage(logErr),
-      })
-    }
+    await logImageDescriptionCall(userId, imageDescProfile, describeStart, {
+      request: {
+        messages: [{
+          role: 'user',
+          content: IMAGE_DESCRIPTION_INSTRUCTION,
+          attachments: [{ filename: file.filename, mimeType: attachmentForLLM.mimeType }],
+        }],
+        temperature,
+        maxTokens,
+      },
+      response: {
+        content: response.content ?? '',
+        finishReason: response.finishReason ?? null,
+      },
+      usage: response.usage,
+    })
 
     // Before believing a word of it: did the image actually arrive? This has
     // to run ahead of every content check, because the failure it catches
@@ -525,17 +539,11 @@ async function describeImageWithProfile(
         promptTokens: response.usage?.promptTokens,
         contentLength: response.content?.length ?? 0,
       })
-      return {
-        type: 'unsupported',
-        error: `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) did not process the image — ${arrival.reason}. Pick a describer on a model that genuinely reads images; a gateway may accept an image and route to a model that ignores it.`,
-        processingMetadata: {
-          originalFilename: file.filename,
-          originalMimeType: file.mimeType,
-          descriptionProfileId: imageDescProfile.id,
-          descriptionProvider: imageDescProfile.provider,
-          descriptionModel: imageDescProfile.modelName,
-        },
-      }
+      return unsupportedResult(
+        imageDescProfile,
+        file,
+        `Image description profile (${imageDescProfile.provider} ${imageDescProfile.modelName}) did not process the image — ${arrival.reason}. Pick a describer on a model that genuinely reads images; a gateway may accept an image and route to a model that ignores it.`
+      )
     }
 
     // Check for empty or invalid responses
@@ -552,31 +560,19 @@ async function describeImageWithProfile(
 
       // Check if this is a reasoning model that hit the token limit
       if (response.finishReason === 'length' && isReasoningModel) {
-        return {
-          type: 'unsupported',
-          error: `Image description failed - ${imageDescProfile.modelName} is a reasoning model that used all ${response.usage?.completionTokens || maxTokens} tokens for internal reasoning and didn't output a description. Reasoning models are expensive and slow for this task. Switch to gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash instead.`,
-          processingMetadata: {
-            originalFilename: file.filename,
-            originalMimeType: file.mimeType,
-            descriptionProfileId: imageDescProfile.id,
-            descriptionProvider: imageDescProfile.provider,
-            descriptionModel: imageDescProfile.modelName,
-          },
-        }
+        return unsupportedResult(
+          imageDescProfile,
+          file,
+          `Image description failed - ${imageDescProfile.modelName} is a reasoning model that used all ${response.usage?.completionTokens || maxTokens} tokens for internal reasoning and didn't output a description. Reasoning models are expensive and slow for this task. Switch to gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash instead.`
+        )
       }
 
       // Generic empty response error
-      return {
-        type: 'unsupported',
-        error: `Image could not be processed - ${imageDescProfile.provider} ${imageDescProfile.modelName} returned empty response. The model may not support vision. Try using gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash as your image description profile.`,
-        processingMetadata: {
-          originalFilename: file.filename,
-          originalMimeType: file.mimeType,
-          descriptionProfileId: imageDescProfile.id,
-          descriptionProvider: imageDescProfile.provider,
-          descriptionModel: imageDescProfile.modelName,
-        },
-      }
+      return unsupportedResult(
+        imageDescProfile,
+        file,
+        `Image could not be processed - ${imageDescProfile.provider} ${imageDescProfile.modelName} returned empty response. The model may not support vision. Try using gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash as your image description profile.`
+      )
     }
 
     // Check if the response looks like an error message or a refusal
@@ -597,17 +593,11 @@ async function describeImageWithProfile(
         model: imageDescProfile.modelName
       })
 
-      return {
-        type: 'unsupported',
-        error: `The image description profile responded with: "${trimmedContent.substring(0, 100)}...". This appears to be an error rather than an image description. The model may not support images or there's a parameter mismatch. Try using gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash.`,
-        processingMetadata: {
-          originalFilename: file.filename,
-          originalMimeType: file.mimeType,
-          descriptionProfileId: imageDescProfile.id,
-          descriptionProvider: imageDescProfile.provider,
-          descriptionModel: imageDescProfile.modelName,
-        },
-      }
+      return unsupportedResult(
+        imageDescProfile,
+        file,
+        `The image description profile responded with: "${trimmedContent.substring(0, 100)}...". This appears to be an error rather than an image description. The model may not support images or there's a parameter mismatch. Try using gpt-4o-mini, claude-haiku-4-5, or gemini-2.0-flash.`
+      )
     }
 
     logger.info('[Image Fallback] Successfully generated description', {
@@ -631,30 +621,15 @@ async function describeImageWithProfile(
   } catch (error) {
     logger.error('[Image Fallback] Error generating description:', {}, error instanceof Error ? error : new Error(String(error)))
     // Log the failed/timed-out call too, so timeouts are visible in llm_logs.
-    try {
-      await logLLMCall({
-        userId,
-        type: 'IMAGE_DESCRIPTION',
-        provider: imageDescProfile.provider,
-        modelName: imageDescProfile.modelName,
-        request: { messages: [{ role: 'user', content: IMAGE_DESCRIPTION_INSTRUCTION }] },
-        response: { content: '', error: getErrorMessage(error) },
-        durationMs: Date.now() - describeStart,
-      })
-    } catch {
-      // Logging must never mask the original failure.
-    }
-    return {
-      type: 'unsupported',
-      error: `Failed to generate image description: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      processingMetadata: {
-        originalFilename: file.filename,
-        originalMimeType: file.mimeType,
-        descriptionProfileId: imageDescProfile.id,
-        descriptionProvider: imageDescProfile.provider,
-        descriptionModel: imageDescProfile.modelName,
-      },
-    }
+    await logImageDescriptionCall(userId, imageDescProfile, describeStart, {
+      request: { messages: [{ role: 'user', content: IMAGE_DESCRIPTION_INSTRUCTION }] },
+      response: { content: '', error: getErrorMessage(error) },
+    })
+    return unsupportedResult(
+      imageDescProfile,
+      file,
+      `Failed to generate image description: ${error instanceof Error ? error.message : 'Unknown error'}`
+    )
   }
 }
 

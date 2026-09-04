@@ -28,6 +28,9 @@ jest.mock('@/lib/services/system-prompt-compiler/compiler', () => ({
 
 jest.mock('@/lib/wardrobe/apply-outfit-selections', () => ({
   applyOutfitSelections: jest.fn(),
+}))
+
+jest.mock('@/lib/llm/cheap-llm', () => ({
   buildCheapLLMConfig: jest.fn(() => ({})),
 }))
 

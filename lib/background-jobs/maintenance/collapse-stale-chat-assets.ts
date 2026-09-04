@@ -111,6 +111,36 @@ export async function isStale(
 }
 
 /**
+ * Walk every chat and apply `collapse` to each one that is stale at
+ * `cutoffMs`. Chats are processed independently: a throw is handed to
+ * `onFailure` and the walk continues, so one bad chat cannot abort the rest.
+ * Staleness is decided one chat at a time through {@link isStale} —
+ * deliberately not batched — so every stale-gated sweep asks the identical
+ * question.
+ *
+ * @returns how many chats were scanned and how many of them were stale
+ */
+export async function forEachStaleChat(
+  repos: ReturnType<typeof getRepositories>,
+  cutoffMs: number,
+  collapse: (chat: ChatMetadata) => Promise<void>,
+  onFailure: (chat: ChatMetadata, error: unknown) => void,
+): Promise<{ chatsScanned: number; staleChats: number }> {
+  const allChats = await repos.chats.findAll();
+  let staleChats = 0;
+  for (const chat of allChats) {
+    if (!(await isStale(chat, cutoffMs, repos))) continue;
+    staleChats++;
+    try {
+      await collapse(chat);
+    } catch (error) {
+      onFailure(chat, error);
+    }
+  }
+  return { chatsScanned: allChats.length, staleChats };
+}
+
+/**
  * Build the keep-set for a chat: the ids it currently references plus their
  * resolved content hashes, so a current asset is protected regardless of
  * whether the field holds a `files.id` or a `doc_mount_file_links.id`.
@@ -239,32 +269,31 @@ export async function collapseStaleChatAssets(
   const repos = getRepositories();
   const cutoffMs = retentionCutoff(await resolveStaleChatDays(), now).getTime();
 
-  const allChats = await repos.chats.findAll();
-  let staleChats = 0;
   let chatsCollapsed = 0;
   let filesDeleted = 0;
   let bytesReleasedEstimate = 0;
 
-  for (const chat of allChats) {
-    if (!(await isStale(chat, cutoffMs, repos))) continue;
-    staleChats++;
-    try {
+  const { chatsScanned, staleChats } = await forEachStaleChat(
+    repos,
+    cutoffMs,
+    async (chat) => {
       const { deleted, bytes } = await collapseOneChat(chat, repos);
       if (deleted > 0) {
         chatsCollapsed++;
         filesDeleted += deleted;
         bytesReleasedEstimate += bytes;
       }
-    } catch (error) {
+    },
+    (chat, error) => {
       moduleLogger.warn('Failed to collapse stale chat — continuing', {
         chatId: chat.id,
         error: error instanceof Error ? error.message : String(error),
       });
-    }
-  }
+    },
+  );
 
   const summary: StaleChatCollapseSummary = {
-    chatsScanned: allChats.length,
+    chatsScanned,
     staleChats,
     chatsCollapsed,
     filesDeleted,

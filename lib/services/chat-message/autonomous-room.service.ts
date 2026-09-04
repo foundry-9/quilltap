@@ -14,13 +14,13 @@
  * turn comes around. The turn handler runs the turns from there.
  */
 
-import { Cron } from 'croner';
 import { randomUUID } from 'node:crypto';
 import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueAutonomousRoomTurn } from '@/lib/background-jobs/queue-service';
 import { beginAutonomousRun } from '@/lib/background-jobs/handlers/autonomous-run-start';
 import { logger } from '@/lib/logger';
 import { publishRealtime } from '@/lib/realtime/bus';
+import { computeNextRunFromCron } from './autonomous-room-cron';
 import type { ChatMetadataBase } from '@/lib/schemas/types';
 
 const HANDLER = 'autonomous-room.service';
@@ -73,15 +73,15 @@ export async function startAutonomousRoomManually(
     const nextMs = Date.parse(chat.scheduleNextRunAt);
     const distance = Math.abs(nextMs - now);
     if (distance <= freshnessWindowMs) {
-      try {
-        const advanced = new Cron(chat.scheduleCron).nextRun(new Date(now));
-        nextScheduledRunAt = advanced ? advanced.toISOString() : nextScheduledRunAt;
-      } catch (error) {
+      const advanced = computeNextRunFromCron(chat.scheduleCron, new Date(now));
+      if (advanced.ok) {
+        nextScheduledRunAt = advanced.nextRunAt ?? nextScheduledRunAt;
+      } else {
         logger.warn('Manual start: failed to advance scheduleNextRunAt past consumed slot', {
           context: HANDLER,
           chatId,
           cron: chat.scheduleCron,
-          error: error instanceof Error ? error.message : String(error),
+          error: advanced.error,
         });
       }
     }
@@ -359,24 +359,18 @@ export async function updateAutonomousRoomSettings(
       update.scheduleCron = null;
       update.scheduleNextRunAt = null;
     } else {
-      let nextRunIso: string | null;
-      try {
-        nextRunIso = new Cron(cron).nextRun(new Date())?.toISOString() ?? null;
-      } catch (error) {
+      const nextRun = computeNextRunFromCron(cron);
+      if (!nextRun.ok) {
         logger.warn('Autonomous-room edit: rejected invalid cron', {
           context: HANDLER,
           chatId,
           cron,
-          error: error instanceof Error ? error.message : String(error),
+          error: nextRun.error,
         });
-        return {
-          ok: false,
-          reason: 'invalid_cron',
-          message: `Invalid cron expression: ${cron}`,
-        };
+        return { ok: false, reason: 'invalid_cron', message: nextRun.message };
       }
       update.scheduleCron = cron;
-      update.scheduleNextRunAt = nextRunIso;
+      update.scheduleNextRunAt = nextRun.nextRunAt;
     }
   }
 

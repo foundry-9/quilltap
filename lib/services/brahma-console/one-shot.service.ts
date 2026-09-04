@@ -30,7 +30,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
+import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
 import {
@@ -102,12 +102,7 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
 
   const keyResolution = await resolveConnectionProfileApiKey(repos, connectionProfile)
   if (!keyResolution.ok) {
-    return {
-      ok: false,
-      detail: keyResolution.reason === 'no-api-key-configured'
-        ? 'no API key configured for this connection profile'
-        : 'API key not found',
-    }
+    return { ok: false, detail: describeProfileApiKeyFailure(keyResolution.reason) }
   }
   const apiKey = keyResolution.apiKey
 

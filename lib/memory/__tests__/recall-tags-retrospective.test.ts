@@ -5,6 +5,8 @@
  */
 
 import {
+  buildRetrospectiveProbes,
+  buildTurnRecallContext,
   combineRecallMultipliers,
   temporalMultiplier,
   recentlyWhisperedMultiplier,
@@ -122,5 +124,84 @@ describe('combineRecallMultipliers with retrospective context', () => {
       10,
     )
     expect(result.fired).toEqual(['past↓', 'repeat↓'])
+  })
+})
+
+describe('buildRetrospectiveProbes (shared multi-probe assembly)', () => {
+  const signals = {
+    entities: ['Lighthouse', 'Point'],
+    paraphrase: 'what happened at the lighthouse',
+    timeRange: { from: '2026-07-13T00:00:00.000Z', to: '2026-07-20T00:00:00.000Z' },
+  }
+
+  it('emits the entity probe and the date-pinned paraphrase on a retrospective turn', () => {
+    expect(buildRetrospectiveProbes(signals, true)).toEqual([
+      'Lighthouse Point',
+      'what happened at the lighthouse (around 2026-07-13 to 2026-07-20)',
+    ])
+  })
+
+  it('returns undefined (never []) when the turn is not retrospective or has no signals', () => {
+    expect(buildRetrospectiveProbes(signals, false)).toBeUndefined()
+    expect(buildRetrospectiveProbes(null, true)).toBeUndefined()
+    expect(buildRetrospectiveProbes(undefined, true)).toBeUndefined()
+  })
+
+  it('returns undefined when the signals offer nothing to probe', () => {
+    expect(buildRetrospectiveProbes({ entities: [' '], paraphrase: 'x', timeRange: null }, true)).toBeUndefined()
+    expect(buildRetrospectiveProbes({}, true)).toBeUndefined()
+  })
+
+  it('skips the paraphrase probe without a resolved window, and the entity probe without entities', () => {
+    expect(buildRetrospectiveProbes({ entities: ['Harbor'], paraphrase: 'x', timeRange: null }, true)).toEqual(['Harbor'])
+    expect(buildRetrospectiveProbes({ paraphrase: 'x', timeRange: signals.timeRange }, true)).toEqual([
+      'x (around 2026-07-13 to 2026-07-20)',
+    ])
+  })
+})
+
+describe('buildTurnRecallContext (shared per-turn context assembly)', () => {
+  const chat = {
+    id: 'chat-1',
+    projectId: 'proj-1',
+    commonplaceRecallHistory: { turns: [['mem-a', 'mem-b'], ['mem-c']] },
+  }
+  const recallSettings = { scopePolicy: 'exclude' as const, expandRelated: true }
+
+  it('threads every field through, including the whispered-id set and the echo guard', () => {
+    const ctx = buildTurnRecallContext({
+      chat,
+      recallSettings,
+      turnContext: 'history',
+      turnTemporal: 'past',
+      turnRetrospective: true,
+      presentAboutCharacterIds: ['char-1', 'char-2'],
+      nowMs: 1_700_000_000_000,
+    })
+    expect(ctx).toEqual({
+      currentProjectId: 'proj-1',
+      scopePolicy: 'exclude',
+      turnContext: 'history',
+      turnTemporal: 'past',
+      turnRetrospective: true,
+      presentAboutCharacterIds: ['char-1', 'char-2'],
+      expandRelated: true,
+      recentlyWhisperedIds: new Set(['mem-a', 'mem-b', 'mem-c']),
+      currentChatId: 'chat-1',
+      nowMs: 1_700_000_000_000,
+    })
+  })
+
+  it('leaves the retrospective flag off entirely when omitted (the replay\'s inert old path)', () => {
+    const ctx = buildTurnRecallContext({
+      chat: { id: 'chat-1' },
+      recallSettings,
+      turnContext: null,
+      turnTemporal: null,
+      nowMs: 0,
+    })
+    expect(ctx).not.toHaveProperty('turnRetrospective')
+    expect(ctx.currentProjectId).toBeNull()
+    expect(ctx.recentlyWhisperedIds?.size).toBe(0)
   })
 })

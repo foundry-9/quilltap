@@ -1,7 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ImageLoraSpec, ImageLoraSupport, ProviderOptionsSchema } from '@quilltap/plugin-types'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
 import { ImageProfileParameters } from './ImageProfileParameters'
 import { LoraListEditor } from './LoraListEditor'
 import { ProviderOptionsPanel } from '@/components/settings/connection-profiles/ProviderOptionsPanel'
@@ -98,17 +101,7 @@ export function ImageProfileForm({
   const [keyValidationStatus, setKeyValidationStatus] = useState<string | null>(null)
   const [imageProviders, setImageProviders] = useState<ImageProviderInfo[]>(FALLBACK_PROVIDERS)
   const [isFetchingProviders, setIsFetchingProviders] = useState(true)
-  // Per-model options schema and LoRA support, resolved server-side. The
-  // schema is the plugin's answer for *this* model — image gateways route to
-  // hundreds of models with different legal sizes — so both refetch whenever
-  // the provider or the model changes.
-  const [optionsSchema, setOptionsSchema] = useState<ProviderOptionsSchema | null>(null)
-  const [loraSupport, setLoraSupport] = useState<ImageLoraSupport | null>(null)
-  // Bumped whenever a live model fetch succeeds. A plugin may build its
-  // options schema from a catalog it can only load with an API key, so the
-  // first schema fetch on a cold cache gets the generic answer; this makes
-  // the editor ask again once that catalog exists.
-  const [catalogVersion, setCatalogVersion] = useState(0)
+  const queryClient = useQueryClient()
 
   // Fetch available image providers on mount
   useEffect(() => {
@@ -166,7 +159,10 @@ export function ImageProfileForm({
         setModelsSource(data.source === 'provider' ? 'provider' : 'builtin')
         setModelsFetchError(data.fetchError || null)
         if (data.source === 'provider') {
-          setCatalogVersion(v => v + 1)
+          // A plugin may build its options schema from a catalog it can only
+          // load with an API key, so the first schema fetch on a cold cache
+          // gets the generic answer; ask again now that catalog exists.
+          void queryClient.invalidateQueries({ queryKey: queryKeys.imageProfiles.all })
         }
       } else {
         // Fall back to default models from provider info
@@ -183,7 +179,7 @@ export function ImageProfileForm({
     } finally {
       setIsFetchingModels(false)
     }
-  }, [formData.provider, formData.apiKeyId, imageProviders])
+  }, [formData.provider, formData.apiKeyId, imageProviders, queryClient])
 
   // Fetch available models when provider or API key changes
   useEffect(() => {
@@ -192,44 +188,39 @@ export function ImageProfileForm({
   }, [fetchModels])
 
   // Ask the provider's plugin what this model's options look like, and
-  // whether it takes LoRA adapters. A provider without the hook answers with
-  // a null schema and the legacy hand-written panel below takes over.
+  // whether it takes LoRA adapters. The schema is the plugin's answer for
+  // *this* model — image gateways route to hundreds of models with different
+  // legal sizes — so it is server state keyed on provider + model, re-synced
+  // whenever either changes and again once a live catalog fetch lands
+  // (`fetchModels` invalidates). A provider without the hook answers with a
+  // null schema and the legacy hand-written panel below takes over; so does
+  // a failed fetch, rather than leaving the previous provider's schema on
+  // screen. While the next answer is in flight the previous one stays up only
+  // if it came from the same provider: a model switch keeps its panel, but a
+  // provider switch drops straight to the legacy panel rather than render the
+  // old provider's schema and LoRA cap against the new one.
   const providerKey = normalizeProviderName(formData.provider, imageProviders)
   const modelKey = formData.modelName
-  useEffect(() => {
-    let cancelled = false
-
-    const fetchOptionsSchema = async () => {
-      try {
-        const url = new URL('/api/v1/image-profiles', window.location.origin)
-        url.searchParams.set('action', 'options-schema')
-        url.searchParams.set('provider', providerKey)
-        if (modelKey) {
-          url.searchParams.set('model', modelKey)
-        }
-        const res = await fetch(url.toString())
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = await res.json()
-        if (cancelled) return
-        setOptionsSchema(data.optionsSchema ?? null)
-        setLoraSupport(data.loraSupport ?? null)
-      } catch {
-        if (cancelled) return
-        // Fall back to the legacy panel and no LoRA editor rather than
-        // leaving a stale schema from the previous provider on screen.
-        setOptionsSchema(null)
-        setLoraSupport(null)
+  const optionsSchemaQuery = useQuery({
+    queryKey: queryKeys.imageProfiles.optionsSchema(providerKey, modelKey),
+    queryFn: ({ signal }) => {
+      const url = new URL('/api/v1/image-profiles', window.location.origin)
+      url.searchParams.set('action', 'options-schema')
+      url.searchParams.set('provider', providerKey)
+      if (modelKey) {
+        url.searchParams.set('model', modelKey)
       }
-    }
-
-    // The schema is server state keyed on provider + model; it re-syncs
-    // whenever either changes, and again once a live catalog fetch lands.
-    fetchOptionsSchema()
-
-    return () => {
-      cancelled = true
-    }
-  }, [providerKey, modelKey, catalogVersion])
+      return apiFetch<{ optionsSchema?: ProviderOptionsSchema | null; loraSupport?: ImageLoraSupport | null }>(
+        url.toString(),
+        { signal }
+      )
+    },
+    placeholderData: (previousData, previousQuery) =>
+      previousQuery?.queryKey[2] === providerKey ? previousData : undefined,
+    retry: false,
+  })
+  const optionsSchema: ProviderOptionsSchema | null = optionsSchemaQuery.data?.optionsSchema ?? null
+  const loraSupport: ImageLoraSupport | null = optionsSchemaQuery.data?.loraSupport ?? null
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
@@ -265,11 +256,6 @@ export function ImageProfileForm({
       parameters: {}, // Reset parameters when switching providers
     }))
     setKeyValidationStatus(null)
-    // The old provider's schema and LoRA cap describe a provider we have just
-    // left; clear them rather than render them against the new one until the
-    // refetch lands.
-    setOptionsSchema(null)
-    setLoraSupport(null)
   }
 
   const handleApiKeyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {

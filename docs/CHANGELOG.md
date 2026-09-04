@@ -4,6 +4,84 @@
 
 ### 4.9-dev
 
+#### Changed: release-checklist refactor pass over the 4.9 diff (DRY / SRP / chokepoints)
+
+A sweep over everything changed since 4.8.4 (324 commits, ~1250 files) folded copy-pasted logic
+back onto one owner each. Behaviour is unchanged except where noted under "Corrections" below.
+New single-source modules, with the duplicates they replaced:
+
+- `lib/llm/cheap-llm.ts` now owns `buildCheapLLMConfig` (moved out of the wardrobe module) and the
+  only `selectionFromProfile` (eight hand-built `CheapLLMSelection` literals removed);
+  `lib/llm/cheap-llm-user-selection.ts` owns the "default profile → `getCheapLLMProvider`" block
+  that seven handlers had inlined. `lib/llm/llm-json.ts` gained `parseLLMJsonObject`.
+- `lib/documents/operator-doc-http.ts` is the one HTTP mapping (read/write/rename/delete/recent)
+  for both the chat-scoped and standalone document routes; `writeDocumentFile` throws a typed
+  `DocumentConflictError` on an mtime mismatch instead of routes string-matching the message.
+- `lib/progress/operation-progress-sse.ts` is the one SSE relay for operation progress;
+  `lib/services/chat-message/autonomous-room-cron.ts` the one cron validator;
+  `pickWeightedRandom` in the turn manager backs both the opener pick and speaker selection.
+- `lib/wardrobe/{create-body,item-route-steps,resolve-container}.ts` back the character, general,
+  group, project and transfer wardrobe routes; both item routes import `updateWardrobeSchema`
+  instead of redeclaring it; `bySlot()` in `wardrobe.types.ts` replaces four per-slot builders;
+  the dialogs use `wardrobeItemUrl`/`encodeWardrobeContainer` instead of hand-built URLs.
+- `lib/pascal/placeholders.ts` classifies `{{…}}` placeholders once for the renderer, the effect
+  resolver, the vocabulary, three draft validators and the Workbench; `custom-tool.types.ts`
+  exports its comparator sets, `valueTypeOf`, and derives the top-level key list from the schema;
+  `prepareRoll`/`drawRoll`/`pickOutcome`, `compareOrdered`, `nextDraftId`, `parseDefinitionText`
+  and a shared `LiteralOperandField` remove the remaining pairs.
+- Turn manager: `getPresentCharacterSeats` and `hasWhisperTargets` replace six inline predicates.
+  Recall: `buildTurnRecallContext` / `buildRetrospectiveProbes` replace three copies (the replay
+  harness now shares production's code instead of mirroring it).
+- Almanack: `render.ts` is per-phase renderers over a `table()` helper (33 hand-written tables);
+  phase collectors own their `emptyXxx()` fallbacks; `db.ts` owns `inClause`/`mainCount`/`mountCount`.
+  `doc-edit-handler` dispatches through a registry; `state-handler` climbs one tier resolver.
+- Data layer: one `tableExists`, one `gcOrphanedFileRow`, one `nextUniqueMountPointName`,
+  `readDatabaseDocumentIfExists`/`deleteDatabaseDocumentIfExists` for the NOT_FOUND split, one
+  embedding-status upsert, one reindex enqueue loop, one memory-row builder, `runSweep` and
+  `forEachStaleChat` for maintenance, `resolveEpisodicAnchors` for the extractor and the fold pass.
+- Import/export/backup: `writeLibraryFileBytes` (restore, import, chat uploads), one create-options
+  computation per import kind, `chunkBase64`/`ChunkAccumulator` for blob chunking,
+  `isTextDocumentFileType` (four sets collapsed), `flipCharacterParticipants` in the archive service.
+  Migrations share `openEncryptedSqlite`/`openMountIndexDbIfPresent`/`openLlmLogsDbIfPresent`/
+  `addColumnIfMissing`; twelve 4.9 migrations are now a column table plus two lines.
+- Instance settings: `readJsonSetting`/`writeJsonSetting` behind five getters, and
+  `createInstanceSettingHandlers` behind the brahma-console, data-retention and taboo routes.
+- Client: `patchChat` (nine hand-rolled chat PUTs), `useOptimisticChatField`, `appendMessageOnce`,
+  `toTurnEvents`, `STAFF_AVATARS` beside `STAFF_DISPLAY_NAMES`, `TAB_KINDS` moved to
+  `lib/workspace/types.ts`, `normalizePanes`/`clampSplitRatio` shared by reducer and persistence,
+  `toAutonomousSettingsHint`, `useInTabDrilldown`, `CanChooseOutfitToggle`,
+  `BoundedNumberInstanceSetting` (data-retention and Brahma-console cards), `useJobFanOutStatus`
+  (the memory and summary fan-out cards now read through TanStack Query on `queryKeys.memories.*`),
+  `downloadFetchedFile`, `lora-scale.ts` (client-safe LoRA bounds), `scenarioOptionLabel`.
+  New query keys: `settings.dataRetention`, `settings.brahmaConsole`, `imageProfiles.optionsSchema`,
+  `system.conversationSummaryRegenerate`, `customTools.file`, `memories.*`.
+
+Corrections that fell out of collapsing the copies (each was a divergence between two sites):
+
+- Cheap-LLM priority-5 selections (current profile → cheapest model, and Ollama "use current
+  model") now carry `profileParameters`, so a profile's provider params reach the fallback path.
+  `isLocal` on the answer-confirmation and cheap-task selections is provider-derived (was `false`).
+- The export wizard's preview count uses `isFileExcludedFromExport`, so it no longer counts
+  archive bundles the writer refuses.
+- The chat-scoped document delete 404 body reads "File not found" (was "File not found not found").
+- API-key failure prose for Brahma one-shot and help chat is now the shared "No API key configured
+  for this connection profile".
+- A Workbench message with a bare family prefix (`{{params.}}`, `{{metadata.}}`, `{{state.}}`) is
+  reported as an unknown placeholder rather than a missing name; `{{params.toString}}` no longer
+  renders prototype function source. Rendered output is otherwise identical.
+- The character edit view's "choose their opening outfit" toggle now toasts on success like the
+  detail view; the new-character wizard's physical-description failure toast prefers the server's
+  error text; the Answer Confirmation settings row uses the shared toggle-row styling.
+- The self-inventory builder no longer wraps the standing-instructions resolver (which already
+  fails soft) in an empty catch.
+
+Left alone on purpose: the NanoGPT/DeepSeek/Z.AI providers still re-implement the
+`OpenAICompatibleProvider` base (a `packages/plugin-utils` change, publish-gated); the
+`StandaloneDocumentView` / `useDocumentMode` editor session; splitting `SalonView`; the two cheap-LLM
+task maps in `core-execution.ts` that have drifted (unifying them changes which chip lights);
+`executeCheapLLMTask`'s positional parameters; the wardrobe dialog's list loaders (their post-load
+state transitions are not a plain query).
+
 #### Fixed: Claude Opus 5 no longer gets sampling parameters it rejects
 
 `AnthropicProvider.SAMPLING_PARAMS_REJECTED_MODELS` listed Sonnet 5, Opus 4.7, Opus 4.8 and the

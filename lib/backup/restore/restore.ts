@@ -13,8 +13,7 @@ import path from 'path';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
-import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
+import { writeLibraryFileBytes } from '@/lib/file-storage/library-file-writer';
 import { makeCarriedStoreRowsResolver } from './carried-store-rows';
 import { parseMountBlobStorageKey } from '@/lib/file-storage/project-store-bridge';
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
@@ -36,6 +35,23 @@ import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index
 import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
+
+/**
+ * Strip the columns a backup's `files` row must not hand to `files.create`:
+ * the auto-generated ones (`userId`, `createdAt`, `updatedAt`), the
+ * `storageKey` (every restore path rewrites it — from the bridge that stored
+ * the bytes, or from the carried-store resolver), and the legacy S3 /
+ * mount-point fields older backups still carry.
+ */
+function stripLegacyFileRowFields<T extends object>(
+  file: T
+): Omit<T, 'userId' | 'createdAt' | 'updatedAt' | 'storageKey'> {
+  const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as T & Record<string, unknown>;
+  delete (fileData as Record<string, unknown>).s3Key;
+  delete (fileData as Record<string, unknown>).s3Bucket;
+  delete (fileData as Record<string, unknown>).mountPointId;
+  return fileData;
+}
 
 /**
  * Restores data from a backup ZIP file on disk
@@ -496,10 +512,7 @@ export async function restore(
           ? carriedStorageKeyFor(originalFile.storageKey)
           : null;
         if (carriedStorageKey) {
-          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
-          delete (fileData as Record<string, unknown>).s3Key;
-          delete (fileData as Record<string, unknown>).s3Bucket;
-          delete (fileData as Record<string, unknown>).mountPointId;
+          const fileData = stripLegacyFileRowFields(file);
           const carriedBlobId = parseMountBlobStorageKey(carriedStorageKey)?.blobId;
           const carriedSha256 = carriedBlobId ? carriedBlobSha256ById.get(carriedBlobId) : undefined;
           await repos.files.create(
@@ -519,34 +532,19 @@ export async function restore(
           // Project-bound files restore into the project mount (via FSM →
           // project-store-bridge). Project-less files land in the Quilltap
           // Uploads mount under restored/, not the catch-all _general/.
-          let restoredStorageKey: string;
-          let restoredMimeType: string;
-          let restoredSize: number;
-          let restoredSha256: string;
-          if (file.projectId) {
-            const uploadResult = await fileStorageManager.uploadFile({
-              filename: file.originalFilename,
-              content: fileBuffer,
-              contentType: file.mimeType,
-              projectId: file.projectId,
-              folderPath: file.folderPath || '/',
-            });
-            restoredStorageKey = uploadResult.storageKey;
-            restoredMimeType = uploadResult.storedMimeType;
-            restoredSize = uploadResult.sizeBytes;
-            restoredSha256 = uploadResult.sha256;
-          } else {
-            const written = await writeUserUploadToMountStore({
-              filename: file.originalFilename,
-              content: fileBuffer,
-              contentType: file.mimeType,
-              subfolder: 'restored',
-            });
-            restoredStorageKey = written.storageKey;
-            restoredMimeType = written.storedMimeType;
-            restoredSize = written.sizeBytes;
-            restoredSha256 = written.sha256;
-          }
+          const {
+            storageKey: restoredStorageKey,
+            storedMimeType: restoredMimeType,
+            sizeBytes: restoredSize,
+            sha256: restoredSha256,
+          } = await writeLibraryFileBytes({
+            filename: file.originalFilename,
+            content: fileBuffer,
+            contentType: file.mimeType,
+            projectId: file.projectId,
+            folderPath: file.folderPath,
+            subfolder: 'restored',
+          });
 
           // Create file metadata with storage key. The bridges may transcode
           // bytes (bitmaps → WebP), so we record the post-bridge
@@ -555,12 +553,7 @@ export async function restore(
           // re-writing it would re-introduce the "media_type X but bytes are Y"
           // error, and (for sha256) a FileEntry that cannot be joined to the
           // mount blob it points at (bug 117).
-          // Strip auto-generated and legacy fields from backup data
-          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
-          // Remove legacy fields that may exist in older backups
-          delete (fileData as Record<string, unknown>).s3Key;
-          delete (fileData as Record<string, unknown>).s3Bucket;
-          delete (fileData as Record<string, unknown>).mountPointId;
+          const fileData = stripLegacyFileRowFields(file);
           await repos.files.create(
             {
               ...fileData,

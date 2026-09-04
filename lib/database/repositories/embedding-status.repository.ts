@@ -280,26 +280,7 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     profileId: string,
     userId: string
   ): Promise<EmbeddingStatus | null> {
-    const existing = await this.findByEntity(entityType, entityId, profileId);
-    if (existing) {
-      return this.update(existing.id, {
-        status: 'EMBEDDED',
-        embeddedAt: this.getCurrentTimestamp(),
-        error: null,
-      });
-    }
-
-    logger.debug('Creating embedding status row on markAsEmbedded (no existing row)', {
-      context: 'EmbeddingStatusRepository.markAsEmbedded',
-      entityType,
-      entityId,
-      profileId,
-    });
-    return this.create({
-      userId,
-      entityType,
-      entityId,
-      profileId,
+    return this.upsertStatus('markAsEmbedded', entityType, entityId, profileId, userId, {
       status: 'EMBEDDED',
       embeddedAt: this.getCurrentTimestamp(),
       error: null,
@@ -321,16 +302,34 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
     error: string,
     userId: string
   ): Promise<EmbeddingStatus | null> {
+    return this.upsertStatus('markAsFailed', entityType, entityId, profileId, userId, {
+      status: 'FAILED',
+      error,
+    });
+  }
+
+  /**
+   * Shared upsert behind {@link markAsEmbedded} / {@link markAsFailed}: apply
+   * `fields` to the existing (entityType, entityId, profileId) row, or create
+   * the row when none exists. On update `fields` is applied as-is (so a
+   * FAILED mark leaves `embeddedAt` untouched); on create it is layered over
+   * an `embeddedAt: null` default so the new row is complete.
+   */
+  private async upsertStatus(
+    method: 'markAsEmbedded' | 'markAsFailed',
+    entityType: EmbeddableEntityType,
+    entityId: string,
+    profileId: string,
+    userId: string,
+    fields: { status: EmbeddingStatus['status']; error: string | null; embeddedAt?: string | null }
+  ): Promise<EmbeddingStatus | null> {
     const existing = await this.findByEntity(entityType, entityId, profileId);
     if (existing) {
-      return this.update(existing.id, {
-        status: 'FAILED',
-        error,
-      });
+      return this.update(existing.id, fields);
     }
 
-    logger.debug('Creating embedding status row on markAsFailed (no existing row)', {
-      context: 'EmbeddingStatusRepository.markAsFailed',
+    logger.debug(`Creating embedding status row on ${method} (no existing row)`, {
+      context: `EmbeddingStatusRepository.${method}`,
       entityType,
       entityId,
       profileId,
@@ -340,9 +339,8 @@ export class EmbeddingStatusRepository extends AbstractBaseRepository<EmbeddingS
       entityType,
       entityId,
       profileId,
-      status: 'FAILED',
       embeddedAt: null,
-      error,
+      ...fields,
     });
   }
 

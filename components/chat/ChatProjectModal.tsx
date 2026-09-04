@@ -9,7 +9,8 @@
 
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
+import { patchChat } from '@/lib/chat/patch-chat'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { BaseModal } from '@/components/ui/BaseModal'
@@ -65,22 +66,7 @@ export default function ChatProjectModal({
     try {
       setSaving(true)
 
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { projectId } }),
-      })
-
-      if (!res.ok) {
-        let errorMessage = 'Failed to update project'
-        try {
-          const errorData = await res.json()
-          errorMessage = errorData.error || errorMessage
-        } catch {
-          errorMessage = `HTTP ${res.status}: ${res.statusText}`
-        }
-        throw new Error(errorMessage)
-      }
+      await patchChat(chatId, { projectId })
 
       setSelectedProjectId(projectId)
 
@@ -97,7 +83,7 @@ export default function ChatProjectModal({
       onSuccess?.()
       onClose()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorMessage = apiErrorMessage(error, 'Failed to update project')
       console.error('[ChatProjectModal] Failed to update project', {
         chatId,
         projectId,

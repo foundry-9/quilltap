@@ -58,6 +58,7 @@ jest.mock('@/lib/services/dangerous-content/provider-routing.service', () => ({
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
   resolveUncensoredCheapLLMSelection: jest.fn(),
+  buildCheapLLMConfig: jest.fn(() => ({})),
   DEFAULT_CHEAP_LLM_CONFIG: {},
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({

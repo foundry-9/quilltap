@@ -29,7 +29,8 @@ import { MAIL_FOLDER } from '@/lib/post-office/mailbox';
 import { WARDROBE_INSTRUCTIONS_PATH } from '@/lib/mount-index/character-vault';
 import { TOOLS_FOLDER } from '@/lib/pascal/custom-tool.types';
 import { getErrorMessage } from '@/lib/error-utils';
-import { isMountIndexAvailable, mainRows, mountRow, mountRows, num } from './db';
+import { inClause, isMountIndexAvailable, mainRows, mountCount, mountRow, mountRows, num } from './db';
+import { countStateFiles } from './state-files';
 import type { MountPointSummaryRow, ScriptoriumInfo, WellKnownMountInfo } from './types';
 
 const moduleLogger = logger.child({ module: 'almanack:scriptorium' });
@@ -87,13 +88,6 @@ async function collectMountOwnership(userId: string): Promise<MountOwnership> {
   };
 }
 
-/** `IN (?, ?, …)` placeholder list; `'(NULL)'` when the set is empty. */
-function inClause(ids: Iterable<string>): { sql: string; params: string[] } {
-  const params = [...ids];
-  if (params.length === 0) return { sql: '(NULL)', params: [] };
-  return { sql: `(${params.map(() => '?').join(', ')})`, params };
-}
-
 /**
  * Count links whose path sits under `folder/` within the given mounts.
  * `excludeRelativePath` drops one exact (lowercased) path from the count —
@@ -106,7 +100,7 @@ function countLinksInFolder(
 ): number {
   const { sql, params } = inClause(mountIds);
   const exclusion = excludeRelativePath ? ' AND lower("relativePath") != ?' : '';
-  const row = mountRow<{ n: number }>(
+  return mountCount(
     `SELECT COUNT(*) AS n FROM "doc_mount_file_links"
      WHERE "mountPointId" IN ${sql} AND lower("relativePath") LIKE ?${exclusion}`,
     [
@@ -116,7 +110,6 @@ function countLinksInFolder(
     ],
     `scriptorium.countLinksInFolder:${folder}`,
   );
-  return num(row?.n);
 }
 
 /**
@@ -134,7 +127,7 @@ function countLinksMatchingContent(
   pattern: string,
 ): number {
   const { sql, params } = inClause(mountIds);
-  const row = mountRow<{ n: number }>(
+  return mountCount(
     `SELECT COUNT(*) AS n
      FROM "doc_mount_file_links" l
      JOIN "doc_mount_documents" d ON d."fileId" = l."fileId"
@@ -144,7 +137,6 @@ function countLinksMatchingContent(
     [...params, `${folder.toLowerCase()}/%`, pattern],
     `scriptorium.countLinksMatchingContent:${folder}`,
   );
-  return num(row?.n);
 }
 
 /** Total bytes of links under `folder/` in the given mounts (blobs + text). */
@@ -337,16 +329,11 @@ export async function collectScriptorium(
 
   // --- Content totals -----------------------------------------------------
 
-  const fileRows = num(
-    mountRow<{ n: number }>(`SELECT COUNT(*) AS n FROM "doc_mount_files"`, [], 'scriptorium.files')
-      ?.n,
-  );
-  const linkRows = num(
-    mountRow<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM "doc_mount_file_links"`,
-      [],
-      'scriptorium.links',
-    )?.n,
+  const fileRows = mountCount(`SELECT COUNT(*) AS n FROM "doc_mount_files"`, [], 'scriptorium.files');
+  const linkRows = mountCount(
+    `SELECT COUNT(*) AS n FROM "doc_mount_file_links"`,
+    [],
+    'scriptorium.links',
   );
 
   const documentTotals = mountRow<{ rows: number; bytes: number }>(
@@ -411,21 +398,17 @@ export async function collectScriptorium(
   const vaultIds = ownership.characterVaults;
   const { sql: vaultSql, params: vaultParams } = inClause(vaultIds);
 
-  const withKeystone = num(
-    mountRow<{ n: number }>(
-      `SELECT COUNT(DISTINCT "mountPointId") AS n FROM "doc_mount_file_links"
-       WHERE "mountPointId" IN ${vaultSql} AND lower("relativePath") = ?`,
-      [...vaultParams, VAULT_KEYSTONE.toLowerCase()],
-      'scriptorium.vaultKeystones',
-    )?.n,
+  const withKeystone = mountCount(
+    `SELECT COUNT(DISTINCT "mountPointId") AS n FROM "doc_mount_file_links"
+     WHERE "mountPointId" IN ${vaultSql} AND lower("relativePath") = ?`,
+    [...vaultParams, VAULT_KEYSTONE.toLowerCase()],
+    'scriptorium.vaultKeystones',
   );
-  const withMetadata = num(
-    mountRow<{ n: number }>(
-      `SELECT COUNT(DISTINCT "mountPointId") AS n FROM "doc_mount_file_links"
-       WHERE "mountPointId" IN ${vaultSql} AND lower("relativePath") = ?`,
-      [...vaultParams, VAULT_METADATA.toLowerCase()],
-      'scriptorium.vaultMetadata',
-    )?.n,
+  const withMetadata = mountCount(
+    `SELECT COUNT(DISTINCT "mountPointId") AS n FROM "doc_mount_file_links"
+     WHERE "mountPointId" IN ${vaultSql} AND lower("relativePath") = ?`,
+    [...vaultParams, VAULT_METADATA.toLowerCase()],
+    'scriptorium.vaultMetadata',
   );
 
   // --- Wardrobe by tier ---------------------------------------------------
@@ -504,13 +487,11 @@ export async function collectScriptorium(
 
   const letters = countLinksInFolder(vaultIds, MAIL_FOLDER);
   const unannounced = countLinksMatchingContent(vaultIds, MAIL_FOLDER, '%alerted: false%');
-  const mailboxes = num(
-    mountRow<{ n: number }>(
-      `SELECT COUNT(DISTINCT "mountPointId") AS n FROM "doc_mount_file_links"
-       WHERE "mountPointId" IN ${vaultSql} AND lower("relativePath") LIKE ?`,
-      [...vaultParams, `${MAIL_FOLDER.toLowerCase()}/%`],
-      'scriptorium.mailboxes',
-    )?.n,
+  const mailboxes = mountCount(
+    `SELECT COUNT(DISTINCT "mountPointId") AS n FROM "doc_mount_file_links"
+     WHERE "mountPointId" IN ${vaultSql} AND lower("relativePath") LIKE ?`,
+    [...vaultParams, `${MAIL_FOLDER.toLowerCase()}/%`],
+    'scriptorium.mailboxes',
   );
 
   // --- Photos -------------------------------------------------------------
@@ -529,11 +510,11 @@ export async function collectScriptorium(
 
   // --- State cascade ------------------------------------------------------
 
-  const projectsWithState = countStateFiles(ownership.projectStores);
-  const groupsWithState = countStateFiles(ownership.groupStores);
+  const projectsWithState = countStateFiles(ownership.projectStores, 'scriptorium.stateFiles');
+  const groupsWithState = countStateFiles(ownership.groupStores, 'scriptorium.stateFiles');
   const generalStatePresent =
     ownership.generalMountId !== null &&
-    countStateFiles([ownership.generalMountId]) > 0;
+    countStateFiles([ownership.generalMountId], 'scriptorium.stateFiles') > 0;
 
   return {
     available: true,
@@ -595,20 +576,4 @@ export async function collectScriptorium(
       generalStatePresent,
     },
   };
-}
-
-/** Stores carrying a non-empty root `state.json` — the state cascade's tiers. */
-function countStateFiles(mountIds: Iterable<string>): number {
-  const { sql, params } = inClause(mountIds);
-  const row = mountRow<{ n: number }>(
-    `SELECT COUNT(DISTINCT l."mountPointId") AS n
-     FROM "doc_mount_file_links" l
-     JOIN "doc_mount_documents" d ON d."fileId" = l."fileId"
-     WHERE l."mountPointId" IN ${sql}
-       AND lower(l."relativePath") = 'state.json'
-       AND trim(d."content") NOT IN ('', '{}')`,
-    [...params],
-    'scriptorium.stateFiles',
-  );
-  return num(row?.n);
 }

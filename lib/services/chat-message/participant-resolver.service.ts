@@ -14,6 +14,7 @@ import {
   selectNextSpeaker,
   calculateTurnStateFromHistory,
   isUserDrivenSeat,
+  getPresentCharacterSeats,
 } from '@/lib/chat/turn-manager'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type {
@@ -81,13 +82,12 @@ export async function resolveRespondingParticipant(
   const userParticipantId = userParticipant?.id ?? null
 
   // Get character participant - use specified participant for continue mode, otherwise first active character
+  const presentSeats = getPresentCharacterSeats(chat.participants)
   let characterParticipant: ChatParticipantBase | undefined
 
   if (requestedRespondingParticipantId) {
     // Continue mode with specific participant requested - find them
-    characterParticipant = chat.participants.find(
-      p => p.id === requestedRespondingParticipantId && p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
-    )
+    characterParticipant = presentSeats.find(p => p.id === requestedRespondingParticipantId)
     if (!characterParticipant) {
       if (isContinueMode) {
         // During continue mode (including chained turns), a mismatched participant
@@ -110,9 +110,7 @@ export async function resolveRespondingParticipant(
         requestedParticipantId: requestedRespondingParticipantId,
       })
       // Fall back to first active character (only for non-continue mode)
-      characterParticipant = chat.participants.find(
-        p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
-      )
+      characterParticipant = presentSeats[0]
     }
   } else {
     // Normal mode or continue mode without specific participant — pick the
@@ -123,20 +121,15 @@ export async function resolveRespondingParticipant(
     // impersonated seat must be excluded via the overlay, not the column) — and
     // respects the persisted `spokenThisCycleParticipantIds` so the cycle is
     // preserved across turns.
-    const llmCandidates = chat.participants.filter(
-      p => p.type === 'CHARACTER'
-        && isParticipantPresent(p.status)
-        && !!p.characterId
-        && !isUserDrivenSeat(p, chat.impersonatingParticipantIds)
+    const llmCandidates = presentSeats.filter(
+      p => !isUserDrivenSeat(p, chat.impersonatingParticipantIds)
     )
 
     if (llmCandidates.length === 0) {
       // No LLM characters present (e.g. solo user-character chat). Fall back
       // to the original first-active-character behaviour so downstream code
       // sees a recognisable error rather than a silent null pick.
-      characterParticipant = chat.participants.find(
-        p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId
-      )
+      characterParticipant = presentSeats[0]
     } else if (llmCandidates.length === 1) {
       characterParticipant = llmCandidates[0]
     } else {

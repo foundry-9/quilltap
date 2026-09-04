@@ -15,6 +15,7 @@
 import {
   WARDROBE_SLOT_TYPES,
   WARDROBE_SLOT_META,
+  bySlot,
   isSlotReportedWhenEmpty,
 } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
@@ -31,7 +32,7 @@ export type OutfitSlotName = keyof OutfitSlotValues
 export function buildOutfitSlotValues(
   fn: (slot: WardrobeItemType) => string[],
 ): OutfitSlotValues {
-  return Object.fromEntries(WARDROBE_SLOT_TYPES.map((s) => [s, fn(s)])) as OutfitSlotValues
+  return bySlot(fn)
 }
 
 /**

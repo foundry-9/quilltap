@@ -13,9 +13,9 @@ import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import {
   isSQLiteBackend,
-  getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
 
 /**
@@ -39,14 +39,7 @@ export const addCustomToolsFieldMigration: Migration = {
     }
 
     // Check if customTools column already exists
-    const columns = getSQLiteTableColumns('chat_settings');
-    const columnNames = columns.map((col) => col.name);
-
-    if (!columnNames.includes('customTools')) {
-      return true;
-    }
-
-    return false;
+    return !sqliteColumnExists('chat_settings', 'customTools');
   },
 
   async run(): Promise<MigrationResult> {
@@ -54,15 +47,9 @@ export const addCustomToolsFieldMigration: Migration = {
     let columnsAdded = 0;
 
     try {
-      const db = getSQLiteDatabase();
-
-      // Check and add customTools column
-      const columns = getSQLiteTableColumns('chat_settings');
-      const columnNames = columns.map((col) => col.name);
-
-      if (!columnNames.includes('customTools')) {
-        // SQLite uses INTEGER for boolean, 1 = true (default enabled)
-        db.exec(`ALTER TABLE "chat_settings" ADD COLUMN "customTools" INTEGER DEFAULT 1`);
+      // Check and add customTools column.
+      // SQLite uses INTEGER for boolean, 1 = true (default enabled)
+      if (addColumnIfMissing('chat_settings', 'customTools', 'INTEGER DEFAULT 1')) {
         columnsAdded++;
         logger.info('Added customTools column to chat_settings table', {
           context: 'migration.add-custom-tools-field',

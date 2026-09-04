@@ -18,8 +18,10 @@
  * roster loader runs — that is the whole design.
  */
 
+import type { z } from 'zod';
 import {
   COMPARATOR_KEYS,
+  CONTAINMENT_KEYS,
   IDENTIFIER_PATTERN,
   MAX_CHIP_LABEL_LENGTH,
   MAX_DESCRIPTION_LENGTH,
@@ -30,10 +32,15 @@ import {
   MAX_OUTCOMES,
   MAX_PARAMETERS,
   MAX_TITLE_LENGTH,
+  ORDERING_KEYS,
   QtapCustomToolSchema,
+  collectUnknownKeys,
   isParamRef,
   isStateRef,
   parseEffectTarget,
+  scanPlaceholders,
+  valueTypeOf,
+  type ComparatorKey,
   type CustomToolEffect,
   type CustomToolOutcome,
   type CustomToolParameter,
@@ -46,27 +53,26 @@ import {
   type QtapCustomTool,
   type StateRef,
   type ToolGate,
+  type ValueType,
   type Visibility,
   type WhenObject,
 } from './custom-tool.types';
 import { parseDiceNotation } from './dice-notation';
 import { parseExpression } from './expressions';
+import { escapeRegex } from '@/lib/utils/regex';
+
+export type { ComparatorKey };
 
 /** The `$schema` value the Builder writes when a file carries none. */
 export const DEFAULT_SCHEMA_VALUE = '/schemas/qtap-custom-tool.schema.json';
 
-/** One comparator key. */
-export type ComparatorKey = (typeof COMPARATOR_KEYS)[number];
-
-/** Comparator keys that order two numbers. */
-export const ORDERING_COMPARATORS: ReadonlySet<ComparatorKey> = new Set(['gt', 'gte', 'lt', 'lte']);
-
-/** Comparator keys that search one string inside another. */
-export const CONTAINMENT_COMPARATORS: ReadonlySet<ComparatorKey> = new Set(['contains', 'ncontains']);
-
 let draftIdCounter = 0;
-/** Stable-enough ids for React keys within one session. */
-function nextDraftId(prefix: string): string {
+/**
+ * Stable-enough ids for React keys within one session. Opaque: `prefix` only
+ * helps a human reading the DOM, and every draft shape (this module's and the
+ * Workbench sections') draws from the one counter.
+ */
+export function nextDraftId(prefix: string): string {
   draftIdCounter += 1;
   return `${prefix}-${draftIdCounter}`;
 }
@@ -121,11 +127,15 @@ export type ConditionSubject =
   /** Whether the LLM consult succeeded — serializes to the comparator's `ok` key. */
   | { kind: 'llm-ok' };
 
-/** A condition chip's right-hand side. */
-export type ConditionOperand =
+/** A literal operand — the three kinds an author types straight into a chip. */
+export type LiteralOperand =
   | { kind: 'number'; text: string }
   | { kind: 'string'; text: string }
-  | { kind: 'boolean'; value: boolean }
+  | { kind: 'boolean'; value: boolean };
+
+/** A condition chip's right-hand side. */
+export type ConditionOperand =
+  | LiteralOperand
   | { kind: 'param'; name: string }
   /** A `$state` reference, carried verbatim (builder does not author it). */
   | { kind: 'state'; path: string; fallback: number | string | boolean };
@@ -164,10 +174,7 @@ export interface DraftGateCondition {
   /** The metadata key this test reads. */
   key: string;
   comparator: ComparatorKey;
-  operand:
-    | { kind: 'number'; text: string }
-    | { kind: 'string'; text: string }
-    | { kind: 'boolean'; value: boolean };
+  operand: LiteralOperand;
 }
 
 /**
@@ -412,7 +419,7 @@ export function gateFromConditions(conditions: DraftGateCondition[]): ToolGate |
     } else if (condition.operand.kind === 'boolean') {
       operand = condition.operand.value;
     } else {
-      if (condition.operand.text === '' && CONTAINMENT_COMPARATORS.has(condition.comparator)) continue;
+      if (condition.operand.text === '' && CONTAINMENT_KEYS.has(condition.comparator)) continue;
       operand = condition.operand.text;
     }
 
@@ -515,6 +522,31 @@ function parameterToDraft(name: string, spec: CustomToolParameter): DraftParamet
   };
 }
 
+/** The two ways a definition's text can fail, and what it is when it doesn't. */
+export type ParsedDefinitionText =
+  | { ok: true; raw: unknown; definition: QtapCustomTool }
+  /** Not JSON at all; `reason` is the parser's own message. */
+  | { ok: false; stage: 'json'; reason: string }
+  /** JSON, but not a definition; `raw` is kept so unknown keys can still be read off it. */
+  | { ok: false; stage: 'schema'; raw: unknown; error: z.ZodError };
+
+/**
+ * Parse-then-validate a definition's text — the one place the editor turns
+ * bytes into a checked document, so JSON mode, repair mode, the form switch,
+ * and the save path cannot disagree about what "valid" means.
+ */
+export function parseDefinitionText(text: string): ParsedDefinitionText {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch (error) {
+    return { ok: false, stage: 'json', reason: error instanceof Error ? error.message : String(error) };
+  }
+  const validated = QtapCustomToolSchema.safeParse(raw);
+  if (!validated.success) return { ok: false, stage: 'schema', raw, error: validated.error };
+  return { ok: true, raw, definition: validated.data };
+}
+
 /**
  * Build a draft from a raw parsed JSON document. Returns null unless the
  * document passes `QtapCustomToolSchema` — an invalid file belongs in JSON
@@ -526,9 +558,10 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
   const definition = parsed.data;
 
   const rawRecord = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
-  const unknownKeys: Array<[string, unknown]> = Object.entries(rawRecord).filter(
-    ([key]) => !KNOWN_KEY_ORDER.includes(key) && key !== '$schema'
-  );
+  // The loader's own notion of "unknown" (which already excludes `$schema`),
+  // kept as [key, value] pairs in the file's order so they re-emit verbatim.
+  const unknown = new Set(collectUnknownKeys(raw));
+  const unknownKeys: Array<[string, unknown]> = Object.entries(rawRecord).filter(([key]) => unknown.has(key));
 
   const isDice = typeof definition.roll === 'string';
   const range = typeof definition.roll === 'object' && definition.roll !== null ? definition.roll : undefined;
@@ -576,24 +609,6 @@ export function draftFromDefinition(raw: unknown): ToolDraft | null {
 // ---------------------------------------------------------------------------
 // Draft → definition (canonical serialization, §6.2)
 // ---------------------------------------------------------------------------
-
-/** Known keys in the schema's declaration order. `$schema` is handled apart. */
-const KNOWN_KEY_ORDER = [
-  'name',
-  'title',
-  'chipLabel',
-  'description',
-  'disabled',
-  'availableWhen',
-  'withheldWhen',
-  'revealOdds',
-  'defaultVisibility',
-  'parameters',
-  'roll',
-  'llm',
-  'effects',
-  'outcomes',
-];
 
 /** Parse loose numeric text. NaN for blank or unparseable. */
 export function parseNumberText(text: string): number {
@@ -836,11 +851,6 @@ export function numericParamNames(draft: ToolDraft): string[] {
     .filter((name) => name.length > 0);
 }
 
-/** The value type a draft parameter's values carry. */
-function draftParamValueType(param: DraftParameter): 'number' | 'string' | 'boolean' {
-  return param.type === 'integer' ? 'number' : param.type;
-}
-
 function validateNumberOrParam(
   value: NumberOrParamValue,
   field: 'min' | 'max' | 'multiplier' | 'offset',
@@ -868,86 +878,85 @@ function validateNumberOrParam(
   }
 }
 
-/** Placeholder families {@link renderTemplate} understands. */
-const PLACEHOLDER_PATTERN = /\{\{([^}]+)\}\}/g;
+/**
+ * How one templated field treats `{{llm}}`: legitimate whenever the oracle is
+ * on (messages, the chip label), or never — the consult prompt cannot quote an
+ * answer that does not exist yet.
+ */
+type LlmPlaceholderRule = 'warn-if-disabled' | 'forbid';
+
+/**
+ * The placeholder audit every templated field shares — outcome messages, the
+ * chip label, and the consult prompt. Warnings only: an unknown placeholder
+ * renders as written, per the runtime convention, and the load-time schema
+ * imposes no reference rule on any of these strings.
+ *
+ * Metadata keys are undeclared by nature: every `{{metadata.<key>}}` is
+ * presumptively legitimate, and an absent key rendering verbatim at run time
+ * is the runtime's convention, not an authoring error (§4.4.2). `{{state.…}}`
+ * is the same kind of thing, but only the chip label has ever admitted it
+ * (`allowState`); the message and prompt audits still flag it as unknown.
+ */
+function auditPlaceholders(
+  text: string,
+  where: DraftIssue['where'],
+  draft: ToolDraft,
+  issues: DraftIssue[],
+  rules: { llm: LlmPlaceholderRule; allowState: boolean }
+): void {
+  const declaredParams = new Set(draft.parameters.map((p) => p.name));
+  for (const { key, ref } of scanPlaceholders(text)) {
+    switch (ref.kind) {
+      case 'value':
+      case 'roll':
+      case 'metadata':
+        break;
+      case 'dice':
+        if (draft.rollForm !== 'dice') {
+          issues.push(warn(where, '{{dice}} renders as an empty string outside the dice form'));
+        }
+        break;
+      case 'llm':
+        if (rules.llm === 'forbid') {
+          issues.push(warn(where, '{{llm}} is not available here — the consult cannot quote its own answer'));
+        } else if (!draft.llmEnabled) {
+          issues.push(warn(where, '{{llm}} renders as written unless the LLM consult is enabled'));
+        }
+        break;
+      case 'params':
+        if (!declaredParams.has(ref.name)) {
+          issues.push(warn(where, `{{${key}}} names no declared parameter — it will render as written`));
+        }
+        break;
+      case 'state':
+        if (!rules.allowState) {
+          issues.push(warn(where, `{{${key}}} is not a placeholder this build knows — it will render as written`));
+        }
+        break;
+      case 'unknown':
+        issues.push(warn(where, `{{${key}}} is not a placeholder this build knows — it will render as written`));
+        break;
+    }
+  }
+}
 
 function validateMessagePlaceholders(outcome: DraftOutcome, draft: ToolDraft, issues: DraftIssue[]): void {
-  const declaredParams = new Set(draft.parameters.map((p) => p.name));
-  PLACEHOLDER_PATTERN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = PLACEHOLDER_PATTERN.exec(outcome.message)) !== null) {
-    const key = match[1].trim();
-    if (key === 'value' || key === 'roll') continue;
-    if (key === 'dice') {
-      if (draft.rollForm !== 'dice') {
-        issues.push(
-          warn({ section: 'message', id: outcome.id }, '{{dice}} renders as an empty string outside the dice form')
-        );
-      }
-      continue;
-    }
-    if (key === 'llm') {
-      if (!draft.llmEnabled) {
-        issues.push(
-          warn({ section: 'message', id: outcome.id }, '{{llm}} renders as written unless the LLM consult is enabled')
-        );
-      }
-      continue;
-    }
-    if (key.startsWith('params.')) {
-      if (!declaredParams.has(key.slice('params.'.length))) {
-        issues.push(
-          warn({ section: 'message', id: outcome.id }, `{{${key}}} names no declared parameter — it will render as written`)
-        );
-      }
-      continue;
-    }
-    // Metadata keys are undeclared by nature: every {{metadata.<key>}} is
-    // presumptively legitimate, and an absent key rendering verbatim at run
-    // time is the runtime's convention, not an authoring error (§4.4.2).
-    if (key.startsWith('metadata.')) continue;
-    issues.push(
-      warn({ section: 'message', id: outcome.id }, `{{${key}}} is not a placeholder this build knows — it will render as written`)
-    );
-  }
+  auditPlaceholders(outcome.message, { section: 'message', id: outcome.id }, draft, issues, {
+    llm: 'warn-if-disabled',
+    allowState: false,
+  });
 }
 
 /**
  * The chip label's placeholder audit — the same families an outcome message
  * takes, `{{llm}}` included (the label renders after the consult, so quoting
- * the answer is legitimate iff the oracle is enabled). Warnings only: an
- * unknown placeholder renders as written, per the runtime convention, and the
- * load-time schema imposes no reference rule on the label.
+ * the answer is legitimate iff the oracle is enabled).
  */
 function validateChipLabelPlaceholders(draft: ToolDraft, issues: DraftIssue[]): void {
-  const declaredParams = new Set(draft.parameters.map((p) => p.name));
-  const where: DraftIssue['where'] = { section: 'identity', field: 'chipLabel' };
-  PLACEHOLDER_PATTERN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = PLACEHOLDER_PATTERN.exec(draft.chipLabel)) !== null) {
-    const key = match[1].trim();
-    if (key === 'value' || key === 'roll') continue;
-    if (key === 'dice') {
-      if (draft.rollForm !== 'dice') {
-        issues.push(warn(where, '{{dice}} renders as an empty string outside the dice form'));
-      }
-      continue;
-    }
-    if (key === 'llm') {
-      if (!draft.llmEnabled) {
-        issues.push(warn(where, '{{llm}} renders as written unless the LLM consult is enabled'));
-      }
-      continue;
-    }
-    if (key.startsWith('params.')) {
-      if (!declaredParams.has(key.slice('params.'.length))) {
-        issues.push(warn(where, `{{${key}}} names no declared parameter — it will render as written`));
-      }
-      continue;
-    }
-    if (key.startsWith('metadata.') || key.startsWith('state.')) continue;
-    issues.push(warn(where, `{{${key}}} is not a placeholder this build knows — it will render as written`));
-  }
+  auditPlaceholders(draft.chipLabel, { section: 'identity', field: 'chipLabel' }, draft, issues, {
+    llm: 'warn-if-disabled',
+    allowState: true,
+  });
 }
 
 /**
@@ -956,32 +965,10 @@ function validateChipLabelPlaceholders(draft: ToolDraft, issues: DraftIssue[]): 
  * does not exist yet.
  */
 function validateLlmPromptPlaceholders(draft: ToolDraft, issues: DraftIssue[]): void {
-  const declaredParams = new Set(draft.parameters.map((p) => p.name));
-  const where: DraftIssue['where'] = { section: 'llm', field: 'prompt' };
-  PLACEHOLDER_PATTERN.lastIndex = 0;
-  let match: RegExpExecArray | null;
-  while ((match = PLACEHOLDER_PATTERN.exec(draft.llmPrompt)) !== null) {
-    const key = match[1].trim();
-    if (key === 'value' || key === 'roll') continue;
-    if (key === 'dice') {
-      if (draft.rollForm !== 'dice') {
-        issues.push(warn(where, '{{dice}} renders as an empty string outside the dice form'));
-      }
-      continue;
-    }
-    if (key === 'llm') {
-      issues.push(warn(where, '{{llm}} is not available here — the consult cannot quote its own answer'));
-      continue;
-    }
-    if (key.startsWith('params.')) {
-      if (!declaredParams.has(key.slice('params.'.length))) {
-        issues.push(warn(where, `{{${key}}} names no declared parameter — it will render as written`));
-      }
-      continue;
-    }
-    if (key.startsWith('metadata.')) continue;
-    issues.push(warn(where, `{{${key}}} is not a placeholder this build knows — it will render as written`));
-  }
+  auditPlaceholders(draft.llmPrompt, { section: 'llm', field: 'prompt' }, draft, issues, {
+    llm: 'forbid',
+    allowState: false,
+  });
 }
 
 function validateCondition(
@@ -1004,7 +991,7 @@ function validateCondition(
   }
   if (
     condition.subject.kind === 'llm-ok' &&
-    (ORDERING_COMPARATORS.has(condition.comparator) || CONTAINMENT_COMPARATORS.has(condition.comparator))
+    (ORDERING_KEYS.has(condition.comparator) || CONTAINMENT_KEYS.has(condition.comparator))
   ) {
     issues.push(err(where, 'whether the consult succeeded can only be tested with = or ≠'));
     return;
@@ -1017,7 +1004,7 @@ function validateCondition(
     }
     // Ordering a non-numeric parameter is a load-time rejection; the UI never
     // offers it, but a parameter's type may have changed under the chip.
-    if (ORDERING_COMPARATORS.has(condition.comparator) && draftParamValueType(target) !== 'number') {
+    if (ORDERING_KEYS.has(condition.comparator) && valueTypeOf(target.type) !== 'number') {
       issues.push(err(where, `${condition.comparator} orders "${condition.subject.name}", which is not numeric`));
     }
   }
@@ -1025,7 +1012,7 @@ function validateCondition(
   // Containment gets its own complete audit — subject and operand must both be
   // text where their types are knowable — and then returns, so the eq/neq and
   // ordering rules below never double-report the same chip.
-  if (CONTAINMENT_COMPARATORS.has(condition.comparator)) {
+  if (CONTAINMENT_KEYS.has(condition.comparator)) {
     const subjectType = subjectValueType(condition.subject, paramByName);
     if (subjectType !== null && subjectType !== 'string') {
       issues.push(err(where, `${condition.comparator} searches a ${subjectType}, and only text can contain text`));
@@ -1039,7 +1026,7 @@ function validateCondition(
       const target = paramByName.get(operand.name);
       if (!operand.name || !target) {
         issues.push(err(where, `compares against "${operand.name || '(no parameter)'}", which is not declared`));
-      } else if (draftParamValueType(target) !== 'string') {
+      } else if (valueTypeOf(target.type) !== 'string') {
         issues.push(err(where, `${condition.comparator} needs text to look for; "${operand.name}" is ${target.type}`));
       }
     }
@@ -1055,16 +1042,16 @@ function validateCondition(
     const target = paramByName.get(operand.name);
     if (!operand.name || !target) {
       issues.push(err(where, `compares against "${operand.name || '(no parameter)'}", which is not declared`));
-    } else if (ORDERING_COMPARATORS.has(condition.comparator) && draftParamValueType(target) !== 'number') {
+    } else if (ORDERING_KEYS.has(condition.comparator) && valueTypeOf(target.type) !== 'number') {
       issues.push(err(where, `${condition.comparator} needs a numeric operand; "${operand.name}" is ${target.type}`));
     } else if (
       condition.subject.kind !== 'metadata' &&
-      !ORDERING_COMPARATORS.has(condition.comparator)
+      !ORDERING_KEYS.has(condition.comparator)
     ) {
       // eq/neq: subject and operand types must agree — except for metadata
       // subjects, whose stored type is unknowable at authoring time.
       const subjectType = subjectValueType(condition.subject, paramByName);
-      if (subjectType !== null && draftParamValueType(target) !== subjectType) {
+      if (subjectType !== null && valueTypeOf(target.type) !== subjectType) {
         issues.push(
           err(where, `${condition.comparator} compares a ${subjectType} with "${operand.name}", which is ${target.type}`)
         );
@@ -1076,7 +1063,7 @@ function validateCondition(
     condition.subject.kind !== 'metadata'
   ) {
     const subjectType = subjectValueType(condition.subject, paramByName);
-    if (ORDERING_COMPARATORS.has(condition.comparator)) {
+    if (ORDERING_KEYS.has(condition.comparator)) {
       issues.push(err(where, `${condition.comparator} can only order numbers`));
     } else if (subjectType !== null && subjectType !== operand.kind) {
       issues.push(err(where, `${condition.comparator} compares a ${subjectType} with a ${operand.kind} — this can never hold`));
@@ -1085,7 +1072,7 @@ function validateCondition(
   if (
     operand.kind === 'number' &&
     condition.subject.kind === 'param' &&
-    !ORDERING_COMPARATORS.has(condition.comparator)
+    !ORDERING_KEYS.has(condition.comparator)
   ) {
     const subjectType = subjectValueType(condition.subject, paramByName);
     if (subjectType !== null && subjectType !== 'number') {
@@ -1125,16 +1112,16 @@ function validateGate(draft: ToolDraft, issues: DraftIssue[]): void {
       continue;
     }
 
-    const slot = `${condition.key}:${condition.comparator}`;
+    const slot = gateConditionSlotKey(condition);
     if (seenSlots.has(slot)) {
       issues.push(err(where, 'the gate can test this key with this comparator only once'));
     }
     seenSlots.add(slot);
 
     const operand = condition.operand;
-    if (ORDERING_COMPARATORS.has(condition.comparator) && operand.kind !== 'number') {
+    if (ORDERING_KEYS.has(condition.comparator) && operand.kind !== 'number') {
       issues.push(err(where, `${condition.comparator} can only order numbers`));
-    } else if (CONTAINMENT_COMPARATORS.has(condition.comparator)) {
+    } else if (CONTAINMENT_KEYS.has(condition.comparator)) {
       if (operand.kind !== 'string') {
         issues.push(err(where, `${condition.comparator} needs text to look for`));
       } else if (operand.text === '') {
@@ -1200,17 +1187,22 @@ function validateDraftEffects(draft: ToolDraft, issues: DraftIssue[]): void {
   }
 }
 
-function subjectValueType(
+/**
+ * The value type a subject carries, or null where it is unknowable at
+ * authoring time — a metadata key's stored value, or whatever the consulted
+ * model chooses to answer.
+ */
+export function subjectValueType(
   subject: ConditionSubject,
   paramByName: Map<string, DraftParameter>
-): 'number' | 'string' | 'boolean' | null {
+): ValueType | null {
   switch (subject.kind) {
     case 'value':
     case 'roll':
       return 'number';
     case 'param': {
       const target = paramByName.get(subject.name);
-      return target ? draftParamValueType(target) : null;
+      return target ? valueTypeOf(target.type) : null;
     }
     case 'metadata':
       return null;
@@ -1221,6 +1213,31 @@ function subjectValueType(
     case 'llm-ok':
       return 'boolean';
   }
+}
+
+/**
+ * Re-seat an operand in the widget a newly chosen comparator can actually use:
+ * ordering takes a number (or a numeric-param reference) everywhere, and
+ * containment looks for text (or a string-param reference) everywhere. Typed
+ * text survives the move between number and text; a boolean starts blank.
+ * References are left alone — their type is the parameter's business.
+ */
+export function reseatOperandForComparator<O extends ConditionOperand>(
+  operand: O,
+  comparator: ComparatorKey
+): O | Extract<LiteralOperand, { kind: 'number' | 'string' }> {
+  if (ORDERING_KEYS.has(comparator) && (operand.kind === 'string' || operand.kind === 'boolean')) {
+    return { kind: 'number', text: operand.kind === 'string' ? operand.text : '' };
+  }
+  if (CONTAINMENT_KEYS.has(comparator) && (operand.kind === 'number' || operand.kind === 'boolean')) {
+    return { kind: 'string', text: operand.kind === 'number' ? operand.text : '' };
+  }
+  return operand;
+}
+
+/** Identity of a gate chip for duplicate detection: metadata key + comparator. */
+export function gateConditionSlotKey(condition: Pick<DraftGateCondition, 'key' | 'comparator'>): string {
+  return `${condition.key}:${condition.comparator}`;
 }
 
 /** Identity of a chip for duplicate detection: subject (+key/name) + comparator. */
@@ -1451,7 +1468,7 @@ export function renameParameterEverywhere(draft: ToolDraft, from: string, to: st
   const renameSubject = (subject: ConditionSubject): ConditionSubject =>
     subject.kind === 'param' && subject.name === from ? { kind: 'param', name: to } : subject;
 
-  const placeholder = new RegExp(`\\{\\{\\s*params\\.${escapeRegExp(from)}\\s*\\}\\}`, 'g');
+  const placeholder = paramPlaceholderPattern(from);
 
   return {
     ...draft,
@@ -1489,7 +1506,7 @@ export function findParameterReferences(draft: ToolDraft, name: string): string[
     if (value.kind === 'param' && value.name === name) sites.push(`roll ${field}`);
   }
 
-  if (new RegExp(`\\{\\{\\s*params\\.${escapeRegExp(name)}\\s*\\}\\}`).test(draft.llmPrompt)) {
+  if (paramPlaceholderPattern(name).test(draft.llmPrompt)) {
     sites.push('the consult prompt renders it');
   }
 
@@ -1503,7 +1520,7 @@ export function findParameterReferences(draft: ToolDraft, name: string): string[
         sites.push(`${label}: a condition compares against it`);
       }
     }
-    if (new RegExp(`\\{\\{\\s*params\\.${escapeRegExp(name)}\\s*\\}\\}`).test(outcome.message)) {
+    if (paramPlaceholderPattern(name).test(outcome.message)) {
       sites.push(`${label}: the message renders it`);
     }
   });
@@ -1511,6 +1528,11 @@ export function findParameterReferences(draft: ToolDraft, name: string): string[
   return sites;
 }
 
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * A fresh global regex matching every `{{params.<name>}}` occurrence (inner
+ * whitespace tolerated, as the renderer trims it). Fresh per call so `test`
+ * and `replace` never share `lastIndex`.
+ */
+function paramPlaceholderPattern(name: string): RegExp {
+  return new RegExp(`\\{\\{\\s*params\\.${escapeRegex(name)}\\s*\\}\\}`, 'g');
 }

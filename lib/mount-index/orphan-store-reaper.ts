@@ -17,6 +17,79 @@
  */
 
 import type { Database as DatabaseType } from 'better-sqlite3';
+import { tableExists } from '@/lib/database/backends/sqlite/introspection';
+
+/**
+ * Minimal synchronous handle {@link gcOrphanedFileRow} needs — satisfied by
+ * better-sqlite3's `Database` and by the repositories' structural `SyncDb`.
+ */
+export interface OrphanGcDb {
+  prepare(sql: string): {
+    get(...params: unknown[]): unknown;
+    run(...params: unknown[]): { changes: number };
+  };
+}
+
+/** Per-table rows removed for one content row by {@link gcOrphanedFileRow}. */
+export interface OrphanedFileRowGc {
+  documents: number;
+  blobs: number;
+  files: number;
+}
+
+/**
+ * Drop a content row (`doc_mount_files` plus its document/blob payload) that
+ * no link references any more. Shared by the link repository's delete and
+ * write paths and by the store cascade so all three collect content the same
+ * way.
+ *
+ * Every write to a database-backed mount is content-addressed: it finds-or-
+ * creates a `doc_mount_files` row for the NEW sha and repoints the link at it.
+ * Without this the row the link just left behind lingers forever, holding its
+ * `doc_mount_documents` / `doc_mount_blobs` payload — a slow leak that had
+ * accumulated dozens of orphans in the wild. Content rows still referenced by
+ * some other link (a real hard link, or an unrelated file that happens to have
+ * identical bytes) are left alone.
+ *
+ * Returns `null` — nothing collected — when `fileId` is null or another link
+ * still references the file; otherwise the per-table counts removed.
+ *
+ * The payload rows are deleted explicitly rather than left to the FK cascade.
+ * `ON DELETE CASCADE` is only present on databases whose tables came from the
+ * add-doc-mount-file-links migration; tables created from the Zod schema by
+ * generateDDL carry no foreign keys at all, so on those instances a cascade
+ * would silently keep every payload forever. Deleting children first is a
+ * no-op where the cascade does exist.
+ *
+ * The payload tables are created lazily by their repositories on first access
+ * (`doc_mount_blobs` has no Zod schema, so `generateDDL` never mints it; a
+ * document-only or restored-from-old-backup index may likewise never have held
+ * a blob). Deleting from a table that has never been created throws
+ * `no such table` — a hard failure on the second write to any path (Bug 13).
+ * So each payload delete is guarded behind a table-existence check; a missing
+ * table has nothing to collect anyway.
+ *
+ * Runs synchronously inside the caller's `db.transaction(...)`.
+ */
+export function gcOrphanedFileRow(db: OrphanGcDb, fileId: string | null): OrphanedFileRowGc | null {
+  if (!fileId) return null;
+  const still = db.prepare(
+    'SELECT COUNT(*) AS count FROM doc_mount_file_links WHERE fileId = ?'
+  ).get(fileId) as { count: number } | undefined;
+  if ((still?.count ?? 0) > 0) return null;
+
+  const counts: OrphanedFileRowGc = { documents: 0, blobs: 0, files: 0 };
+  if (tableExists(db, 'doc_mount_documents')) {
+    counts.documents = db.prepare('DELETE FROM doc_mount_documents WHERE fileId = ?').run(fileId).changes;
+  }
+  if (tableExists(db, 'doc_mount_blobs')) {
+    counts.blobs = db.prepare('DELETE FROM doc_mount_blobs WHERE fileId = ?').run(fileId).changes;
+  }
+  if (tableExists(db, 'doc_mount_files')) {
+    counts.files = db.prepare('DELETE FROM doc_mount_files WHERE id = ?').run(fileId).changes;
+  }
+  return counts;
+}
 
 export interface OrphanedStoreChildrenSwept {
   links: number;

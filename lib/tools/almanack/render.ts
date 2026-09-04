@@ -6,12 +6,21 @@
  * from a fixture, and it keeps "what we gathered" separate from "how we say
  * it", which is where the old report's mislabelled sections came from.
  *
+ * One renderer per phase (`renderPremises` … `renderWireRecords`), mirroring
+ * the collectors in `phase1-…` through `phase6-…`; {@link renderAlmanackMarkdown}
+ * binds them in order. Every markdown table goes through {@link table}, whose
+ * separator row follows the one convention the whole document uses (a dash
+ * for every header character, plus one each side).
+ *
  * @module lib/tools/almanack/render
  */
 
 import { formatBytes } from '@/lib/utils/format-bytes';
 import { ALMANACK_TITLE } from './phases';
 import type { AlmanackReportData, CacheRow, ProfileWindowRow } from './types';
+
+/** Appends lines to the document under construction. */
+type Push = (...values: string[]) => void;
 
 function formatUSD(amount: number): string {
   return `$${amount.toFixed(4)}`;
@@ -54,22 +63,27 @@ function countList(rows: Array<{ label: string; count: number }>, empty: string)
   return rows.map(r => `- **${r.label}**: ${r.count.toLocaleString()}`);
 }
 
-export function renderAlmanackMarkdown(data: AlmanackReportData): string {
-  const lines: string[] = [];
-  const push = (...values: string[]) => lines.push(...values);
+/**
+ * Emit a markdown table: the header row, a separator whose dash run is each
+ * header's length plus two, then one line per row. Cells are joined verbatim,
+ * so anything that might carry a pipe must already have been through
+ * {@link cell}. Numbers render as they would in a template literal.
+ */
+function table(
+  push: Push,
+  headers: readonly string[],
+  rows: ReadonlyArray<ReadonlyArray<string | number>>,
+): void {
+  push(`| ${headers.join(' | ')} |`);
+  push(`|${headers.map(h => '-'.repeat(h.length + 2)).join('|')}|`);
+  for (const row of rows) push(`| ${row.join(' | ')} |`);
+}
 
-  push(`# ${ALMANACK_TITLE}`, '');
-  push(`Generated: ${formatDateTime(data.generatedAt)}`, '');
-  push(
-    'A compendium of the establishment as it stands: what is installed, what is configured,',
-    'and what has accumulated. Safe to share — see the privacy note in the help page.',
-    '',
-  );
+// ============================================================================
+// Phase 1 — Taking the measure of the premises
+// ============================================================================
 
-  // ==========================================================================
-  // Phase 1 — Taking the measure of the premises
-  // ==========================================================================
-
+function renderPremises(push: Push, data: AlmanackReportData): void {
   push('## The Premises', '');
   push('### System Information', '');
   push(`- **Version**: ${data.version}`);
@@ -102,22 +116,29 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
     push(`- **Highest App Version Seen**: ${data.databaseSecurity.highestAppVersion}`);
   }
   push('');
-  push('| Database | Size | Present |');
-  push('|----------|------|---------|');
-  for (const db of data.databaseSecurity.databases) {
-    push(`| ${cell(db.label)} | ${formatBytes(db.sizeBytes)} | ${yesNo(db.present)} |`);
-  }
+  table(
+    push,
+    ['Database', 'Size', 'Present'],
+    data.databaseSecurity.databases.map(db => [
+      cell(db.label),
+      formatBytes(db.sizeBytes),
+      yesNo(db.present),
+    ]),
+  );
   push('');
 
   push('### Backup Status', '');
-  push('| Database | Backups | Newest | Oldest | Total Size |');
-  push('|----------|---------|--------|--------|------------|');
-  for (const backup of data.backupStatus) {
-    push(
-      `| ${cell(backup.label)} | ${backup.count} | ${formatDate(backup.newestDate)} | ` +
-        `${formatDate(backup.oldestDate)} | ${formatBytes(backup.totalSizeBytes)} |`,
-    );
-  }
+  table(
+    push,
+    ['Database', 'Backups', 'Newest', 'Oldest', 'Total Size'],
+    data.backupStatus.map(backup => [
+      cell(backup.label),
+      backup.count,
+      formatDate(backup.newestDate),
+      formatDate(backup.oldestDate),
+      formatBytes(backup.totalSizeBytes),
+    ]),
+  );
   push('');
 
   push('### Migration State', '');
@@ -125,11 +146,13 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
   push(`- **Last Migration**: ${data.migrationState.lastMigrationId ?? 'None recorded'}`);
   push(`- **Applied At**: ${formatDateTime(data.migrationState.lastMigrationAt)}`);
   push(`- **Applied By Version**: ${data.migrationState.lastMigrationVersion ?? 'N/A'}`, '');
+}
 
-  // ==========================================================================
-  // Phase 2 — Cataloguing the machinery
-  // ==========================================================================
+// ============================================================================
+// Phase 2 — Cataloguing the machinery
+// ============================================================================
 
+function renderMachinery(push: Push, data: AlmanackReportData): void {
   push('## The Machinery', '');
 
   push('### Plugins', '');
@@ -141,11 +164,11 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
   push(`- **Per-character plugin data rows**: ${data.plugins.characterPluginDataRows}`, '');
 
   if (data.plugins.byCapability.length > 0) {
-    push('| Capability | Plugins |');
-    push('|------------|---------|');
-    for (const row of data.plugins.byCapability) {
-      push(`| ${cell(row.capability)} | ${row.count} |`);
-    }
+    table(
+      push,
+      ['Capability', 'Plugins'],
+      data.plugins.byCapability.map(row => [cell(row.capability), row.count]),
+    );
     push('');
   }
 
@@ -158,30 +181,32 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
       push(`*None*`, '');
       continue;
     }
-    push('| Name | Version | Source | Capabilities |');
-    push('|------|---------|--------|--------------|');
-    for (const plugin of list) {
-      push(
-        `| ${cell(plugin.title)} | ${cell(plugin.version)} | ` +
-          `${plugin.installedFromNpm ? 'npm' : 'bundled'} | ${cell(plugin.capabilities.join(', '))} |`,
-      );
-    }
+    table(
+      push,
+      ['Name', 'Version', 'Source', 'Capabilities'],
+      list.map(plugin => [
+        cell(plugin.title),
+        cell(plugin.version),
+        plugin.installedFromNpm ? 'npm' : 'bundled',
+        cell(plugin.capabilities.join(', ')),
+      ]),
+    );
     push('');
   }
 
   push('### LLM Providers', '');
-  push('| Provider | Configured | Capabilities |');
-  push('|----------|------------|--------------|');
-  for (const provider of data.providers) {
-    const caps: string[] = [];
-    if (provider.capabilities.chat) caps.push('Chat');
-    if (provider.capabilities.imageGeneration) caps.push('Images');
-    if (provider.capabilities.embeddings) caps.push('Embeddings');
-    if (provider.capabilities.webSearch) caps.push('Web Search');
-    push(
-      `| ${cell(provider.displayName)} | ${provider.configured ? '✓' : '✗'} | ${cell(caps.join(', '))} |`,
-    );
-  }
+  table(
+    push,
+    ['Provider', 'Configured', 'Capabilities'],
+    data.providers.map(provider => {
+      const caps: string[] = [];
+      if (provider.capabilities.chat) caps.push('Chat');
+      if (provider.capabilities.imageGeneration) caps.push('Images');
+      if (provider.capabilities.embeddings) caps.push('Embeddings');
+      if (provider.capabilities.webSearch) caps.push('Web Search');
+      return [cell(provider.displayName), provider.configured ? '✓' : '✗', cell(caps.join(', '))];
+    }),
+  );
   push('');
 
   push('### Models by Provider', '');
@@ -209,14 +234,18 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
   if (data.providerModelCache.length === 0) {
     push('*Cache is empty — model lists are being fetched live*', '');
   } else {
-    push('| Provider | Total | Chat | Image | Embedding | Last Refreshed |');
-    push('|----------|-------|------|-------|-----------|----------------|');
-    for (const row of data.providerModelCache) {
-      push(
-        `| ${cell(row.provider)} | ${row.total} | ${row.chat} | ${row.image} | ${row.embedding} | ` +
-          `${formatDateTime(row.newestUpdatedAt)} |`,
-      );
-    }
+    table(
+      push,
+      ['Provider', 'Total', 'Chat', 'Image', 'Embedding', 'Last Refreshed'],
+      data.providerModelCache.map(row => [
+        cell(row.provider),
+        row.total,
+        row.chat,
+        row.image,
+        row.embedding,
+        formatDateTime(row.newestUpdatedAt),
+      ]),
+    );
     push('');
   }
 
@@ -224,14 +253,17 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
   if (data.apiKeyUsage.length === 0) {
     push('*No API keys stored*', '');
   } else {
-    push('| Provider | Keys | Active | Never Used | Last Used |');
-    push('|----------|------|--------|------------|-----------|');
-    for (const row of data.apiKeyUsage) {
-      push(
-        `| ${cell(row.provider)} | ${row.total} | ${row.active} | ${row.neverUsed} | ` +
-          `${formatDate(row.lastUsed)} |`,
-      );
-    }
+    table(
+      push,
+      ['Provider', 'Keys', 'Active', 'Never Used', 'Last Used'],
+      data.apiKeyUsage.map(row => [
+        cell(row.provider),
+        row.total,
+        row.active,
+        row.neverUsed,
+        formatDate(row.lastUsed),
+      ]),
+    );
     push('');
   }
   if (data.apiKeyTypes.length > 0) {
@@ -260,13 +292,14 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
 
   push('### Image Providers', '');
   if (data.imageProviders.length > 0) {
-    push('| Provider | Models |');
-    push('|----------|--------|');
-    for (const provider of data.imageProviders) {
-      push(
-        `| ${cell(provider.displayName)} | ${cell(provider.models.join(', ') || '*No models listed*')} |`,
-      );
-    }
+    table(
+      push,
+      ['Provider', 'Models'],
+      data.imageProviders.map(provider => [
+        cell(provider.displayName),
+        cell(provider.models.join(', ') || '*No models listed*'),
+      ]),
+    );
   } else {
     push('*No image providers available*');
   }
@@ -274,13 +307,14 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
 
   push('### Embedding Providers', '');
   if (data.embeddingProviders.length > 0) {
-    push('| Provider | Models |');
-    push('|----------|--------|');
-    for (const provider of data.embeddingProviders) {
-      push(
-        `| ${cell(provider.displayName)} | ${cell(provider.models.join(', ') || '*No models listed*')} |`,
-      );
-    }
+    table(
+      push,
+      ['Provider', 'Models'],
+      data.embeddingProviders.map(provider => [
+        cell(provider.displayName),
+        cell(provider.models.join(', ') || '*No models listed*'),
+      ]),
+    );
   } else {
     push('*No embedding providers available*');
   }
@@ -318,48 +352,60 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
   }
   push('');
   if (data.themeInfo.themes.length > 0) {
-    push('| Theme | Version | Source | Icon Overrides | Unknown |');
-    push('|-------|---------|--------|----------------|---------|');
-    for (const theme of data.themeInfo.themes) {
-      push(
-        `| ${cell(theme.name)} | ${cell(theme.version)} | ${cell(theme.source)} | ` +
-          `${theme.iconOverrides} | ${theme.unknownIconOverrides} |`,
-      );
-    }
+    table(
+      push,
+      ['Theme', 'Version', 'Source', 'Icon Overrides', 'Unknown'],
+      data.themeInfo.themes.map(theme => [
+        cell(theme.name),
+        cell(theme.version),
+        cell(theme.source),
+        theme.iconOverrides,
+        theme.unknownIconOverrides,
+      ]),
+    );
     push('');
   }
+}
 
-  // ==========================================================================
-  // Phase 3 — Auditing the ledgers
-  // ==========================================================================
+// ============================================================================
+// Phase 3 — Auditing the ledgers
+// ============================================================================
 
+function renderLedgers(push: Push, data: AlmanackReportData): void {
   push('## The Ledgers', '');
 
   push('### Census', '');
-  push('| Collection | Count |');
-  push('|------------|-------|');
-  push(`| Characters | ${data.databaseStats.characters} |`);
-  push(`| Favourite Characters | ${data.databaseStats.favoriteCharacters} |`);
-  push(`| Chats | ${data.databaseStats.chats} |`);
-  push(`| Memories | ${data.databaseStats.memories.toLocaleString()} |`);
-  push(`| Tags | ${data.databaseStats.tags} |`);
-  push(`| Projects | ${data.databaseStats.projects} |`);
-  push(`| Groups | ${data.databaseStats.groups} |`);
-  push(
-    `| Connection Profiles | ${data.databaseStats.connectionProfiles.total} ` +
-      `(${data.databaseStats.connectionProfiles.webSearchEnabled} web search, ` +
-      `${data.databaseStats.connectionProfiles.toolUseEnabled} tool use, ` +
-      `${data.databaseStats.connectionProfiles.dangerousCompatible} dangerous) |`,
-  );
-  push(`| Image Profiles | ${data.databaseStats.imageProfiles} |`);
-  push(`| Embedding Profiles | ${data.databaseStats.embeddingProfiles} |`);
-  push(
-    `| Prompt Templates | ${data.databaseStats.promptTemplates.total} ` +
-      `(${data.databaseStats.promptTemplates.builtIn} built-in, ${data.databaseStats.promptTemplates.custom} custom) |`,
-  );
-  push(
-    `| Roleplay Templates | ${data.databaseStats.roleplayTemplates.total} ` +
-      `(${data.databaseStats.roleplayTemplates.builtIn} built-in, ${data.databaseStats.roleplayTemplates.custom} custom) |`,
+  table(
+    push,
+    ['Collection', 'Count'],
+    [
+      ['Characters', data.databaseStats.characters],
+      ['Favourite Characters', data.databaseStats.favoriteCharacters],
+      ['Chats', data.databaseStats.chats],
+      ['Memories', data.databaseStats.memories.toLocaleString()],
+      ['Tags', data.databaseStats.tags],
+      ['Projects', data.databaseStats.projects],
+      ['Groups', data.databaseStats.groups],
+      [
+        'Connection Profiles',
+        `${data.databaseStats.connectionProfiles.total} ` +
+          `(${data.databaseStats.connectionProfiles.webSearchEnabled} web search, ` +
+          `${data.databaseStats.connectionProfiles.toolUseEnabled} tool use, ` +
+          `${data.databaseStats.connectionProfiles.dangerousCompatible} dangerous)`,
+      ],
+      ['Image Profiles', data.databaseStats.imageProfiles],
+      ['Embedding Profiles', data.databaseStats.embeddingProfiles],
+      [
+        'Prompt Templates',
+        `${data.databaseStats.promptTemplates.total} ` +
+          `(${data.databaseStats.promptTemplates.builtIn} built-in, ${data.databaseStats.promptTemplates.custom} custom)`,
+      ],
+      [
+        'Roleplay Templates',
+        `${data.databaseStats.roleplayTemplates.total} ` +
+          `(${data.databaseStats.roleplayTemplates.builtIn} built-in, ${data.databaseStats.roleplayTemplates.custom} custom)`,
+      ],
+    ],
   );
   push('');
 
@@ -392,11 +438,11 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
 
   if (data.chatBreakdown.participantHistogram.length > 0) {
     push('Cast sizes:', '');
-    push('| Participants | Chats |');
-    push('|--------------|-------|');
-    for (const row of data.chatBreakdown.participantHistogram) {
-      push(`| ${row.participants} | ${row.chats} |`);
-    }
+    table(
+      push,
+      ['Participants', 'Chats'],
+      data.chatBreakdown.participantHistogram.map(row => [row.participants, row.chats]),
+    );
     push('');
   }
 
@@ -412,17 +458,17 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
     push(`- **With a wall-clock budget**: ${data.autonomousRooms.withWallClockBudget}`);
     push(`- **With a spend cap**: ${data.autonomousRooms.withSpendCap}`);
     push(`- **Permitting destructive tools**: ${data.autonomousRooms.destructiveToolsAllowed}`, '');
-    push('| Run State | Rooms |');
-    push('|-----------|-------|');
-    for (const row of data.autonomousRooms.byRunState) {
-      push(`| ${cell(row.runState)} | ${row.count} |`);
-    }
+    table(
+      push,
+      ['Run State', 'Rooms'],
+      data.autonomousRooms.byRunState.map(row => [cell(row.runState), row.count]),
+    );
     push('');
-    push('| Visibility | Rooms |');
-    push('|------------|-------|');
-    for (const row of data.autonomousRooms.byVisibility) {
-      push(`| ${cell(row.visibility)} | ${row.count} |`);
-    }
+    table(
+      push,
+      ['Visibility', 'Rooms'],
+      data.autonomousRooms.byVisibility.map(row => [cell(row.visibility), row.count]),
+    );
     push('');
   }
 
@@ -465,6 +511,155 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
   push(`- **May create outfits**: ${data.characterBreakdown.canCreateOutfits}`);
   push(`- **With a Core-whisper override**: ${data.characterBreakdown.coreWhisperOverrides}`, '');
 
+  renderFeatureConfig(push, data);
+
+  push('### Instance Settings', '');
+  push(`- **Stale-chat retention**: ${data.instanceSettings.staleChatDays} days`);
+  push(
+    `- **Chats eligible for the next sweep**: ${data.instanceSettings.chatsEligibleForNextSweep}`,
+  );
+  push(`- **Max concurrent background jobs**: ${data.instanceSettings.maxConcurrentJobs}`);
+  push(
+    `- **Memory recall**: scope policy \`${data.instanceSettings.memoryRecall.scopePolicy}\`, ` +
+      `related-memory expansion ${yesNo(data.instanceSettings.memoryRecall.expandRelated)}`,
+  );
+  push(
+    `- **Memory extraction limits**: ${yesNo(data.instanceSettings.memoryExtractionLimits.enabled)} ` +
+      `(max ${data.instanceSettings.memoryExtractionLimits.maxPerHour}/hour, ` +
+      `soft start ${data.instanceSettings.memoryExtractionLimits.softStartFraction}, ` +
+      `floor ${data.instanceSettings.memoryExtractionLimits.softFloor})`,
+  );
+  push(
+    `- **Last maintenance sweep**: ${formatDateTime(data.instanceSettings.lastMaintenanceSweepAt)}`,
+    '',
+  );
+
+  push('### Background Jobs', '');
+  push('**By status**', '');
+  push(
+    ...countList(
+      data.backgroundJobs.byStatus.map(r => ({ label: r.status, count: r.count })),
+      'No jobs',
+    ),
+  );
+  push('');
+  push('**By type**', '');
+  push(
+    ...countList(
+      data.backgroundJobs.byType.map(r => ({ label: r.type, count: r.count })),
+      'No jobs',
+    ),
+  );
+  push('');
+  push(`- **Attempts exhausted**: ${data.backgroundJobs.attemptsExhausted}`);
+  push(
+    `- **Oldest pending job scheduled**: ${formatDateTime(data.backgroundJobs.oldestPendingScheduledAt)}`,
+    '',
+  );
+  if (data.backgroundJobs.failed.length > 0) {
+    table(
+      push,
+      ['Failed Job Type', 'Count', 'Most Recent Error'],
+      data.backgroundJobs.failed.map(row => [cell(row.type), row.count, cell(row.lastError ?? '—')]),
+    );
+    push('');
+  }
+
+  push('### Embedding Pipeline', '');
+  push(
+    `- **Conversation chunks**: ${data.embeddingPipeline.conversationChunks.total.toLocaleString()} ` +
+      `(${data.embeddingPipeline.conversationChunks.unembedded.toLocaleString()} unembedded)`,
+  );
+  push(
+    `- **Help docs**: ${data.embeddingPipeline.helpDocs.total} ` +
+      `(${data.embeddingPipeline.helpDocs.unembedded} unembedded)`,
+  );
+  push(
+    `- **Failed rows**: ${data.embeddingPipeline.failed} ` +
+      '_(permanent for the current profile)_',
+  );
+  push(
+    `- **Active profile dimensions**: ${data.embeddingPipeline.activeProfileDimensions ?? 'Not configured'}`,
+  );
+  if (data.embeddingPipeline.dimensionMismatch) {
+    push(
+      '- **⚠ Dimension mismatch**: stored vectors do not all match the active embedding profile. ' +
+        'Recall against the mismatched vectors will be wrong until they are reindexed.',
+    );
+  }
+  push('');
+  if (data.embeddingPipeline.storedDimensions.length > 0) {
+    table(
+      push,
+      ['Table', 'Dimensions', 'Vectors'],
+      data.embeddingPipeline.storedDimensions.map(row => [
+        cell(row.table),
+        row.dimensions,
+        row.vectors.toLocaleString(),
+      ]),
+    );
+    push('');
+  }
+  if (data.embeddingPipeline.statusByEntityType.length > 0) {
+    table(
+      push,
+      ['Entity Type', 'Status', 'Rows'],
+      data.embeddingPipeline.statusByEntityType.map(row => [
+        cell(row.entityType),
+        cell(row.status),
+        row.count.toLocaleString(),
+      ]),
+    );
+    push('');
+  }
+
+  push('### Ariel (Terminal)', '');
+  push(`- **Total sessions**: ${data.terminal.totalSessions}`);
+  push(`- **Still live**: ${data.terminal.liveSessions}`);
+  push(`- **Exited non-zero**: ${data.terminal.nonZeroExits}`);
+  push(
+    `- **Shells seen**: ${data.terminal.distinctShells.length > 0 ? data.terminal.distinctShells.join(', ') : 'None'}`,
+    '',
+  );
+
+  push('### Legacy File Ledger', '');
+  push(
+    'The `files` table. Since the document-store cutovers the bulk of stored bytes lives in the',
+    'Scriptorium (below); what remains here is mostly generated-image bookkeeping and residue.',
+    '',
+  );
+  push(`- **Total Files**: ${data.storageStats.totalFiles.toLocaleString()}`);
+  push(`- **Total Size**: ${formatBytes(data.storageStats.totalSize)}`);
+  push(`- **Files not marked \`ok\`**: ${data.storageStats.notOkFiles}`, '');
+  if (data.storageStats.folders.length > 0) {
+    table(
+      push,
+      ['Folder', 'Files', 'Size'],
+      data.storageStats.folders.map(folder => [
+        cell(folder.path),
+        folder.fileCount,
+        formatBytes(folder.totalSize),
+      ]),
+    );
+    push('');
+  }
+  if (data.storageStats.generatedImagesByModel.length > 0) {
+    push('Generated images by model:', '');
+    table(
+      push,
+      ['Model', 'Images', 'Size'],
+      data.storageStats.generatedImagesByModel.map(row => [
+        cell(row.generationModel),
+        row.count,
+        formatBytes(row.bytes),
+      ]),
+    );
+    push('');
+  }
+}
+
+/** The "Feature Configuration" subsection of the ledgers — every dial on `chat_settings`. */
+function renderFeatureConfig(push: Push, data: AlmanackReportData): void {
   push('### Feature Configuration', '');
   const fc = data.featureConfig;
   push('#### The Concierge (Dangerous Content)', '');
@@ -538,139 +733,13 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
     `- **Uncensored fallback configured**: ${yesNo(fc.uncensoredImageDescriptionProfileConfigured)}`,
     '',
   );
+}
 
-  push('### Instance Settings', '');
-  push(`- **Stale-chat retention**: ${data.instanceSettings.staleChatDays} days`);
-  push(
-    `- **Chats eligible for the next sweep**: ${data.instanceSettings.chatsEligibleForNextSweep}`,
-  );
-  push(`- **Max concurrent background jobs**: ${data.instanceSettings.maxConcurrentJobs}`);
-  push(
-    `- **Memory recall**: scope policy \`${data.instanceSettings.memoryRecall.scopePolicy}\`, ` +
-      `related-memory expansion ${yesNo(data.instanceSettings.memoryRecall.expandRelated)}`,
-  );
-  push(
-    `- **Memory extraction limits**: ${yesNo(data.instanceSettings.memoryExtractionLimits.enabled)} ` +
-      `(max ${data.instanceSettings.memoryExtractionLimits.maxPerHour}/hour, ` +
-      `soft start ${data.instanceSettings.memoryExtractionLimits.softStartFraction}, ` +
-      `floor ${data.instanceSettings.memoryExtractionLimits.softFloor})`,
-  );
-  push(
-    `- **Last maintenance sweep**: ${formatDateTime(data.instanceSettings.lastMaintenanceSweepAt)}`,
-    '',
-  );
+// ============================================================================
+// Phase 4 — Touring the Scriptorium
+// ============================================================================
 
-  push('### Background Jobs', '');
-  push('**By status**', '');
-  push(
-    ...countList(
-      data.backgroundJobs.byStatus.map(r => ({ label: r.status, count: r.count })),
-      'No jobs',
-    ),
-  );
-  push('');
-  push('**By type**', '');
-  push(
-    ...countList(
-      data.backgroundJobs.byType.map(r => ({ label: r.type, count: r.count })),
-      'No jobs',
-    ),
-  );
-  push('');
-  push(`- **Attempts exhausted**: ${data.backgroundJobs.attemptsExhausted}`);
-  push(
-    `- **Oldest pending job scheduled**: ${formatDateTime(data.backgroundJobs.oldestPendingScheduledAt)}`,
-    '',
-  );
-  if (data.backgroundJobs.failed.length > 0) {
-    push('| Failed Job Type | Count | Most Recent Error |');
-    push('|-----------------|-------|-------------------|');
-    for (const row of data.backgroundJobs.failed) {
-      push(`| ${cell(row.type)} | ${row.count} | ${cell(row.lastError ?? '—')} |`);
-    }
-    push('');
-  }
-
-  push('### Embedding Pipeline', '');
-  push(
-    `- **Conversation chunks**: ${data.embeddingPipeline.conversationChunks.total.toLocaleString()} ` +
-      `(${data.embeddingPipeline.conversationChunks.unembedded.toLocaleString()} unembedded)`,
-  );
-  push(
-    `- **Help docs**: ${data.embeddingPipeline.helpDocs.total} ` +
-      `(${data.embeddingPipeline.helpDocs.unembedded} unembedded)`,
-  );
-  push(
-    `- **Failed rows**: ${data.embeddingPipeline.failed} ` +
-      '_(permanent for the current profile)_',
-  );
-  push(
-    `- **Active profile dimensions**: ${data.embeddingPipeline.activeProfileDimensions ?? 'Not configured'}`,
-  );
-  if (data.embeddingPipeline.dimensionMismatch) {
-    push(
-      '- **⚠ Dimension mismatch**: stored vectors do not all match the active embedding profile. ' +
-        'Recall against the mismatched vectors will be wrong until they are reindexed.',
-    );
-  }
-  push('');
-  if (data.embeddingPipeline.storedDimensions.length > 0) {
-    push('| Table | Dimensions | Vectors |');
-    push('|-------|------------|---------|');
-    for (const row of data.embeddingPipeline.storedDimensions) {
-      push(`| ${cell(row.table)} | ${row.dimensions} | ${row.vectors.toLocaleString()} |`);
-    }
-    push('');
-  }
-  if (data.embeddingPipeline.statusByEntityType.length > 0) {
-    push('| Entity Type | Status | Rows |');
-    push('|-------------|--------|------|');
-    for (const row of data.embeddingPipeline.statusByEntityType) {
-      push(`| ${cell(row.entityType)} | ${cell(row.status)} | ${row.count.toLocaleString()} |`);
-    }
-    push('');
-  }
-
-  push('### Ariel (Terminal)', '');
-  push(`- **Total sessions**: ${data.terminal.totalSessions}`);
-  push(`- **Still live**: ${data.terminal.liveSessions}`);
-  push(`- **Exited non-zero**: ${data.terminal.nonZeroExits}`);
-  push(
-    `- **Shells seen**: ${data.terminal.distinctShells.length > 0 ? data.terminal.distinctShells.join(', ') : 'None'}`,
-    '',
-  );
-
-  push('### Legacy File Ledger', '');
-  push(
-    'The `files` table. Since the document-store cutovers the bulk of stored bytes lives in the',
-    'Scriptorium (below); what remains here is mostly generated-image bookkeeping and residue.',
-    '',
-  );
-  push(`- **Total Files**: ${data.storageStats.totalFiles.toLocaleString()}`);
-  push(`- **Total Size**: ${formatBytes(data.storageStats.totalSize)}`);
-  push(`- **Files not marked \`ok\`**: ${data.storageStats.notOkFiles}`, '');
-  if (data.storageStats.folders.length > 0) {
-    push('| Folder | Files | Size |');
-    push('|--------|-------|------|');
-    for (const folder of data.storageStats.folders) {
-      push(`| ${cell(folder.path)} | ${folder.fileCount} | ${formatBytes(folder.totalSize)} |`);
-    }
-    push('');
-  }
-  if (data.storageStats.generatedImagesByModel.length > 0) {
-    push('Generated images by model:', '');
-    push('| Model | Images | Size |');
-    push('|-------|--------|------|');
-    for (const row of data.storageStats.generatedImagesByModel) {
-      push(`| ${cell(row.generationModel)} | ${row.count} | ${formatBytes(row.bytes)} |`);
-    }
-    push('');
-  }
-
-  // ==========================================================================
-  // Phase 4 — Touring the Scriptorium
-  // ==========================================================================
-
+function renderScriptorium(push: Push, data: AlmanackReportData): void {
   push('## The Scriptorium', '');
   const s = data.scriptorium;
   if (!s.available) {
@@ -680,179 +749,196 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
       'document byte live there.*',
       '',
     );
-  } else {
-    push('### Document Stores', '');
-    push(`- **Total stores**: ${s.mountPoints.total} (${s.mountPoints.enabled} enabled)`);
-    push(`- **Stores with a scan error**: ${s.mountPoints.scanErrors}`);
-    push(`- **Stores stuck mid-conversion**: ${s.mountPoints.conversionErrors}`, '');
-
-    if (s.mountPoints.byKind.length > 0) {
-      push('| Mount Type | Store Type | Stores | Enabled | Files | Chunks | Size |');
-      push('|------------|------------|--------|---------|-------|--------|------|');
-      for (const row of s.mountPoints.byKind) {
-        push(
-          `| ${cell(row.mountType)} | ${cell(row.storeType)} | ${row.count} | ${row.enabled} | ` +
-            `${row.fileCount.toLocaleString()} | ${row.chunkCount.toLocaleString()} | ${formatBytes(row.totalSizeBytes)} |`,
-        );
-      }
-      push('');
-    }
-
-    push('**Scan status**', '');
-    push(...countList(s.mountPoints.scanStatuses.map(r => ({ label: r.status, count: r.count })), 'No stores'));
-    push('');
-    push('**Conversion status**', '');
-    push(
-      ...countList(
-        s.mountPoints.conversionStatuses.map(r => ({ label: r.status, count: r.count })),
-        'No stores',
-      ),
-    );
-    push('');
-
-    if (s.mountPoints.wellKnown.length > 0) {
-      push('The three global stores:', '');
-      push('| Store | Setting Key | Resolves |');
-      push('|-------|-------------|----------|');
-      for (const row of s.mountPoints.wellKnown) {
-        const name = row.resolved ? (row.name ?? '(unnamed)') : row.mountPointId ? 'Missing row' : 'Not provisioned';
-        push(`| ${cell(row.label)} | \`${cell(row.settingKey)}\` | ${cell(name)} |`);
-      }
-      push('');
-    }
-
-    push('### Contents', '');
-    push(`- **Content rows** (\`doc_mount_files\`): ${s.content.fileRows.toLocaleString()}`);
-    push(`- **Link rows** (visible locations): ${s.content.linkRows.toLocaleString()}`);
-    push(
-      `- **Text documents**: ${s.content.documentRows.toLocaleString()} (${formatBytes(s.content.documentTextBytes)})`,
-    );
-    push(
-      `- **Binary blobs**: ${s.content.blobRows.toLocaleString()} (${formatBytes(s.content.blobBytes)})`,
-    );
-    push(
-      `- **Chunks**: ${s.content.chunkRows.toLocaleString()} ` +
-        `(${s.content.unembeddedChunks.toLocaleString()} unembedded, ${s.content.chunkTokens.toLocaleString()} tokens)`,
-    );
-    push('');
-    if (s.content.blobsByMimeType.length > 0) {
-      push('| Stored MIME Type | Blobs | Size |');
-      push('|------------------|-------|------|');
-      for (const row of s.content.blobsByMimeType) {
-        push(`| ${cell(row.storedMimeType)} | ${row.count.toLocaleString()} | ${formatBytes(row.bytes)} |`);
-      }
-      push('');
-    }
-
-    push('### Links & Policy', '');
-    push(`- **Links per content row**: ${s.links.dedupRatio.toFixed(2)}`);
-    push(
-      `- **Hard-link groups**: ${s.links.hardLinkGroups} (${s.links.hardLinkedLinks} links belong to one)`,
-    );
-    push(`- **Extraction errors**: ${s.links.extractionErrors}`);
-    push(`- **Conversion errors**: ${s.links.conversionErrors}`);
-    push(`- **Documents withheld from embedding**: ${s.links.policyEmbedDenied}`);
-    push(`- **Documents hidden from characters**: ${s.links.policyCharacterReadDenied}`);
-    push(`- **Documents characters may not write**: ${s.links.policyCharacterWriteDenied}`, '');
-
-    push('### Character Vaults', '');
-    push(`- **Vault-linked characters**: ${s.characterVaults.total}`);
-    push(`- **With the \`properties.json\` keystone**: ${s.characterVaults.withKeystone}`);
-    if (s.characterVaults.missingKeystone > 0) {
-      push(
-        `- **⚠ Missing the keystone**: ${s.characterVaults.missingKeystone}. ` +
-          'Reading one of these characters raises `CharacterVaultUnavailableError` — a hard failure ' +
-          'for that character, not a silently empty one.',
-      );
-    }
-    push(`- **With a \`metadata.json\`**: ${s.characterVaults.withMetadata}`, '');
-
-    push('### Wardrobe', '');
-    if (s.wardrobe.every(w => w.items === 0)) {
-      push('*No wardrobe items*', '');
-    } else {
-      push('| Tier | Items | Archived |');
-      push('|------|-------|----------|');
-      for (const row of s.wardrobe) {
-        push(`| ${cell(row.tier)} | ${row.items} | ${row.archived} |`);
-      }
-      push('');
-    }
-
-    push("### Pascal's Workbench (Custom Tools)", '');
-    push(`- **Definitions found**: ${s.customTools.total}`);
-    push(`- **With saved presets**: ${s.customTools.withPresets} (${s.customTools.presetFiles} preset files)`);
-    push(`- **Consulting an LLM**: ${s.customTools.withLlmConsult}`);
-    push(`- **With side effects**: ${s.customTools.withEffects}`);
-    push(`- **Gated on invoker metadata**: ${s.customTools.metadataGated}`);
-    push(`- **Failed to parse**: ${s.customTools.parseFailures}`, '');
-    if (s.customTools.byStore.length > 0) {
-      push('| Store | Definitions |');
-      push('|-------|-------------|');
-      for (const row of s.customTools.byStore) {
-        push(`| ${cell(row.store)} | ${row.count} |`);
-      }
-      push('');
-    }
-    if (s.customTools.parseFailureDetail.length > 0) {
-      push('Definitions that would not load:', '');
-      push('| Store | Path | Reason |');
-      push('|-------|------|--------|');
-      for (const row of s.customTools.parseFailureDetail) {
-        push(`| ${cell(row.store)} | ${cell(row.path)} | ${cell(row.reason)} |`);
-      }
-      push('');
-    }
-
-    push("### Suparṇā's Post Office", '');
-    push(`- **Letters delivered**: ${s.postOffice.letters}`);
-    push(`- **Not yet announced**: ${s.postOffice.unannounced}`);
-    push(`- **Characters with a mailbox**: ${s.postOffice.mailboxes}`, '');
-
-    push('### Photographs', '');
-    push(
-      `- **In character vaults**: ${s.photos.characterVaultPhotos} (${formatBytes(s.photos.characterVaultBytes)})`,
-    );
-    push(
-      `- **In your gallery**: ${s.photos.userGalleryPhotos} (${formatBytes(s.photos.userGalleryBytes)})`,
-    );
-    push('- *Counts and bytes only — never titles, captions or filenames.*', '');
-
-    push('### Scenarios & State', '');
-    if (s.scenarios.every(row => row.count === 0)) {
-      push('*No scenarios*', '');
-    } else {
-      push('| Tier | Scenarios | Archived |');
-      push('|------|-----------|----------|');
-      for (const row of s.scenarios) {
-        push(`| ${cell(row.tier)} | ${row.count} | ${row.archived} |`);
-      }
-      push('');
-    }
-    push('State cascade coverage (chat → project → group → general):', '');
-    push(`- **Chats carrying state**: ${s.stateCascade.chatsWithState}`);
-    push(`- **Projects carrying state**: ${s.stateCascade.projectsWithState}`);
-    push(`- **Groups carrying state**: ${s.stateCascade.groupsWithState}`);
-    push(`- **General state present**: ${yesNo(s.stateCascade.generalStatePresent)}`, '');
+    return;
   }
 
-  // ==========================================================================
-  // Phase 5 — Assembling the dramatis personae
-  // ==========================================================================
+  push('### Document Stores', '');
+  push(`- **Total stores**: ${s.mountPoints.total} (${s.mountPoints.enabled} enabled)`);
+  push(`- **Stores with a scan error**: ${s.mountPoints.scanErrors}`);
+  push(`- **Stores stuck mid-conversion**: ${s.mountPoints.conversionErrors}`, '');
 
+  if (s.mountPoints.byKind.length > 0) {
+    table(
+      push,
+      ['Mount Type', 'Store Type', 'Stores', 'Enabled', 'Files', 'Chunks', 'Size'],
+      s.mountPoints.byKind.map(row => [
+        cell(row.mountType),
+        cell(row.storeType),
+        row.count,
+        row.enabled,
+        row.fileCount.toLocaleString(),
+        row.chunkCount.toLocaleString(),
+        formatBytes(row.totalSizeBytes),
+      ]),
+    );
+    push('');
+  }
+
+  push('**Scan status**', '');
+  push(...countList(s.mountPoints.scanStatuses.map(r => ({ label: r.status, count: r.count })), 'No stores'));
+  push('');
+  push('**Conversion status**', '');
+  push(
+    ...countList(
+      s.mountPoints.conversionStatuses.map(r => ({ label: r.status, count: r.count })),
+      'No stores',
+    ),
+  );
+  push('');
+
+  if (s.mountPoints.wellKnown.length > 0) {
+    push('The three global stores:', '');
+    table(
+      push,
+      ['Store', 'Setting Key', 'Resolves'],
+      s.mountPoints.wellKnown.map(row => {
+        const name = row.resolved ? (row.name ?? '(unnamed)') : row.mountPointId ? 'Missing row' : 'Not provisioned';
+        return [cell(row.label), `\`${cell(row.settingKey)}\``, cell(name)];
+      }),
+    );
+    push('');
+  }
+
+  push('### Contents', '');
+  push(`- **Content rows** (\`doc_mount_files\`): ${s.content.fileRows.toLocaleString()}`);
+  push(`- **Link rows** (visible locations): ${s.content.linkRows.toLocaleString()}`);
+  push(
+    `- **Text documents**: ${s.content.documentRows.toLocaleString()} (${formatBytes(s.content.documentTextBytes)})`,
+  );
+  push(
+    `- **Binary blobs**: ${s.content.blobRows.toLocaleString()} (${formatBytes(s.content.blobBytes)})`,
+  );
+  push(
+    `- **Chunks**: ${s.content.chunkRows.toLocaleString()} ` +
+      `(${s.content.unembeddedChunks.toLocaleString()} unembedded, ${s.content.chunkTokens.toLocaleString()} tokens)`,
+  );
+  push('');
+  if (s.content.blobsByMimeType.length > 0) {
+    table(
+      push,
+      ['Stored MIME Type', 'Blobs', 'Size'],
+      s.content.blobsByMimeType.map(row => [
+        cell(row.storedMimeType),
+        row.count.toLocaleString(),
+        formatBytes(row.bytes),
+      ]),
+    );
+    push('');
+  }
+
+  push('### Links & Policy', '');
+  push(`- **Links per content row**: ${s.links.dedupRatio.toFixed(2)}`);
+  push(
+    `- **Hard-link groups**: ${s.links.hardLinkGroups} (${s.links.hardLinkedLinks} links belong to one)`,
+  );
+  push(`- **Extraction errors**: ${s.links.extractionErrors}`);
+  push(`- **Conversion errors**: ${s.links.conversionErrors}`);
+  push(`- **Documents withheld from embedding**: ${s.links.policyEmbedDenied}`);
+  push(`- **Documents hidden from characters**: ${s.links.policyCharacterReadDenied}`);
+  push(`- **Documents characters may not write**: ${s.links.policyCharacterWriteDenied}`, '');
+
+  push('### Character Vaults', '');
+  push(`- **Vault-linked characters**: ${s.characterVaults.total}`);
+  push(`- **With the \`properties.json\` keystone**: ${s.characterVaults.withKeystone}`);
+  if (s.characterVaults.missingKeystone > 0) {
+    push(
+      `- **⚠ Missing the keystone**: ${s.characterVaults.missingKeystone}. ` +
+        'Reading one of these characters raises `CharacterVaultUnavailableError` — a hard failure ' +
+        'for that character, not a silently empty one.',
+    );
+  }
+  push(`- **With a \`metadata.json\`**: ${s.characterVaults.withMetadata}`, '');
+
+  push('### Wardrobe', '');
+  if (s.wardrobe.every(w => w.items === 0)) {
+    push('*No wardrobe items*', '');
+  } else {
+    table(
+      push,
+      ['Tier', 'Items', 'Archived'],
+      s.wardrobe.map(row => [cell(row.tier), row.items, row.archived]),
+    );
+    push('');
+  }
+
+  push("### Pascal's Workbench (Custom Tools)", '');
+  push(`- **Definitions found**: ${s.customTools.total}`);
+  push(`- **With saved presets**: ${s.customTools.withPresets} (${s.customTools.presetFiles} preset files)`);
+  push(`- **Consulting an LLM**: ${s.customTools.withLlmConsult}`);
+  push(`- **With side effects**: ${s.customTools.withEffects}`);
+  push(`- **Gated on invoker metadata**: ${s.customTools.metadataGated}`);
+  push(`- **Failed to parse**: ${s.customTools.parseFailures}`, '');
+  if (s.customTools.byStore.length > 0) {
+    table(
+      push,
+      ['Store', 'Definitions'],
+      s.customTools.byStore.map(row => [cell(row.store), row.count]),
+    );
+    push('');
+  }
+  if (s.customTools.parseFailureDetail.length > 0) {
+    push('Definitions that would not load:', '');
+    table(
+      push,
+      ['Store', 'Path', 'Reason'],
+      s.customTools.parseFailureDetail.map(row => [cell(row.store), cell(row.path), cell(row.reason)]),
+    );
+    push('');
+  }
+
+  push("### Suparṇā's Post Office", '');
+  push(`- **Letters delivered**: ${s.postOffice.letters}`);
+  push(`- **Not yet announced**: ${s.postOffice.unannounced}`);
+  push(`- **Characters with a mailbox**: ${s.postOffice.mailboxes}`, '');
+
+  push('### Photographs', '');
+  push(
+    `- **In character vaults**: ${s.photos.characterVaultPhotos} (${formatBytes(s.photos.characterVaultBytes)})`,
+  );
+  push(
+    `- **In your gallery**: ${s.photos.userGalleryPhotos} (${formatBytes(s.photos.userGalleryBytes)})`,
+  );
+  push('- *Counts and bytes only — never titles, captions or filenames.*', '');
+
+  push('### Scenarios & State', '');
+  if (s.scenarios.every(row => row.count === 0)) {
+    push('*No scenarios*', '');
+  } else {
+    table(
+      push,
+      ['Tier', 'Scenarios', 'Archived'],
+      s.scenarios.map(row => [cell(row.tier), row.count, row.archived]),
+    );
+    push('');
+  }
+  push('State cascade coverage (chat → project → group → general):', '');
+  push(`- **Chats carrying state**: ${s.stateCascade.chatsWithState}`);
+  push(`- **Projects carrying state**: ${s.stateCascade.projectsWithState}`);
+  push(`- **Groups carrying state**: ${s.stateCascade.groupsWithState}`);
+  push(`- **General state present**: ${yesNo(s.stateCascade.generalStatePresent)}`, '');
+}
+
+// ============================================================================
+// Phase 5 — Assembling the dramatis personae
+// ============================================================================
+
+function renderPersonae(push: Push, data: AlmanackReportData): void {
   push('## Dramatis Personae', '');
 
   push('### Ten Busiest Characters', '');
   if (data.personae.topCharacters.length === 0) {
     push('*No characters*', '');
   } else {
-    push('| Character | Chats | Memories | Vault Size |');
-    push('|-----------|-------|----------|------------|');
-    for (const row of data.personae.topCharacters) {
-      push(
-        `| ${cell(row.name)} | ${row.chats} | ${row.memories.toLocaleString()} | ${formatBytes(row.storageBytes)} |`,
-      );
-    }
+    table(
+      push,
+      ['Character', 'Chats', 'Memories', 'Vault Size'],
+      data.personae.topCharacters.map(row => [
+        cell(row.name),
+        row.chats,
+        row.memories.toLocaleString(),
+        formatBytes(row.storageBytes),
+      ]),
+    );
     push('');
     push(
       `Ranked by chats, ties broken by memories. Help chats and Brahma Console sessions are excluded. ` +
@@ -868,14 +954,18 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
   if (data.personae.projects.length === 0) {
     push('*No projects*', '');
   } else {
-    push('| Project | Linked Stores | Chats | Files | Documents | State |');
-    push('|---------|---------------|-------|-------|-----------|-------|');
-    for (const row of data.personae.projects) {
-      push(
-        `| ${cell(row.name)} | ${row.linkedStores} | ${row.chats} | ${row.files} | ${row.documents} | ` +
-          `${row.hasState ? '✓' : '—'} |`,
-      );
-    }
+    table(
+      push,
+      ['Project', 'Linked Stores', 'Chats', 'Files', 'Documents', 'State'],
+      data.personae.projects.map(row => [
+        cell(row.name),
+        row.linkedStores,
+        row.chats,
+        row.files,
+        row.documents,
+        row.hasState ? '✓' : '—',
+      ]),
+    );
     push('');
   }
 
@@ -883,14 +973,16 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
   if (data.personae.groups.length === 0) {
     push('*No groups*', '');
   } else {
-    push('| Group | Members | Linked Stores | Official Store |');
-    push('|-------|---------|---------------|----------------|');
-    for (const row of data.personae.groups) {
-      push(
-        `| ${cell(row.name)} | ${cell(row.members.join(', ') || '*none*')} | ${row.linkedStores} | ` +
-          `${row.hasOfficialStore ? '✓' : '⚠ missing'} |`,
-      );
-    }
+    table(
+      push,
+      ['Group', 'Members', 'Linked Stores', 'Official Store'],
+      data.personae.groups.map(row => [
+        cell(row.name),
+        cell(row.members.join(', ') || '*none*'),
+        row.linkedStores,
+        row.hasOfficialStore ? '✓' : '⚠ missing',
+      ]),
+    );
     push('');
     if (data.personae.groups.some(g => !g.hasOfficialStore)) {
       push(
@@ -900,11 +992,61 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
       );
     }
   }
+}
 
-  // ==========================================================================
-  // Phase 6 — Reading the wire records
-  // ==========================================================================
+// ============================================================================
+// Phase 6 — Reading the wire records
+// ============================================================================
 
+/** A per-profile retention-window table, or the `empty` note when there are no rows. */
+function renderWindow(push: Push, heading: string, rows: ProfileWindowRow[], empty: string): void {
+  push(`### ${heading}`, '');
+  if (rows.length === 0) {
+    push(`*${empty}*`, '');
+    return;
+  }
+  table(
+    push,
+    ['Profile', 'Provider / Model', 'Requests', 'Tokens', 'Avg', 'Median', 'Measured', 'Errors'],
+    rows.map(row => [
+      cell(row.label),
+      cell(`${row.provider} / ${row.modelName}`),
+      row.requests.toLocaleString(),
+      row.totalTokens.toLocaleString(),
+      formatMs(row.avgDurationMs),
+      formatMs(row.medianDurationMs),
+      `${row.measuredRequests}/${row.requests}`,
+      row.failures,
+    ]),
+  );
+  push('');
+}
+
+/** A prompt-cache table keyed by provider or profile, or the `empty` note. */
+function renderCache(push: Push, heading: string, rows: CacheRow[], empty: string): void {
+  push(`### ${heading}`, '');
+  if (rows.length === 0) {
+    push(`*${empty}*`, '');
+    return;
+  }
+  table(
+    push,
+    ['Key', 'Requests w/ Cache Data', 'Hits', 'Hit Rate', 'Cache Read', 'Cache Write', 'Uncached Prompt', 'Token Hit Rate'],
+    rows.map(row => [
+      cell(row.label),
+      row.rowsWithCacheUsage.toLocaleString(),
+      row.rowsWithCacheRead.toLocaleString(),
+      percent(row.requestHitRatio),
+      row.cacheReadTokens.toLocaleString(),
+      row.cacheCreationTokens.toLocaleString(),
+      row.uncachedPromptTokens.toLocaleString(),
+      percent(row.tokenHitRatio),
+    ]),
+  );
+  push('');
+}
+
+function renderWireRecords(push: Push, data: AlmanackReportData): void {
   push('## The Wire Records', '');
   push(
     `> These figures are drawn from the LLM logs. Logging is currently **${data.wireRecords.loggingEnabled ? 'on' : 'off'}**`,
@@ -932,15 +1074,20 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
   if (data.wireRecords.byType.length === 0) {
     push('*No logged requests*', '');
   } else {
-    push('| Type | Requests | Prompt | Completion | Total | Avg Latency | Measured | Errors |');
-    push('|------|----------|--------|------------|-------|-------------|----------|--------|');
-    for (const row of data.wireRecords.byType) {
-      push(
-        `| ${cell(row.type)} | ${row.requests.toLocaleString()} | ${row.promptTokens.toLocaleString()} | ` +
-          `${row.completionTokens.toLocaleString()} | ${row.totalTokens.toLocaleString()} | ` +
-          `${formatMs(row.avgDurationMs)} | ${row.measuredRequests}/${row.requests} | ${row.failures} |`,
-      );
-    }
+    table(
+      push,
+      ['Type', 'Requests', 'Prompt', 'Completion', 'Total', 'Avg Latency', 'Measured', 'Errors'],
+      data.wireRecords.byType.map(row => [
+        cell(row.type),
+        row.requests.toLocaleString(),
+        row.promptTokens.toLocaleString(),
+        row.completionTokens.toLocaleString(),
+        row.totalTokens.toLocaleString(),
+        formatMs(row.avgDurationMs),
+        `${row.measuredRequests}/${row.requests}`,
+        row.failures,
+      ]),
+    );
     push('');
     push(
       '"Measured" is the denominator behind the average — requests carrying a usable `durationMs`.',
@@ -953,15 +1100,19 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
   if (data.wireRecords.connectionProfileLifetime.length === 0) {
     push('*No connection profiles*', '');
   } else {
-    push('| Profile | Provider / Model | Messages | Prompt | Completion | Total | Last Touched |');
-    push('|---------|------------------|----------|--------|------------|-------|--------------|');
-    for (const row of data.wireRecords.connectionProfileLifetime) {
-      push(
-        `| ${cell(row.name)} | ${cell(`${row.provider} / ${row.modelName}`)} | ${row.messageCount.toLocaleString()} | ` +
-          `${row.totalPromptTokens.toLocaleString()} | ${row.totalCompletionTokens.toLocaleString()} | ` +
-          `${row.totalTokens.toLocaleString()} | ${formatDate(row.lastTouchedAt)} |`,
-      );
-    }
+    table(
+      push,
+      ['Profile', 'Provider / Model', 'Messages', 'Prompt', 'Completion', 'Total', 'Last Touched'],
+      data.wireRecords.connectionProfileLifetime.map(row => [
+        cell(row.name),
+        cell(`${row.provider} / ${row.modelName}`),
+        row.messageCount.toLocaleString(),
+        row.totalPromptTokens.toLocaleString(),
+        row.totalCompletionTokens.toLocaleString(),
+        row.totalTokens.toLocaleString(),
+        formatDate(row.lastTouchedAt),
+      ]),
+    );
     push('');
     push(
       'These counters live on the profile rows and cover the profile\'s whole life, not the log retention',
@@ -970,31 +1121,15 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
     );
   }
 
-  const renderWindow = (heading: string, rows: ProfileWindowRow[], empty: string) => {
-    push(`### ${heading}`, '');
-    if (rows.length === 0) {
-      push(`*${empty}*`, '');
-      return;
-    }
-    push('| Profile | Provider / Model | Requests | Tokens | Avg | Median | Measured | Errors |');
-    push('|---------|------------------|----------|--------|-----|--------|----------|--------|');
-    for (const row of rows) {
-      push(
-        `| ${cell(row.label)} | ${cell(`${row.provider} / ${row.modelName}`)} | ${row.requests.toLocaleString()} | ` +
-          `${row.totalTokens.toLocaleString()} | ${formatMs(row.avgDurationMs)} | ${formatMs(row.medianDurationMs)} | ` +
-          `${row.measuredRequests}/${row.requests} | ${row.failures} |`,
-      );
-    }
-    push('');
-  };
-
   renderWindow(
+    push,
     'Connection Profiles — Within the Retention Window',
     data.wireRecords.connectionProfileWindow,
     'No logged requests',
   );
 
   renderWindow(
+    push,
     'Image Profiles — Within the Retention Window',
     data.wireRecords.imageProfileWindow,
     'No logged image generations',
@@ -1008,27 +1143,8 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
     );
   }
 
-  const renderCache = (heading: string, rows: CacheRow[], empty: string) => {
-    push(`### ${heading}`, '');
-    if (rows.length === 0) {
-      push(`*${empty}*`, '');
-      return;
-    }
-    push('| Key | Requests w/ Cache Data | Hits | Hit Rate | Cache Read | Cache Write | Uncached Prompt | Token Hit Rate |');
-    push('|-----|------------------------|------|----------|------------|-------------|-----------------|----------------|');
-    for (const row of rows) {
-      push(
-        `| ${cell(row.label)} | ${row.rowsWithCacheUsage.toLocaleString()} | ${row.rowsWithCacheRead.toLocaleString()} | ` +
-          `${percent(row.requestHitRatio)} | ${row.cacheReadTokens.toLocaleString()} | ` +
-          `${row.cacheCreationTokens.toLocaleString()} | ${row.uncachedPromptTokens.toLocaleString()} | ` +
-          `${percent(row.tokenHitRatio)} |`,
-      );
-    }
-    push('');
-  };
-
-  renderCache('Prompt Cache by Provider', data.wireRecords.cacheByProvider, 'No cache data recorded');
-  renderCache('Prompt Cache by Profile', data.wireRecords.cacheByProfile, 'No per-profile cache data recorded');
+  renderCache(push, 'Prompt Cache by Provider', data.wireRecords.cacheByProvider, 'No cache data recorded');
+  renderCache(push, 'Prompt Cache by Profile', data.wireRecords.cacheByProfile, 'No per-profile cache data recorded');
   push(
     'Cache figures come from the `cacheUsage` payload, which in practice only chat messages carry — the',
     'streaming path is its sole writer. There is no "was this a hit" flag; a hit is a row reporting more',
@@ -1036,6 +1152,32 @@ export function renderAlmanackMarkdown(data: AlmanackReportData): string {
     '"Uncached Prompt" and "Cache Read" together make the whole prompt.',
     '',
   );
+}
+
+// ============================================================================
+// Binding the volume
+// ============================================================================
+
+export function renderAlmanackMarkdown(data: AlmanackReportData): string {
+  const lines: string[] = [];
+  const push: Push = (...values) => {
+    lines.push(...values);
+  };
+
+  push(`# ${ALMANACK_TITLE}`, '');
+  push(`Generated: ${formatDateTime(data.generatedAt)}`, '');
+  push(
+    'A compendium of the establishment as it stands: what is installed, what is configured,',
+    'and what has accumulated. Safe to share — see the privacy note in the help page.',
+    '',
+  );
+
+  renderPremises(push, data);
+  renderMachinery(push, data);
+  renderLedgers(push, data);
+  renderScriptorium(push, data);
+  renderPersonae(push, data);
+  renderWireRecords(push, data);
 
   return lines.join('\n');
 }

@@ -24,7 +24,11 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
-import { withWardrobeArchivedParam } from '@/lib/wardrobe/wardrobe-container'
+import {
+  GENERAL_CONTAINER,
+  wardrobeCollectionUrl,
+  withWardrobeArchivedParam,
+} from '@/lib/wardrobe/wardrobe-container'
 
 export interface UseCharacterWardrobeItemsResult {
   items: WardrobeItem[]
@@ -98,14 +102,14 @@ export function useCharacterWardrobeItems(
       }
       setResolvedProjectId(projectTierId)
 
-      const withArchived = (url: string) => withWardrobeArchivedParam(url, includeArchived)
+      const personalUrl = wardrobeCollectionUrl({ scope: 'character', id: characterId })
       const [personalRes, groupRes, projectRes, archetypeRes] = await Promise.all([
-        fetch(withArchived(`/api/v1/characters/${characterId}/wardrobe`)),
-        fetch(withArchived(`/api/v1/characters/${characterId}/wardrobe?scope=group`)),
+        fetch(withWardrobeArchivedParam(personalUrl, includeArchived)),
+        fetch(withWardrobeArchivedParam(`${personalUrl}?scope=group`, includeArchived)),
         projectTierId
-          ? fetch(withArchived(`/api/v1/projects/${projectTierId}/wardrobe`))
+          ? fetch(wardrobeCollectionUrl({ scope: 'project', id: projectTierId }, { includeArchived }))
           : Promise.resolve(null),
-        fetch(withArchived('/api/v1/wardrobe')),
+        fetch(wardrobeCollectionUrl(GENERAL_CONTAINER, { includeArchived })),
       ])
 
       // Merge with precedence: personal > group > project > general.

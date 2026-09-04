@@ -13,6 +13,7 @@ import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.type
 import { unionTypes } from '@/lib/wardrobe/composite-types'
 import { charCountClass } from '@/lib/utils/char-count'
 import {
+  GENERAL_CONTAINER,
   wardrobeCollectionUrl,
   wardrobeItemUrl,
   type WardrobeContainer,
@@ -190,12 +191,12 @@ export function WardrobeItemEditor({
               ? Promise.resolve(null)
               : fetch(wardrobeCollectionUrl(sharedContainer))
             : characterId
-              ? fetch(`/api/v1/characters/${characterId}/wardrobe`)
+              ? fetch(wardrobeCollectionUrl({ scope: 'character', id: characterId }))
               : Promise.resolve(null),
           !sharedContainer && projectId
-            ? fetch(`/api/v1/projects/${projectId}/wardrobe`)
+            ? fetch(wardrobeCollectionUrl({ scope: 'project', id: projectId }))
             : Promise.resolve(null),
-          fetch('/api/v1/wardrobe'),
+          fetch(wardrobeCollectionUrl(GENERAL_CONTAINER)),
         ])
 
         const collected: CandidateItem[] = []
@@ -416,15 +417,16 @@ export function WardrobeItemEditor({
           ? wardrobeItemUrl(sharedContainer, item.id)
           : wardrobeCollectionUrl(sharedContainer)
       } else if (isEditing) {
-        url = isShared
-          ? `/api/v1/wardrobe/${item.id}`
-          : `/api/v1/characters/${characterId}/wardrobe/${item.id}`
+        url = wardrobeItemUrl(
+          isShared ? GENERAL_CONTAINER : { scope: 'character', id: characterId },
+          item.id,
+        )
       } else if (createScope === 'project' && projectId) {
-        url = `/api/v1/projects/${projectId}/wardrobe`
+        url = wardrobeCollectionUrl({ scope: 'project', id: projectId })
       } else if (createScope === 'global') {
-        url = '/api/v1/wardrobe'
+        url = wardrobeCollectionUrl(GENERAL_CONTAINER)
       } else {
-        url = `/api/v1/characters/${characterId}/wardrobe`
+        url = wardrobeCollectionUrl({ scope: 'character', id: characterId })
       }
       const method = isEditing ? 'PUT' : 'POST'
 

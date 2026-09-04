@@ -41,9 +41,20 @@ jest.mock('@/lib/mount-index/database-store', () => {
       this.code = code;
     }
   }
+  // Mirror the real helper's contract over the mocked primitive so the
+  // NOT_FOUND stubs below keep driving the reader.
+  const readDatabaseDocumentIfExists = async (mountPointId: string, relativePath: string) => {
+    try {
+      return (await readDatabaseDocumentMock(mountPointId, relativePath)).content;
+    } catch (error) {
+      if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') return null;
+      throw error;
+    }
+  };
   return {
     DatabaseStoreError,
     readDatabaseDocument: (...args: unknown[]) => readDatabaseDocumentMock(...args),
+    readDatabaseDocumentIfExists,
     writeDatabaseDocument: jest.fn(),
     deleteDatabaseDocument: jest.fn(),
   };

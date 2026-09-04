@@ -2023,7 +2023,8 @@ describe('quilltap-import-service', () => {
       expect(mockUserRepos.memories.create).toHaveBeenCalledWith(
         expect.objectContaining({
           projectId: newProjectId,
-        })
+        }),
+        undefined
       );
     });
 
@@ -2065,7 +2066,8 @@ describe('quilltap-import-service', () => {
       expect(mockUserRepos.memories.create).toHaveBeenCalledWith(
         expect.objectContaining({
           tags: [newTagId],
-        })
+        }),
+        undefined
       );
     });
   });

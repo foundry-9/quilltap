@@ -20,7 +20,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
+import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import { resolveBrahmaMaxAgentTurns } from './turn-budget'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ConnectionProfile, MessageEvent } from '@/lib/schemas/types'
@@ -191,11 +191,7 @@ async function processBrahmaResponse(
   // accept one — see Bug 81)
   const keyResolution = await resolveConnectionProfileApiKey(repos, connectionProfile)
   if (!keyResolution.ok) {
-    throw new Error(
-      keyResolution.reason === 'no-api-key-configured'
-        ? 'No API key configured for this connection profile'
-        : 'API key not found'
-    )
+    throw new Error(describeProfileApiKeyFailure(keyResolution.reason))
   }
   const apiKey = keyResolution.apiKey
 

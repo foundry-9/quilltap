@@ -52,10 +52,64 @@ import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 
 const logger = baseLogger.child({ module: 'import:quilltap-import-stream' });
 
+/**
+ * Reassembles one blob's base64 chunk records in index order.
+ *
+ * Arrivals are counted rather than checked with `every`: the slots are a
+ * pre-sized sparse array, and `every` skips holes, so it would answer true the
+ * moment the first chunk landed however many were still outstanding — which
+ * truncated any blob over `BLOB_CHUNK_BYTES` and left the follow-on chunks
+ * with no accumulator to join.
+ */
+class ChunkAccumulator {
+  private readonly received: string[];
+  private count = 0;
+
+  /**
+   * @param chunkCount how many chunks the parent record promised
+   * @param kind the chunk record kind, for error messages
+   * @param identity `sha256=…` / `fileId=…`, for error messages
+   */
+  constructor(
+    readonly chunkCount: number,
+    private readonly kind: 'doc_mount_blob_chunk' | 'file_blob_chunk',
+    private readonly identity: string
+  ) {
+    this.received = new Array(chunkCount);
+  }
+
+  /** Chunks received so far. */
+  get receivedCount(): number {
+    return this.count;
+  }
+
+  /**
+   * Record one chunk. Returns true when this was the last outstanding one.
+   * Throws on an index outside `chunkCount` or a second arrival at one index.
+   */
+  add(index: number, dataBase64: string): boolean {
+    if (index < 0 || index >= this.chunkCount) {
+      throw new Error(
+        `${this.kind} index ${index} out of range (chunkCount=${this.chunkCount}, ${this.identity})`
+      );
+    }
+    if (this.received[index] !== undefined) {
+      throw new Error(`Duplicate ${this.kind} at index ${index} for ${this.identity}`);
+    }
+    this.received[index] = dataBase64;
+    this.count++;
+    return this.count === this.chunkCount;
+  }
+
+  /** The reassembled base64 payload; only meaningful once `add` returned true. */
+  join(): string {
+    return this.received.join('');
+  }
+}
+
 interface BlobAccumulator {
   meta: Omit<ExportedDocumentStoreBlob, 'dataBase64'>;
-  chunkCount: number;
-  received: string[];
+  chunks: ChunkAccumulator;
 }
 
 /**
@@ -102,10 +156,7 @@ export async function assembleExportFromStream(
   const instanceSettings: ExportedInstanceSetting[] = [];
 
   /** Same chunk-reassembly contract as the doc-store blobs, keyed by fileId. */
-  const fileBlobAccumulators = new Map<
-    string,
-    { chunkCount: number; received: string[] }
-  >();
+  const fileBlobAccumulators = new Map<string, ChunkAccumulator>();
 
   const blobAccumulators = new Map<string, BlobAccumulator>();
   const blobKey = (mountPointId: string, sha256: string) =>
@@ -290,8 +341,11 @@ export async function assembleExportFromStream(
             extractionStatus: blobRec.data.extractionStatus ?? 'none',
             extractionError: blobRec.data.extractionError ?? null,
           },
-          chunkCount: blobRec.data.chunkCount,
-          received: new Array(blobRec.data.chunkCount),
+          chunks: new ChunkAccumulator(
+            blobRec.data.chunkCount,
+            'doc_mount_blob_chunk',
+            `sha256=${blobRec.data.sha256}`
+          ),
         });
         break;
       }
@@ -305,30 +359,11 @@ export async function assembleExportFromStream(
             `doc_mount_blob_chunk received without preceding doc_mount_blob (sha256=${chunk.sha256})`
           );
         }
-        if (chunk.index < 0 || chunk.index >= accum.chunkCount) {
-          throw new Error(
-            `doc_mount_blob_chunk index ${chunk.index} out of range (chunkCount=${accum.chunkCount}, sha256=${chunk.sha256})`
-          );
-        }
-        if (accum.received[chunk.index] !== undefined) {
-          throw new Error(
-            `Duplicate doc_mount_blob_chunk at index ${chunk.index} for sha256=${chunk.sha256}`
-          );
-        }
-        accum.received[chunk.index] = chunk.dataBase64;
-
-        // If this was the last chunk, finalize the blob. Count the arrivals
-        // against chunkCount rather than asking `every` — the accumulator is a
-        // pre-sized sparse array, and `every` skips holes, so it answers true
-        // the moment the first chunk lands however many are still outstanding.
-        // That truncated any blob over BLOB_CHUNK_BYTES and left the follow-on
-        // chunks with no accumulator to join.
-        const allReceived =
-          accum.received.filter((v) => typeof v === 'string').length === accum.chunkCount;
-        if (allReceived) {
+        // If this was the last chunk, finalize the blob.
+        if (accum.chunks.add(chunk.index, chunk.dataBase64)) {
           blobs.push({
             ...accum.meta,
-            dataBase64: accum.received.join(''),
+            dataBase64: accum.chunks.join(),
           });
           blobAccumulators.delete(key);
         }
@@ -352,10 +387,10 @@ export async function assembleExportFromStream(
 
       case 'file_blob': {
         const blobRec = record as QtapRecord & { kind: 'file_blob' };
-        fileBlobAccumulators.set(blobRec.fileId, {
-          chunkCount: blobRec.chunkCount,
-          received: new Array(blobRec.chunkCount),
-        });
+        fileBlobAccumulators.set(
+          blobRec.fileId,
+          new ChunkAccumulator(blobRec.chunkCount, 'file_blob_chunk', `fileId=${blobRec.fileId}`)
+        );
         break;
       }
 
@@ -367,27 +402,9 @@ export async function assembleExportFromStream(
             `file_blob_chunk received without preceding file_blob (fileId=${chunk.fileId})`
           );
         }
-        if (chunk.index < 0 || chunk.index >= accum.chunkCount) {
-          throw new Error(
-            `file_blob_chunk index ${chunk.index} out of range (chunkCount=${accum.chunkCount}, fileId=${chunk.fileId})`
-          );
-        }
-        if (accum.received[chunk.index] !== undefined) {
-          throw new Error(
-            `Duplicate file_blob_chunk at index ${chunk.index} for fileId=${chunk.fileId}`
-          );
-        }
-        accum.received[chunk.index] = chunk.dataBase64;
-
-        // Count arrivals rather than asking `every`: the accumulator is a
-        // pre-sized sparse array and `every` skips holes, so it would answer
-        // true the moment the first chunk landed. Same trap as the doc-store
-        // blob path above.
-        const allReceived =
-          accum.received.filter((v) => typeof v === 'string').length === accum.chunkCount;
-        if (allReceived) {
+        if (accum.add(chunk.index, chunk.dataBase64)) {
           const target = filesById.get(chunk.fileId);
-          if (target) target.dataBase64 = accum.received.join('');
+          if (target) target.dataBase64 = accum.join();
           fileBlobAccumulators.delete(chunk.fileId);
         }
         break;
@@ -424,8 +441,8 @@ export async function assembleExportFromStream(
   if (blobAccumulators.size > 0) {
     const pending = Array.from(blobAccumulators.values()).map((a) => ({
       sha256: a.meta.sha256,
-      received: a.received.filter((v) => typeof v === 'string').length,
-      expected: a.chunkCount,
+      received: a.chunks.receivedCount,
+      expected: a.chunks.chunkCount,
     }));
     throw new Error(
       `NDJSON export truncated: ${blobAccumulators.size} blob(s) missing chunks — ${JSON.stringify(pending)}`
@@ -435,7 +452,7 @@ export async function assembleExportFromStream(
   if (fileBlobAccumulators.size > 0) {
     const pending = Array.from(fileBlobAccumulators.entries()).map(([fileId, a]) => ({
       fileId,
-      received: a.received.filter((v) => typeof v === 'string').length,
+      received: a.receivedCount,
       expected: a.chunkCount,
     }));
     throw new Error(

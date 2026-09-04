@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { showConfirmation } from '@/lib/alert';
 import { showErrorToast, showSuccessToast } from '@/lib/toast';
-import { triggerDownload } from '@/lib/download-utils';
+import { downloadFetchedFile } from '@/lib/download-utils';
 import { copyImageToClipboard } from '@/lib/clipboard-utils';
 import { Icon } from '@/components/ui/icon';
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider';
@@ -420,10 +420,7 @@ function PhotoDetailModal({
   const handleDownload = useCallback(async () => {
     setDownloading(true);
     try {
-      const res = await fetch(entry.blobUrl);
-      if (!res.ok) throw new Error(`Failed to fetch image (${res.status})`);
-      const blob = await res.blob();
-      await triggerDownload(blob, entry.fileName);
+      await downloadFetchedFile(entry.blobUrl, entry.fileName);
     } catch (err) {
       console.error('Failed to download photo:', { error: err instanceof Error ? err.message : String(err) });
       showErrorToast('Failed to download photo');

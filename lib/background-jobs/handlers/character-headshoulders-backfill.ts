@@ -20,12 +20,11 @@ import type { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
+import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
 import {
-  getCheapLLMProvider,
-  DEFAULT_CHEAP_LLM_CONFIG,
-  type CheapLLMConfig,
-  type CheapLLMSelection,
-} from '@/lib/llm/cheap-llm';
+  selectCheapLLMFromProfiles,
+  type UserCheapLLMSelection,
+} from '@/lib/llm/cheap-llm-user-selection';
 import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service';
 import { createLLMProvider } from '@/lib/llm/plugin-factory';
 import {
@@ -80,26 +79,12 @@ export async function handleCharacterHeadShouldersBackfill(job: BackgroundJob): 
   // danger-classification selection.
   const chatSettings = await repos.chatSettings.findByUserId(job.userId) ?? undefined;
   const allProfiles = await repos.connections.findByUserId(job.userId);
-  const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
-    strategy: chatSettings.cheapLLMSettings.strategy,
-    userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
-    defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
-    fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
-  } : DEFAULT_CHEAP_LLM_CONFIG;
 
-  const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-  if (!defaultProfile) {
-    logger.warn('[HeadShouldersBackfill] No connection profile configured, skipping', {
-      context: CONTEXT,
-      jobId: job.id,
-      characterId: payload.characterId,
-    });
-    return;
-  }
-
-  let selection: CheapLLMSelection;
+  // The profile read stays outside the guard on purpose: a failing read is the
+  // job's failure to report, only a failing selection is worth skipping over.
+  let resolved: UserCheapLLMSelection | null;
   try {
-    selection = getCheapLLMProvider(defaultProfile, cheapLLMConfig, allProfiles, false);
+    resolved = selectCheapLLMFromProfiles(allProfiles, buildCheapLLMConfig(chatSettings));
   } catch (error) {
     logger.warn('[HeadShouldersBackfill] Failed to select cheap LLM, skipping', {
       context: CONTEXT,
@@ -108,6 +93,16 @@ export async function handleCharacterHeadShouldersBackfill(job: BackgroundJob): 
     });
     return;
   }
+
+  if (!resolved) {
+    logger.warn('[HeadShouldersBackfill] No connection profile configured, skipping', {
+      context: CONTEXT,
+      jobId: job.id,
+      characterId: payload.characterId,
+    });
+    return;
+  }
+  const { selection } = resolved;
 
   const apiKey = await getApiKeyForCheapLLMSelection(selection, job.userId);
   if (apiKey === null) {

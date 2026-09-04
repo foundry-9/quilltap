@@ -19,10 +19,11 @@
  * @module mount-index/delete-store-cascade
  */
 
-import type { Database as DatabaseType } from 'better-sqlite3';
 import { logger } from '@/lib/logger';
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
+import { tableExists } from '@/lib/database/backends/sqlite/introspection';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
+import { gcOrphanedFileRow } from '@/lib/mount-index/orphan-store-reaper';
 
 /** Per-table row counts removed by {@link deleteStoreCascade}. */
 export interface StoreCascadeDeleteCounts {
@@ -35,12 +36,6 @@ export interface StoreCascadeDeleteCounts {
   projectLinks: number;
   groupLinks: number;
   mountPoint: number;
-}
-
-function tableExists(db: DatabaseType, name: string): boolean {
-  return !!db
-    .prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?`)
-    .get(name);
 }
 
 /**
@@ -102,37 +97,17 @@ export function deleteStoreCascade(mountPointId: string): StoreCascadeDeleteCoun
         .run(mountPointId).changes;
     }
 
-    // Content rows whose last link just went away. Documents and blobs are
-    // deleted explicitly (not left to an ON DELETE CASCADE): generateDDL tables
-    // carry no foreign keys, so a cascade would silently keep the payload
-    // forever on those instances. Deleting children first is a no-op where the
-    // cascade does exist.
+    // Content rows whose last link just went away — the same collector the
+    // link repository's delete/write paths use (see `gcOrphanedFileRow` for
+    // why documents and blobs are deleted explicitly and table-guarded).
+    // `affectedFileIds` is empty when the links table is absent, so the
+    // ref-count query inside never runs against a missing table.
     for (const fileId of affectedFileIds) {
-      const stillLinked = has('doc_mount_file_links')
-        ? (
-            db
-              .prepare(
-                `SELECT COUNT(*) AS count FROM doc_mount_file_links WHERE fileId = ?`
-              )
-              .get(fileId) as { count: number }
-          ).count
-        : 0;
-      if (stillLinked > 0) continue;
-      if (has('doc_mount_documents')) {
-        counts.documents += db
-          .prepare(`DELETE FROM doc_mount_documents WHERE fileId = ?`)
-          .run(fileId).changes;
-      }
-      if (has('doc_mount_blobs')) {
-        counts.blobs += db
-          .prepare(`DELETE FROM doc_mount_blobs WHERE fileId = ?`)
-          .run(fileId).changes;
-      }
-      if (has('doc_mount_files')) {
-        counts.files += db
-          .prepare(`DELETE FROM doc_mount_files WHERE id = ?`)
-          .run(fileId).changes;
-      }
+      const gc = gcOrphanedFileRow(db, fileId);
+      if (!gc) continue;
+      counts.documents += gc.documents;
+      counts.blobs += gc.blobs;
+      counts.files += gc.files;
     }
 
     // Folder hierarchy — keyed on mountPointId, no FK to anything above, so it

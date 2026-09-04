@@ -137,8 +137,7 @@ async function loadPerspectives(
       perspectives.push({
         characterId: character.id,
         characterName: character.name,
-        characterMountPointId:
-          (character as unknown as Record<string, unknown>).characterDocumentMountPointId as string | null ?? null,
+        characterMountPointId: character.characterDocumentMountPointId ?? null,
         // findById hydrates the vault, so the fact sheet is already in hand —
         // no second read when a run turns out to need it.
         metadata: character.metadata ?? {},

@@ -12,10 +12,9 @@ import { useSearchParams } from 'next/navigation'
 import FileBrowser from '@/components/files/FileBrowser'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
 
-function FilesPageContent() {
+function FilesPageContent({ bgStyle }: { bgStyle: ReturnType<typeof useSubsystemBackgroundStyle> }) {
   const searchParams = useSearchParams()
   const selectedFileId = searchParams.get('fileId')
-  const bgStyle = useSubsystemBackgroundStyle('commonplace-book')
 
   return (
     <div className="qt-page-container text-foreground" style={bgStyle}>
@@ -59,7 +58,7 @@ export function FilesView() {
         </div>
       </div>
     }>
-      <FilesPageContent />
+      <FilesPageContent bgStyle={bgStyle} />
     </Suspense>
   )
 }

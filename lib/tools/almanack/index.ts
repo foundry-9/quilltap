@@ -36,6 +36,8 @@ import {
   collectDatabaseSecurity,
   collectMigrationState,
   collectRuntimeEnvironment,
+  emptyDatabaseSecurity,
+  emptyMigrationState,
 } from './phase1-premises';
 import {
   collectApiKeyTypes,
@@ -51,6 +53,9 @@ import {
   collectProviderInfo,
   collectProviderModelCache,
   collectThemeInfo,
+  emptyMCPServers,
+  emptyPluginBreakdown,
+  emptyThemeInfo,
 } from './phase2-machinery';
 import {
   collectAutonomousRooms,
@@ -61,15 +66,26 @@ import {
   collectDatabaseStats,
   collectEmbeddingPipeline,
   collectFeatureConfig,
-  defaultFeatureConfig,
   collectInstanceSettings,
   collectMemoryBreakdown,
   collectStorageStats,
   collectTerminal,
+  defaultFeatureConfig,
+  defaultInstanceSettings,
+  emptyAutonomousRooms,
+  emptyBackgroundJobs,
+  emptyCharacterBreakdown,
+  emptyChatBreakdown,
+  emptyChatStats,
+  emptyDatabaseStats,
+  emptyEmbeddingPipeline,
+  emptyMemoryResult,
+  emptyStorageStats,
+  emptyTerminal,
 } from './phase3-ledgers';
 import { collectScriptorium, emptyScriptorium } from './phase4-scriptorium';
-import { collectPersonae } from './phase5-personae';
-import { collectWireRecords } from './phase6-wire-records';
+import { collectPersonae, emptyPersonae } from './phase5-personae';
+import { collectWireRecords, emptyWireRecords } from './phase6-wire-records';
 import { renderAlmanackMarkdown } from './render';
 import type { AlmanackReportData } from './types';
 
@@ -107,22 +123,9 @@ export async function generateAlmanackData(
   // so it needs no fallback shape of its own.
   const runtimeEnvironment = collectRuntimeEnvironment();
   const [databaseSecurity, backupStatus, migrationState] = await Promise.all([
-    collect(
-      'databaseSecurity',
-      { passphraseProtected: false, databases: [], highestAppVersion: null },
-      () => collectDatabaseSecurity(),
-    ),
+    collect('databaseSecurity', emptyDatabaseSecurity(), () => collectDatabaseSecurity()),
     collect('backupStatus', [], () => collectBackupStatus()),
-    collect(
-      'migrationState',
-      {
-        appliedCount: 0,
-        lastMigrationId: null,
-        lastMigrationAt: null,
-        lastMigrationVersion: null,
-      },
-      () => collectMigrationState(),
-    ),
+    collect('migrationState', emptyMigrationState(), () => collectMigrationState()),
   ]);
 
   // --- Phase 2: Cataloguing the machinery ---------------------------------
@@ -143,19 +146,7 @@ export async function generateAlmanackData(
     mcpServers,
     themeInfo,
   ] = await Promise.all([
-    collect(
-      'plugins',
-      {
-        enabled: [],
-        disabled: [],
-        byCapability: [],
-        npmInstalled: 0,
-        bundled: 0,
-        pluginConfigRows: 0,
-        characterPluginDataRows: 0,
-      },
-      () => collectPluginInfo(userId),
-    ),
+    collect('plugins', emptyPluginBreakdown(), () => collectPluginInfo(userId)),
     collect('providers', [], () => collectProviderInfo(userId)),
     collect('models', [], () => collectModels(userId)),
     collect('providerModelCache', [], () => collectProviderModelCache()),
@@ -165,30 +156,8 @@ export async function generateAlmanackData(
     collect('embeddingProvider', {}, () => collectEmbeddingInfo(userId)),
     collect('imageProviders', [], () => collectImageProviders()),
     collect('embeddingProviders', [], () => collectEmbeddingProviders()),
-    collect(
-      'mcpServers',
-      {
-        configured: 0,
-        enabled: 0,
-        serverNames: [],
-        autoReconnect: true,
-        maxReconnectAttempts: 5,
-      },
-      () => collectMCPServers(userId),
-    ),
-    collect(
-      'themeInfo',
-      {
-        activeThemeId: null,
-        colorMode: 'system',
-        stats: { total: 0, withDarkMode: 0, withCssOverrides: 0, errors: 0 },
-        themes: [],
-        themesWithIcons: 0,
-        totalIconOverrides: 0,
-        totalUnknownIconOverrides: 0,
-      },
-      () => collectThemeInfo(userId),
-    ),
+    collect('mcpServers', emptyMCPServers(), () => collectMCPServers(userId)),
+    collect('themeInfo', emptyThemeInfo(), () => collectThemeInfo(userId)),
   ]);
 
   // --- Phase 3: Auditing the ledgers --------------------------------------
@@ -207,167 +176,20 @@ export async function generateAlmanackData(
     terminal,
     storageStats,
   ] = await Promise.all([
-    collect(
-      'databaseStats',
-      {
-        characters: 0,
-        favoriteCharacters: 0,
-        chats: 0,
-        memories: 0,
-        tags: 0,
-        projects: 0,
-        groups: 0,
-        connectionProfiles: {
-          total: 0,
-          webSearchEnabled: 0,
-          toolUseEnabled: 0,
-          dangerousCompatible: 0,
-        },
-        imageProfiles: 0,
-        embeddingProfiles: 0,
-        promptTemplates: { total: 0, builtIn: 0, custom: 0 },
-        roleplayTemplates: { total: 0, builtIn: 0, custom: 0 },
-      },
-      () => collectDatabaseStats(userId),
-    ),
-    collect(
-      'chatStats',
-      {
-        totalEstimatedCostUSD: 0,
-        totalPromptTokens: 0,
-        totalCompletionTokens: 0,
-        totalMessages: 0,
-        agentModeChats: 0,
-        dangerousChats: 0,
-      },
-      () => collectChatStats(userId),
-    ),
-    collect(
-      'chatBreakdown',
-      {
-        byType: [],
-        participantHistogram: [],
-        pausedChats: 0,
-        documentModeChats: 0,
-        chatDocumentRows: 0,
-        multiDocumentChats: 0,
-        chatsWithEquippedOutfit: 0,
-        pendingOutfitNotificationChats: 0,
-        narrativeTimelineChats: 0,
-        chatsWithNonEmptyState: 0,
-      },
-      () => collectChatBreakdown(userId),
-    ),
-    collect(
-      'autonomousRooms',
-      {
-        total: 0,
-        byRunState: [],
-        scheduled: 0,
-        overdue: 0,
-        withTurnBudget: 0,
-        withTokenBudget: 0,
-        withWallClockBudget: 0,
-        withSpendCap: 0,
-        destructiveToolsAllowed: 0,
-        byVisibility: [],
-      },
-      () => collectAutonomousRooms(userId),
-    ),
-    collect(
-      'memoryBreakdown',
-      {
-        breakdown: {
-          total: 0,
-          byKind: [],
-          bySource: [],
-          byWitnessedContext: [],
-          withOccurredAt: 0,
-          withNarrativeTime: 0,
-          withEntities: 0,
-          withEmbedding: 0,
-          reinforcedTotal: 0,
-          maxReinforcementCount: 0,
-          charactersWithMemories: 0,
-        },
-        byCharacter: new Map<string, number>(),
-      },
-      () => collectMemoryBreakdown(),
-    ),
-    collect(
-      'characterBreakdown',
-      {
-        total: 0,
-        vaultLinked: 0,
-        vaultless: 0,
-        npcs: 0,
-        userControlled: 0,
-        carinaAnswerers: 0,
-        systemTransparent: 0,
-        canDressThemselves: 0,
-        canCreateOutfits: 0,
-        coreWhisperOverrides: 0,
-      },
-      () => collectCharacterBreakdown(userId),
+    collect('databaseStats', emptyDatabaseStats(), () => collectDatabaseStats(userId)),
+    collect('chatStats', emptyChatStats(), () => collectChatStats(userId)),
+    collect('chatBreakdown', emptyChatBreakdown(), () => collectChatBreakdown(userId)),
+    collect('autonomousRooms', emptyAutonomousRooms(), () => collectAutonomousRooms(userId)),
+    collect('memoryBreakdown', emptyMemoryResult(), () => collectMemoryBreakdown()),
+    collect('characterBreakdown', emptyCharacterBreakdown(), () =>
+      collectCharacterBreakdown(userId),
     ),
     collect('featureConfig', defaultFeatureConfig(), () => collectFeatureConfig(userId)),
-    collect(
-      'instanceSettings',
-      {
-        staleChatDays: 30,
-        chatsEligibleForNextSweep: 0,
-        maxConcurrentJobs: 4,
-        memoryRecall: { scopePolicy: 'down-weight', expandRelated: false },
-        memoryExtractionLimits: {
-          enabled: false,
-          maxPerHour: 20,
-          softStartFraction: 0.7,
-          softFloor: 0.7,
-        },
-        lastMaintenanceSweepAt: null,
-      },
-      () => collectInstanceSettings(userId),
-    ),
-    collect(
-      'backgroundJobs',
-      {
-        byStatus: [],
-        byType: [],
-        failed: [],
-        attemptsExhausted: 0,
-        oldestPendingScheduledAt: null,
-      },
-      () => collectBackgroundJobs(userId),
-    ),
-    collect(
-      'embeddingPipeline',
-      {
-        statusByEntityType: [],
-        failed: 0,
-        conversationChunks: { total: 0, unembedded: 0 },
-        helpDocs: { total: 0, unembedded: 0 },
-        storedDimensions: [],
-        activeProfileDimensions: null,
-        dimensionMismatch: false,
-      },
-      () => collectEmbeddingPipeline(userId),
-    ),
-    collect(
-      'terminal',
-      { totalSessions: 0, liveSessions: 0, nonZeroExits: 0, distinctShells: [] },
-      () => collectTerminal(),
-    ),
-    collect(
-      'storageStats',
-      {
-        totalFiles: 0,
-        totalSize: 0,
-        folders: [],
-        notOkFiles: 0,
-        generatedImagesByModel: [],
-      },
-      () => collectStorageStats(userId),
-    ),
+    collect('instanceSettings', defaultInstanceSettings(), () => collectInstanceSettings(userId)),
+    collect('backgroundJobs', emptyBackgroundJobs(), () => collectBackgroundJobs(userId)),
+    collect('embeddingPipeline', emptyEmbeddingPipeline(), () => collectEmbeddingPipeline(userId)),
+    collect('terminal', emptyTerminal(), () => collectTerminal()),
+    collect('storageStats', emptyStorageStats(), () => collectStorageStats(userId)),
   ]);
 
   // --- Phase 4: Touring the Scriptorium -----------------------------------
@@ -378,31 +200,14 @@ export async function generateAlmanackData(
 
   // --- Phase 5: Assembling the dramatis personae --------------------------
   announce(progress, 'personae');
-  const personae = await collect(
-    'personae',
-    { topCharacters: [], countsRemovedParticipants: true, projects: [], groups: [] },
-    () => collectPersonae(userId, memoryResult.byCharacter),
+  const personae = await collect('personae', emptyPersonae(), () =>
+    collectPersonae(userId, memoryResult.byCharacter),
   );
 
   // --- Phase 6: Reading the wire records ----------------------------------
   announce(progress, 'wire-records');
-  const wireRecords = await collect(
-    'wireRecords',
-    {
-      totalEntries: 0,
-      tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      loggingEnabled: true,
-      verboseMode: false,
-      retentionDays: 30,
-      exactProfileAttribution: false,
-      byType: [],
-      connectionProfileLifetime: [],
-      connectionProfileWindow: [],
-      imageProfileWindow: [],
-      cacheByProvider: [],
-      cacheByProfile: [],
-    },
-    () => collectWireRecords(userId),
+  const wireRecords = await collect('wireRecords', emptyWireRecords(), () =>
+    collectWireRecords(userId),
   );
 
   const data: AlmanackReportData = {
