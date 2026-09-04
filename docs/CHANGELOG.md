@@ -4,6 +4,33 @@
 
 ### 4.9-dev
 
+#### Changed: dependency refresh across the app, the packages, and the plugins
+
+`npm update -S` at the root, in all five `packages/`, and in all fifteen `plugins/dist/` packages.
+No source changed; this is dependency movement only.
+
+Notable root bumps: `next` 16.3.0 → 16.3.4, `zod` 4.4.3 → 4.5.4, `openai` 7.4.0 → 7.10.0,
+`@openrouter/sdk` 1.2.32 → 1.2.106, `@tanstack/react-query` (and devtools, eslint plugin) 5.101.4 →
+5.102.8, `@tanstack/react-virtual` 3.14.10, `sharp` 0.35.3 → 0.35.4, `katex` 0.18.5, `mammoth`
+1.12.2, plus jest 30.5.1, jest-environment-jsdom 30.5.1, and assorted dev-tool patches.
+
+`@quilltap/plugin-utils` 2.6.0 → 2.6.1 (picks up `@quilltap/plugin-types` ^2.6.0) and
+`@quilltap/theme-storybook` 1.0.69 → 1.0.70 (Storybook 10.6.0). `packages/quilltap` took the `sharp`
+bump; its version is stamped at release. `packages/plugin-types` and `packages/create-quilltap-theme`
+had no dependency change.
+
+All fifteen plugins were rebuilt and fourteen took a patch bump. Seven of those declare no changed
+dependency of their own: anthropic, curl, default-system-prompts, google, mcp, ollama, and
+search-serper resolve `openai` and `@quilltap/plugin-utils` up to the root `node_modules`, so the new
+root versions changed their bundled `index.js`. A changed bundle shipped under an unchanged version
+would leave installed copies stale with no way to tell, so those were bumped too.
+`qtap-plugin-builtin-embeddings` rebuilt byte-identical and kept 1.0.18.
+
+The root `postcss` override was pinned at `^8.5.26` while the direct devDependency moved to
+`^8.5.28`, which npm rejects outright (`EOVERRIDE`) — a plain `npm install` failed until the two
+agreed. The override now reads `$postcss`, the same self-referencing form `sharp` and `pdfjs-dist`
+already use, so it tracks the direct dependency instead of drifting away from it on the next update.
+
 #### Fixed: `instances default --json` never worked, and CLI doc drift around it (bug 120, checklist item 12)
 
 Audit of the `quilltap` CLI's docs, shell completions, and help text against the commands the CLI

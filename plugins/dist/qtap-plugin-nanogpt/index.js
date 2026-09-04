@@ -1,8 +1,17 @@
 "use strict";
+var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __commonJS = (cb, mod) => function __require() {
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
+};
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -15,7 +24,44 @@ var __copyProps = (to, from, except, desc) => {
   }
   return to;
 };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+
+// node_modules/openai/internal/auth/x509-transport-state.js
+var require_x509_transport_state = __commonJS({
+  "node_modules/openai/internal/auth/x509-transport-state.js"(exports2, module2) {
+    "use strict";
+    if (typeof module2 !== "undefined" && module2 !== globalThis.module && typeof exports2 !== "undefined" && module2.exports === exports2) {
+      Object.defineProperty(exports2, "__esModule", { value: true });
+      exports2.findX509Credential = exports2.rememberX509Credential = exports2.findX509OAuthError = exports2.rememberX509OAuthError = exports2.isApprovedX509Client = exports2.markApprovedX509Client = exports2.isRetryableX509IssuerError = exports2.markRetryableX509IssuerError = exports2.isTransientX509ConnectionError = exports2.markTransientX509ConnectionError = exports2.rememberRegisteredX509Transport = exports2.findRegisteredX509Transport = void 0;
+      const registeredX509Transports2 = /* @__PURE__ */ new WeakMap();
+      const transientX509ConnectionErrors2 = /* @__PURE__ */ new WeakSet();
+      const retryableX509IssuerErrors2 = /* @__PURE__ */ new WeakSet();
+      const approvedX509Clients2 = /* @__PURE__ */ new WeakSet();
+      const approvedX509OAuthErrors2 = /* @__PURE__ */ new WeakMap();
+      const approvedX509Credentials2 = /* @__PURE__ */ new WeakMap();
+      exports2.findRegisteredX509Transport = WeakMap.prototype.get.bind(registeredX509Transports2);
+      exports2.rememberRegisteredX509Transport = WeakMap.prototype.set.bind(registeredX509Transports2);
+      exports2.markTransientX509ConnectionError = WeakSet.prototype.add.bind(transientX509ConnectionErrors2);
+      exports2.isTransientX509ConnectionError = WeakSet.prototype.has.bind(transientX509ConnectionErrors2);
+      exports2.markRetryableX509IssuerError = WeakSet.prototype.add.bind(retryableX509IssuerErrors2);
+      exports2.isRetryableX509IssuerError = WeakSet.prototype.has.bind(retryableX509IssuerErrors2);
+      exports2.markApprovedX509Client = WeakSet.prototype.add.bind(approvedX509Clients2);
+      exports2.isApprovedX509Client = WeakSet.prototype.has.bind(approvedX509Clients2);
+      exports2.rememberX509OAuthError = WeakMap.prototype.set.bind(approvedX509OAuthErrors2);
+      exports2.findX509OAuthError = WeakMap.prototype.get.bind(approvedX509OAuthErrors2);
+      exports2.rememberX509Credential = WeakMap.prototype.set.bind(approvedX509Credentials2);
+      exports2.findX509Credential = WeakMap.prototype.get.bind(approvedX509Credentials2);
+    }
+  }
+});
 
 // index.ts
 var index_exports = {};
@@ -26,21 +72,21 @@ __export(index_exports, {
 module.exports = __toCommonJS(index_exports);
 
 // node_modules/openai/internal/tslib.mjs
-function __classPrivateFieldSet(receiver, state, value, kind, f) {
+function __classPrivateFieldSet(receiver, state2, value, kind, f) {
   if (kind === "m")
     throw new TypeError("Private method is not writable");
   if (kind === "a" && !f)
     throw new TypeError("Private accessor was defined without a setter");
-  if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
+  if (typeof state2 === "function" ? receiver !== state2 || !f : !state2.has(receiver))
     throw new TypeError("Cannot write private member to an object whose class did not declare it");
-  return kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value), value;
+  return kind === "a" ? f.call(receiver, value) : f ? f.value = value : state2.set(receiver, value), value;
 }
-function __classPrivateFieldGet(receiver, state, kind, f) {
+function __classPrivateFieldGet(receiver, state2, kind, f) {
   if (kind === "a" && !f)
     throw new TypeError("Private accessor was defined without a getter");
-  if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
+  if (typeof state2 === "function" ? receiver !== state2 || !f : !state2.has(receiver))
     throw new TypeError("Cannot read private member from an object whose class did not declare it");
-  return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+  return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state2.get(receiver);
 }
 
 // node_modules/openai/internal/utils/uuid.mjs
@@ -274,11 +320,11 @@ function getDefaultFetch() {
   throw new Error("`fetch` is not defined as a global; Either pass `fetch` to the client, `new OpenAI({ fetch })` or polyfill the global, `globalThis.fetch = fetch`");
 }
 function makeReadableStream(...args) {
-  const ReadableStream = globalThis.ReadableStream;
-  if (typeof ReadableStream === "undefined") {
+  const ReadableStream2 = globalThis.ReadableStream;
+  if (typeof ReadableStream2 === "undefined") {
     throw new Error("`ReadableStream` is not defined as a global; You will need to polyfill it, `globalThis.ReadableStream = ReadableStream`");
   }
-  return new ReadableStream(...args);
+  return new ReadableStream2(...args);
 }
 function ReadableStreamFrom(iterable) {
   let iter = Symbol.asyncIterator in iterable ? iterable[Symbol.asyncIterator]() : iterable[Symbol.iterator]();
@@ -340,9 +386,9 @@ async function CancelReadableStream(stream) {
 
 // node_modules/openai/internal/utils/bytes.mjs
 var encodeUTF8_;
-function encodeUTF8(str2) {
+function encodeUTF8(str) {
   let encoder;
-  return (encodeUTF8_ ?? (encoder = new globalThis.TextEncoder(), encodeUTF8_ = encoder.encode.bind(encoder)))(str2);
+  return (encodeUTF8_ ?? (encoder = new globalThis.TextEncoder(), encodeUTF8_ = encoder.encode.bind(encoder)))(str);
 }
 var decodeUTF8_;
 function decodeUTF8(bytes) {
@@ -564,16 +610,75 @@ function loggerFor(client) {
   cachedLoggers.set(logger5, [logLevel, levelLogger]);
   return levelLogger;
 }
+var sensitiveQueryNames = /* @__PURE__ */ new Set([
+  "apikey",
+  "accesstoken",
+  "refreshtoken",
+  "sessiontoken",
+  "sessionid",
+  "idtoken",
+  "authtoken",
+  "authorization",
+  "token",
+  "password",
+  "clientsecret",
+  "xamzsecuritytoken",
+  "xamzsignature",
+  "xamzcredential"
+]);
+function isSensitiveQueryParameter(name) {
+  const normalized = name.toLowerCase().replace(/[-_]/gu, "");
+  return sensitiveQueryNames.has(normalized) || sensitiveQueryNames.has(normalized.replace(/^x/u, ""));
+}
+var sensitiveHeaderNames = /* @__PURE__ */ new Set([
+  "authorization",
+  "proxy-authorization",
+  "api-key",
+  "x-api-key",
+  "x-amz-security-token",
+  "cookie",
+  "set-cookie",
+  "x-session-token",
+  "x-session-id",
+  "x-auth-token",
+  "x-id-token"
+]);
+function isSensitiveHeader(name) {
+  return sensitiveHeaderNames.has(name.toLowerCase().replace(/_/gu, "-")) || isSensitiveQueryParameter(name);
+}
+function redactURL(value) {
+  const url = new URL(value);
+  url.username = "";
+  url.password = "";
+  url.hash = "";
+  for (const name of url.searchParams.keys()) {
+    if (isSensitiveQueryParameter(name)) {
+      url.searchParams.set(name, "***");
+    }
+  }
+  return url.href;
+}
 var formatRequestDetails = (details) => {
   if (details.options) {
     details.options = { ...details.options };
     delete details.options["headers"];
+    if (details.options.path) {
+      const path2 = details.options.path;
+      const redacted = new URL(redactURL(new URL(path2, "https://redacted.invalid").href));
+      details.options.path = redacted.origin === "https://redacted.invalid" ? `${path2.startsWith("/") ? "/" : ""}${redacted.pathname.slice(1)}${redacted.search}` : redacted.href;
+    }
+    if (details.options.query) {
+      details.options.query = Object.fromEntries(Object.entries(details.options.query).map(([name, value]) => [
+        name,
+        isSensitiveQueryParameter(name) ? "***" : value
+      ]));
+    }
+  }
+  if (details.url) {
+    details.url = redactURL(details.url);
   }
   if (details.headers) {
-    details.headers = Object.fromEntries((details.headers instanceof Headers ? [...details.headers] : Object.entries(details.headers)).map(([name, value]) => [
-      name,
-      name.toLowerCase() === "authorization" || name.toLowerCase() === "api-key" || name.toLowerCase() === "x-api-key" || name.toLowerCase() === "x-amz-security-token" || name.toLowerCase() === "cookie" || name.toLowerCase() === "set-cookie" ? "***" : value
-    ]));
+    details.headers = Object.fromEntries((details.headers instanceof Headers ? [...details.headers] : Object.entries(details.headers)).map(([name, value]) => [name, isSensitiveHeader(name) ? "***" : value]));
   }
   if ("retryOfRequestLogID" in details) {
     if (details.retryOfRequestLogID) {
@@ -586,6 +691,34 @@ var formatRequestDetails = (details) => {
 
 // node_modules/openai/core/streaming.mjs
 var _Stream_client;
+function createStreamTeeQueue() {
+  let entries = [];
+  let head = 0;
+  return {
+    get length() {
+      return entries.length - head;
+    },
+    enqueue(value) {
+      entries.push(value);
+    },
+    dequeue() {
+      if (head === entries.length) {
+        return void 0;
+      }
+      const value = entries[head];
+      entries[head] = void 0;
+      head += 1;
+      if (head === entries.length) {
+        entries = [];
+        head = 0;
+      } else if (head >= 1024 && head * 2 >= entries.length) {
+        entries = entries.slice(head);
+        head = 0;
+      }
+      return value;
+    }
+  };
+}
 var Stream = class _Stream {
   /** Wraps an asynchronous event iterator and the controller that owns its request. */
   constructor(iterator, controller, client) {
@@ -613,7 +746,7 @@ var Stream = class _Stream {
       let receivedCompletionSentinel = false;
       try {
         for await (const sse of _iterSSEMessages(response, controller)) {
-          if (sse.data.startsWith("[DONE]")) {
+          if (sse.data === "[DONE]") {
             receivedCompletionSentinel = true;
             break;
           }
@@ -621,10 +754,13 @@ var Stream = class _Stream {
             let data;
             try {
               data = JSON.parse(sse.data);
-            } catch (e) {
-              logger5.error(`Could not parse message into JSON:`, sse.data);
-              logger5.error(`From chunk:`, sse.raw);
-              throw e;
+            } catch {
+              logger5.error(`Could not parse message into JSON:`);
+              logger5.error(`From chunk:`);
+              throw new SyntaxError("Error reading response: malformed server-sent event JSON.");
+            }
+            if (sse.event === "error") {
+              throw new APIError(void 0, data?.error ?? data, void 0, response.headers);
             }
             if (data && data.error) {
               throw new APIError(void 0, data.error, void 0, response.headers);
@@ -634,13 +770,10 @@ var Stream = class _Stream {
             let data;
             try {
               data = JSON.parse(sse.data);
-            } catch (e) {
-              console.error(`Could not parse message into JSON:`, sse.data);
-              console.error(`From chunk:`, sse.raw);
-              throw e;
-            }
-            if (sse.event === "error") {
-              throw new APIError(void 0, data.error, data.message, void 0);
+            } catch {
+              logger5.error(`Could not parse message into JSON:`);
+              logger5.error(`From chunk:`);
+              throw new SyntaxError("Error reading response: malformed server-sent event JSON.");
             }
             yield { event: sse.event, data };
           }
@@ -725,7 +858,16 @@ var Stream = class _Stream {
             continue;
           }
           if (line) {
-            yield JSON.parse(line);
+            let data;
+            try {
+              data = JSON.parse(line);
+            } catch (error) {
+              if (error instanceof SyntaxError) {
+                throw new SyntaxError("Error reading response: malformed newline-delimited JSON.");
+              }
+              throw error;
+            }
+            yield data;
           }
         }
         done = true;
@@ -751,17 +893,17 @@ var Stream = class _Stream {
    * independently read from at different speeds.
    */
   tee() {
-    const left = [];
-    const right = [];
+    const left = createStreamTeeQueue();
+    const right = createStreamTeeQueue();
     const iterator = this.iterator();
     const teeIterator = (queue) => ({
       next: () => {
         if (queue.length === 0) {
           const result = iterator.next();
-          left.push(result);
-          right.push(result);
+          left.enqueue(result);
+          right.enqueue(result);
         }
-        return queue.shift();
+        return queue.dequeue();
       }
     });
     return [
@@ -798,6 +940,123 @@ var Stream = class _Stream {
     });
   }
 };
+function createAbortableSSESource(body, signal) {
+  const reader = typeof body.getReader === "function" ? body.getReader() : void 0;
+  const source = reader ? {
+    next: () => reader.read(),
+    return: () => reader.cancel()
+  } : ReadableStreamToAsyncIterable(body)[Symbol.asyncIterator]();
+  const ended = { value: void 0, done: true };
+  let closed = false;
+  let canceled = false;
+  let cancellation;
+  let interrupt;
+  const waitForAbort = () => (
+    // oxlint-disable-next-line promise/avoid-new -- AbortSignal callbacks need a portable Promise bridge.
+    new Promise((resolve) => {
+      interrupt = resolve;
+    })
+  );
+  const cancel = () => {
+    if (canceled || closed) {
+      return cancellation;
+    }
+    canceled = true;
+    try {
+      cancellation = Promise.resolve(source.return?.());
+    } catch (error) {
+      cancellation = Promise.reject(error);
+    }
+    cancellation.catch(() => void 0);
+    return cancellation;
+  };
+  const abort = () => {
+    queueMicrotask(() => {
+      interrupt?.();
+      cancel();
+    });
+  };
+  const iterator = {
+    async next() {
+      if (signal.aborted) {
+        return ended;
+      }
+      const aborted = waitForAbort().then(() => ended);
+      try {
+        const result = await Promise.race([source.next(), aborted]);
+        if (signal.aborted) {
+          return ended;
+        }
+        if (result.done) {
+          closed = true;
+          return ended;
+        }
+        return { value: result.value, done: false };
+      } catch (error) {
+        if (signal.aborted && (isAbortError(error) || error === signal.reason)) {
+          return ended;
+        }
+        throw error;
+      } finally {
+        interrupt = void 0;
+      }
+    },
+    async return() {
+      const pending = cancel();
+      if (pending && !signal.aborted) {
+        const aborted = waitForAbort();
+        try {
+          if (!signal.aborted) {
+            await Promise.race([pending, aborted]);
+          }
+        } finally {
+          interrupt = void 0;
+        }
+      }
+      return ended;
+    },
+    [Symbol.asyncIterator]() {
+      return this;
+    }
+  };
+  return {
+    iterator,
+    start() {
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) {
+        abort();
+      }
+    },
+    async cleanup(failed) {
+      let cleanupError;
+      try {
+        signal.removeEventListener("abort", abort);
+      } catch (error) {
+        cleanupError = error;
+      }
+      if (!closed) {
+        const pending = cancel();
+        if (pending && !failed && !signal.aborted) {
+          try {
+            await pending;
+          } catch (error) {
+            cleanupError ?? (cleanupError = error);
+          }
+        }
+      }
+      if (reader) {
+        try {
+          reader.releaseLock();
+        } catch (error) {
+          cleanupError ?? (cleanupError = error);
+        }
+      }
+      if (cleanupError !== void 0 && !failed && !signal.aborted) {
+        throw cleanupError;
+      }
+    }
+  };
+}
 async function* _iterSSEMessages(response, controller) {
   if (!response.body) {
     controller.abort();
@@ -808,20 +1067,44 @@ async function* _iterSSEMessages(response, controller) {
   }
   const sseDecoder = new SSEDecoder();
   const lineDecoder = new LineDecoder();
-  const iter = ReadableStreamToAsyncIterable(response.body);
-  for await (const sseChunk of iterSSEChunks(iter)) {
-    for (const line of lineDecoder.decode(sseChunk)) {
+  const { signal } = controller;
+  const source = createAbortableSSESource(response.body, signal);
+  let failed = false;
+  try {
+    source.start();
+    for await (const sseChunk of iterSSEChunks(source.iterator)) {
+      if (signal.aborted) {
+        return;
+      }
+      for (const line of lineDecoder.decode(sseChunk)) {
+        if (signal.aborted) {
+          return;
+        }
+        const sse = sseDecoder.decode(line);
+        if (sse) {
+          yield sse;
+        }
+      }
+    }
+    if (signal.aborted) {
+      return;
+    }
+    for (const line of lineDecoder.flush()) {
+      if (signal.aborted) {
+        return;
+      }
       const sse = sseDecoder.decode(line);
       if (sse) {
         yield sse;
       }
     }
-  }
-  for (const line of lineDecoder.flush()) {
-    const sse = sseDecoder.decode(line);
-    if (sse) {
-      yield sse;
+  } catch (error) {
+    failed = true;
+    if (!signal.aborted || !isAbortError(error) && error !== signal.reason) {
+      throw error;
     }
+  } finally {
+    await source.cleanup(failed);
   }
 }
 var DOUBLE_NEWLINE_DELIMITER_MAX_OVERLAP_BYTES = 3;
@@ -911,12 +1194,12 @@ var SSEDecoder = class {
     return null;
   }
 };
-function partition(str2, delimiter) {
-  const index = str2.indexOf(delimiter);
+function partition(str, delimiter) {
+  const index = str.indexOf(delimiter);
   if (index !== -1) {
-    return [str2.slice(0, index), delimiter, str2.slice(index + delimiter.length)];
+    return [str.slice(0, index), delimiter, str.slice(index + delimiter.length)];
   }
-  return [str2, "", ""];
+  return [str, "", ""];
 }
 
 // node_modules/openai/internal/parse.mjs
@@ -984,7 +1267,7 @@ function addRequestID(value, response) {
 }
 
 // node_modules/openai/version.mjs
-var VERSION = "7.5.0";
+var VERSION = "7.10.0";
 
 // node_modules/openai/internal/detect-platform.mjs
 var isRunningInBrowser = () => {
@@ -1121,12 +1404,51 @@ var getPlatformHeaders = () => {
 };
 
 // node_modules/openai/internal/request-options.mjs
+var jsonRequestBodyObservers = /* @__PURE__ */ new WeakMap();
+function observeJSONRequestBody(body, observer) {
+  let observers = jsonRequestBodyObservers.get(body);
+  if (!observers) {
+    observers = /* @__PURE__ */ new Set();
+    jsonRequestBodyObservers.set(body, observers);
+  }
+  observers.add(observer);
+  return () => {
+    const active = jsonRequestBodyObservers.get(body);
+    if (!active) {
+      return;
+    }
+    active.delete(observer);
+    if (active.size === 0) {
+      jsonRequestBodyObservers.delete(body);
+    }
+  };
+}
 var FallbackEncoder = ({ headers, body }) => {
+  const observers = typeof body === "object" && body !== null ? jsonRequestBodyObservers.get(body) : void 0;
+  let encoded;
+  if (!observers || observers.size === 0) {
+    encoded = JSON.stringify(body);
+  } else {
+    const active = [...observers];
+    encoded = JSON.stringify(body, function(key, value) {
+      let observed = value;
+      for (const observer of active) {
+        const replacement = observer.value(this, key, observed);
+        if (replacement !== void 0) {
+          observed = replacement;
+        }
+      }
+      return observed;
+    });
+    for (const observer of active) {
+      observer.complete();
+    }
+  }
   return {
     bodyHeaders: {
       "content-type": "application/json"
     },
-    body: JSON.stringify(body)
+    body: encoded
   };
 };
 
@@ -1154,15 +1476,15 @@ var hex_table = /* @__PURE__ */ (() => {
   return array;
 })();
 var limit = 1024;
-var encode = (str2, _defaultEncoder, charset, _kind, format) => {
-  if (str2.length === 0) {
-    return str2;
+var encode = (str, _defaultEncoder, charset, _kind, format) => {
+  if (str.length === 0) {
+    return str;
   }
-  let string = str2;
-  if (typeof str2 === "symbol") {
-    string = Symbol.prototype.toString.call(str2);
-  } else if (typeof str2 !== "string") {
-    string = String(str2);
+  let string = str;
+  if (typeof str === "symbol") {
+    string = Symbol.prototype.toString.call(str);
+  } else if (typeof str !== "string") {
+    string = String(str);
   }
   if (charset === "iso-8859-1") {
     return escape(string).replace(/%u[0-9a-f]{4}/gi, ($0) => "%26%23" + Number.parseInt($0.slice(2), 16) + "%3B");
@@ -1524,6 +1846,27 @@ function stringifyQuery(query) {
   return stringify(query, { arrayFormat: "brackets" });
 }
 
+// node_modules/openai/internal/data-residency.mjs
+var endpoints = /* @__PURE__ */ new Map([
+  ["global", "https://api.openai.com/v1"],
+  ["us", "https://us.api.openai.com/v1"],
+  ["eu", "https://eu.api.openai.com/v1"],
+  ["ae", "https://ae.api.openai.com/v1"]
+]);
+function resolveDataResidency(options) {
+  if (options.dataResidency === null || options.dataResidency === void 0) {
+    return void 0;
+  }
+  if (hasOwn(options, "baseURL")) {
+    throw new OpenAIError("The `dataResidency` and `baseURL` options are mutually exclusive.");
+  }
+  const endpoint = endpoints.get(options.dataResidency);
+  if (endpoint === void 0) {
+    throw new OpenAIError("Invalid `dataResidency`; expected one of: global, us, eu, ae.");
+  }
+  return endpoint;
+}
+
 // node_modules/openai/core/api-promise.mjs
 var _APIPromise_client;
 var APIPromise = class _APIPromise extends Promise {
@@ -1754,6 +2097,71 @@ var SUBJECT_TOKEN_TYPES = {
   id: "urn:ietf:params:oauth:token-type:id_token"
 };
 var TOKEN_EXCHANGE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:token-exchange";
+var MAX_REFRESH_BUFFER_FRACTION = 0.5;
+function calculateRefreshAt(expiresAt, now, refreshBufferSeconds) {
+  const configuredBufferMs = (refreshBufferSeconds ?? 1200) * 1e3;
+  const effectiveBufferMs = Math.min(configuredBufferMs, (expiresAt - now) * MAX_REFRESH_BUFFER_FRACTION);
+  return expiresAt - effectiveBufferMs;
+}
+var NATIVE_RESPONSE_PROTOTYPE = Response.prototype;
+var READ_NATIVE_RESPONSE_BODY = NATIVE_RESPONSE_PROTOTYPE.arrayBuffer;
+function isResponsePrototype(response, prototype) {
+  const constructor = Object.getOwnPropertyDescriptor(prototype, "constructor")?.value;
+  if (prototype === response || typeof constructor !== "function" || Object.getOwnPropertyDescriptor(constructor, "name")?.value !== "Response" || Object.getOwnPropertyDescriptor(constructor, "prototype")?.value !== prototype) {
+    return false;
+  }
+  const tag = Object.getOwnPropertyDescriptor(prototype, Symbol.toStringTag);
+  return (tag?.value === "Response" || typeof tag?.get === "function") && typeof Object.getOwnPropertyDescriptor(prototype, "headers")?.get === "function" && typeof Object.getOwnPropertyDescriptor(prototype, "ok")?.get === "function" && typeof Object.getOwnPropertyDescriptor(prototype, "status")?.get === "function";
+}
+function isResponseBodyPrototype(prototype, responsePrototype) {
+  if (prototype === responsePrototype) {
+    return true;
+  }
+  const constructor = Object.getOwnPropertyDescriptor(prototype, "constructor")?.value;
+  return responsePrototype !== null && Object.getPrototypeOf(responsePrototype) === prototype && typeof constructor === "function" && Object.getOwnPropertyDescriptor(constructor, "name")?.value === "Body" && Object.getOwnPropertyDescriptor(constructor, "prototype")?.value === prototype;
+}
+function decodeNativeResponseBody(body) {
+  const scope = globalThis;
+  return new TextDecoder("utf-8", { ignoreBOM: typeof scope.Bun?.version === "string" }).decode(body);
+}
+async function parseOAuthTokenResponse(response) {
+  let readText;
+  let responsePrototype = null;
+  for (let depth = 0, prototype = response; prototype !== null && depth < 16; prototype = Object.getPrototypeOf(prototype), depth += 1) {
+    if (prototype === NATIVE_RESPONSE_PROTOTYPE) {
+      break;
+    }
+    if (isResponsePrototype(response, prototype)) {
+      responsePrototype = prototype;
+    }
+    const parser = Object.getOwnPropertyDescriptor(prototype, "json");
+    if (!parser) {
+      continue;
+    }
+    if (typeof parser.value !== "function") {
+      break;
+    }
+    const bodyReader = Object.getOwnPropertyDescriptor(prototype, "text")?.value;
+    if (typeof bodyReader === "function" && isResponseBodyPrototype(prototype, responsePrototype)) {
+      readText = bodyReader;
+      break;
+    }
+    return parser.value.call(response);
+  }
+  const body = readText === void 0 ? decodeNativeResponseBody(await READ_NATIVE_RESPONSE_BODY.call(response)) : await readText.call(response);
+  try {
+    return JSON.parse(body);
+  } catch {
+    throw new SyntaxError("Token exchange response contains invalid JSON");
+  }
+}
+function isUnsafeAccessToken(accessToken) {
+  const scope = globalThis;
+  if (typeof scope.Bun?.version === "string") {
+    return /[^\t\u0020-\u007E]|^[\t ]|[\t ]$/u.test(accessToken);
+  }
+  return /[^\t\u0020-\u007E\u0080-\u00FF]|^[\t ]|[\t ]$/u.test(accessToken);
+}
 var WorkloadIdentityAuth = class _WorkloadIdentityAuth {
   /**
    * Creates a workload-identity token cache and OAuth token-exchange client.
@@ -1766,7 +2174,17 @@ var WorkloadIdentityAuth = class _WorkloadIdentityAuth {
     this.refreshPromise = null;
     this.tokenGeneration = 0;
     this.tokenExchangeUrl = "https://auth.openai.com/oauth/token";
-    this.config = config2;
+    const { identityProviderId, serviceAccountId, clientId, refreshBufferSeconds, provider } = config2;
+    this.config = {
+      identityProviderId,
+      serviceAccountId,
+      ...clientId === void 0 ? {} : { clientId },
+      ...refreshBufferSeconds === void 0 ? {} : { refreshBufferSeconds },
+      provider: {
+        tokenType: provider.tokenType,
+        getToken: provider.getToken.bind(provider)
+      }
+    };
     this.fetch = fetch2 ?? getDefaultFetch();
   }
   /**
@@ -1794,7 +2212,7 @@ var WorkloadIdentityAuth = class _WorkloadIdentityAuth {
         }
       }
     }
-    if (this.needsRefresh(this.cachedToken) && !this.refreshPromise) {
+    if (_WorkloadIdentityAuth.needsRefresh(this.cachedToken) && !this.refreshPromise) {
       const refreshPromise = this.refreshToken(this.tokenGeneration).finally(() => {
         if (this.refreshPromise === refreshPromise) {
           this.refreshPromise = null;
@@ -1837,11 +2255,11 @@ var WorkloadIdentityAuth = class _WorkloadIdentityAuth {
       }
       throw APIError.generate(response.status, body2, `Token exchange failed with status ${response.status}`, response.headers);
     }
-    const tokenResponse = await response.json();
-    if (typeof tokenResponse !== "object" || tokenResponse === null || !("access_token" in tokenResponse) || typeof tokenResponse.access_token !== "string" || tokenResponse.access_token.trim().length === 0) {
+    const tokenResponse = await parseOAuthTokenResponse(response);
+    const accessToken = typeof tokenResponse === "object" && tokenResponse !== null && "access_token" in tokenResponse ? tokenResponse.access_token : void 0;
+    if (typeof accessToken !== "string" || accessToken.trim().length === 0 || isUnsafeAccessToken(accessToken)) {
       throw new OpenAIError("Token exchange response missing 'access_token' field");
     }
-    const accessToken = tokenResponse.access_token;
     const expiresIn = tokenResponse.expires_in ?? 3600;
     if (typeof expiresIn !== "number" || !Number.isFinite(expiresIn) || expiresIn <= 0) {
       throw new OpenAIError("Token exchange response has invalid 'expires_in' field");
@@ -1854,7 +2272,8 @@ var WorkloadIdentityAuth = class _WorkloadIdentityAuth {
     if (this.tokenGeneration === generation) {
       this.cachedToken = {
         token: accessToken,
-        expiresAt
+        expiresAt,
+        refreshAt: calculateRefreshAt(expiresAt, now, this.config.refreshBufferSeconds)
       };
     }
     return accessToken;
@@ -1862,10 +2281,8 @@ var WorkloadIdentityAuth = class _WorkloadIdentityAuth {
   static isTokenExpired(cachedToken) {
     return Date.now() >= cachedToken.expiresAt;
   }
-  needsRefresh(cachedToken) {
-    const bufferSeconds = this.config.refreshBufferSeconds ?? 1200;
-    const bufferMs = bufferSeconds * 1e3;
-    return Date.now() >= cachedToken.expiresAt - bufferMs;
+  static needsRefresh(cachedToken) {
+    return Date.now() >= cachedToken.refreshAt;
   }
   /** Discards the cached access token so the next request performs a fresh exchange. */
   invalidateToken() {
@@ -1874,6 +2291,26 @@ var WorkloadIdentityAuth = class _WorkloadIdentityAuth {
     this.refreshPromise = null;
   }
 };
+
+// node_modules/openai/internal/auth/x509-api-origin.mjs
+var X509_API_BASE_URL = "https://mtls.api.openai.com/v1";
+function assertX509APIOrigin(value) {
+  let target;
+  try {
+    target = new URL(value);
+  } catch {
+    throw new OpenAIError("X.509 workload identity requires the approved global mTLS API origin.");
+  }
+  if (target.origin !== "https://mtls.api.openai.com" || target.username || target.password) {
+    throw new OpenAIError("X.509 workload identity requires the approved global mTLS API origin.");
+  }
+  for (const name of target.searchParams.keys()) {
+    if (isSensitiveQueryParameter(name)) {
+      throw new OpenAIError("X.509 workload identity cannot send conflicting query authentication credentials.");
+    }
+  }
+  return target;
+}
 
 // node_modules/openai/internal/headers.mjs
 var brand_privateNullableHeaders = /* @__PURE__ */ Symbol("brand.privateNullableHeaders");
@@ -1942,6 +2379,872 @@ var buildHeaders = (newHeaders) => {
   return { [brand_privateNullableHeaders]: true, values: targetHeaders, nulls: nullHeaders };
 };
 
+// node_modules/openai/internal/auth/x509-transport-state-browser.mjs
+var x509_transport_state_browser_exports = {};
+__export(x509_transport_state_browser_exports, {
+  findRegisteredX509Transport: () => findRegisteredX509Transport,
+  findX509Credential: () => findX509Credential,
+  findX509OAuthError: () => findX509OAuthError,
+  isApprovedX509Client: () => isApprovedX509Client,
+  isRetryableX509IssuerError: () => isRetryableX509IssuerError,
+  isTransientX509ConnectionError: () => isTransientX509ConnectionError,
+  markApprovedX509Client: () => markApprovedX509Client,
+  markRetryableX509IssuerError: () => markRetryableX509IssuerError,
+  markTransientX509ConnectionError: () => markTransientX509ConnectionError,
+  rememberRegisteredX509Transport: () => rememberRegisteredX509Transport,
+  rememberX509Credential: () => rememberX509Credential,
+  rememberX509OAuthError: () => rememberX509OAuthError
+});
+var registeredX509Transports = /* @__PURE__ */ new WeakMap();
+var transientX509ConnectionErrors = /* @__PURE__ */ new WeakSet();
+var retryableX509IssuerErrors = /* @__PURE__ */ new WeakSet();
+var approvedX509Clients = /* @__PURE__ */ new WeakSet();
+var approvedX509OAuthErrors = /* @__PURE__ */ new WeakMap();
+var approvedX509Credentials = /* @__PURE__ */ new WeakMap();
+var findRegisteredX509Transport = WeakMap.prototype.get.bind(registeredX509Transports);
+var rememberRegisteredX509Transport = WeakMap.prototype.set.bind(registeredX509Transports);
+var markTransientX509ConnectionError = WeakSet.prototype.add.bind(transientX509ConnectionErrors);
+var isTransientX509ConnectionError = WeakSet.prototype.has.bind(transientX509ConnectionErrors);
+var markRetryableX509IssuerError = WeakSet.prototype.add.bind(retryableX509IssuerErrors);
+var isRetryableX509IssuerError = WeakSet.prototype.has.bind(retryableX509IssuerErrors);
+var markApprovedX509Client = WeakSet.prototype.add.bind(approvedX509Clients);
+var isApprovedX509Client = WeakSet.prototype.has.bind(approvedX509Clients);
+var rememberX509OAuthError = WeakMap.prototype.set.bind(approvedX509OAuthErrors);
+var findX509OAuthError = WeakMap.prototype.get.bind(approvedX509OAuthErrors);
+var rememberX509Credential = WeakMap.prototype.set.bind(approvedX509Credentials);
+var findX509Credential = WeakMap.prototype.get.bind(approvedX509Credentials);
+
+// node_modules/openai/internal/auth/x509-transport-state.mjs
+var nodeState = __toESM(require_x509_transport_state(), 1);
+var state = typeof nodeState.findRegisteredX509Transport === "function" ? nodeState : x509_transport_state_browser_exports;
+var {
+  findRegisteredX509Transport: findRegisteredX509Transport3,
+  rememberRegisteredX509Transport: rememberRegisteredX509Transport2,
+  markTransientX509ConnectionError: markTransientX509ConnectionError2,
+  isTransientX509ConnectionError: isTransientX509ConnectionError2,
+  markRetryableX509IssuerError: markRetryableX509IssuerError2,
+  isRetryableX509IssuerError: isRetryableX509IssuerError2,
+  markApprovedX509Client: markApprovedX509Client2,
+  isApprovedX509Client: isApprovedX509Client2,
+  rememberX509OAuthError: rememberX509OAuthError2,
+  findX509OAuthError: findX509OAuthError2,
+  rememberX509Credential: rememberX509Credential2,
+  findX509Credential: findX509Credential2
+} = state;
+
+// node_modules/openai/internal/auth/x509-transport-registry.mjs
+function resolveX509Transport(value) {
+  if (!value || typeof value !== "object") {
+    throw new OpenAIError("X.509 workload identity requires an approved X.509 transport capability.");
+  }
+  const registered = findRegisteredX509Transport3(value);
+  if (!registered) {
+    throw new OpenAIError("X.509 workload identity requires an approved X.509 transport capability.");
+  }
+  return registered;
+}
+
+// node_modules/openai/internal/auth/x509-workload-identity-auth.mjs
+var _X509WorkloadIdentityAuth_instances;
+var _a;
+var _X509WorkloadIdentityAuth_identityProviderId;
+var _X509WorkloadIdentityAuth_serviceAccountId;
+var _X509WorkloadIdentityAuth_configuredRefreshBufferMs;
+var _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds;
+var _X509WorkloadIdentityAuth_organization;
+var _X509WorkloadIdentityAuth_project;
+var _X509WorkloadIdentityAuth_transport;
+var _X509WorkloadIdentityAuth_refreshBufferMs;
+var _X509WorkloadIdentityAuth_cachedToken;
+var _X509WorkloadIdentityAuth_refresh;
+var _X509WorkloadIdentityAuth_tokenGeneration;
+var _X509WorkloadIdentityAuth_cancelRequestBody;
+var _X509WorkloadIdentityAuth_assignToken;
+var _X509WorkloadIdentityAuth_recoverRefreshFailure;
+var _X509WorkloadIdentityAuth_fallbackToken;
+var _X509WorkloadIdentityAuth_retireRefresh;
+var _X509WorkloadIdentityAuth_beginRefresh;
+var _X509WorkloadIdentityAuth_refreshToken;
+var _X509WorkloadIdentityAuth_preflight;
+var _X509WorkloadIdentityAuth_scope;
+var _X509WorkloadIdentityAuth_assertTenantHeaders;
+var FORBIDDEN_TRANSPORT_OPTIONS = ["dispatcher", "agent", "client", "tls", "proxy"];
+var headerValue = (headers, name) => Headers.prototype.get.call(headers, name);
+var DEFAULT_REFRESH_BUFFER_MS = 20 * 60 * 1e3;
+var FAILED_REFRESH_COOLDOWN_MS = 1e3;
+var userAbortError = (signal) => {
+  const error = new APIUserAbortError();
+  Object.defineProperty(error, "cause", { value: signal.reason, writable: true, configurable: true });
+  return error;
+};
+function assertSafeHeaders(headers) {
+  for (const name of Headers.prototype.keys.call(headers)) {
+    const canonical = name.toLowerCase().split("_").join("-");
+    if (canonical !== "authorization" && isSensitiveHeader(canonical) || canonical === "host") {
+      throw new OpenAIError("X.509 workload identity cannot send conflicting authentication credentials.");
+    }
+  }
+}
+function exchangeDeadline(timeout, callerSignal) {
+  const deadline = new AbortController();
+  const timer = timeout === void 0 ? void 0 : setTimeout(() => deadline.abort(new APIConnectionTimeoutError()), timeout);
+  const timerHandle = timer;
+  if (typeof timerHandle === "object" && timerHandle !== null && "unref" in timerHandle && typeof timerHandle.unref === "function") {
+    timerHandle.unref();
+  }
+  const cancel = () => deadline.abort(callerSignal?.reason);
+  callerSignal?.addEventListener("abort", cancel, { once: true });
+  if (callerSignal?.aborted) {
+    cancel();
+  }
+  return {
+    signal: deadline.signal,
+    dispose: () => {
+      callerSignal?.removeEventListener("abort", cancel);
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
+  };
+}
+function waitForRefresh(attempt, signal) {
+  let abort;
+  const canceled = new Promise((_resolve, reject) => {
+    abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) {
+      abort();
+    }
+  });
+  return {
+    result: Promise.race([attempt.promise, canceled]),
+    dispose: () => {
+      if (abort) {
+        signal.removeEventListener("abort", abort);
+      }
+    }
+  };
+}
+function isX509WorkloadIdentity(identity) {
+  if (!identity || typeof identity !== "object") {
+    return false;
+  }
+  let providerOwner = identity;
+  while (providerOwner !== null && providerOwner !== Object.prototype) {
+    const provider = Object.getOwnPropertyDescriptor(providerOwner, "provider");
+    if (provider) {
+      if (!("value" in provider) || provider.value !== void 0) {
+        return false;
+      }
+      break;
+    }
+    providerOwner = Object.getPrototypeOf(providerOwner);
+  }
+  let current = identity;
+  while (current !== null && current !== Object.prototype) {
+    const discriminator = Object.getOwnPropertyDescriptor(current, "type");
+    if (discriminator) {
+      if (!("value" in discriminator)) {
+        throw new OpenAIError("X.509 workload identity type must be a plain data property.");
+      }
+      return discriminator.value === "x509";
+    }
+    current = Object.getPrototypeOf(current);
+  }
+  return false;
+}
+function assertX509FetchOptions(options) {
+  if (!options) {
+    return;
+  }
+  for (const name of FORBIDDEN_TRANSPORT_OPTIONS) {
+    if (hasOwn(options, name)) {
+      throw new OpenAIError("X.509 workload identity cannot override its approved transport capability.");
+    }
+  }
+  const redirect = Object.getOwnPropertyDescriptor(options, "redirect")?.value;
+  if (redirect !== void 0 && redirect !== "manual") {
+    throw new OpenAIError("X.509 workload identity requests require manual redirects.");
+  }
+}
+function assertX509RequestOptions(options) {
+  assertX509FetchOptions(options);
+  if (options && ["body", "headers", "method", "signal"].some((name) => hasOwn(options, name))) {
+    throw new OpenAIError("X.509 workload identity cannot override its request body, headers, method, or signal through fetch options.");
+  }
+}
+function snapshotX509RequestOptions(options) {
+  assertX509RequestOptions(options);
+  const snapshot = { ...options };
+  assertX509RequestOptions(snapshot);
+  return snapshot;
+}
+var X509WorkloadIdentityAuth = class {
+  /** Captures one registered, immutable certificate identity and its enrolled selectors. */
+  constructor(identity, transport, organization, project) {
+    _X509WorkloadIdentityAuth_instances.add(this);
+    _X509WorkloadIdentityAuth_identityProviderId.set(this, void 0);
+    _X509WorkloadIdentityAuth_serviceAccountId.set(this, void 0);
+    _X509WorkloadIdentityAuth_configuredRefreshBufferMs.set(this, void 0);
+    _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds.set(this, void 0);
+    _X509WorkloadIdentityAuth_organization.set(this, void 0);
+    _X509WorkloadIdentityAuth_project.set(this, void 0);
+    _X509WorkloadIdentityAuth_transport.set(this, void 0);
+    _X509WorkloadIdentityAuth_refreshBufferMs.set(this, void 0);
+    _X509WorkloadIdentityAuth_cachedToken.set(this, void 0);
+    _X509WorkloadIdentityAuth_refresh.set(this, void 0);
+    _X509WorkloadIdentityAuth_tokenGeneration.set(this, 0);
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_transport, resolveX509Transport(transport), "f");
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_identityProviderId, identity.identityProviderId, "f");
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_serviceAccountId, identity.serviceAccountId, "f");
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferMs, identity.refreshBufferMs, "f");
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, identity.refreshBufferSeconds, "f");
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_organization, organization, "f");
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_project, project, "f");
+    if (__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferMs, "f") !== void 0 && __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f") !== void 0) {
+      throw new OpenAIError("X.509 workload identity cannot combine refreshBufferSeconds and refreshBufferMs.");
+    }
+    if (__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferMs, "f") !== void 0 && (!Number.isSafeInteger(__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferMs, "f")) || __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferMs, "f") < 0)) {
+      throw new OpenAIError("X.509 workload identity requires a nonnegative integer refreshBufferMs.");
+    }
+    if (__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f") !== void 0 && (!Number.isSafeInteger(__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f")) || __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f") < 0 || !Number.isSafeInteger(__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f") * 1e3))) {
+      throw new OpenAIError("X.509 workload identity requires a nonnegative integer refreshBufferSeconds.");
+    }
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_refreshBufferMs, __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f") === void 0 ? __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferMs, "f") ?? DEFAULT_REFRESH_BUFFER_MS : __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f") * 1e3, "f");
+  }
+  /** Reconstructs the immutable selectors captured before caller-owned identity mutation. */
+  identitySnapshot() {
+    return {
+      type: "x509",
+      identityProviderId: __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_identityProviderId, "f"),
+      serviceAccountId: __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_serviceAccountId, "f"),
+      ...__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferMs, "f") === void 0 ? {} : { refreshBufferMs: __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferMs, "f") },
+      ...__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f") === void 0 ? {} : { refreshBufferSeconds: __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds, "f") }
+    };
+  }
+  /** Preserves explicitly headerless requests without presenting a certificate to the issuer. */
+  static shouldAuthenticate(options, defaultHeaders, requestHeaders = options.headers) {
+    return !buildHeaders([defaultHeaders, requestHeaders]).nulls.has("authorization");
+  }
+  /** Snapshots each caller-owned header layer once while preserving nulls and precedence. */
+  snapshotHeaders(defaultHeaders, requestHeaders) {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    scope.defaultHeaders ?? (scope.defaultHeaders = buildHeaders([defaultHeaders]));
+    scope.requestHeaders ?? (scope.requestHeaders = buildHeaders([requestHeaders]));
+    return this.headerSnapshots();
+  }
+  /** Returns the already rendered caller headers without touching mutable inputs again. */
+  headerSnapshots() {
+    const { defaultHeaders, requestHeaders } = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    if (!defaultHeaders || !requestHeaders) {
+      throw new OpenAIError("X.509 workload identity requires snapshotted request headers.");
+    }
+    return { defaultHeaders, requestHeaders };
+  }
+  /** Captures enrolled public tenant selectors once before certificate presentation. */
+  snapshotTenant(organization, project) {
+    if (organization !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_organization, "f") || project !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_project, "f")) {
+      throw new OpenAIError("X.509 workload identity cannot override its enrolled organization or project.");
+    }
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    scope.tenant = { organization, project };
+    return scope.tenant;
+  }
+  /** Returns the tenant selectors already approved for this logical request. */
+  tenantSnapshot() {
+    const { tenant } = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    if (!tenant) {
+      throw new OpenAIError("X.509 workload identity requires snapshotted tenant selectors.");
+    }
+    return tenant;
+  }
+  /** Validates and retains the exact destination that authenticated dispatch will use. */
+  snapshotAPIURL(value) {
+    assertX509APIOrigin(value);
+    __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this).apiURL = value;
+  }
+  /** Reads the already-approved destination without rerendering caller-owned request options. */
+  requestAPIURL() {
+    const { apiURL } = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    if (apiURL === void 0) {
+      throw new OpenAIError("X.509 workload identity requires a snapshotted API destination.");
+    }
+    return apiURL;
+  }
+  /** Captures the exact caller settings approved for authenticated dispatch. */
+  snapshotRequest(signal, timeout, fetchOptions) {
+    var _b;
+    (_b = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this)).request ?? (_b.request = { signal, timeout, fetchOptions });
+  }
+  /** Returns immutable request settings without invoking caller-owned accessors again. */
+  requestSnapshot() {
+    const { request } = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    if (!request) {
+      throw new OpenAIError("X.509 workload identity requires snapshotted request settings.");
+    }
+    return request;
+  }
+  /** Suspends an already-running network budget during retry-local asynchronous preparation. */
+  beginRequestPreparation() {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    if (scope.deadlineArmed && scope.preparationStartedAt === void 0) {
+      scope.preparationStartedAt = performance.now();
+      scope.preparationWallStartedAt = Date.now();
+    }
+  }
+  /** Begins local request construction without charging protected hook latency to the network. */
+  beginRequestPlanning() {
+    __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this).phase = "planning";
+  }
+  /** Arms one absolute network deadline only after all local request preparation completes. */
+  beginRequestNetwork() {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    if (!scope.deadlineArmed) {
+      scope.wallStartedAt = Date.now();
+      scope.monotonicStartedAt = performance.now();
+      scope.deadlineArmed = true;
+    } else if (scope.preparationStartedAt !== void 0) {
+      scope.monotonicStartedAt += performance.now() - scope.preparationStartedAt;
+      scope.wallStartedAt += Date.now() - (scope.preparationWallStartedAt ?? Date.now());
+      delete scope.preparationStartedAt;
+      delete scope.preparationWallStartedAt;
+    }
+  }
+  /** Keeps certificate authentication outside overridable request construction. */
+  isPlanningRequest() {
+    return __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this).phase === "planning";
+  }
+  /** Approves the final overridden destination and transport before minting a bearer. */
+  authorizePlannedRequest(url, request, timeout, allowHookSignal = false) {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    const headers = Object.getOwnPropertyDescriptor(request, "headers");
+    const body = Object.getOwnPropertyDescriptor(request, "body");
+    const signal = Object.getOwnPropertyDescriptor(request, "signal");
+    const redirect = Object.getOwnPropertyDescriptor(request, "redirect");
+    if (scope.phase !== "planning" || !headers || !(headers.value instanceof Headers) || !body && "body" in request || [body, signal, redirect].some((descriptor) => descriptor && !("value" in descriptor))) {
+      throw new OpenAIError("X.509 workload identity requires an approved final request.");
+    }
+    this.snapshotAPIURL(url);
+    assertX509FetchOptions(request);
+    try {
+      assertSafeHeaders(headers.value);
+    } catch {
+      throw new OpenAIError("X.509 workload identity cannot use caller-supplied authentication credentials.");
+    }
+    if (headerValue(headers.value, "Authorization") !== null) {
+      throw new OpenAIError("X.509 workload identity cannot use caller-supplied authorization credentials.");
+    }
+    __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_assertTenantHeaders).call(this, headers.value);
+    if (!allowHookSignal && (signal?.value ?? void 0) !== (this.requestSnapshot().signal ?? void 0)) {
+      throw new OpenAIError("X.509 workload identity must preserve its approved request signal.");
+    }
+    const approved = this.requestSnapshot();
+    scope.request = { ...approved, timeout: Math.min(approved.timeout, timeout) };
+    scope.phase = "authorizing";
+  }
+  /** Owns only SDK-created iterator adapters until authenticated dispatch takes responsibility. */
+  ownRequestBody(body, source) {
+    if (body instanceof ReadableStream && body !== source) {
+      __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this).materializedBody = body;
+    }
+  }
+  /** Recognizes every one-shot upload before issuer authentication or request replay. */
+  static isStreamingRequestBody(body) {
+    return globalThis.ReadableStream !== void 0 && body instanceof globalThis.ReadableStream || typeof body === "object" && body !== null && (Symbol.asyncIterator in body || Symbol.iterator in body && "next" in body && typeof body.next === "function");
+  }
+  /** Retires abandoned upload adapters without masking or blocking their authentication failure. */
+  retireRequestBody() {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    const body = scope.materializedBody;
+    delete scope.materializedBody;
+    if (body) {
+      void __classPrivateFieldGet(_a, _a, "m", _X509WorkloadIdentityAuth_cancelRequestBody).call(_a, body);
+    }
+  }
+  /** Transfers the dispatched upload while retiring any SDK-owned body replaced by a hook. */
+  releaseRequestBody(body) {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    if (scope.materializedBody === body) {
+      delete scope.materializedBody;
+    } else {
+      this.retireRequestBody();
+    }
+  }
+  /** Retains caller-only cancellation separately from SDK-created deadline controllers. */
+  setEffectiveSignal(signal) {
+    if (signal) {
+      __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this).effectiveSignal = signal;
+    } else {
+      delete __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this).effectiveSignal;
+    }
+  }
+  /** Uses protected-hook cancellation when an authenticated attempt enters retry backoff. */
+  effectiveSignal() {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    return scope.effectiveSignal ?? scope.request?.signal;
+  }
+  /** Establishes an independent scope even when concurrent requests share caller options. */
+  runRequest(operation, requestOwner) {
+    return __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").run(async () => {
+      const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").current();
+      if (!scope) {
+        throw new OpenAIError("X.509 workload identity requires an active certificate request scope.");
+      }
+      scope.owner = this;
+      scope.requestOwner = requestOwner;
+      try {
+        return await operation();
+      } finally {
+        this.retireRequestBody();
+        this.releaseRequestCredentials();
+        delete scope.requestOwner;
+        delete scope.owner;
+      }
+    });
+  }
+  /** Reports whether a public request-building call already belongs to an active logical operation. */
+  inRequest(requestOwner) {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").current();
+    return scope?.owner === this && scope.requestOwner === requestOwner && scope.phase !== "authorizing";
+  }
+  /** Shares a cache only when the complete, privately snapshotted credential identity matches. */
+  matches(other) {
+    return __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f") === __classPrivateFieldGet(other, _X509WorkloadIdentityAuth_transport, "f") && __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_identityProviderId, "f") === __classPrivateFieldGet(other, _X509WorkloadIdentityAuth_identityProviderId, "f") && __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_serviceAccountId, "f") === __classPrivateFieldGet(other, _X509WorkloadIdentityAuth_serviceAccountId, "f") && __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_organization, "f") === __classPrivateFieldGet(other, _X509WorkloadIdentityAuth_organization, "f") && __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_project, "f") === __classPrivateFieldGet(other, _X509WorkloadIdentityAuth_project, "f") && __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_refreshBufferMs, "f") === __classPrivateFieldGet(other, _X509WorkloadIdentityAuth_refreshBufferMs, "f");
+  }
+  /** Binds deferred response parsing to the original logical request and its unchanged deadline. */
+  continuation() {
+    const { wallStartedAt, monotonicStartedAt, deadlineArmed, request, requestOwner, effectiveSignal } = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    const scope = {
+      wallStartedAt,
+      monotonicStartedAt,
+      owner: this,
+      ...deadlineArmed ? { deadlineArmed } : {},
+      ...request ? { request } : {},
+      ...effectiveSignal ? { effectiveSignal } : {},
+      ...requestOwner ? { requestOwner } : {}
+    };
+    return (operation) => __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").resume(scope, async () => {
+      try {
+        return await operation();
+      } finally {
+        this.releaseRequestCredentials();
+        delete scope.requestOwner;
+        delete scope.owner;
+      }
+    });
+  }
+  /** Removes dispatched bearer material before settled request promises can retain their scope. */
+  releaseRequestCredentials() {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    delete scope.request;
+    delete scope.phase;
+    delete scope.deadlineArmed;
+    delete scope.preparationStartedAt;
+    delete scope.preparationWallStartedAt;
+    delete scope.effectiveSignal;
+    delete scope.materializedBody;
+    delete scope.apiURL;
+    delete scope.tenant;
+    delete scope.token;
+    delete scope.defaultHeaders;
+    delete scope.requestHeaders;
+    delete scope.tokenGeneration;
+    delete scope.headers;
+    delete scope.authorization;
+  }
+  /** Returns the original authentication start so response consumption shares its request deadline. */
+  requestStartedAt(_options) {
+    return __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").current()?.wallStartedAt;
+  }
+  /** Distinguishes issued workload credentials from independent admin or headerless requests. */
+  usedWorkloadToken(_options) {
+    return __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").current()?.token !== void 0;
+  }
+  /** Returns the budget left after certificate authentication without starting another timeout. */
+  remainingTimeout(_options, timeout) {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").current();
+    if (scope === void 0) {
+      return timeout;
+    }
+    const remaining = timeout - (performance.now() - scope.monotonicStartedAt);
+    if (remaining <= 0) {
+      throw new APIConnectionTimeoutError();
+    }
+    return remaining;
+  }
+  /** Cancels active retry timers promptly without changing public caller-abort semantics. */
+  async waitForRetry(duration, signal) {
+    try {
+      await __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").sleep(duration, signal);
+    } catch (error) {
+      if (signal?.aborted) {
+        throw userAbortError(signal);
+      }
+      throw error;
+    }
+  }
+  /** Trusts only issuer or connection failures privately branded by the approved transport. */
+  static isRetryableFailure(error) {
+    return typeof error === "object" && error !== null && (isTransientX509ConnectionError2(error) || isRetryableX509IssuerError2(error));
+  }
+  /** Reads safe retry hints only from a privately branded, sanitized issuer response. */
+  static retryHeaders(error) {
+    if (!error || typeof error !== "object" || !isRetryableX509IssuerError2(error)) {
+      return void 0;
+    }
+    const headers = Object.getOwnPropertyDescriptor(error, "headers")?.value;
+    return headers instanceof Headers ? headers : void 0;
+  }
+  /** Exchanges the exact certificate capability selected for the matching API dispatch. */
+  async getToken(options, context) {
+    const callerSignal = context ? context.signal : options?.signal;
+    if (callerSignal?.aborted) {
+      throw userAbortError(callerSignal);
+    }
+    if (options) {
+      assertX509RequestOptions(context ? context.fetchOptions : options.fetchOptions);
+    }
+    __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_preflight).call(this, context);
+    const scope = options ? __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this) : void 0;
+    const cached = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_cachedToken, "f");
+    if (cached && performance.now() < cached.refreshAt && Date.now() < cached.wallRefreshAt) {
+      return __classPrivateFieldGet(_a, _a, "m", _X509WorkloadIdentityAuth_assignToken).call(_a, scope, cached);
+    }
+    const remaining = context && options ? this.remainingTimeout(options, context.timeout) : context?.timeout;
+    const { signal, dispose } = exchangeDeadline(remaining, callerSignal);
+    if (callerSignal?.aborted) {
+      dispose();
+      throw userAbortError(callerSignal);
+    }
+    const attempt = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_refresh, "f") ?? __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_beginRefresh).call(this);
+    attempt.waiters += 1;
+    const waiter = waitForRefresh(attempt, signal);
+    try {
+      const exchanged = await waiter.result;
+      const refreshed = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_cachedToken, "f");
+      if (!refreshed || refreshed.accessToken !== exchanged.accessToken) {
+        throw new APIUserAbortError();
+      }
+      return __classPrivateFieldGet(_a, _a, "m", _X509WorkloadIdentityAuth_assignToken).call(_a, scope, refreshed);
+    } catch (error) {
+      return await __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_recoverRefreshFailure).call(this, error, attempt, cached, scope, options, context);
+    } finally {
+      waiter.dispose();
+      dispose();
+      attempt.waiters -= 1;
+      __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_retireRefresh).call(this, attempt);
+    }
+  }
+  /** Invalidates only the workload-token generation actually rejected by the current request. */
+  invalidateToken() {
+    const rejected = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").current();
+    if (!rejected?.token || __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_cachedToken, "f")?.accessToken !== rejected.token || __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_cachedToken, "f").generation !== rejected.tokenGeneration) {
+      return;
+    }
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_tokenGeneration, __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_tokenGeneration, "f") + 1, "f");
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_cachedToken, void 0, "f");
+    const refresh = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_refresh, "f");
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_refresh, void 0, "f");
+    refresh?.controller.abort(new APIUserAbortError());
+  }
+  /** Binds the minted credential to the original headers before protected request hooks run. */
+  bindRequest(options, request, adminAPIKey) {
+    if (!(request.headers instanceof Headers)) {
+      throw new OpenAIError("X.509 workload identity requires the original workload authorization headers.");
+    }
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    const { token } = scope;
+    const security = options.__security ?? { bearerAuth: true };
+    let approvedAuthorization = token ? `Bearer ${token}` : null;
+    if (!token && security.adminAPIKeyAuth && adminAPIKey !== null && headerValue(request.headers, "Authorization") !== null) {
+      approvedAuthorization = new Headers({ Authorization: `Bearer ${adminAPIKey}` }).get("Authorization");
+    }
+    scope.headers = request.headers;
+    scope.authorization = approvedAuthorization;
+    this.assertRequest(request);
+  }
+  /** Rebinds an equivalent protected-hook container without relaxing final dispatch identity checks. */
+  adoptRequestHeaders(request) {
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_scope).call(this);
+    const original = scope.headers;
+    if (!(original instanceof Headers) || !(request.headers instanceof Headers)) {
+      throw new OpenAIError("X.509 workload identity must preserve its issued workload authorization.");
+    }
+    scope.headers = request.headers;
+    try {
+      this.assertRequest(request);
+    } catch (error) {
+      scope.headers = original;
+      throw error;
+    }
+  }
+  /** Rejects request hooks that replace the selected bearer or its approved header identity. */
+  assertRequest(request) {
+    const { headers } = request;
+    if (!(headers instanceof Headers)) {
+      throw new OpenAIError("X.509 workload identity must preserve its issued workload authorization.");
+    }
+    const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").current();
+    if (!scope || scope.headers !== headers || scope.authorization === void 0 || headerValue(headers, "Authorization") !== scope.authorization) {
+      throw new OpenAIError("X.509 workload identity must preserve its issued workload authorization.");
+    }
+    __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_assertTenantHeaders).call(this, headers);
+    assertSafeHeaders(headers);
+  }
+  /** Returns a guarded final dispatcher while preserving all existing request hook object identities. */
+  fetch() {
+    return async (input, init = {}) => {
+      const target = assertX509APIOrigin(typeof input === "string" || input instanceof URL ? input : input.url);
+      assertX509FetchOptions(init);
+      this.assertRequest(init);
+      const approved = init.headers;
+      if (!(approved instanceof Headers)) {
+        throw new OpenAIError("X.509 workload identity must preserve its issued workload authorization.");
+      }
+      const headers = new Headers([...Headers.prototype.entries.call(approved)]);
+      assertSafeHeaders(headers);
+      init.headers = headers;
+      init.redirect = "manual";
+      return await __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").dispatch(target, init);
+    };
+  }
+};
+_a = X509WorkloadIdentityAuth, _X509WorkloadIdentityAuth_identityProviderId = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_serviceAccountId = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_configuredRefreshBufferMs = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_configuredRefreshBufferSeconds = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_organization = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_project = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_transport = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_refreshBufferMs = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_cachedToken = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_refresh = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_tokenGeneration = /* @__PURE__ */ new WeakMap(), _X509WorkloadIdentityAuth_instances = /* @__PURE__ */ new WeakSet(), _X509WorkloadIdentityAuth_cancelRequestBody = async function _X509WorkloadIdentityAuth_cancelRequestBody2(body) {
+  try {
+    await CancelReadableStream(body);
+  } catch {
+  }
+}, _X509WorkloadIdentityAuth_assignToken = function _X509WorkloadIdentityAuth_assignToken2(scope, token) {
+  if (scope) {
+    scope.token = token.accessToken;
+    scope.tokenGeneration = token.generation;
+  }
+  return token.accessToken;
+}, _X509WorkloadIdentityAuth_recoverRefreshFailure = async function _X509WorkloadIdentityAuth_recoverRefreshFailure2(error, attempt, cached, scope, options, context) {
+  const callerSignal = context ? context.signal : options?.signal;
+  if (callerSignal?.aborted) {
+    throw userAbortError(callerSignal);
+  }
+  if (attempt.controller.signal.aborted && attempt.generation !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_tokenGeneration, "f")) {
+    return await this.getToken(options, context);
+  }
+  const fallback = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_fallbackToken).call(this, error, cached, scope);
+  if (fallback !== void 0) {
+    return fallback;
+  }
+  if (error && typeof error === "object" && !(error instanceof OAuthError)) {
+    const oauth = findX509OAuthError2(error);
+    if (oauth) {
+      throw new OAuthError(oauth.status, oauth.error, oauth.headers);
+    }
+  }
+  throw error;
+}, _X509WorkloadIdentityAuth_fallbackToken = function _X509WorkloadIdentityAuth_fallbackToken2(error, cached, scope) {
+  if (!cached || cached !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_cachedToken, "f") || performance.now() >= cached.expiresAt || Date.now() >= cached.wallExpiresAt || !_a.isRetryableFailure(error)) {
+    return void 0;
+  }
+  const headers = _a.retryHeaders(error);
+  const milliseconds = headers?.get("retry-after-ms");
+  let requested = milliseconds ? Number(milliseconds) : void 0;
+  const retryAfter = headers?.get("retry-after");
+  if (retryAfter && (requested === void 0 || Number.isNaN(requested))) {
+    const seconds = Number(retryAfter);
+    requested = Number.isNaN(seconds) ? Date.parse(retryAfter) - Date.now() : seconds * 1e3;
+  }
+  const cooldown = requested !== void 0 && Number.isFinite(requested) && requested >= 0 && requested <= 6e4 ? Math.max(FAILED_REFRESH_COOLDOWN_MS, requested) : FAILED_REFRESH_COOLDOWN_MS;
+  cached.refreshAt = Math.min(cached.expiresAt, performance.now() + cooldown);
+  cached.wallRefreshAt = Math.min(cached.wallExpiresAt, Date.now() + cooldown);
+  return __classPrivateFieldGet(_a, _a, "m", _X509WorkloadIdentityAuth_assignToken).call(_a, scope, cached);
+}, _X509WorkloadIdentityAuth_retireRefresh = function _X509WorkloadIdentityAuth_retireRefresh2(attempt) {
+  if (attempt.waiters !== 0 || __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_refresh, "f") !== attempt) {
+    return;
+  }
+  queueMicrotask(() => {
+    if (attempt.waiters === 0 && __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_refresh, "f") === attempt) {
+      __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_refresh, void 0, "f");
+      __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_tokenGeneration, __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_tokenGeneration, "f") + 1, "f");
+      attempt.controller.abort(new APIUserAbortError());
+    }
+  });
+}, _X509WorkloadIdentityAuth_beginRefresh = function _X509WorkloadIdentityAuth_beginRefresh2() {
+  const controller = new AbortController();
+  const generation = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_tokenGeneration, "f");
+  const attempt = {
+    controller,
+    generation,
+    waiters: 0,
+    promise: __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_instances, "m", _X509WorkloadIdentityAuth_refreshToken).call(this, controller, generation)
+  };
+  __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_refresh, attempt, "f");
+  return attempt;
+}, _X509WorkloadIdentityAuth_refreshToken = async function _X509WorkloadIdentityAuth_refreshToken2(controller, generation) {
+  const startedAt = performance.now();
+  const wallStartedAt = Date.now();
+  try {
+    const token = await __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").exchange(__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_identityProviderId, "f"), __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_serviceAccountId, "f"), controller.signal);
+    const lifetime = token.expiresIn * 1e3;
+    const expiresAt = startedAt + lifetime;
+    const wallExpiresAt = wallStartedAt + lifetime;
+    if (performance.now() >= expiresAt || Date.now() >= wallExpiresAt) {
+      throw new OpenAIError("X.509 workload identity token expired before its exchange completed.");
+    }
+    if (__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_tokenGeneration, "f") !== generation || controller.signal.aborted || __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_refresh, "f")?.controller !== controller) {
+      throw new APIUserAbortError();
+    }
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_tokenGeneration, __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_tokenGeneration, "f") + 1, "f");
+    __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_cachedToken, {
+      accessToken: token.accessToken,
+      generation: __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_tokenGeneration, "f"),
+      expiresAt,
+      refreshAt: expiresAt - Math.min(__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_refreshBufferMs, "f"), lifetime / 2),
+      wallExpiresAt,
+      wallRefreshAt: wallExpiresAt - Math.min(__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_refreshBufferMs, "f"), lifetime / 2)
+    }, "f");
+    return token;
+  } finally {
+    if (__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_refresh, "f")?.controller === controller) {
+      __classPrivateFieldSet(this, _X509WorkloadIdentityAuth_refresh, void 0, "f");
+    }
+  }
+}, _X509WorkloadIdentityAuth_preflight = function _X509WorkloadIdentityAuth_preflight2(context) {
+  if (!context) {
+    return;
+  }
+  if (context.organization !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_organization, "f") || context.project !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_project, "f")) {
+    throw new OpenAIError("X.509 workload identity cannot override its enrolled organization or project.");
+  }
+  assertX509APIOrigin(context.apiURL);
+  const supplied = buildHeaders([context.defaultHeaders, context.requestHeaders]);
+  if (__classPrivateFieldGet(this, _X509WorkloadIdentityAuth_organization, "f") !== null && supplied.nulls.has("openai-organization") || __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_project, "f") !== null && supplied.nulls.has("openai-project")) {
+    throw new OpenAIError("X.509 workload identity cannot omit its enrolled organization or project.");
+  }
+  for (const name of supplied.values.keys()) {
+    const canonical = name.toLowerCase().split("_").join("-");
+    if ((canonical === "openai-organization" || canonical === "openai-project") && (name !== canonical || headerValue(supplied.values, name) !== (canonical === "openai-organization" ? context.organization : context.project))) {
+      throw new OpenAIError("X.509 workload identity cannot override its enrolled organization or project.");
+    }
+    if (isSensitiveHeader(canonical) || canonical === "host") {
+      throw new OpenAIError("X.509 workload identity cannot use caller-supplied authentication credentials.");
+    }
+  }
+}, _X509WorkloadIdentityAuth_scope = function _X509WorkloadIdentityAuth_scope2() {
+  const scope = __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_transport, "f").current();
+  if (!scope || scope.owner !== this) {
+    throw new OpenAIError("X.509 workload identity requires an active certificate request scope.");
+  }
+  return scope;
+}, _X509WorkloadIdentityAuth_assertTenantHeaders = function _X509WorkloadIdentityAuth_assertTenantHeaders2(headers) {
+  if (headerValue(headers, "OpenAI-Organization") !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_organization, "f") || headerValue(headers, "OpenAI-Project") !== __classPrivateFieldGet(this, _X509WorkloadIdentityAuth_project, "f")) {
+    throw new OpenAIError("X.509 workload identity cannot override its enrolled organization or project.");
+  }
+  for (const name of Headers.prototype.keys.call(headers)) {
+    const canonical = name.toLowerCase().split("_").join("-");
+    if ((canonical === "openai-organization" || canonical === "openai-project") && name !== canonical) {
+      throw new OpenAIError("X.509 workload identity cannot override its enrolled organization or project.");
+    }
+  }
+};
+
+// node_modules/openai/internal/auth/x509-credential-options.mjs
+function normalizeX509CredentialOptions(options) {
+  const { credential } = options;
+  if (credential === void 0) {
+    return { credential, options };
+  }
+  const registered = findX509Credential2(credential);
+  if (!registered) {
+    throw new OpenAIError("An X.509 credential must be created by the SDK authentication helper.");
+  }
+  const conflicting = ["apiKey", "adminAPIKey", "workloadIdentity", "x509Transport"].filter((name) => {
+    const value = options[name];
+    return value !== null && value !== void 0;
+  });
+  if (conflicting.length > 0) {
+    throw new OpenAIError(`The \`credential\` option cannot be combined with ${conflicting.map((name) => `\`${name}\``).join(", ")}.`);
+  }
+  return {
+    credential,
+    options: {
+      ...options,
+      apiKey: null,
+      adminAPIKey: null,
+      baseURL: options.baseURL ?? null,
+      organization: options.organization ?? null,
+      project: options.project ?? null,
+      workloadIdentity: registered.identity,
+      x509Transport: registered.transport
+    }
+  };
+}
+function overridesOrdinaryAuthentication({ apiKey, adminAPIKey }) {
+  return apiKey !== null && apiKey !== void 0 || adminAPIKey !== null && adminAPIKey !== void 0;
+}
+function prepareProviderClone(inherited, overrides) {
+  const inheritedProvider = inherited.provider;
+  const replacingProvider = overrides.credential ?? overrides.workloadIdentity;
+  const provider = overrides.provider ?? (replacingProvider ? void 0 : inheritedProvider);
+  if (provider !== inheritedProvider) {
+    delete inherited.baseURL;
+    delete inherited.organization;
+    delete inherited.project;
+    delete inherited.defaultHeaders;
+    delete inherited.defaultQuery;
+    delete inherited.fetchOptions;
+    delete inherited.fetch;
+  }
+  if (provider) {
+    delete inherited.apiKey;
+    delete inherited.adminAPIKey;
+    delete inherited.credential;
+    delete inherited.workloadIdentity;
+    delete inherited.x509Transport;
+    delete inherited.baseURL;
+  }
+  return provider;
+}
+function prepareX509ClientClone(inherited, overrides, credential, currentlyX509) {
+  const nextIdentity = hasOwn(overrides, "workloadIdentity") ? overrides.workloadIdentity : inherited.workloadIdentity;
+  const dropping = credential !== void 0 && (overridesOrdinaryAuthentication(overrides) && overrides.workloadIdentity === void 0 || overrides.provider !== void 0);
+  if (credential !== void 0 && hasOwn(overrides, "workloadIdentity")) {
+    delete inherited.x509Transport;
+  }
+  const inheritedCredential = credential !== void 0 && !dropping && overrides.credential === void 0 && !hasOwn(overrides, "workloadIdentity") && !hasOwn(overrides, "x509Transport") ? credential : void 0;
+  const nextCredential = overrides.credential === void 0 ? inheritedCredential : overrides.credential;
+  const nextX509 = nextCredential !== void 0 || !dropping && isX509WorkloadIdentity(nextIdentity);
+  if (currentlyX509 !== nextX509) {
+    delete inherited.fetch;
+    delete inherited.baseURL;
+    delete inherited.organization;
+    delete inherited.project;
+    delete inherited.defaultHeaders;
+    delete inherited.defaultQuery;
+    delete inherited.fetchOptions;
+    if (nextX509) {
+      inherited.apiKey = null;
+    } else {
+      delete inherited.x509Transport;
+      if (dropping) {
+        delete inherited.workloadIdentity;
+      }
+    }
+  }
+  if (nextCredential !== void 0) {
+    delete inherited.apiKey;
+    delete inherited.adminAPIKey;
+    delete inherited.workloadIdentity;
+    delete inherited.x509Transport;
+    inherited.credential = nextCredential;
+    if (overrides.credential !== void 0) {
+      delete inherited.organization;
+      delete inherited.project;
+      delete inherited.defaultHeaders;
+      delete inherited.defaultQuery;
+      delete inherited.fetchOptions;
+    }
+  }
+  return { credential: nextCredential, provider: prepareProviderClone(inherited, overrides) };
+}
+
 // node_modules/openai/internal/uploads.mjs
 var brand_privateStreamingFile = /* @__PURE__ */ Symbol("brand.privateStreamingFile");
 function toStreamingFile(data, name, options) {
@@ -1974,7 +3277,8 @@ function getName(value, options) {
   if (typeof value !== "object" || value === null) {
     return void 0;
   }
-  const explicitName = "name" in value && value.name && String(value.name) || "filename" in value && value.filename && String(value.filename);
+  const name = "name" in value ? value.name : void 0;
+  const explicitName = name && String(name) || "filename" in value && value.filename && String(value.filename);
   if (explicitName) {
     return options?.stripFilename === false ? normalizeFilenamePath(explicitName) : basename(explicitName);
   }
@@ -1993,7 +3297,11 @@ function basename(value) {
   return value.split(/[\\/]/).pop() || void 0;
 }
 function normalizeFilenamePath(value) {
-  return value.replace(/\\/g, "/");
+  const normalized = value.replace(/\\/g, "/");
+  if (normalized.startsWith("/") || /^[A-Za-z]:/.test(normalized) || normalized.split("/").includes("..")) {
+    throw new TypeError("Upload file name must be a safe relative path without parent directory segments");
+  }
+  return normalized;
 }
 var isAsyncIterable = (value) => value != null && typeof value === "object" && typeof value[Symbol.asyncIterator] === "function";
 var maybeMultipartFormRequestOptions = async (opts, fetch2, formOptions) => {
@@ -2048,10 +3356,10 @@ var createForm = async (body, fetch2, options = {}) => {
   await Promise.all(Object.entries(body || {}).map(([key, value]) => addFormValue(form, key, value, options)));
   return form;
 };
-var isNamedBlob = (value) => value instanceof Blob && "name" in value;
+var isBlob = (value) => value instanceof Blob;
 var isReadableStream = (value) => typeof value === "object" && value !== null && "getReader" in value && typeof value.getReader === "function";
 var isStreamingFile = (value) => typeof value === "object" && value !== null && brand_privateStreamingFile in value;
-var isUploadable = (value) => typeof value === "object" && value !== null && (value instanceof Response || isAsyncIterable(value) || isReadableStream(value) || isStreamingFile(value) || isNamedBlob(value));
+var isUploadable = (value) => typeof value === "object" && value !== null && (value instanceof Response || isAsyncIterable(value) || isReadableStream(value) || isStreamingFile(value) || isBlob(value));
 var hasStreamingUploadableValue = (value) => {
   if (isStreamingFile(value) || isAsyncIterable(value) || isReadableStream(value)) {
     return true;
@@ -2059,8 +3367,8 @@ var hasStreamingUploadableValue = (value) => {
   if (Array.isArray(value)) {
     return value.some(hasStreamingUploadableValue);
   }
-  if (value && typeof value === "object" && !isNamedBlob(value) && !(value instanceof Response)) {
-    for (const k in value) {
+  if (value && typeof value === "object" && !isBlob(value) && !(value instanceof Response)) {
+    for (const k of Object.keys(value)) {
       if (hasStreamingUploadableValue(value[k])) {
         return true;
       }
@@ -2076,7 +3384,7 @@ var hasUploadableValue = (value) => {
     return value.some(hasUploadableValue);
   }
   if (value && typeof value === "object") {
-    for (const k in value) {
+    for (const k of Object.keys(value)) {
       if (hasUploadableValue(value[k])) {
         return true;
       }
@@ -2084,19 +3392,32 @@ var hasUploadableValue = (value) => {
   }
   return false;
 };
+var snapshotPreservedUploadEntries = (entries, filenames) => {
+  const snapshot = [];
+  for (const entry of entries) {
+    if (isUploadable(entry.value) && !filenames.has(entry.value)) {
+      filenames.set(entry.value, getStreamingFileName(entry.value, { stripFilenames: false }));
+    }
+    snapshot.push(entry);
+  }
+  return snapshot;
+};
 var createStreamingFormRequestOptions = (opts, options = {}) => {
+  const entries = iterateFormEntries(opts.body);
+  const preservedFilenames = options.stripFilenames === false ? /* @__PURE__ */ new WeakMap() : void 0;
+  const multipartEntries = preservedFilenames ? snapshotPreservedUploadEntries(entries, preservedFilenames) : entries;
   const boundary = `openai-${Math.random().toString(36).slice(2)}`;
-  const body = ReadableStreamFrom(iterateMultipartBody(opts.body, boundary, options));
+  const body = ReadableStreamFrom(iterateMultipartBody(multipartEntries, boundary, options, preservedFilenames));
   return {
     ...opts,
     body,
     headers: buildHeaders([{ "content-type": `multipart/form-data; boundary=${boundary}` }, opts.headers])
   };
 };
-async function* iterateMultipartBody(body, boundary, options) {
-  for await (const { key, value } of iterateFormEntries(body)) {
+async function* iterateMultipartBody(entries, boundary, options, preservedFilenames) {
+  for await (const { key, value } of entries) {
     if (isUploadable(value)) {
-      const filename = getStreamingFileName(value, options);
+      const filename = preservedFilenames?.get(value) ?? getStreamingFileName(value, options);
       const type = getStreamingFileType(value);
       yield encodeUTF8(`--${boundary}\r
 `);
@@ -2117,7 +3438,7 @@ ${String(value)}`);
   yield encodeUTF8(`--${boundary}--\r
 `);
 }
-async function* iterateFormEntries(body) {
+function* iterateFormEntries(body) {
   if (!body || typeof body !== "object") {
     return;
   }
@@ -2125,7 +3446,7 @@ async function* iterateFormEntries(body) {
     yield* iterateFormValue(key, value);
   }
 }
-async function* iterateFormValue(key, value) {
+function* iterateFormValue(key, value) {
   if (value === void 0) {
     return;
   }
@@ -2152,13 +3473,13 @@ function getStreamingFileName(value, options) {
     if (typeof name !== "string" || !name) {
       throw new TypeError("Streaming upload file name must be a non-empty string");
     }
-    return options.stripFilenames === false ? normalizeFilenamePath(name) : name;
+    return options.stripFilenames === false ? normalizeFilenamePath(name) : basename(name) ?? "unknown_file";
   }
   return getName(value, { stripFilename: options.stripFilenames }) ?? "unknown_file";
 }
 function getStreamingFileType(value) {
   let type;
-  if (isStreamingFile(value) || isNamedBlob(value)) {
+  if (isStreamingFile(value) || isBlob(value)) {
     ({ type } = value);
   } else if (value instanceof Response) {
     type = value.headers.get("content-type") ?? void 0;
@@ -2226,13 +3547,31 @@ var addFormValue = async (form, key, value, options) => {
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     form.append(key, String(value));
   } else if (value instanceof Response) {
-    form.append(key, makeFile([await value.blob()], getName(value, { stripFilename: options.stripFilenames })));
+    const blob = await value.blob();
+    form.append(key, makeFile([blob], getName(value, { stripFilename: options.stripFilenames }), { type: blob.type }));
   } else if (isAsyncIterable(value)) {
     form.append(key, makeFile([await new Response(ReadableStreamFrom(value)).blob()], getName(value, { stripFilename: options.stripFilenames })));
-  } else if (isNamedBlob(value)) {
-    form.append(key, value, getName(value, { stripFilename: options.stripFilenames }));
+  } else if (isBlob(value)) {
+    const filename = getName(value, { stripFilename: options.stripFilenames });
+    if (filename === void 0) {
+      form.append(key, value);
+    } else {
+      form.append(key, value, filename);
+    }
   } else if (Array.isArray(value)) {
-    await Promise.all(value.map((entry) => addFormValue(form, key + "[]", entry, options)));
+    const entries = await Promise.all(value.map(async (entry) => {
+      const entryForm = new FormData();
+      await addFormValue(entryForm, key + "[]", entry, options);
+      return entryForm;
+    }));
+    for (const entryForm of entries) {
+      if (!entryForm) {
+        continue;
+      }
+      for (const [entryKey, entryValue] of entryForm.entries()) {
+        form.append(entryKey, entryValue);
+      }
+    }
   } else if (typeof value === "object") {
     await Promise.all(Object.entries(value).map(([name, prop]) => addFormValue(form, `${key}[${name}]`, prop, options)));
   } else {
@@ -2312,8 +3651,8 @@ var APIResource = class {
 };
 
 // node_modules/openai/internal/utils/path.mjs
-function encodeURIPath(str2) {
-  return str2.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
+function encodeURIPath(str) {
+  return str.replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]+/g, encodeURIComponent);
 }
 var EMPTY = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.create(null));
 var createPathTagFunction = (pathEncoder = encodeURIPath) => function path2(statics, ...params) {
@@ -2410,7 +3749,14 @@ function parseResponseFormatContent(format, content) {
   if (typeof format === "object" && format !== null && "$parseRaw" in format && typeof format.$parseRaw === "function") {
     return format.$parseRaw(content);
   }
-  return JSON.parse(content);
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new SyntaxError("Error reading response: invalid structured output JSON.");
+    }
+    throw error;
+  }
 }
 function isAutoParsableTool(tool) {
   return tool?.["$brand"] === "auto-parseable-tool";
@@ -2470,7 +3816,7 @@ function parseToolCall(params, toolCall) {
   if (isAutoParsableTool(inputTool)) {
     parsedArguments = inputTool.$parseRaw(toolCall.function.arguments);
   } else if (inputTool?.function.strict) {
-    parsedArguments = JSON.parse(toolCall.function.arguments);
+    parsedArguments = parseResponseFormatContent({ type: "json_schema", $parseRaw: void 0 }, toolCall.function.arguments);
   }
   return {
     ...toolCall,
@@ -2522,12 +3868,312 @@ var _EventStream_resolveEndPromise;
 var _EventStream_rejectEndPromise;
 var _EventStream_listeners;
 var _EventStream_abortListeners;
+var _EventStream_emittedListenerRegistrations;
+var _EventStream_pendingListenerCleanup;
+var _EventStream_pendingBufferedEventChecks;
+var _EventStream_listenerDispatchDepth;
 var _EventStream_ended;
 var _EventStream_errored;
 var _EventStream_aborted;
 var _EventStream_catchingPromiseCreated;
 var _EventStream_removeAbortListeners;
+var _EventStream_onceForEmitted;
+var _EventStream_removeEmittedListener;
+var _EventStream_cleanupEmittedListeners;
 var _EventStream_handleError;
+var MAX_BUFFERED_ITERATOR_EVENTS = 4096;
+var MAX_BUFFERED_ITERATOR_BYTES = 8 * 1024 * 1024;
+var MAX_INSPECTABLE_TYPED_ARRAY_ELEMENTS = 4096;
+var MAX_BUFFERED_EVENT_DEPTH = 256;
+var bufferedJSONStringify = JSON.stringify;
+var bufferedJSONParse = JSON.parse;
+var sdkOwnedBufferedEventArguments = /* @__PURE__ */ new WeakSet();
+var typedArrayBufferGetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), "buffer")?.get;
+var typedArrayLengthGetter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), "length")?.get;
+var dataViewBufferGetter = Object.getOwnPropertyDescriptor(DataView.prototype, "buffer")?.get;
+var symbolDescriptionGetter = Object.getOwnPropertyDescriptor(Symbol.prototype, "description")?.get;
+var dateTimestampGetter = Date.prototype.getTime;
+var arrayBufferByteLengthGetter = Object.getOwnPropertyDescriptor(ArrayBuffer.prototype, "byteLength")?.get;
+var sharedArrayBufferByteLengthGetter = typeof SharedArrayBuffer === "function" ? Object.getOwnPropertyDescriptor(SharedArrayBuffer.prototype, "byteLength")?.get : void 0;
+var errorStackDescriptor = Object.getOwnPropertyDescriptor(new Error("native stack descriptor"), "stack");
+var functionToString = Function.prototype.toString;
+var objectToString = Object.prototype.toString;
+var errorBrandDescriptor = Object.getOwnPropertyDescriptor(Error, "isError");
+var nativeErrorBrand = errorBrandDescriptor && "value" in errorBrandDescriptor && typeof errorBrandDescriptor.value === "function" ? errorBrandDescriptor.value : void 0;
+var nativeErrorConstructorSource = functionToString.call(Error);
+var nativeDateConstructorSource = functionToString.call(Date);
+var nativeFunctionConstructorSource = functionToString.call(Function);
+var trustedIntrinsicPrototypes = /* @__PURE__ */ new Set([
+  APIConnectionError.prototype,
+  APIConnectionTimeoutError.prototype,
+  APIError.prototype,
+  OpenAIError.prototype,
+  APIUserAbortError.prototype,
+  AuthenticationError.prototype,
+  BadRequestError.prototype,
+  ConflictError.prototype,
+  ContentFilterFinishReasonError.prototype,
+  InternalServerError.prototype,
+  InvalidWebhookSignatureError.prototype,
+  LengthFinishReasonError.prototype,
+  NotFoundError.prototype,
+  OAuthError.prototype,
+  PermissionDeniedError.prototype,
+  RateLimitError.prototype,
+  SubjectTokenProviderError.prototype,
+  UnprocessableEntityError.prototype
+]);
+var trustedNativeConstructorSources = /* @__PURE__ */ new Set();
+var canonicalIntrinsicDescriptors = /* @__PURE__ */ new Map();
+var foreignErrorStackDescriptors = /* @__PURE__ */ new WeakMap();
+function captureNativeProxyDetector() {
+  if (typeof process === "undefined") {
+    return void 0;
+  }
+  try {
+    const loader = Object.getOwnPropertyDescriptor(process, "getBuiltinModule");
+    if (!loader || !("value" in loader) || typeof loader.value !== "function") {
+      return void 0;
+    }
+    const util = Reflect.apply(loader.value, process, ["node:util"]);
+    if (typeof util !== "object" || util === null) {
+      return void 0;
+    }
+    const types = Object.getOwnPropertyDescriptor(util, "types");
+    if (!types || !("value" in types) || typeof types.value !== "object" || types.value === null) {
+      return void 0;
+    }
+    const detector = Object.getOwnPropertyDescriptor(types.value, "isProxy");
+    if (!detector || !("value" in detector) || typeof detector.value !== "function") {
+      return void 0;
+    }
+    return detector.value;
+  } catch {
+    return void 0;
+  }
+}
+var nativeProxyDetector = captureNativeProxyDetector();
+function rememberTrustedIntrinsic(constructor) {
+  if (typeof constructor !== "function") {
+    return;
+  }
+  const prototypeDescriptor = Object.getOwnPropertyDescriptor(constructor, "prototype");
+  if (!prototypeDescriptor || !("value" in prototypeDescriptor) || typeof prototypeDescriptor.value !== "object" && typeof prototypeDescriptor.value !== "function") {
+    return;
+  }
+  trustedIntrinsicPrototypes.add(prototypeDescriptor.value);
+  const source = functionToString.call(constructor);
+  if (/^function [A-Za-z_$][\w$]*\(\) \{ \[native code\] \}$/u.test(source) && prototypeDescriptor.configurable === false && prototypeDescriptor.writable === false) {
+    trustedNativeConstructorSources.add(source);
+    const descriptors = /* @__PURE__ */ new Map();
+    for (const key of Reflect.ownKeys(prototypeDescriptor.value)) {
+      const descriptor = Object.getOwnPropertyDescriptor(prototypeDescriptor.value, key);
+      if (descriptor) {
+        descriptors.set(key, descriptor);
+      }
+    }
+    canonicalIntrinsicDescriptors.set(source, descriptors);
+  }
+}
+for (const constructor of [
+  Object,
+  Function,
+  Array,
+  Date,
+  Map,
+  Set,
+  ArrayBuffer,
+  DataView,
+  Error,
+  EvalError,
+  RangeError,
+  ReferenceError,
+  SyntaxError,
+  TypeError,
+  URIError,
+  Uint8Array,
+  Uint8ClampedArray,
+  Uint16Array,
+  Uint32Array,
+  Int8Array,
+  Int16Array,
+  Int32Array,
+  Float32Array,
+  Float64Array
+]) {
+  rememberTrustedIntrinsic(constructor);
+}
+for (const name of [
+  "SharedArrayBuffer",
+  "AggregateError",
+  "Float16Array",
+  "BigInt64Array",
+  "BigUint64Array",
+  "Blob",
+  "File",
+  "Headers"
+]) {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, name);
+  if (descriptor && "value" in descriptor) {
+    rememberTrustedIntrinsic(descriptor.value);
+  }
+}
+var typedArrayConstructorDescriptor = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Uint8Array.prototype), "constructor");
+if (typedArrayConstructorDescriptor && "value" in typedArrayConstructorDescriptor) {
+  rememberTrustedIntrinsic(typedArrayConstructorDescriptor.value);
+}
+if (typeof Buffer === "function") {
+  rememberTrustedIntrinsic(Buffer);
+}
+var blobInternalHandlePrototype = (() => {
+  if (typeof Blob !== "function") {
+    return void 0;
+  }
+  try {
+    const blob = new Blob([]);
+    for (const key of Object.getOwnPropertySymbols(blob)) {
+      const descriptor = Object.getOwnPropertyDescriptor(blob, key);
+      if (descriptor && "value" in descriptor && typeof descriptor.value === "object" && descriptor.value) {
+        return Object.getPrototypeOf(descriptor.value);
+      }
+    }
+  } catch {
+    return void 0;
+  }
+  return void 0;
+})();
+var mapEntries = Map.prototype.entries;
+var setValues = Set.prototype.values;
+var headersEntriesDescriptor = typeof Headers === "function" ? Object.getOwnPropertyDescriptor(Headers.prototype, "entries") : void 0;
+var headersEntries = headersEntriesDescriptor && "value" in headersEntriesDescriptor && typeof headersEntriesDescriptor.value === "function" ? headersEntriesDescriptor.value : void 0;
+var retainedStorageBrands = /* @__PURE__ */ new Set([
+  "ArrayBuffer",
+  "SharedArrayBuffer",
+  "Blob",
+  "File",
+  "Map",
+  "Date",
+  "Set",
+  "Headers"
+]);
+function getTrustedForeignIntrinsic(prototype) {
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, "constructor");
+  if (!descriptor || !("value" in descriptor) || typeof descriptor.value !== "function") {
+    return void 0;
+  }
+  const constructor = descriptor.value;
+  const source = functionToString.call(constructor);
+  const descriptors = canonicalIntrinsicDescriptors.get(source);
+  if (!trustedNativeConstructorSources.has(source) || !descriptors) {
+    return void 0;
+  }
+  const constructorPrototype = Object.getOwnPropertyDescriptor(constructor, "prototype");
+  if (!constructorPrototype || !("value" in constructorPrototype) || constructorPrototype.value !== prototype || constructorPrototype.configurable !== false || constructorPrototype.writable !== false) {
+    return void 0;
+  }
+  return { constructor, descriptors, functionPrototype: Object.getPrototypeOf(constructor) };
+}
+function isTrustedIntrinsicPrototype(prototype) {
+  return trustedIntrinsicPrototypes.has(prototype) || getTrustedForeignIntrinsic(prototype) !== void 0;
+}
+function isCanonicalIntrinsicFunction(value, canonical, functionPrototype) {
+  if (canonical === void 0) {
+    return value === void 0;
+  }
+  if (typeof value !== "function" || typeof canonical !== "function") {
+    return false;
+  }
+  const source = functionToString.call(canonical);
+  if (functionToString.call(value) !== source) {
+    return false;
+  }
+  const actualFunctionPrototype = Object.getPrototypeOf(value);
+  if (actualFunctionPrototype === functionPrototype) {
+    return true;
+  }
+  if (!/^function [A-Za-z_$][\w$]*\(\) \{ \[native code\] \}$/u.test(source)) {
+    return false;
+  }
+  const intrinsic = getTrustedForeignIntrinsic(actualFunctionPrototype);
+  return intrinsic !== void 0 && functionToString.call(intrinsic.constructor) === nativeFunctionConstructorSource;
+}
+function isCanonicalIntrinsicDescriptor(descriptor, canonical, functionPrototype) {
+  if (!canonical || descriptor.configurable !== canonical.configurable || descriptor.enumerable !== canonical.enumerable || "value" in descriptor !== "value" in canonical) {
+    return false;
+  }
+  if ("value" in descriptor && "value" in canonical) {
+    if (descriptor.writable !== canonical.writable) {
+      return false;
+    }
+    if (typeof canonical.value === "function") {
+      return isCanonicalIntrinsicFunction(descriptor.value, canonical.value, functionPrototype);
+    }
+    if (canonical.value !== null && typeof canonical.value === "object") {
+      return false;
+    }
+    return Object.is(descriptor.value, canonical.value);
+  }
+  return isCanonicalIntrinsicFunction(descriptor.get, canonical.get, functionPrototype) && isCanonicalIntrinsicFunction(descriptor.set, canonical.set, functionPrototype);
+}
+function hasNativeErrorBrand(current) {
+  if (nativeErrorBrand) {
+    return nativeErrorBrand.call(Error, current);
+  }
+  let prototype = current;
+  for (let depth = 0; prototype !== null && depth < MAX_BUFFERED_EVENT_DEPTH; depth += 1) {
+    if (Object.getOwnPropertyDescriptor(prototype, Symbol.toStringTag)) {
+      return false;
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return prototype === null && objectToString.call(current) === "[object Error]";
+}
+function getVerifiedForeignErrorConstructor(current, stackDescriptor) {
+  if (typeof stackDescriptor.get !== "function" || typeof stackDescriptor.set !== "function") {
+    return void 0;
+  }
+  let prototype = Object.getPrototypeOf(current);
+  for (let depth = 0; prototype !== null && depth < MAX_BUFFERED_EVENT_DEPTH; depth += 1) {
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, "constructor");
+    if (descriptor && "value" in descriptor && typeof descriptor.value === "function") {
+      const constructor = descriptor.value;
+      if (functionToString.call(constructor) === nativeErrorConstructorSource && isTrustedIntrinsicPrototype(prototype)) {
+        const functionPrototype = Object.getPrototypeOf(constructor);
+        if (Object.getPrototypeOf(stackDescriptor.get) === functionPrototype && Object.getPrototypeOf(stackDescriptor.set) === functionPrototype) {
+          return { constructor, prototype };
+        }
+        return void 0;
+      }
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return void 0;
+}
+function isTrustedNativeErrorStack(current, descriptor) {
+  if (!hasNativeErrorBrand(current)) {
+    return false;
+  }
+  if (errorStackDescriptor && !("value" in errorStackDescriptor) && typeof errorStackDescriptor.get === "function" && Object.prototype.isPrototypeOf.call(Error.prototype, current) && descriptor.get === errorStackDescriptor.get && descriptor.set === errorStackDescriptor.set) {
+    return true;
+  }
+  const verified = getVerifiedForeignErrorConstructor(current, descriptor);
+  if (!verified) {
+    return false;
+  }
+  let canonicalDescriptor = foreignErrorStackDescriptors.get(verified.prototype);
+  if (!canonicalDescriptor) {
+    const canonical = Reflect.construct(verified.constructor, []);
+    if (typeof canonical !== "object" || canonical === null || !hasNativeErrorBrand(canonical) || Object.getPrototypeOf(canonical) !== verified.prototype) {
+      return false;
+    }
+    canonicalDescriptor = Object.getOwnPropertyDescriptor(canonical, "stack");
+    if (!canonicalDescriptor || "value" in canonicalDescriptor || typeof canonicalDescriptor.get !== "function" || typeof canonicalDescriptor.set !== "function") {
+      return false;
+    }
+    foreignErrorStackDescriptors.set(verified.prototype, canonicalDescriptor);
+  }
+  return descriptor.get === canonicalDescriptor.get && descriptor.set === canonicalDescriptor.set;
+}
 function createEventQueue() {
   let entries = [];
   let head = 0;
@@ -2560,6 +4206,570 @@ function createEventQueue() {
     }
   };
 }
+function getRetainedStorageBrand(current) {
+  let prototype = Object.getPrototypeOf(current);
+  for (let depth = 0; prototype !== null && depth < MAX_BUFFERED_EVENT_DEPTH; depth += 1) {
+    if (prototype === Date.prototype) {
+      return "Date";
+    }
+    if (!trustedIntrinsicPrototypes.has(prototype)) {
+      const constructor = Object.getOwnPropertyDescriptor(prototype, "constructor");
+      if (constructor && "value" in constructor && typeof constructor.value === "function" && functionToString.call(constructor.value) === nativeDateConstructorSource && getTrustedForeignIntrinsic(prototype)) {
+        return "Date";
+      }
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, Symbol.toStringTag);
+    if (descriptor && "value" in descriptor && typeof descriptor.value === "string" && retainedStorageBrands.has(descriptor.value)) {
+      return descriptor.value;
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return void 0;
+}
+function estimateRetainedBufferBytes(current, visit, depth) {
+  if (ArrayBuffer.isView(current)) {
+    let buffer;
+    let kind2 = "typed-array";
+    try {
+      buffer = typedArrayBufferGetter?.call(current);
+    } catch {
+      kind2 = "data-view";
+      buffer = dataViewBufferGetter?.call(current);
+    }
+    if (typeof buffer !== "object" || buffer === null) {
+      return { bytes: Number.POSITIVE_INFINITY, kind: kind2 };
+    }
+    visit(buffer, depth + 1);
+    return { bytes: 0, kind: kind2 };
+  }
+  const brand = getRetainedStorageBrand(current);
+  if (!brand) {
+    return void 0;
+  }
+  let getter;
+  const kind = "buffer";
+  switch (brand) {
+    case "ArrayBuffer": {
+      getter = arrayBufferByteLengthGetter;
+      break;
+    }
+    case "SharedArrayBuffer": {
+      getter = sharedArrayBufferByteLengthGetter;
+      break;
+    }
+    case "Blob":
+    case "File": {
+      return { bytes: Number.POSITIVE_INFINITY, kind: "blob" };
+    }
+    case "Map": {
+      return { bytes: 0, kind: "map" };
+    }
+    case "Date": {
+      Reflect.apply(dateTimestampGetter, current, []);
+      return { bytes: 8, kind: "date" };
+    }
+    case "Set": {
+      return { bytes: 0, kind: "set" };
+    }
+    case "Headers": {
+      return { bytes: 0, kind: "headers" };
+    }
+    default: {
+      return void 0;
+    }
+  }
+  const bytes = getter?.call(current);
+  return {
+    bytes: typeof bytes === "number" && Number.isSafeInteger(bytes) && bytes >= 0 ? bytes : Number.POSITIVE_INFINITY,
+    kind
+  };
+}
+function visitHiddenEventValues(current, kind, visit) {
+  if (kind === "map") {
+    for (const [key, entry] of mapEntries.call(current)) {
+      if (!visit(key, 8) || !visit(entry, 8)) {
+        return false;
+      }
+    }
+  }
+  if (kind === "set") {
+    for (const entry of setValues.call(current)) {
+      if (!visit(entry, 8)) {
+        return false;
+      }
+    }
+  }
+  if (kind === "headers") {
+    if (!headersEntries) {
+      return false;
+    }
+    for (const [name, value] of headersEntries.call(current)) {
+      if (!visit(name, 8) || !visit(value, 8)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+function getInspectableEventKeys(current, kind, availableBytes) {
+  if (Array.isArray(current)) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, "length");
+    const length2 = descriptor && "value" in descriptor ? descriptor.value : void 0;
+    if (typeof length2 !== "number" || !Number.isSafeInteger(length2) || length2 < 0 || length2 > Math.floor(availableBytes / 16)) {
+      return void 0;
+    }
+  }
+  if (kind !== "typed-array") {
+    return Reflect.ownKeys(current);
+  }
+  const length = typedArrayLengthGetter?.call(current);
+  if (typeof length !== "number" || !Number.isSafeInteger(length) || length < 0 || length > MAX_INSPECTABLE_TYPED_ARRAY_ELEMENTS) {
+    return void 0;
+  }
+  return Reflect.ownKeys(current).filter((key) => {
+    if (typeof key !== "string") {
+      return true;
+    }
+    const index = Number(key);
+    return !Number.isInteger(index) || index < 0 || index >= length || String(index) !== key;
+  });
+}
+function visitInspectableEventProperties(current, kind, depth, availableBytes, charge, visit) {
+  const keys = getInspectableEventKeys(current, kind, availableBytes());
+  if (keys === void 0) {
+    return false;
+  }
+  for (const key of keys) {
+    if (!charge(typeof key === "string" ? key.length * 2 + 8 : 8)) {
+      return false;
+    }
+    if (typeof key === "symbol") {
+      visit(key, depth + 1);
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(current, key);
+    if (!descriptor) {
+      return false;
+    }
+    if (!("value" in descriptor)) {
+      if (key === "stack" && isTrustedNativeErrorStack(current, descriptor)) {
+        continue;
+      }
+      return false;
+    }
+    visit(descriptor.value, depth + 1, kind === "blob");
+  }
+  return true;
+}
+function visitRetainedEventPrototypes(current, depth, isBlobInternalHandle, visited, availableBytes, charge, visit, retainPrototype) {
+  let prototype = Object.getPrototypeOf(current);
+  for (let prototypeDepth = depth + 1; prototype !== null; prototypeDepth += 1) {
+    if (prototypeDepth >= MAX_BUFFERED_EVENT_DEPTH) {
+      return false;
+    }
+    if (trustedIntrinsicPrototypes.has(prototype) || isBlobInternalHandle && prototype === blobInternalHandlePrototype) {
+      return true;
+    }
+    if (visited.has(prototype)) {
+      visit(prototype, prototypeDepth);
+      return availableBytes() >= 0;
+    }
+    visited.add(prototype);
+    const retainedPrototype = prototype;
+    const retained = retainPrototype(retainedPrototype, () => {
+      if (!charge(16)) {
+        return false;
+      }
+      const intrinsic = getTrustedForeignIntrinsic(retainedPrototype);
+      if (!intrinsic) {
+        return visitInspectableEventProperties(retainedPrototype, void 0, prototypeDepth, availableBytes, charge, visit);
+      }
+      for (const key of Reflect.ownKeys(retainedPrototype)) {
+        const descriptor = Object.getOwnPropertyDescriptor(retainedPrototype, key);
+        if (!descriptor) {
+          return false;
+        }
+        if (isCanonicalIntrinsicDescriptor(descriptor, intrinsic.descriptors.get(key), intrinsic.functionPrototype)) {
+          continue;
+        }
+        if (!charge(typeof key === "string" ? key.length * 2 + 8 : 8) || !("value" in descriptor)) {
+          return false;
+        }
+        if (typeof key === "symbol") {
+          visit(key, prototypeDepth + 1);
+        }
+        visit(descriptor.value, prototypeDepth + 1);
+      }
+      return availableBytes() >= 0;
+    });
+    if (!retained) {
+      return false;
+    }
+    prototype = Object.getPrototypeOf(retainedPrototype);
+  }
+  return true;
+}
+var BUFFERED_LEDGER_ENTRY_BYTES = 32;
+var BUFFERED_LEDGER_NODE_BYTES = 32;
+var BUFFERED_LEDGER_EDGE_BYTES = 8;
+var BUFFERED_LEDGER_OWNER_BYTES = 16;
+var MAX_BUFFERED_LEDGER_RECONCILIATION_WORK = 128 * 1024;
+function inspectBufferedEventGraph(value, remainingBytes) {
+  let bytes = 0;
+  let scalarBytes = 0;
+  const visited = /* @__PURE__ */ new WeakSet();
+  const visitedSymbols = /* @__PURE__ */ new Set();
+  const roots = /* @__PURE__ */ new Set();
+  const nodes = /* @__PURE__ */ new Map();
+  let activeNode;
+  const availableBytes = () => remainingBytes - bytes;
+  const charge = (amount) => {
+    if (!Number.isSafeInteger(amount) || amount < 0) {
+      bytes = remainingBytes + 1;
+      return false;
+    }
+    bytes += amount;
+    if (activeNode) {
+      activeNode.bytes += amount;
+    } else {
+      scalarBytes += amount;
+    }
+    return bytes <= remainingBytes;
+  };
+  const addIdentity = (identity) => {
+    if (activeNode) {
+      activeNode.edges.add(identity);
+    } else {
+      roots.add(identity);
+    }
+  };
+  const retainIdentity = (identity, inspect) => {
+    addIdentity(identity);
+    const node = { bytes: 0, edges: /* @__PURE__ */ new Set() };
+    nodes.set(identity, node);
+    const previous = activeNode;
+    activeNode = node;
+    try {
+      return inspect();
+    } finally {
+      activeNode = previous;
+    }
+  };
+  const visitSymbol = (current) => {
+    if (visitedSymbols.has(current)) {
+      addIdentity(current);
+      charge(8);
+      return;
+    }
+    visitedSymbols.add(current);
+    if (!retainIdentity(current, () => {
+      if (!symbolDescriptionGetter) {
+        return false;
+      }
+      const description = Reflect.apply(symbolDescriptionGetter, current, []);
+      return charge(8 + (description?.length ?? 0) * 2);
+    })) {
+      bytes = remainingBytes + 1;
+    }
+  };
+  const visit = (current, depth, isBlobInternalHandle = false) => {
+    if (bytes > remainingBytes) {
+      return;
+    }
+    if (typeof current === "string") {
+      charge(current.length * 2);
+      return;
+    }
+    if (typeof current === "symbol") {
+      visitSymbol(current);
+      return;
+    }
+    if (typeof current === "function") {
+      bytes = remainingBytes + 1;
+      return;
+    }
+    if (current === null || typeof current !== "object") {
+      charge(8);
+      return;
+    }
+    if (nativeProxyDetector?.(current)) {
+      bytes = remainingBytes + 1;
+      return;
+    }
+    if (depth >= MAX_BUFFERED_EVENT_DEPTH) {
+      bytes = remainingBytes + 1;
+      return;
+    }
+    if (visited.has(current)) {
+      addIdentity(current);
+      charge(8);
+      return;
+    }
+    visited.add(current);
+    if (!retainIdentity(current, () => {
+      if (!charge(16)) {
+        return false;
+      }
+      const retainedStorage = estimateRetainedBufferBytes(current, visit, depth);
+      if (!visitRetainedEventPrototypes(current, depth, isBlobInternalHandle, visited, availableBytes, charge, visit, retainIdentity)) {
+        return false;
+      }
+      if (retainedStorage !== void 0 && !charge(retainedStorage.bytes)) {
+        return false;
+      }
+      if (!visitHiddenEventValues(current, retainedStorage?.kind, (hiddenValue, overhead) => {
+        if (!charge(overhead)) {
+          return false;
+        }
+        visit(hiddenValue, depth + 1);
+        return bytes <= remainingBytes;
+      })) {
+        return false;
+      }
+      return visitInspectableEventProperties(current, retainedStorage?.kind, depth, availableBytes, charge, visit);
+    })) {
+      bytes = remainingBytes + 1;
+    }
+  };
+  try {
+    visit(value, 0);
+  } catch {
+    return void 0;
+  }
+  return bytes <= remainingBytes ? { scalarBytes, roots, nodes } : void 0;
+}
+function areBufferedRetainedEdgesEqual(first, second) {
+  if (first.size !== second.size) {
+    return false;
+  }
+  for (const identity of first) {
+    if (!second.has(identity)) {
+      return false;
+    }
+  }
+  return true;
+}
+function getBufferedLedgerNodeBytes(node, owners) {
+  return node.bytes + BUFFERED_LEDGER_NODE_BYTES + node.edges.size * BUFFERED_LEDGER_EDGE_BYTES + owners * BUFFERED_LEDGER_OWNER_BYTES;
+}
+function getBufferedLedgerEntryBytes(entry) {
+  return BUFFERED_LEDGER_ENTRY_BYTES + entry.scalarBytes + entry.roots.size * BUFFERED_LEDGER_EDGE_BYTES;
+}
+function collectBufferedLedgerIdentities(roots, candidate, records, work) {
+  const identities = /* @__PURE__ */ new Set();
+  const pending = [...roots];
+  while (pending.length) {
+    work.remaining -= 1;
+    if (work.remaining < 0) {
+      return void 0;
+    }
+    const identity = pending.pop();
+    if (identities.has(identity)) {
+      continue;
+    }
+    const node = candidate.get(identity) ?? records.get(identity);
+    if (!node) {
+      return void 0;
+    }
+    identities.add(identity);
+    for (const edge of node.edges) {
+      pending.push(edge);
+    }
+  }
+  return identities;
+}
+function getBufferedLedgerChange(identity, graph, records, changes, node) {
+  const existing = changes.get(identity);
+  if (existing) {
+    if (node) {
+      existing.node = node;
+    }
+    return existing;
+  }
+  const current = node ?? graph.nodes.get(identity) ?? records.get(identity);
+  if (!current) {
+    return void 0;
+  }
+  const update = { node: current, ownerDelta: 0 };
+  changes.set(identity, update);
+  return update;
+}
+function findBufferedLedgerAffectedOwners(entry, graph, records, changes, work) {
+  const affected = /* @__PURE__ */ new Set([entry]);
+  for (const [identity, node] of graph.nodes) {
+    work.remaining -= 1;
+    if (work.remaining < 0) {
+      return void 0;
+    }
+    const previous = records.get(identity);
+    if (!previous) {
+      continue;
+    }
+    const changedEdges = !areBufferedRetainedEdgesEqual(previous.edges, node.edges);
+    if (previous.bytes !== node.bytes || changedEdges) {
+      getBufferedLedgerChange(identity, graph, records, changes, node);
+    }
+    if (!changedEdges) {
+      continue;
+    }
+    for (const owner of previous.owners) {
+      work.remaining -= 1;
+      if (work.remaining < 0) {
+        return void 0;
+      }
+      affected.add(owner);
+    }
+  }
+  return affected;
+}
+function updateBufferedLedgerMembershipChanges(owner, next, graph, records, changes, work) {
+  for (const identity of owner.identities) {
+    work.remaining -= 1;
+    if (work.remaining < 0) {
+      return false;
+    }
+    if (!next.has(identity)) {
+      const update = getBufferedLedgerChange(identity, graph, records, changes);
+      if (!update) {
+        return false;
+      }
+      update.ownerDelta -= 1;
+    }
+  }
+  for (const identity of next) {
+    work.remaining -= 1;
+    if (work.remaining < 0) {
+      return false;
+    }
+    if (!owner.identities.has(identity)) {
+      const update = getBufferedLedgerChange(identity, graph, records, changes);
+      if (!update) {
+        return false;
+      }
+      update.ownerDelta += 1;
+    }
+  }
+  return true;
+}
+function collectBufferedLedgerMemberships(entry, graph, affected, records, changes, work) {
+  const memberships = /* @__PURE__ */ new Map();
+  for (const owner of affected) {
+    const roots = owner === entry ? graph.roots : owner.roots;
+    const next = collectBufferedLedgerIdentities(roots, graph.nodes, records, work);
+    if (!next || !updateBufferedLedgerMembershipChanges(owner, next, graph, records, changes, work)) {
+      return void 0;
+    }
+    memberships.set(owner, next);
+  }
+  return memberships;
+}
+function projectBufferedLedgerBytes(currentBytes, entry, graph, isNew, changes, records) {
+  let projected = currentBytes - (isNew ? 0 : getBufferedLedgerEntryBytes(entry)) + getBufferedLedgerEntryBytes(graph);
+  for (const [identity, update] of changes) {
+    const previous = records.get(identity);
+    const owners = (previous?.owners.size ?? 0) + update.ownerDelta;
+    if (owners < 0) {
+      return void 0;
+    }
+    if (previous) {
+      projected -= getBufferedLedgerNodeBytes(previous, previous.owners.size);
+    }
+    if (owners) {
+      projected += getBufferedLedgerNodeBytes(update.node, owners);
+    }
+  }
+  return Number.isSafeInteger(projected) && projected >= 0 && projected <= MAX_BUFFERED_ITERATOR_BYTES ? projected : void 0;
+}
+function applyBufferedLedgerChanges(records, changes, memberships) {
+  for (const [identity, update] of changes) {
+    const previous = records.get(identity);
+    const owners = (previous?.owners.size ?? 0) + update.ownerDelta;
+    if (!owners) {
+      continue;
+    }
+    if (previous) {
+      previous.bytes = update.node.bytes;
+      previous.edges = update.node.edges;
+    } else {
+      records.set(identity, {
+        bytes: update.node.bytes,
+        edges: update.node.edges,
+        owners: /* @__PURE__ */ new Set()
+      });
+    }
+  }
+  for (const [owner, next] of memberships) {
+    for (const identity of owner.identities) {
+      if (!next.has(identity)) {
+        records.get(identity)?.owners.delete(owner);
+      }
+    }
+    for (const identity of next) {
+      if (!owner.identities.has(identity)) {
+        records.get(identity).owners.add(owner);
+      }
+    }
+    owner.identities = next;
+  }
+  for (const identity of changes.keys()) {
+    if (records.get(identity)?.owners.size === 0) {
+      records.delete(identity);
+    }
+  }
+}
+function createBufferedEventLedger() {
+  const records = /* @__PURE__ */ new Map();
+  let bytes = 0;
+  const reconcile = (entry, graph, isNew) => {
+    const work = { remaining: MAX_BUFFERED_LEDGER_RECONCILIATION_WORK };
+    const changes = /* @__PURE__ */ new Map();
+    const affected = findBufferedLedgerAffectedOwners(entry, graph, records, changes, work);
+    if (!affected) {
+      return false;
+    }
+    const memberships = collectBufferedLedgerMemberships(entry, graph, affected, records, changes, work);
+    if (!memberships) {
+      return false;
+    }
+    const projectedBytes = projectBufferedLedgerBytes(bytes, entry, graph, isNew, changes, records);
+    if (projectedBytes === void 0) {
+      return false;
+    }
+    applyBufferedLedgerChanges(records, changes, memberships);
+    entry.scalarBytes = graph.scalarBytes;
+    entry.roots = graph.roots;
+    bytes = projectedBytes;
+    return true;
+  };
+  const release = (entry) => {
+    bytes -= getBufferedLedgerEntryBytes(entry);
+    for (const identity of entry.identities) {
+      const record = records.get(identity);
+      if (!record?.owners.delete(entry)) {
+        continue;
+      }
+      bytes -= BUFFERED_LEDGER_OWNER_BYTES;
+      if (record.owners.size === 0) {
+        bytes -= getBufferedLedgerNodeBytes(record, 0);
+        records.delete(identity);
+      }
+    }
+    entry.identities.clear();
+  };
+  return {
+    retain(graph) {
+      const entry = { scalarBytes: 0, roots: /* @__PURE__ */ new Set(), identities: /* @__PURE__ */ new Set() };
+      return reconcile(entry, graph, true) ? entry : void 0;
+    },
+    refresh(entry, graph) {
+      return reconcile(entry, graph, false);
+    },
+    release,
+    clear() {
+      records.clear();
+      bytes = 0;
+    }
+  };
+}
 var EventStream = class {
   /** Creates an unstarted stream with independent connection and completion lifecycle promises. */
   constructor() {
@@ -2573,6 +4783,10 @@ var EventStream = class {
     _EventStream_rejectEndPromise.set(this, () => void 0);
     _EventStream_listeners.set(this, /* @__PURE__ */ Object.create(null));
     _EventStream_abortListeners.set(this, []);
+    _EventStream_emittedListenerRegistrations.set(this, /* @__PURE__ */ new WeakMap());
+    _EventStream_pendingListenerCleanup.set(this, /* @__PURE__ */ new Set());
+    _EventStream_pendingBufferedEventChecks.set(this, /* @__PURE__ */ new Set());
+    _EventStream_listenerDispatchDepth.set(this, 0);
     _EventStream_ended.set(this, false);
     _EventStream_errored.set(this, false);
     _EventStream_aborted.set(this, false);
@@ -2654,8 +4868,8 @@ var EventStream = class {
    * @returns This stream, so that listener registration calls can be chained.
    */
   on(event, listener) {
-    var _a4;
-    const listeners = (_a4 = __classPrivateFieldGet(this, _EventStream_listeners, "f"))[event] || (_a4[event] = []);
+    var _a5;
+    const listeners = (_a5 = __classPrivateFieldGet(this, _EventStream_listeners, "f"))[event] || (_a5[event] = []);
     listeners.push({ listener });
     return this;
   }
@@ -2671,7 +4885,12 @@ var EventStream = class {
     if (!listeners) {
       return this;
     }
-    const index = listeners.findIndex((l) => l.listener === listener);
+    const emittedRegistration = __classPrivateFieldGet(this, _EventStream_emittedListenerRegistrations, "f").get(listener);
+    if (emittedRegistration?.event === event && !emittedRegistration.registration.removed && !emittedRegistration.registration.detached) {
+      __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_removeEmittedListener).call(this, event, emittedRegistration.registration);
+      return this;
+    }
+    const index = listeners.findIndex((l) => !l.removed && l.listener === listener);
     if (index !== -1) {
       listeners.splice(index, 1);
     }
@@ -2683,8 +4902,8 @@ var EventStream = class {
    * @returns This stream, so that listener registration calls can be chained.
    */
   once(event, listener) {
-    var _a4;
-    const listeners = (_a4 = __classPrivateFieldGet(this, _EventStream_listeners, "f"))[event] || (_a4[event] = []);
+    var _a5;
+    const listeners = (_a5 = __classPrivateFieldGet(this, _EventStream_listeners, "f"))[event] || (_a5[event] = []);
     listeners.push({ listener, once: true });
     return this;
   }
@@ -2715,9 +4934,9 @@ var EventStream = class {
         resolve(values.length > 1 ? values : values[0]);
       };
       if (event !== "error") {
-        this.once("error", onError);
+        __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_onceForEmitted).call(this, "error", onError);
       }
-      this.once(event, onEvent);
+      __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_onceForEmitted).call(this, event, onEvent);
     });
   }
   /**
@@ -2734,7 +4953,14 @@ var EventStream = class {
    */
   events(event) {
     return this._createIterator((push) => {
-      const onEvent = (...args) => push(args);
+      const onEvent = (...args) => {
+        sdkOwnedBufferedEventArguments.add(args);
+        try {
+          push(args);
+        } finally {
+          sdkOwnedBufferedEventArguments.delete(args);
+        }
+      };
       this.on(event, onEvent);
       return () => this.off(event, onEvent);
     }, {
@@ -2752,10 +4978,16 @@ var EventStream = class {
    * here: the iterator ends when the stream ends, listeners are removed on
    * end/return, and a terminal error is retained until buffered values have
    * drained so it is surfaced even when no reader was waiting when it fired.
+   * Detached consumers have bounded event and byte queues; exceeding either
+   * limit fails the stream and aborts its underlying request. Detached queues
+   * also reject accessor-backed payloads because getter closures cannot be
+   * safely sized without executing untrusted code.
    */
   _createIterator(attach, { rejectOnError = true, rejectOnAbort = true, onReturn } = {}) {
     const pushQueue = createEventQueue();
+    const bufferedEventSizes = createEventQueue();
     const readQueue = createEventQueue();
+    const bufferedLedger = createBufferedEventLedger();
     let ended = this.ended;
     let failure;
     let failureDelivered = false;
@@ -2783,6 +5015,38 @@ var EventStream = class {
         this.off("abort", onFailure);
       }
     };
+    const deactivateBufferedEvent = (entry) => {
+      entry.active = false;
+      if (entry.check) {
+        __classPrivateFieldGet(this, _EventStream_pendingBufferedEventChecks, "f").delete(entry.check);
+        entry.check = void 0;
+      }
+    };
+    const failBufferedEvents = (discardRetained = false) => {
+      if (discardRetained) {
+        while (bufferedEventSizes.length) {
+          deactivateBufferedEvent(bufferedEventSizes.dequeue());
+        }
+        pushQueue.clear();
+        bufferedLedger.clear();
+      }
+      const error = new OpenAIError(`Event stream iterator buffer limit exceeded (${MAX_BUFFERED_ITERATOR_EVENTS} events or ${MAX_BUFFERED_ITERATOR_BYTES} bytes); consume events as they arrive.`);
+      try {
+        __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_handleError).call(this, error);
+      } finally {
+        this.controller.abort();
+      }
+      return error;
+    };
+    const revalidateBufferedEvent = (value, entry) => {
+      if (!entry.active || __classPrivateFieldGet(this, _EventStream_ended, "f")) {
+        return;
+      }
+      const graph = inspectBufferedEventGraph(value, MAX_BUFFERED_ITERATOR_BYTES);
+      if (!graph || !bufferedLedger.refresh(entry.retention, graph)) {
+        failBufferedEvents(true);
+      }
+    };
     const push = (value) => {
       if (ended) {
         return;
@@ -2791,7 +5055,34 @@ var EventStream = class {
       if (reader) {
         reader.resolve({ value, done: false });
       } else {
+        if (pushQueue.length >= MAX_BUFFERED_ITERATOR_EVENTS) {
+          failBufferedEvents();
+          return;
+        }
+        const graph = inspectBufferedEventGraph(value, MAX_BUFFERED_ITERATOR_BYTES);
+        const retention = graph && bufferedLedger.retain(graph);
+        if (!retention) {
+          failBufferedEvents();
+          return;
+        }
+        if (typeof value === "object" && value !== null && sdkOwnedBufferedEventArguments.has(value)) {
+          const argumentsTuple = value;
+          for (let index = 0; index < argumentsTuple.length; index += 1) {
+            const argument = argumentsTuple[index];
+            if (typeof argument === "string") {
+              argumentsTuple[index] = bufferedJSONParse(bufferedJSONStringify(argument));
+            }
+          }
+        }
+        const entry = { retention, active: true, check: void 0 };
         pushQueue.enqueue(value);
+        bufferedEventSizes.enqueue(entry);
+        const check = () => {
+          entry.check = void 0;
+          revalidateBufferedEvent(value, entry);
+        };
+        entry.check = check;
+        __classPrivateFieldGet(this, _EventStream_pendingBufferedEventChecks, "f").add(check);
       }
     };
     const onFailure = (error) => {
@@ -2821,7 +5112,17 @@ var EventStream = class {
     return {
       next: () => {
         if (pushQueue.length) {
-          return Promise.resolve({ value: pushQueue.dequeue(), done: false });
+          const value = pushQueue.dequeue();
+          const entry = bufferedEventSizes.dequeue();
+          deactivateBufferedEvent(entry);
+          const graph = inspectBufferedEventGraph(value, MAX_BUFFERED_ITERATOR_BYTES);
+          if (!graph || !bufferedLedger.refresh(entry.retention, graph)) {
+            const error = failBufferedEvents(true);
+            failureDelivered = true;
+            return Promise.reject(error);
+          }
+          bufferedLedger.release(entry.retention);
+          return Promise.resolve({ value, done: false });
         }
         if (failure && !failureDelivered) {
           failureDelivered = true;
@@ -2836,7 +5137,11 @@ var EventStream = class {
       },
       return: () => {
         ended = true;
+        while (bufferedEventSizes.length) {
+          deactivateBufferedEvent(bufferedEventSizes.dequeue());
+        }
         pushQueue.clear();
+        bufferedLedger.clear();
         cleanup();
         finishReaders();
         if (onReturn) {
@@ -2857,7 +5162,7 @@ var EventStream = class {
   }
   /** Returns whether an event currently has one or more registered listeners. */
   _hasListeners(event) {
-    return Boolean(__classPrivateFieldGet(this, _EventStream_listeners, "f")[event]?.length);
+    return Boolean(__classPrivateFieldGet(this, _EventStream_listeners, "f")[event]?.some((listener) => !listener.removed));
   }
   /** Dispatches a stream event and performs the associated lifecycle transitions. */
   _emit(event, ...args) {
@@ -2871,9 +5176,30 @@ var EventStream = class {
     }
     const listeners = __classPrivateFieldGet(this, _EventStream_listeners, "f")[event];
     if (listeners) {
-      __classPrivateFieldGet(this, _EventStream_listeners, "f")[event] = listeners.filter((l) => !l.once);
-      for (const { listener } of listeners) {
-        listener(...args);
+      __classPrivateFieldGet(this, _EventStream_listeners, "f")[event] = listeners.filter((listener) => {
+        if (listener.once) {
+          listener.detached = true;
+        }
+        return !listener.once && !listener.removed;
+      });
+      __classPrivateFieldSet(this, _EventStream_listenerDispatchDepth, __classPrivateFieldGet(this, _EventStream_listenerDispatchDepth, "f") + 1, "f");
+      try {
+        for (const registration of listeners) {
+          if (!registration.removed) {
+            registration.listener(...args);
+          }
+        }
+      } finally {
+        __classPrivateFieldSet(this, _EventStream_listenerDispatchDepth, __classPrivateFieldGet(this, _EventStream_listenerDispatchDepth, "f") - 1, "f");
+        if (__classPrivateFieldGet(this, _EventStream_listenerDispatchDepth, "f") === 0) {
+          __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_cleanupEmittedListeners).call(this);
+          for (const check of __classPrivateFieldGet(this, _EventStream_pendingBufferedEventChecks, "f")) {
+            __classPrivateFieldGet(this, _EventStream_pendingBufferedEventChecks, "f").delete(check);
+            if (!__classPrivateFieldGet(this, _EventStream_ended, "f")) {
+              check();
+            }
+          }
+        }
       }
     }
     if (event === "abort") {
@@ -2900,10 +5226,38 @@ var EventStream = class {
   _emitFinal() {
   }
 };
-_EventStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_endPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_listeners = /* @__PURE__ */ new WeakMap(), _EventStream_abortListeners = /* @__PURE__ */ new WeakMap(), _EventStream_ended = /* @__PURE__ */ new WeakMap(), _EventStream_errored = /* @__PURE__ */ new WeakMap(), _EventStream_aborted = /* @__PURE__ */ new WeakMap(), _EventStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _EventStream_instances = /* @__PURE__ */ new WeakSet(), _EventStream_removeAbortListeners = function _EventStream_removeAbortListeners2() {
+_EventStream_connectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectConnectedPromise = /* @__PURE__ */ new WeakMap(), _EventStream_endPromise = /* @__PURE__ */ new WeakMap(), _EventStream_resolveEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_rejectEndPromise = /* @__PURE__ */ new WeakMap(), _EventStream_listeners = /* @__PURE__ */ new WeakMap(), _EventStream_abortListeners = /* @__PURE__ */ new WeakMap(), _EventStream_emittedListenerRegistrations = /* @__PURE__ */ new WeakMap(), _EventStream_pendingListenerCleanup = /* @__PURE__ */ new WeakMap(), _EventStream_pendingBufferedEventChecks = /* @__PURE__ */ new WeakMap(), _EventStream_listenerDispatchDepth = /* @__PURE__ */ new WeakMap(), _EventStream_ended = /* @__PURE__ */ new WeakMap(), _EventStream_errored = /* @__PURE__ */ new WeakMap(), _EventStream_aborted = /* @__PURE__ */ new WeakMap(), _EventStream_catchingPromiseCreated = /* @__PURE__ */ new WeakMap(), _EventStream_instances = /* @__PURE__ */ new WeakSet(), _EventStream_removeAbortListeners = function _EventStream_removeAbortListeners2() {
   for (const { signal, listener } of __classPrivateFieldGet(this, _EventStream_abortListeners, "f").splice(0)) {
     signal.removeEventListener("abort", listener);
   }
+}, _EventStream_onceForEmitted = function _EventStream_onceForEmitted2(event, listener) {
+  const previousListeners = __classPrivateFieldGet(this, _EventStream_listeners, "f")[event];
+  const previousLength = previousListeners?.length ?? 0;
+  this.once(event, listener);
+  const listeners = __classPrivateFieldGet(this, _EventStream_listeners, "f")[event];
+  const [registration] = listeners?.slice(-1) ?? [];
+  if ((previousListeners === void 0 || listeners === previousListeners) && listeners?.length === previousLength + 1 && registration?.listener === listener && registration.once) {
+    __classPrivateFieldGet(this, _EventStream_emittedListenerRegistrations, "f").set(listener, { event, registration });
+  }
+}, _EventStream_removeEmittedListener = function _EventStream_removeEmittedListener2(event, registration) {
+  if (registration.removed) {
+    return;
+  }
+  registration.removed = true;
+  __classPrivateFieldGet(this, _EventStream_emittedListenerRegistrations, "f").delete(registration.listener);
+  __classPrivateFieldGet(this, _EventStream_pendingListenerCleanup, "f").add(event);
+  if (__classPrivateFieldGet(this, _EventStream_listenerDispatchDepth, "f") === 0) {
+    __classPrivateFieldGet(this, _EventStream_instances, "m", _EventStream_cleanupEmittedListeners).call(this);
+  }
+}, _EventStream_cleanupEmittedListeners = function _EventStream_cleanupEmittedListeners2() {
+  for (const event of __classPrivateFieldGet(this, _EventStream_pendingListenerCleanup, "f")) {
+    const eventType = event;
+    const listeners = __classPrivateFieldGet(this, _EventStream_listeners, "f")[eventType];
+    if (listeners) {
+      __classPrivateFieldGet(this, _EventStream_listeners, "f")[eventType] = listeners.filter((listener) => !listener.removed);
+    }
+  }
+  __classPrivateFieldGet(this, _EventStream_pendingListenerCleanup, "f").clear();
 }, _EventStream_handleError = function _EventStream_handleError2(error) {
   __classPrivateFieldSet(this, _EventStream_errored, true, "f");
   if (error instanceof Error && error.name === "AbortError") {
@@ -2931,7 +5285,8 @@ function isRunnableFunctionWithParse(fn) {
 
 // node_modules/openai/lib/AbstractChatCompletionRunner.mjs
 var _AbstractChatCompletionRunner_instances;
-var _a;
+var _a2;
+var _AbstractChatCompletionRunner_completionArrivedBeforeAbort;
 var _AbstractChatCompletionRunner_getFinalContent;
 var _AbstractChatCompletionRunner_getFinalMessage;
 var _AbstractChatCompletionRunner_getFinalFunctionToolCall;
@@ -2998,9 +5353,11 @@ var AbstractChatCompletionRunner = class extends EventStream {
     super(...arguments);
     _AbstractChatCompletionRunner_instances.add(this);
     this._chatCompletions = [];
+    _AbstractChatCompletionRunner_completionArrivedBeforeAbort.set(this, false);
     this.messages = [];
   }
   _addChatCompletion(chatCompletion) {
+    __classPrivateFieldSet(this, _AbstractChatCompletionRunner_completionArrivedBeforeAbort, !this.controller.signal.aborted, "f");
     normalizeToolCallIds(chatCompletion);
     this._chatCompletions.push(chatCompletion);
     this._emit("chatCompletion", chatCompletion);
@@ -3105,7 +5462,7 @@ var AbstractChatCompletionRunner = class extends EventStream {
   }
   async _createChatCompletion(client, params, options) {
     this._listenForAbort(options?.signal);
-    __classPrivateFieldGet(_a, _a, "m", _AbstractChatCompletionRunner_validateParams).call(_a, params);
+    __classPrivateFieldGet(_a2, _a2, "m", _AbstractChatCompletionRunner_validateParams).call(_a2, params);
     const chatCompletion = await client.chat.completions.create({ ...params, stream: false }, { ...options, signal: this.controller.signal });
     this._connected();
     return this._addChatCompletion(parseChatCompletion(chatCompletion, params));
@@ -3159,7 +5516,10 @@ var AbstractChatCompletionRunner = class extends EventStream {
     for (const message of params.messages) {
       this._addMessage(message, false);
     }
+    let allowBufferedToolCall = false;
     const runToolCall = async (toolCall) => {
+      const bufferedToolCall = allowBufferedToolCall;
+      allowBufferedToolCall = false;
       if (toolCall.type !== "function") {
         return { message: void 0, functionCalled: false };
       }
@@ -3180,14 +5540,23 @@ var AbstractChatCompletionRunner = class extends EventStream {
         try {
           parsed = await fn.parse(args);
         } catch (error) {
+          if (this.controller.signal.aborted) {
+            throw new APIUserAbortError();
+          }
           const content2 = error instanceof Error ? error.message : String(error);
           return { message: { role, tool_call_id, content: content2 }, functionCalled: false };
         }
+        if (this.controller.signal.aborted) {
+          throw new APIUserAbortError();
+        }
         rawContent = await fn.function(parsed, runner, toolContext);
       } else {
+        if (this.controller.signal.aborted && !bufferedToolCall) {
+          throw new APIUserAbortError();
+        }
         rawContent = await fn.function(args, runner, toolContext);
       }
-      const content = __classPrivateFieldGet(_a, _a, "m", _AbstractChatCompletionRunner_stringifyFunctionCallResult).call(_a, rawContent);
+      const content = __classPrivateFieldGet(_a2, _a2, "m", _AbstractChatCompletionRunner_stringifyFunctionCallResult).call(_a2, rawContent);
       return { message: { role, tool_call_id, content }, functionCalled: true };
     };
     for (let i = 0; i < maxChatCompletions; ++i) {
@@ -3197,6 +5566,7 @@ var AbstractChatCompletionRunner = class extends EventStream {
         tools,
         messages: this.messages.map(toRequestMessage)
       }, options);
+      allowBufferedToolCall = this.controller.signal.aborted && __classPrivateFieldGet(this, _AbstractChatCompletionRunner_completionArrivedBeforeAbort, "f");
       const message = chatCompletion.choices[0]?.message;
       if (!message) {
         throw new OpenAIError(`missing message in ChatCompletion response`);
@@ -3211,6 +5581,9 @@ var AbstractChatCompletionRunner = class extends EventStream {
           if (result.message) {
             this._addMessage(result.message);
           }
+          if (this.controller.signal.aborted) {
+            throw new APIUserAbortError();
+          }
           if (singleFunctionToCall && result.functionCalled) {
             await afterCompletion?.(chatCompletion, runner);
             return;
@@ -3218,9 +5591,11 @@ var AbstractChatCompletionRunner = class extends EventStream {
         }
       } else {
         const results = await Promise.allSettled(message.tool_calls.map(runToolCall));
-        for (const result of results) {
-          if (result.status === "rejected") {
-            throw result.reason;
+        if (!this.controller.signal.aborted) {
+          for (const result of results) {
+            if (result.status === "rejected") {
+              throw result.reason;
+            }
           }
         }
         for (const result of results) {
@@ -3228,12 +5603,15 @@ var AbstractChatCompletionRunner = class extends EventStream {
             this._addMessage(result.value.message);
           }
         }
+        if (this.controller.signal.aborted) {
+          throw new APIUserAbortError();
+        }
       }
       await afterCompletion?.(chatCompletion, runner);
     }
   }
 };
-_a = AbstractChatCompletionRunner, _AbstractChatCompletionRunner_instances = /* @__PURE__ */ new WeakSet(), _AbstractChatCompletionRunner_getFinalContent = function _AbstractChatCompletionRunner_getFinalContent2() {
+_a2 = AbstractChatCompletionRunner, _AbstractChatCompletionRunner_completionArrivedBeforeAbort = /* @__PURE__ */ new WeakMap(), _AbstractChatCompletionRunner_instances = /* @__PURE__ */ new WeakSet(), _AbstractChatCompletionRunner_getFinalContent = function _AbstractChatCompletionRunner_getFinalContent2() {
   return __classPrivateFieldGet(this, _AbstractChatCompletionRunner_instances, "m", _AbstractChatCompletionRunner_getFinalMessage).call(this).content ?? null;
 }, _AbstractChatCompletionRunner_getFinalMessage = function _AbstractChatCompletionRunner_getFinalMessage2() {
   let i = this.messages.length;
@@ -3549,13 +5927,26 @@ var _ChatCompletionStream_params;
 var _ChatCompletionStream_audioDoneChoiceIndexes;
 var _ChatCompletionStream_choiceEventStates;
 var _ChatCompletionStream_currentChatCompletionSnapshot;
+var _ChatCompletionStream_hasAutoParseableTool;
+var _ChatCompletionStream_partialJSONParseBudget;
 var _ChatCompletionStream_beginRequest;
 var _ChatCompletionStream_getChoiceEventState;
 var _ChatCompletionStream_addChunk;
 var _ChatCompletionStream_emitToolCallDoneEvent;
 var _ChatCompletionStream_emitContentDoneEvents;
+var _ChatCompletionStream_validateStructuredSnapshots;
 var _ChatCompletionStream_endRequest;
 var _ChatCompletionStream_accumulateChatCompletion;
+function parseStructuredStreamingJSON(content) {
+  try {
+    return partialParse(content);
+  } catch (error) {
+    if (error instanceof MalformedJSON || error instanceof SyntaxError) {
+      return parseResponseFormatContent({ type: "json_schema", $parseRaw: void 0 }, content);
+    }
+    throw error;
+  }
+}
 var CHAT_COMPLETION_READABLE_STREAM_MESSAGE_PREFIX = "chat.completion.chunk.message:";
 function makeChatCompletionReadableStreamMessageChunk(chunk, message, toolCallIds) {
   const payload = {
@@ -3582,6 +5973,218 @@ function getChatCompletionReadableStreamMessage(item) {
 }
 var MAX_STREAM_CHOICES = 128;
 var MAX_STREAM_TOOL_CALLS = 128;
+var MAX_PARTIAL_JSON_BYTES = 16 * 1024 * 1024;
+var MAX_PARTIAL_JSON_FRAGMENTS = 65536;
+var MAX_PARTIAL_JSON_DEPTH = 128;
+var MAX_PARTIAL_JSON_PARSE_WORK = 64 * 1024 * 1024;
+var EAGER_PARTIAL_JSON_BYTES = 1024;
+function createPartialJSONParseState() {
+  return {
+    bytes: 0,
+    depth: 0,
+    fragments: 0,
+    work: 0,
+    escaped: false,
+    has_non_whitespace: false,
+    in_string: false,
+    last_parsed_bytes: 0,
+    pending_high_surrogate: false
+  };
+}
+function recordPartialJSONFragment(state2, budget, fragment, validationWorkBudget) {
+  if (budget.fragments >= MAX_PARTIAL_JSON_FRAGMENTS) {
+    throw new OpenAIError("Chat completion stream exceeded its structured JSON fragment limit");
+  }
+  let bytes = 0;
+  let { depth, escaped, has_non_whitespace: hasNonWhitespace, in_string: inString } = state2;
+  let completed = false;
+  let firstCharacter = true;
+  for (const character of fragment) {
+    const previousBytes = bytes;
+    const codePoint = character.codePointAt(0);
+    if (firstCharacter && state2.pending_high_surrogate && codePoint >= 56320 && codePoint <= 57343) {
+      bytes += 1;
+    } else if (codePoint <= 127) {
+      bytes += 1;
+    } else if (codePoint <= 2047) {
+      bytes += 2;
+    } else if (codePoint <= 65535) {
+      bytes += 3;
+    } else {
+      bytes += 4;
+    }
+    firstCharacter = false;
+    if (budget.bytes + bytes > MAX_PARTIAL_JSON_BYTES) {
+      throw new OpenAIError("Chat completion stream exceeded its structured JSON byte limit");
+    }
+    if (validationWorkBudget && validationWorkBudget.work + bytes > MAX_PARTIAL_JSON_PARSE_WORK) {
+      validationWorkBudget.work += previousBytes;
+      throw new OpenAIError("Chat completion stream exceeded its structured JSON parse-work limit");
+    }
+    if (character !== " " && character !== "\n" && character !== "\r" && character !== "	") {
+      hasNonWhitespace = true;
+    }
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        inString = false;
+        completed || (completed = depth === 0);
+      }
+      continue;
+    }
+    if (character === '"') {
+      inString = true;
+    } else if (character === "{" || character === "[") {
+      depth += 1;
+      if (depth > MAX_PARTIAL_JSON_DEPTH) {
+        throw new OpenAIError("Chat completion stream exceeded its structured JSON nesting depth limit");
+      }
+    } else if ((character === "}" || character === "]") && depth > 0) {
+      depth -= 1;
+      completed || (completed = depth === 0);
+    }
+  }
+  state2.bytes += bytes;
+  state2.fragments += 1;
+  state2.depth = depth;
+  state2.escaped = escaped;
+  state2.has_non_whitespace = hasNonWhitespace;
+  state2.in_string = inString;
+  if (fragment.length > 0) {
+    const finalCodeUnit = fragment.codePointAt(fragment.length - 1) ?? 0;
+    state2.pending_high_surrogate = finalCodeUnit >= 55296 && finalCodeUnit <= 56319;
+  }
+  budget.bytes += bytes;
+  budget.fragments += 1;
+  if (validationWorkBudget) {
+    validationWorkBudget.work += bytes;
+  }
+  if (!hasNonWhitespace || bytes === 0) {
+    return false;
+  }
+  const minimumGrowth = Math.max(EAGER_PARTIAL_JSON_BYTES, Math.floor(state2.last_parsed_bytes / 2));
+  if (state2.bytes > EAGER_PARTIAL_JSON_BYTES && !completed && state2.bytes - state2.last_parsed_bytes < minimumGrowth) {
+    return false;
+  }
+  return true;
+}
+function reservePartialJSONParse(state2, budget) {
+  if (budget.work + state2.bytes > MAX_PARTIAL_JSON_PARSE_WORK) {
+    return false;
+  }
+  budget.work += state2.bytes;
+  state2.work += state2.bytes;
+  state2.last_parsed_bytes = state2.bytes;
+  return true;
+}
+function captureStructuredJSONSnapshot(snapshot, property) {
+  const descriptor = Object.getOwnPropertyDescriptor(snapshot, property);
+  if (!descriptor) {
+    let prototype = Object.getPrototypeOf(snapshot);
+    for (let depth = 0; prototype !== null; depth += 1) {
+      if (depth >= MAX_PARTIAL_JSON_DEPTH || Object.getOwnPropertyDescriptor(prototype, property)) {
+        throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+      }
+      prototype = Object.getPrototypeOf(prototype);
+    }
+    return void 0;
+  }
+  if (!("value" in descriptor) || typeof descriptor.value !== "string" && descriptor.value !== null && descriptor.value !== void 0) {
+    throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+  }
+  return descriptor.value;
+}
+function captureStructuredMessageSnapshot(choice) {
+  const descriptor = Object.getOwnPropertyDescriptor(choice, "message");
+  if (!descriptor || !("value" in descriptor) || typeof descriptor.value !== "object" || descriptor.value === null) {
+    throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+  }
+  return descriptor.value;
+}
+function captureSnapshotArray(snapshot, property, maximum, kind) {
+  const descriptor = Object.getOwnPropertyDescriptor(snapshot, property);
+  if (!descriptor) {
+    let prototype = Object.getPrototypeOf(snapshot);
+    for (let depth = 0; prototype !== null; depth += 1) {
+      if (depth >= MAX_PARTIAL_JSON_DEPTH || Object.getOwnPropertyDescriptor(prototype, property)) {
+        throw new OpenAIError(`Chat completion stream contains an unsafe snapshot ${kind} collection`);
+      }
+      prototype = Object.getPrototypeOf(prototype);
+    }
+    return void 0;
+  }
+  if (!("value" in descriptor) || !Array.isArray(descriptor.value)) {
+    throw new OpenAIError(`Chat completion stream contains an unsafe snapshot ${kind} collection`);
+  }
+  const length = Object.getOwnPropertyDescriptor(descriptor.value, "length");
+  if (!length || !("value" in length) || !Number.isSafeInteger(length.value) || length.value > maximum) {
+    throw new OpenAIError(`Chat completion stream exceeded its snapshot ${kind} limit`);
+  }
+  return descriptor.value;
+}
+function captureSnapshotArrayItem(array, index) {
+  const descriptor = Object.getOwnPropertyDescriptor(array, index);
+  if (!descriptor) {
+    return void 0;
+  }
+  if (!("value" in descriptor)) {
+    throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+  }
+  return descriptor.value;
+}
+function mapCapturedSnapshotArray(array, maximum, kind, map) {
+  const descriptor = Object.getOwnPropertyDescriptor(array, "length");
+  const length = descriptor && "value" in descriptor ? descriptor.value : void 0;
+  if (typeof length !== "number" || !Number.isSafeInteger(length) || length < 0 || length > maximum) {
+    throw new OpenAIError(`Chat completion stream exceeded its snapshot ${kind} limit`);
+  }
+  const mapped = [];
+  mapped.length = length;
+  for (let index = 0; index < length; index += 1) {
+    const item = Object.getOwnPropertyDescriptor(array, index);
+    if (!item) {
+      continue;
+    }
+    if (!("value" in item)) {
+      throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+    }
+    mapped[index] = map(item.value, index);
+  }
+  return mapped;
+}
+function validateStructuredJSONSnapshot(value, budget, validationWorkBudget) {
+  const state2 = createPartialJSONParseState();
+  const parseBudget = budget ?? { bytes: 0, fragments: 0, work: 0 };
+  recordPartialJSONFragment(state2, parseBudget, value, validationWorkBudget);
+  if (!reservePartialJSONParse(state2, parseBudget)) {
+    throw new OpenAIError("Chat completion stream exceeded its structured JSON parse-work limit");
+  }
+  return value;
+}
+function ownFunctionToolIdentity(toolCall) {
+  const type = Object.getOwnPropertyDescriptor(toolCall, "type");
+  const fn = Object.getOwnPropertyDescriptor(toolCall, "function");
+  if (!type || !("value" in type) || type.value !== "function" || !fn || !("value" in fn)) {
+    return void 0;
+  }
+  if (typeof fn.value !== "object" || fn.value === null) {
+    return void 0;
+  }
+  const name = Object.getOwnPropertyDescriptor(fn.value, "name");
+  if (!name || !("value" in name) || typeof name.value !== "string" || name.value.length === 0) {
+    return void 0;
+  }
+  return { type: "function", name: name.value };
+}
+function assertBoundToolCallIdentity(toolCall, identity) {
+  const current = ownFunctionToolIdentity(toolCall);
+  if (!current || current.name !== identity.name || current.type !== identity.type) {
+    throw new OpenAIError("Chat completion stream contains a changed tool call identity");
+  }
+}
 function assignOwnProperties(target, source) {
   if (Object.prototype.propertyIsEnumerable.call(source, "__proto__") && !hasOwn(target, "__proto__")) {
     Object.defineProperty(target, "__proto__", {
@@ -3593,6 +6196,429 @@ function assignOwnProperties(target, source) {
   }
   return Object.assign(target, source);
 }
+function cloneParserConfigObject(value, stableFields = []) {
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  for (const field of stableFields) {
+    const descriptor = descriptors[field];
+    if (!descriptor && !(field in value)) {
+      continue;
+    }
+    descriptors[field] = {
+      value: descriptor && "value" in descriptor ? descriptor.value : Reflect.get(value, field, value),
+      enumerable: descriptor?.enumerable ?? false,
+      configurable: descriptor?.configurable ?? true,
+      writable: descriptor && "writable" in descriptor ? descriptor.writable : false
+    };
+  }
+  return Object.create(Object.getPrototypeOf(value), descriptors);
+}
+function snapshotChatCompletionParserParams(params) {
+  const snapshot = cloneParserConfigObject(params);
+  if (params.tools) {
+    const stableTools = [];
+    const lengthDescriptor = Object.getOwnPropertyDescriptor(params.tools, "length");
+    const length = lengthDescriptor && "value" in lengthDescriptor ? lengthDescriptor.value : void 0;
+    const toolCount = typeof length === "number" && Number.isSafeInteger(length) && length >= 0 ? Math.min(length, MAX_STREAM_TOOL_CALLS) : 0;
+    for (let index = 0; index < toolCount; index += 1) {
+      const item = Object.getOwnPropertyDescriptor(params.tools, String(index));
+      if (!item || !("value" in item)) {
+        stableTools.length = index + 1;
+        continue;
+      }
+      const tool = item.value;
+      const stableTool = cloneParserConfigObject(tool, [
+        "type",
+        "$brand",
+        "$parseRaw",
+        "$callback",
+        "function"
+      ]);
+      const descriptors = Object.getOwnPropertyDescriptors(stableTool);
+      if (isChatCompletionFunctionTool(stableTool)) {
+        const descriptor = descriptors.function;
+        descriptors.function = {
+          ...descriptor && "value" in descriptor ? descriptor : { configurable: true, enumerable: true, writable: true },
+          value: cloneParserConfigObject(stableTool.function, ["name", "strict"])
+        };
+      }
+      stableTools[index] = Object.create(Object.getPrototypeOf(tool), descriptors);
+    }
+    snapshot.tools = stableTools;
+  }
+  if (params.response_format) {
+    snapshot.response_format = cloneParserConfigObject(params.response_format, [
+      "type",
+      "$brand",
+      "$parseRaw"
+    ]);
+  }
+  return snapshot;
+}
+var MAX_SERIALIZED_PARSER_SCHEMA_NODES = 4096;
+var stringifyParserSchemaValue = JSON.stringify;
+var MAX_SERIALIZED_PARSER_SCHEMA_BYTES = 1024 * 1024;
+var MAX_SERIALIZED_PARSER_SCHEMA_DEPTH = 64;
+var OMITTED_SERIALIZED_PARSER_VALUE = /* @__PURE__ */ Symbol("omitted serialized parser value");
+var UNSAFE_SERIALIZED_PARSER_VALUE = /* @__PURE__ */ Symbol("unsafe serialized parser value");
+function canonicalSerializedParserSchema(value, budget) {
+  const ancestors = /* @__PURE__ */ new WeakSet();
+  const charge = (bytes) => {
+    if (!Number.isSafeInteger(bytes) || bytes < 0 || budget.bytes + bytes > MAX_SERIALIZED_PARSER_SCHEMA_BYTES) {
+      return false;
+    }
+    budget.bytes += bytes;
+    return true;
+  };
+  const visit = (current, depth) => {
+    if (depth > MAX_SERIALIZED_PARSER_SCHEMA_DEPTH || budget.nodes >= MAX_SERIALIZED_PARSER_SCHEMA_NODES) {
+      return UNSAFE_SERIALIZED_PARSER_VALUE;
+    }
+    budget.nodes += 1;
+    if (current === void 0 || typeof current === "function" || typeof current === "symbol") {
+      return OMITTED_SERIALIZED_PARSER_VALUE;
+    }
+    if (typeof current === "bigint") {
+      return UNSAFE_SERIALIZED_PARSER_VALUE;
+    }
+    if (current === null || typeof current === "boolean" || typeof current === "number") {
+      const serialized = stringifyParserSchemaValue(current);
+      return typeof serialized === "string" && charge(serialized.length) ? serialized : UNSAFE_SERIALIZED_PARSER_VALUE;
+    }
+    if (typeof current === "string") {
+      if (!charge(current.length * 6 + 2)) {
+        return UNSAFE_SERIALIZED_PARSER_VALUE;
+      }
+      return stringifyParserSchemaValue(current);
+    }
+    if (typeof current !== "object" || ancestors.has(current)) {
+      return UNSAFE_SERIALIZED_PARSER_VALUE;
+    }
+    const array = Array.isArray(current);
+    const prototype = Object.getPrototypeOf(current);
+    if (array && prototype !== Array.prototype || !array && prototype !== null && prototype !== Object.prototype) {
+      return UNSAFE_SERIALIZED_PARSER_VALUE;
+    }
+    for (let owner = current; owner !== null; owner = Object.getPrototypeOf(owner)) {
+      const serializer = Object.getOwnPropertyDescriptor(owner, "toJSON");
+      if (!serializer) {
+        continue;
+      }
+      if (!("value" in serializer) || typeof serializer.value === "function") {
+        return UNSAFE_SERIALIZED_PARSER_VALUE;
+      }
+      break;
+    }
+    ancestors.add(current);
+    try {
+      if (!charge(2)) {
+        return UNSAFE_SERIALIZED_PARSER_VALUE;
+      }
+      if (array) {
+        const lengthDescriptor = Object.getOwnPropertyDescriptor(current, "length");
+        const length = lengthDescriptor && "value" in lengthDescriptor ? lengthDescriptor.value : void 0;
+        if (typeof length !== "number" || !Number.isSafeInteger(length) || length < 0 || length > MAX_SERIALIZED_PARSER_SCHEMA_NODES - budget.nodes) {
+          return UNSAFE_SERIALIZED_PARSER_VALUE;
+        }
+        const items = [];
+        for (let index = 0; index < length; index += 1) {
+          const key = String(index);
+          const descriptor = Object.getOwnPropertyDescriptor(current, key);
+          if (!descriptor) {
+            if (Object.getOwnPropertyDescriptor(Array.prototype, key) || Object.getOwnPropertyDescriptor(Object.prototype, key)) {
+              return UNSAFE_SERIALIZED_PARSER_VALUE;
+            }
+            budget.nodes += 1;
+            if (!charge(4)) {
+              return UNSAFE_SERIALIZED_PARSER_VALUE;
+            }
+            items.push("null");
+            continue;
+          }
+          if (!("value" in descriptor)) {
+            return UNSAFE_SERIALIZED_PARSER_VALUE;
+          }
+          const item = visit(descriptor.value, depth + 1);
+          if (item === UNSAFE_SERIALIZED_PARSER_VALUE) {
+            return item;
+          }
+          items.push(item === OMITTED_SERIALIZED_PARSER_VALUE ? "null" : item);
+        }
+        return `[${items.join(",")}]`;
+      }
+      const keys = Reflect.ownKeys(current);
+      if (keys.length > MAX_SERIALIZED_PARSER_SCHEMA_NODES - budget.nodes) {
+        return UNSAFE_SERIALIZED_PARSER_VALUE;
+      }
+      const entries = [];
+      for (const key of keys) {
+        if (typeof key !== "string") {
+          continue;
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(current, key);
+        if (!descriptor) {
+          return UNSAFE_SERIALIZED_PARSER_VALUE;
+        }
+        if (!descriptor.enumerable) {
+          continue;
+        }
+        if (!("value" in descriptor)) {
+          return UNSAFE_SERIALIZED_PARSER_VALUE;
+        }
+        entries.push([key, descriptor.value]);
+      }
+      entries.sort(([left], [right]) => {
+        if (left === right) {
+          return 0;
+        }
+        return left < right ? -1 : 1;
+      });
+      const fields = [];
+      for (const [key, entry] of entries) {
+        const normalized = visit(entry, depth + 1);
+        if (normalized === UNSAFE_SERIALIZED_PARSER_VALUE) {
+          return normalized;
+        }
+        if (normalized === OMITTED_SERIALIZED_PARSER_VALUE) {
+          continue;
+        }
+        if (!charge(key.length * 6 + 3)) {
+          return UNSAFE_SERIALIZED_PARSER_VALUE;
+        }
+        fields.push(`${stringifyParserSchemaValue(key)}:${normalized}`);
+      }
+      return `{${fields.join(",")}}`;
+    } finally {
+      ancestors.delete(current);
+    }
+  };
+  try {
+    const normalized = visit(value, 0);
+    return typeof normalized === "string" ? normalized : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function rememberSerializedParserSchema(signatures, source, holder, key) {
+  const parser = Object.getOwnPropertyDescriptor(source, "$parseRaw");
+  const schema = Object.getOwnPropertyDescriptor(holder, key);
+  if (!parser || !("value" in parser) || typeof parser.value !== "function" || !schema || !("value" in schema)) {
+    return;
+  }
+  const normalized = canonicalSerializedParserSchema(schema.value, { nodes: 0, bytes: 0 });
+  if (normalized !== void 0) {
+    signatures.set(source, normalized);
+  }
+}
+function hasMatchingSerializedParserSchema(signatures, source, holder, key, value) {
+  const expected = source && signatures.get(source);
+  const descriptor = Object.getOwnPropertyDescriptor(holder, key);
+  return expected !== void 0 && descriptor !== void 0 && "value" in descriptor && canonicalSerializedParserSchema(value, { nodes: 0, bytes: 0 }) === expected;
+}
+function serializedParserDescriptor(descriptor, value) {
+  return descriptor && "value" in descriptor ? { ...descriptor, value } : { configurable: true, enumerable: true, writable: true, value };
+}
+function shadowSerializedParserMetadata(descriptors, source, fields) {
+  for (const field of fields) {
+    const descriptor = descriptors[field];
+    if (!descriptor && !(field in source)) {
+      continue;
+    }
+    descriptors[field] = descriptor && "value" in descriptor ? { ...descriptor, value: void 0 } : {
+      configurable: descriptor?.configurable ?? true,
+      enumerable: descriptor?.enumerable ?? false,
+      writable: false,
+      value: void 0
+    };
+  }
+}
+function snapshotSerializedParserTool(serialized) {
+  const source = serialized.source ?? {
+    type: serialized.type,
+    ...serialized.type === "function" ? { function: {} } : {}
+  };
+  const descriptors = Object.getOwnPropertyDescriptors(source);
+  descriptors.type = serializedParserDescriptor(descriptors.type, serialized.type);
+  if (serialized.type !== "function" || !serialized.function) {
+    if (descriptors.function) {
+      descriptors.function = serializedParserDescriptor(descriptors.function, void 0);
+    }
+    shadowSerializedParserMetadata(descriptors, source, ["$brand", "$parseRaw", "$callback"]);
+    return Object.create(Object.getPrototypeOf(source), descriptors);
+  }
+  const descriptor = descriptors.function;
+  const original = descriptor && "value" in descriptor && typeof descriptor.value === "object" && descriptor.value !== null ? descriptor.value : {};
+  const functionDescriptors = Object.getOwnPropertyDescriptors(original);
+  functionDescriptors["name"] = serializedParserDescriptor(functionDescriptors["name"], serialized.function.name);
+  functionDescriptors["strict"] = serializedParserDescriptor(functionDescriptors["strict"], serialized.function.strict);
+  descriptors.function = serializedParserDescriptor(descriptor, Object.create(Object.getPrototypeOf(original), functionDescriptors));
+  if (!serialized.function.schemaMatches) {
+    shadowSerializedParserMetadata(descriptors, source, ["$brand", "$parseRaw", "$callback"]);
+  }
+  return Object.create(Object.getPrototypeOf(source), descriptors);
+}
+function snapshotSerializedResponseFormat(serialized) {
+  const source = serialized.source ?? { type: serialized.type };
+  const descriptors = Object.getOwnPropertyDescriptors(source);
+  descriptors.type = serializedParserDescriptor(descriptors.type, serialized.type);
+  if (serialized.type !== "json_schema" || !serialized.source || !serialized.schemaMatches) {
+    shadowSerializedParserMetadata(descriptors, source, ["$brand", "$parseRaw"]);
+  }
+  return Object.create(Object.getPrototypeOf(source), descriptors);
+}
+function ownSerializedParserObject(holder, key) {
+  const descriptor = Object.getOwnPropertyDescriptor(holder, key);
+  if (!descriptor || !("value" in descriptor)) {
+    return void 0;
+  }
+  const { value } = descriptor;
+  return typeof value === "object" && value !== null ? value : void 0;
+}
+function observeSerializedChatCompletionParserParams(body, initial, update) {
+  const originalToolOwners = /* @__PURE__ */ new WeakMap();
+  const originalSchemaSignatures = /* @__PURE__ */ new WeakMap();
+  if (body.tools) {
+    for (let index = 0; index < body.tools.length && index < MAX_STREAM_TOOL_CALLS; index += 1) {
+      const owner = ownSerializedParserObject(body.tools, String(index));
+      const source = initial.tools?.[index];
+      if (owner && source) {
+        originalToolOwners.set(owner, source);
+        const originalFunction = ownSerializedParserObject(source, "function");
+        if (originalFunction) {
+          rememberSerializedParserSchema(originalSchemaSignatures, source, originalFunction, "parameters");
+        }
+      }
+    }
+  }
+  if (initial.response_format) {
+    rememberSerializedParserSchema(originalSchemaSignatures, initial.response_format, initial.response_format, "json_schema");
+  }
+  let root;
+  let tools;
+  let responseFormat;
+  let responseFrame;
+  let frames = [];
+  let toolFrames = /* @__PURE__ */ new WeakMap();
+  let actualToolOwners = /* @__PURE__ */ new Map();
+  let functionFrames = /* @__PURE__ */ new WeakMap();
+  return observeJSONRequestBody(body, {
+    value(holder, key, value) {
+      if (!root && key === "" && typeof value === "object" && value !== null) {
+        root = value;
+        tools = void 0;
+        responseFormat = void 0;
+        responseFrame = void 0;
+        frames = [];
+        toolFrames = /* @__PURE__ */ new WeakMap();
+        actualToolOwners = /* @__PURE__ */ new Map();
+        functionFrames = /* @__PURE__ */ new WeakMap();
+        return;
+      }
+      if (holder === root && key === "response_format") {
+        if (typeof value === "object" && value !== null) {
+          responseFormat = value;
+          const owner = ownSerializedParserObject(holder, key);
+          responseFrame = {
+            source: owner === body.response_format ? initial.response_format : void 0,
+            schemaMatches: false
+          };
+        }
+        return;
+      }
+      if (holder === root && key === "tools") {
+        if (Array.isArray(value)) {
+          tools = new Proxy(value, {
+            get(target, property) {
+              const actual = Reflect.get(target, property, target);
+              if (typeof property === "string") {
+                const index = Number(property);
+                if (Number.isSafeInteger(index) && index >= 0 && index < MAX_STREAM_TOOL_CALLS && String(index) === property) {
+                  actualToolOwners.set(index, typeof actual === "object" && actual !== null ? actual : void 0);
+                }
+              }
+              return actual;
+            }
+          });
+          return tools;
+        }
+        return;
+      }
+      if (holder === tools) {
+        const index = Number(key);
+        if (!Number.isSafeInteger(index) || index < 0 || index >= MAX_STREAM_TOOL_CALLS || typeof value !== "object" || value === null) {
+          return;
+        }
+        const owner = actualToolOwners.get(index);
+        const source = owner ? originalToolOwners.get(owner) : void 0;
+        const frame = { source };
+        frames[index] = frame;
+        toolFrames.set(value, frame);
+        return;
+      }
+      const tool = toolFrames.get(holder);
+      if (tool) {
+        if (key === "type" && typeof value === "string") {
+          tool.type = value;
+        } else if (key === "function" && typeof value === "object" && value !== null) {
+          const fn2 = { source: tool.source, schemaMatches: false };
+          tool.function = fn2;
+          functionFrames.set(value, fn2);
+        }
+        return;
+      }
+      if (holder === responseFormat && responseFrame) {
+        if (key === "type" && typeof value === "string") {
+          responseFrame.type = value;
+        } else if (key === "json_schema") {
+          responseFrame.schemaMatches = hasMatchingSerializedParserSchema(originalSchemaSignatures, responseFrame.source, holder, key, value);
+        }
+        return;
+      }
+      const fn = functionFrames.get(holder);
+      if (fn) {
+        if (key === "name" && typeof value === "string") {
+          fn.name = value;
+        } else if (key === "strict" && typeof value === "boolean") {
+          fn.strict = value;
+        } else if (key === "parameters") {
+          fn.schemaMatches = hasMatchingSerializedParserSchema(originalSchemaSignatures, fn.source, holder, key, value);
+        }
+      }
+      return void 0;
+    },
+    complete() {
+      if (!root) {
+        return;
+      }
+      const snapshot = cloneParserConfigObject(initial);
+      if (tools) {
+        const serializedTools = [];
+        for (let index = 0; index < frames.length; index += 1) {
+          const frame = frames[index];
+          if (frame) {
+            serializedTools[index] = snapshotSerializedParserTool(frame);
+          }
+        }
+        snapshot.tools = serializedTools;
+      } else {
+        delete snapshot.tools;
+      }
+      if (responseFrame) {
+        snapshot.response_format = snapshotSerializedResponseFormat(responseFrame);
+      } else {
+        delete snapshot.response_format;
+      }
+      update(snapshot);
+      root = void 0;
+      tools = void 0;
+      responseFormat = void 0;
+      responseFrame = void 0;
+      frames = [];
+      toolFrames = /* @__PURE__ */ new WeakMap();
+      actualToolOwners = /* @__PURE__ */ new Map();
+      functionFrames = /* @__PURE__ */ new WeakMap();
+    }
+  });
+}
 var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompletionRunner {
   /** Creates an unstarted stream, retaining request parameters for structured-output parsing. */
   constructor(params) {
@@ -3602,9 +6628,29 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     _ChatCompletionStream_audioDoneChoiceIndexes.set(this, void 0);
     _ChatCompletionStream_choiceEventStates.set(this, void 0);
     _ChatCompletionStream_currentChatCompletionSnapshot.set(this, void 0);
+    _ChatCompletionStream_hasAutoParseableTool.set(this, void 0);
+    _ChatCompletionStream_partialJSONParseBudget.set(this, void 0);
     __classPrivateFieldSet(this, _ChatCompletionStream_params, params, "f");
     __classPrivateFieldSet(this, _ChatCompletionStream_audioDoneChoiceIndexes, /* @__PURE__ */ new Set(), "f");
     __classPrivateFieldSet(this, _ChatCompletionStream_choiceEventStates, [], "f");
+    __classPrivateFieldSet(this, _ChatCompletionStream_hasAutoParseableTool, false, "f");
+    const tools = params?.tools;
+    const lengthDescriptor = tools && Object.getOwnPropertyDescriptor(tools, "length");
+    const length = lengthDescriptor && "value" in lengthDescriptor ? lengthDescriptor.value : void 0;
+    if (tools && typeof length === "number" && Number.isSafeInteger(length) && length >= 0) {
+      for (let index = 0; index < Math.min(length, MAX_STREAM_TOOL_CALLS); index += 1) {
+        const descriptor = Object.getOwnPropertyDescriptor(tools, String(index));
+        if (!descriptor || !("value" in descriptor)) {
+          continue;
+        }
+        const tool = descriptor.value;
+        if (isChatCompletionFunctionTool(tool) && (isAutoParsableTool(tool) || tool.function.strict === true)) {
+          __classPrivateFieldSet(this, _ChatCompletionStream_hasAutoParseableTool, true, "f");
+          break;
+        }
+      }
+    }
+    __classPrivateFieldSet(this, _ChatCompletionStream_partialJSONParseBudget, { bytes: 0, fragments: 0, work: 0 }, "f");
   }
   /** The latest accumulated completion, or `undefined` before a chunk arrives or after finalization. */
   get currentChatCompletionSnapshot() {
@@ -3630,8 +6676,20 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
   }
   async _createChatCompletion(client, params, options) {
     this._listenForAbort(options?.signal);
+    const requestParams = { ...params, stream: true };
+    __classPrivateFieldSet(this, _ChatCompletionStream_params, requestParams, "f");
     __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_beginRequest).call(this);
-    const stream = await client.chat.completions.create({ ...params, stream: true }, { ...options, signal: this.controller.signal });
+    const parserParams = snapshotChatCompletionParserParams(requestParams);
+    __classPrivateFieldSet(this, _ChatCompletionStream_params, parserParams, "f");
+    __classPrivateFieldSet(this, _ChatCompletionStream_hasAutoParseableTool, parserParams.tools?.some((tool) => isChatCompletionFunctionTool(tool) && (isAutoParsableTool(tool) || tool.function.strict === true)) ?? false, "f");
+    const stopObserving = requestParams.tools || requestParams.response_format ? observeSerializedChatCompletionParserParams(requestParams, parserParams, (serialized) => {
+      __classPrivateFieldSet(this, _ChatCompletionStream_params, serialized, "f");
+      __classPrivateFieldSet(this, _ChatCompletionStream_hasAutoParseableTool, serialized.tools?.some((tool) => isChatCompletionFunctionTool(tool) && (isAutoParsableTool(tool) || tool.function.strict === true)) ?? false, "f");
+    }) : void 0;
+    const stream = await client.chat.completions.create(requestParams, {
+      ...options,
+      signal: this.controller.signal
+    }).finally(stopObserving);
     this._connected();
     for await (const chunk of stream) {
       __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_addChunk).call(this, chunk);
@@ -3686,90 +6744,114 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     throw new OpenAIError(`request ended without sending any chunks`);
   }
   /** Iterates over raw API chunks; stopping iteration early aborts the underlying request. */
-  [(_ChatCompletionStream_params = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_audioDoneChoiceIndexes = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_choiceEventStates = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_currentChatCompletionSnapshot = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_instances = /* @__PURE__ */ new WeakSet(), _ChatCompletionStream_beginRequest = function _ChatCompletionStream_beginRequest2() {
+  [(_ChatCompletionStream_params = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_audioDoneChoiceIndexes = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_choiceEventStates = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_currentChatCompletionSnapshot = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_hasAutoParseableTool = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_partialJSONParseBudget = /* @__PURE__ */ new WeakMap(), _ChatCompletionStream_instances = /* @__PURE__ */ new WeakSet(), _ChatCompletionStream_beginRequest = function _ChatCompletionStream_beginRequest2() {
     if (this.ended) {
       return;
     }
     __classPrivateFieldSet(this, _ChatCompletionStream_audioDoneChoiceIndexes, /* @__PURE__ */ new Set(), "f");
     __classPrivateFieldSet(this, _ChatCompletionStream_currentChatCompletionSnapshot, void 0, "f");
+    __classPrivateFieldSet(this, _ChatCompletionStream_partialJSONParseBudget, { bytes: 0, fragments: 0, work: 0 }, "f");
   }, _ChatCompletionStream_getChoiceEventState = function _ChatCompletionStream_getChoiceEventState2(choice) {
-    let state = __classPrivateFieldGet(this, _ChatCompletionStream_choiceEventStates, "f")[choice.index];
-    if (state) {
-      return state;
+    let state2 = __classPrivateFieldGet(this, _ChatCompletionStream_choiceEventStates, "f")[choice.index];
+    if (state2) {
+      return state2;
     }
-    state = {
+    state2 = {
       content_done: false,
+      content_parse_state: void 0,
       refusal_done: false,
       logprobs_content_done: false,
       logprobs_refusal_done: false,
       done_tool_calls: /* @__PURE__ */ new Set(),
-      current_tool_call_index: null
+      current_tool_call_index: null,
+      tool_call_parse_states: /* @__PURE__ */ new Map(),
+      tool_call_identities: /* @__PURE__ */ new Map()
     };
-    __classPrivateFieldGet(this, _ChatCompletionStream_choiceEventStates, "f")[choice.index] = state;
-    return state;
+    __classPrivateFieldGet(this, _ChatCompletionStream_choiceEventStates, "f")[choice.index] = state2;
+    return state2;
   }, _ChatCompletionStream_addChunk = function _ChatCompletionStream_addChunk2(chunk) {
     if (this.ended) {
       return;
     }
-    const completion = __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_accumulateChatCompletion).call(this, chunk);
+    const capturedChoiceFrames = /* @__PURE__ */ new WeakMap();
+    const completion = __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_accumulateChatCompletion).call(this, chunk, capturedChoiceFrames);
     this._emit("chunk", chunk, completion);
     for (const choice of chunk.choices) {
-      const choiceSnapshot = completion.choices[choice.index];
+      const capturedChoice = capturedChoiceFrames.get(choice);
+      const choiceSnapshot = completion.choices[capturedChoice?.index ?? choice.index];
+      const capturedToolCalls = capturedChoice?.tool_calls ?? [];
       const { delta } = choice;
-      if (delta?.content != null && choiceSnapshot.message?.role === "assistant" && choiceSnapshot.message?.content) {
-        this._emit("content", delta.content, choiceSnapshot.message.content);
+      const structuredResponse = isParseableResponseFormat(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.response_format);
+      const boundedSnapshot = structuredResponse || __classPrivateFieldGet(this, _ChatCompletionStream_hasAutoParseableTool, "f");
+      const messageSnapshot = boundedSnapshot ? captureStructuredMessageSnapshot(choiceSnapshot) : choiceSnapshot.message;
+      const refusal = boundedSnapshot ? captureStructuredJSONSnapshot(messageSnapshot, "refusal") : messageSnapshot.refusal;
+      const parseableContent = !refusal && structuredResponse;
+      const messageContent = parseableContent ? captureStructuredJSONSnapshot(messageSnapshot, "content") : messageSnapshot.content;
+      if (delta?.content != null && messageSnapshot.role === "assistant" && messageContent) {
+        this._emit("content", delta.content, messageContent);
         this._emit("content.delta", {
           delta: delta.content,
-          snapshot: choiceSnapshot.message.content,
-          parsed: choiceSnapshot.message.parsed
+          snapshot: messageContent,
+          parsed: messageSnapshot.parsed
         });
       }
-      if (delta?.refusal != null && choiceSnapshot.message?.role === "assistant" && choiceSnapshot.message?.refusal) {
+      if (delta?.refusal != null && messageSnapshot.role === "assistant" && refusal) {
         this._emit("refusal.delta", {
           delta: delta.refusal,
-          snapshot: choiceSnapshot.message.refusal
+          snapshot: refusal
         });
       }
-      if (choice.logprobs?.content != null && choiceSnapshot.message?.role === "assistant") {
+      if (choice.logprobs?.content != null && messageSnapshot.role === "assistant") {
         this._emit("logprobs.content.delta", {
           content: choice.logprobs?.content,
           snapshot: choiceSnapshot.logprobs?.content ?? []
         });
       }
-      if (choice.logprobs?.refusal != null && choiceSnapshot.message?.role === "assistant") {
+      if (choice.logprobs?.refusal != null && messageSnapshot.role === "assistant") {
         this._emit("logprobs.refusal.delta", {
           refusal: choice.logprobs?.refusal,
           snapshot: choiceSnapshot.logprobs?.refusal ?? []
         });
       }
-      const state = __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choiceSnapshot);
+      const state2 = __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choiceSnapshot);
       if (choiceSnapshot.finish_reason) {
         __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_emitContentDoneEvents).call(this, choiceSnapshot);
-        if (state.current_tool_call_index != null) {
-          __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_emitToolCallDoneEvent).call(this, choiceSnapshot, state.current_tool_call_index);
+        if (state2.current_tool_call_index != null) {
+          __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_emitToolCallDoneEvent).call(this, choiceSnapshot, state2.current_tool_call_index);
         }
       }
-      for (const toolCall of delta?.tool_calls ?? []) {
-        if (state.current_tool_call_index !== toolCall.index) {
+      for (const toolCall of capturedToolCalls) {
+        if (state2.current_tool_call_index !== toolCall.index) {
           __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_emitContentDoneEvents).call(this, choiceSnapshot);
-          if (state.current_tool_call_index != null) {
-            __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_emitToolCallDoneEvent).call(this, choiceSnapshot, state.current_tool_call_index);
+          if (state2.current_tool_call_index != null) {
+            __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_emitToolCallDoneEvent).call(this, choiceSnapshot, state2.current_tool_call_index);
           }
         }
-        state.current_tool_call_index = toolCall.index;
+        state2.current_tool_call_index = toolCall.index;
       }
-      for (const toolCallDelta of delta?.tool_calls ?? []) {
-        const toolCallSnapshot = choiceSnapshot.message.tool_calls?.[toolCallDelta.index];
+      for (const toolCallDelta of capturedToolCalls) {
+        const toolCallSnapshot = messageSnapshot.tool_calls?.[toolCallDelta.index];
         if (!toolCallSnapshot?.type) {
           continue;
         }
         if (toolCallSnapshot.type === "function") {
+          const boundIdentity = state2.tool_call_identities.get(toolCallDelta.index);
+          let argumentsSnapshot;
+          if (boundIdentity?.parseable) {
+            const capturedArguments = captureStructuredJSONSnapshot(toolCallSnapshot.function, "arguments");
+            if (typeof capturedArguments !== "string") {
+              throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+            }
+            argumentsSnapshot = capturedArguments;
+          } else {
+            argumentsSnapshot = toolCallSnapshot.function.arguments;
+          }
           this._emit("tool_calls.function.arguments.delta", {
             name: toolCallSnapshot.function.name,
             index: toolCallDelta.index,
-            arguments: toolCallSnapshot.function.arguments,
+            arguments: argumentsSnapshot,
             parsed_arguments: toolCallSnapshot.function.parsed_arguments,
-            arguments_delta: toolCallDelta.function?.arguments ?? ""
+            arguments_delta: toolCallDelta.arguments_delta
           });
         } else if (toolCallSnapshot.type !== "custom") {
           assertNever(toolCallSnapshot);
@@ -3777,13 +6859,18 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       }
     }
   }, _ChatCompletionStream_emitToolCallDoneEvent = function _ChatCompletionStream_emitToolCallDoneEvent2(choiceSnapshot, toolCallIndex) {
-    const state = __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choiceSnapshot);
-    if (state.done_tool_calls.has(toolCallIndex)) {
+    const state2 = __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choiceSnapshot);
+    if (state2.done_tool_calls.has(toolCallIndex)) {
       return;
     }
-    const toolCallSnapshot = choiceSnapshot.message.tool_calls?.[toolCallIndex];
+    const messageSnapshot = __classPrivateFieldGet(this, _ChatCompletionStream_hasAutoParseableTool, "f") ? captureStructuredMessageSnapshot(choiceSnapshot) : choiceSnapshot.message;
+    const toolCallSnapshot = messageSnapshot.tool_calls?.[toolCallIndex];
     if (!toolCallSnapshot) {
       throw new Error("no tool call snapshot");
+    }
+    const boundIdentity = state2.tool_call_identities.get(toolCallIndex);
+    if (boundIdentity) {
+      assertBoundToolCallIdentity(toolCallSnapshot, boundIdentity);
     }
     if (!toolCallSnapshot.type) {
       throw new Error("tool call snapshot missing `type`");
@@ -3791,41 +6878,155 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     if (toolCallSnapshot.type === "function") {
       const inputTool = __classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.tools?.find((tool) => isChatCompletionFunctionTool(tool) && tool.function.name === toolCallSnapshot.function.name);
       let parsedArguments = null;
+      const parseable = isAutoParsableTool(inputTool) || inputTool?.function.strict === true;
+      let argumentsSnapshot;
+      if (parseable) {
+        if (__classPrivateFieldGet(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f")) {
+          __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_validateStructuredSnapshots).call(this, __classPrivateFieldGet(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f"));
+        }
+        const capturedArguments = captureStructuredJSONSnapshot(toolCallSnapshot.function, "arguments");
+        if (typeof capturedArguments !== "string") {
+          throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+        }
+        argumentsSnapshot = capturedArguments;
+      } else {
+        argumentsSnapshot = toolCallSnapshot.function.arguments;
+      }
       if (isAutoParsableTool(inputTool)) {
-        parsedArguments = inputTool.$parseRaw(toolCallSnapshot.function.arguments);
+        parsedArguments = inputTool.$parseRaw(validateStructuredJSONSnapshot(argumentsSnapshot));
       } else if (inputTool?.function.strict) {
-        parsedArguments = JSON.parse(toolCallSnapshot.function.arguments);
+        parsedArguments = parseResponseFormatContent({ type: "json_schema", $parseRaw: void 0 }, validateStructuredJSONSnapshot(argumentsSnapshot));
       }
       this._emit("tool_calls.function.arguments.done", {
         name: toolCallSnapshot.function.name,
         index: toolCallIndex,
-        arguments: toolCallSnapshot.function.arguments,
+        arguments: argumentsSnapshot,
         parsed_arguments: parsedArguments
       });
     } else if (toolCallSnapshot.type !== "custom") {
       assertNever(toolCallSnapshot);
     }
   }, _ChatCompletionStream_emitContentDoneEvents = function _ChatCompletionStream_emitContentDoneEvents2(choiceSnapshot) {
-    const state = __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choiceSnapshot);
-    if (choiceSnapshot.message.content != null && (choiceSnapshot.message.content !== "" || !choiceSnapshot.message.refusal && !choiceSnapshot.message.tool_calls?.length && !choiceSnapshot.message.function_call) && !state.content_done) {
-      state.content_done = true;
+    const state2 = __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choiceSnapshot);
+    const structuredResponse = isParseableResponseFormat(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.response_format);
+    const boundedSnapshot = structuredResponse || __classPrivateFieldGet(this, _ChatCompletionStream_hasAutoParseableTool, "f");
+    const messageSnapshot = boundedSnapshot ? captureStructuredMessageSnapshot(choiceSnapshot) : choiceSnapshot.message;
+    const refusal = boundedSnapshot ? captureStructuredJSONSnapshot(messageSnapshot, "refusal") : messageSnapshot.refusal;
+    const parseableContent = !refusal && structuredResponse;
+    const content = parseableContent ? captureStructuredJSONSnapshot(messageSnapshot, "content") : messageSnapshot.content;
+    if (content != null && (content !== "" || !refusal && !messageSnapshot.tool_calls?.length && !messageSnapshot.function_call) && !state2.content_done) {
+      if (parseableContent && __classPrivateFieldGet(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f")) {
+        __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_validateStructuredSnapshots).call(this, __classPrivateFieldGet(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f"));
+      }
+      state2.content_done = true;
       this._emit("content.done", {
-        content: choiceSnapshot.message.content,
-        parsed: choiceSnapshot.message.refusal ? null : parseResponseFormatContent(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.response_format, choiceSnapshot.message.content)
+        content,
+        parsed: refusal ? null : parseResponseFormatContent(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.response_format, parseableContent ? validateStructuredJSONSnapshot(content) : content)
       });
     }
-    if (choiceSnapshot.message.refusal && !state.refusal_done) {
-      state.refusal_done = true;
-      this._emit("refusal.done", { refusal: choiceSnapshot.message.refusal });
+    if (refusal && !state2.refusal_done) {
+      state2.refusal_done = true;
+      this._emit("refusal.done", { refusal });
     }
-    if (choiceSnapshot.logprobs?.content && !state.logprobs_content_done) {
-      state.logprobs_content_done = true;
+    if (choiceSnapshot.logprobs?.content && !state2.logprobs_content_done) {
+      state2.logprobs_content_done = true;
       this._emit("logprobs.content.done", { content: choiceSnapshot.logprobs.content });
     }
-    if (choiceSnapshot.logprobs?.refusal && !state.logprobs_refusal_done) {
-      state.logprobs_refusal_done = true;
+    if (choiceSnapshot.logprobs?.refusal && !state2.logprobs_refusal_done) {
+      state2.logprobs_refusal_done = true;
       this._emit("logprobs.refusal.done", { refusal: choiceSnapshot.logprobs.refusal });
     }
+  }, _ChatCompletionStream_validateStructuredSnapshots = function _ChatCompletionStream_validateStructuredSnapshots2(snapshot) {
+    const finalJSONBudget = { bytes: 0, fragments: 0, work: 0 };
+    const parseableContent = isParseableResponseFormat(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.response_format);
+    const validatedMessages = /* @__PURE__ */ new WeakMap();
+    const choices = captureSnapshotArray(snapshot, "choices", MAX_STREAM_CHOICES, "choice");
+    if (!choices) {
+      throw new OpenAIError("Chat completion stream contains an unsafe snapshot choice collection");
+    }
+    for (let choiceIndex = 0; choiceIndex < choices.length; choiceIndex += 1) {
+      const choice = captureSnapshotArrayItem(choices, choiceIndex);
+      if (!choice) {
+        continue;
+      }
+      const message = captureStructuredMessageSnapshot(choice);
+      const refusal = captureStructuredJSONSnapshot(message, "refusal");
+      const content = captureStructuredJSONSnapshot(message, "content");
+      const validatedTools = /* @__PURE__ */ new Map();
+      const toolCalls = captureSnapshotArray(message, "tool_calls", MAX_STREAM_TOOL_CALLS, "tool-call");
+      validatedMessages.set(choice, Object.freeze({
+        message,
+        content,
+        refusal,
+        toolCallCollection: toolCalls,
+        toolCalls: validatedTools
+      }));
+      const state2 = __classPrivateFieldGet(this, _ChatCompletionStream_choiceEventStates, "f")[choice.index];
+      if (parseableContent && !refusal && typeof content === "string") {
+        validateStructuredJSONSnapshot(content, finalJSONBudget, __classPrivateFieldGet(this, _ChatCompletionStream_partialJSONParseBudget, "f"));
+      }
+      for (const [index, identity] of state2?.tool_call_identities ?? []) {
+        const toolCall = toolCalls && captureSnapshotArrayItem(toolCalls, index);
+        if (!toolCall) {
+          throw new OpenAIError("Chat completion stream contains a changed tool call identity");
+        }
+        assertBoundToolCallIdentity(toolCall, identity);
+      }
+      if (!__classPrivateFieldGet(this, _ChatCompletionStream_hasAutoParseableTool, "f")) {
+        continue;
+      }
+      for (let toolCallIndex = 0; toolCallIndex < (toolCalls?.length ?? 0); toolCallIndex += 1) {
+        const toolCall = captureSnapshotArrayItem(toolCalls, toolCallIndex);
+        if (!toolCall) {
+          continue;
+        }
+        const identity = ownFunctionToolIdentity(toolCall);
+        if (!identity) {
+          const type = Object.getOwnPropertyDescriptor(toolCall, "type");
+          if (type && !("value" in type)) {
+            throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+          }
+          if (type?.value !== "function") {
+            continue;
+          }
+          const fn2 = Object.getOwnPropertyDescriptor(toolCall, "function");
+          if (fn2 && !("value" in fn2)) {
+            throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+          }
+          if (fn2 && typeof fn2.value === "object" && fn2.value !== null) {
+            const name = Object.getOwnPropertyDescriptor(fn2.value, "name");
+            if (name && !("value" in name)) {
+              throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+            }
+          }
+          continue;
+        }
+        if (!shouldParseToolCall(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f"), {
+          type: identity.type,
+          function: { name: identity.name }
+        })) {
+          continue;
+        }
+        const descriptor = Object.getOwnPropertyDescriptor(toolCall, "function");
+        if (!descriptor || !("value" in descriptor)) {
+          throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+        }
+        const fn = descriptor.value;
+        const argumentsSnapshot = captureStructuredJSONSnapshot(fn, "arguments");
+        if (typeof argumentsSnapshot !== "string") {
+          throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+        }
+        validateStructuredJSONSnapshot(argumentsSnapshot, finalJSONBudget, __classPrivateFieldGet(this, _ChatCompletionStream_partialJSONParseBudget, "f"));
+        validatedTools.set(toolCallIndex, Object.freeze({
+          tool: toolCall,
+          function: fn,
+          type: identity.type,
+          name: identity.name,
+          arguments: argumentsSnapshot
+        }));
+      }
+    }
+    return validatedMessages;
   }, _ChatCompletionStream_endRequest = function _ChatCompletionStream_endRequest2() {
     if (this.ended) {
       throw new OpenAIError(`stream has ended, this shouldn't happen`);
@@ -3834,15 +7035,16 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     if (!snapshot) {
       throw new OpenAIError(`request ended without sending any chunks`);
     }
+    const validatedMessages = __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_validateStructuredSnapshots).call(this, snapshot);
     const audioDoneChoiceIndexes = __classPrivateFieldGet(this, _ChatCompletionStream_audioDoneChoiceIndexes, "f");
     __classPrivateFieldSet(this, _ChatCompletionStream_audioDoneChoiceIndexes, /* @__PURE__ */ new Set(), "f");
     __classPrivateFieldSet(this, _ChatCompletionStream_currentChatCompletionSnapshot, void 0, "f");
     __classPrivateFieldSet(this, _ChatCompletionStream_choiceEventStates, [], "f");
-    return finalizeChatCompletion(snapshot, __classPrivateFieldGet(this, _ChatCompletionStream_params, "f"), audioDoneChoiceIndexes);
-  }, _ChatCompletionStream_accumulateChatCompletion = function _ChatCompletionStream_accumulateChatCompletion2(chunk) {
-    var _a4, _b, _c, _d, _e;
+    return finalizeChatCompletion(snapshot, __classPrivateFieldGet(this, _ChatCompletionStream_params, "f"), audioDoneChoiceIndexes, validatedMessages);
+  }, _ChatCompletionStream_accumulateChatCompletion = function _ChatCompletionStream_accumulateChatCompletion2(chunk, capturedChoiceFrames) {
+    var _a5, _b, _c, _d, _e;
     let snapshot = __classPrivateFieldGet(this, _ChatCompletionStream_currentChatCompletionSnapshot, "f");
-    const { choices, ...rest } = chunk;
+    const { choices, obfuscation: _obfuscation, ...rest } = chunk;
     if (!snapshot) {
       const newSnapshot = {
         ...rest,
@@ -3855,15 +7057,21 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     }
     const requestedChoiceCount = __classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.n;
     const maxChoices = typeof requestedChoiceCount === "number" && Number.isSafeInteger(requestedChoiceCount) && requestedChoiceCount > 0 ? Math.min(requestedChoiceCount, MAX_STREAM_CHOICES) : MAX_STREAM_CHOICES;
-    for (const { delta, finish_reason, index, logprobs = null, ...other } of chunk.choices) {
+    for (const chunkChoice of chunk.choices) {
+      const { delta, finish_reason, index, logprobs = null, ...other } = chunkChoice;
+      const capturedToolCalls = [];
+      capturedChoiceFrames.set(chunkChoice, Object.freeze({ index, tool_calls: capturedToolCalls }));
       if (!Number.isSafeInteger(index) || index < 0 || index >= maxChoices) {
         throw new OpenAIError(`Chat completion stream contains an invalid choice index: ${index}`);
       }
       let choice = snapshot.choices[index];
       if (!choice) {
-        const newChoice = { finish_reason, index, message: {}, logprobs, ...other };
+        const newChoice = { finish_reason, index, message: {}, logprobs: null, ...other };
         snapshot.choices[index] = newChoice;
         choice = newChoice;
+      }
+      if (isParseableResponseFormat(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.response_format) || __classPrivateFieldGet(this, _ChatCompletionStream_hasAutoParseableTool, "f")) {
+        captureStructuredJSONSnapshot(captureStructuredMessageSnapshot(choice), "refusal");
       }
       if (logprobs) {
         if (choice.logprobs) {
@@ -3871,7 +7079,7 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           assertIsEmpty(rest3);
           assignOwnProperties(choice.logprobs, rest3);
           if (content2) {
-            (_a4 = choice.logprobs).content ?? (_a4.content = []);
+            (_a5 = choice.logprobs).content ?? (_a5.content = []);
             choice.logprobs.content.push(...content2);
           }
           if (refusal2) {
@@ -3880,6 +7088,12 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
           }
         } else {
           choice.logprobs = { ...logprobs };
+          if (logprobs.content) {
+            choice.logprobs.content = [...logprobs.content];
+          }
+          if (logprobs.refusal) {
+            choice.logprobs.refusal = [...logprobs.refusal];
+          }
         }
       }
       if (finish_reason) {
@@ -3895,10 +7109,13 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
       }
       assignOwnProperties(choice, other);
       if (!delta) {
+        Object.freeze(capturedToolCalls);
         continue;
       }
       __classPrivateFieldGet(this, _ChatCompletionStream_audioDoneChoiceIndexes, "f").delete(index);
-      const { audio, content, refusal, function_call, role, tool_calls, ...rest2 } = delta;
+      const { audio, content, refusal, function_call, role, ...capturedDeltaFields } = delta;
+      const { tool_calls: capturedToolCallDelta, ...rest2 } = capturedDeltaFields;
+      const tool_calls = hasOwn(capturedDeltaFields, "tool_calls") ? capturedToolCallDelta : delta.tool_calls;
       assertIsEmpty(rest2);
       assignOwnProperties(choice.message, rest2);
       if (audio?.expires_at != null && audio.id == null && audio.data == null && audio.transcript == null && content == null && refusal == null && function_call == null && role == null && tool_calls == null && Object.keys(rest2).length === 0) {
@@ -3939,18 +7156,41 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
         }
       }
       if (content != null) {
-        choice.message.content = (choice.message.content || "") + content;
         if (!choice.message.refusal && isParseableResponseFormat(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.response_format)) {
-          choice.message.parsed = choice.message.content.trim() ? partialParse(choice.message.content) : null;
+          const eventState = __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choice);
+          const parseState = eventState.content_parse_state ?? (eventState.content_parse_state = createPartialJSONParseState());
+          const shouldParse = recordPartialJSONFragment(parseState, __classPrivateFieldGet(this, _ChatCompletionStream_partialJSONParseBudget, "f"), content);
+          choice.message.content = (captureStructuredJSONSnapshot(choice.message, "content") || "") + content;
+          if (!parseState.has_non_whitespace) {
+            choice.message.parsed = null;
+          } else if (shouldParse && reservePartialJSONParse(parseState, __classPrivateFieldGet(this, _ChatCompletionStream_partialJSONParseBudget, "f"))) {
+            __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_validateStructuredSnapshots).call(this, snapshot);
+            choice.message.parsed = parseStructuredStreamingJSON(validateStructuredJSONSnapshot(choice.message.content));
+          } else if (content.length > 0) {
+            choice.message.parsed = null;
+          }
+        } else {
+          choice.message.content = (choice.message.content || "") + content;
         }
       }
       if (tool_calls) {
         const toolCallSnapshots = (_e = choice.message).tool_calls ?? (_e.tool_calls = []);
-        for (const { index: index2, id, type, function: fn, custom, ...rest3 } of tool_calls) {
+        for (const toolCallDelta of tool_calls) {
+          const { index: index2, id, type, function: fn, custom, ...rest3 } = toolCallDelta;
           if (!Number.isSafeInteger(index2) || index2 < 0 || index2 >= MAX_STREAM_TOOL_CALLS) {
             throw new OpenAIError(`Chat completion stream contains an invalid tool call index: ${index2}`);
           }
+          let argumentsDelta = "";
           const tool_call = toolCallSnapshots[index2] ?? (toolCallSnapshots[index2] = {});
+          const functionName = fn?.name;
+          const eventState = __classPrivateFieldGet(this, _ChatCompletionStream_hasAutoParseableTool, "f") ? __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_getChoiceEventState).call(this, choice) : void 0;
+          let boundIdentity = eventState?.tool_call_identities.get(index2);
+          if (boundIdentity) {
+            assertBoundToolCallIdentity(tool_call, boundIdentity);
+            if (type !== void 0 && type !== boundIdentity.type || functionName !== void 0 && functionName !== boundIdentity.name) {
+              throw new OpenAIError("Chat completion stream contains a changed tool call identity");
+            }
+          }
           assignOwnProperties(tool_call, rest3);
           if (id) {
             tool_call.id = id;
@@ -3968,19 +7208,63 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
             }
           }
           if (fn) {
-            const functionSnapshot = tool_call.function ?? (tool_call.function = { name: fn.name ?? "", arguments: "" });
-            if (fn.name) {
-              functionSnapshot.name = fn.name;
+            const functionSnapshot = tool_call.function ?? (tool_call.function = { name: functionName ?? "", arguments: "" });
+            if (functionName) {
+              functionSnapshot.name = functionName;
             }
-            if (fn.arguments) {
-              functionSnapshot.arguments += fn.arguments;
-              if (shouldParseToolCall(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f"), tool_call)) {
-                functionSnapshot.parsed_arguments = partialParse(functionSnapshot.arguments);
+            if (eventState && !boundIdentity) {
+              const identity = ownFunctionToolIdentity(tool_call);
+              const configuredTool = identity && __classPrivateFieldGet(this, _ChatCompletionStream_params, "f")?.tools?.find((tool) => isChatCompletionFunctionTool(tool) && tool.function.name === identity.name);
+              if (identity) {
+                boundIdentity = {
+                  ...identity,
+                  parseable: configuredTool !== void 0 && shouldParseToolCall(__classPrivateFieldGet(this, _ChatCompletionStream_params, "f"), {
+                    type: identity.type,
+                    function: { name: identity.name }
+                  })
+                };
+                eventState.tool_call_identities.set(index2, boundIdentity);
+                if (!boundIdentity.parseable) {
+                  const provisionalState = eventState.tool_call_parse_states.get(index2);
+                  if (provisionalState) {
+                    __classPrivateFieldGet(this, _ChatCompletionStream_partialJSONParseBudget, "f").bytes -= provisionalState.bytes;
+                    __classPrivateFieldGet(this, _ChatCompletionStream_partialJSONParseBudget, "f").fragments -= provisionalState.fragments;
+                    __classPrivateFieldGet(this, _ChatCompletionStream_partialJSONParseBudget, "f").work -= provisionalState.work;
+                    eventState.tool_call_parse_states.delete(index2);
+                  }
+                }
+              }
+            }
+            const argumentFragment = fn.arguments;
+            if (argumentFragment != null) {
+              argumentsDelta = argumentFragment;
+              if (eventState && boundIdentity?.parseable !== false) {
+                let parseState = eventState.tool_call_parse_states.get(index2);
+                if (!parseState) {
+                  parseState = createPartialJSONParseState();
+                  eventState.tool_call_parse_states.set(index2, parseState);
+                }
+                const shouldParse = recordPartialJSONFragment(parseState, __classPrivateFieldGet(this, _ChatCompletionStream_partialJSONParseBudget, "f"), argumentFragment);
+                const previousArguments = captureStructuredJSONSnapshot(functionSnapshot, "arguments");
+                if (typeof previousArguments !== "string") {
+                  throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+                }
+                functionSnapshot.arguments = previousArguments + argumentFragment;
+                if (shouldParse && boundIdentity?.parseable === true && reservePartialJSONParse(parseState, __classPrivateFieldGet(this, _ChatCompletionStream_partialJSONParseBudget, "f"))) {
+                  __classPrivateFieldGet(this, _ChatCompletionStream_instances, "m", _ChatCompletionStream_validateStructuredSnapshots).call(this, snapshot);
+                  functionSnapshot.parsed_arguments = parseStructuredStreamingJSON(validateStructuredJSONSnapshot(functionSnapshot.arguments));
+                } else if (argumentFragment.length > 0 && hasOwn(functionSnapshot, "parsed_arguments")) {
+                  functionSnapshot.parsed_arguments = void 0;
+                }
+              } else {
+                functionSnapshot.arguments += argumentFragment;
               }
             }
           }
+          capturedToolCalls.push(Object.freeze({ index: index2, arguments_delta: argumentsDelta }));
         }
       }
+      Object.freeze(capturedToolCalls);
     }
     return snapshot;
   }, Symbol.asyncIterator)]() {
@@ -3996,12 +7280,36 @@ var ChatCompletionStream = class _ChatCompletionStream extends AbstractChatCompl
     return stream.toReadableStream();
   }
 };
-function finalizeChatCompletion(snapshot, params, audioDoneChoiceIndexes) {
+function finalizeChatCompletion(snapshot, params, audioDoneChoiceIndexes, validatedMessages) {
   const { id, choices, created, model, system_fingerprint, ...rest } = snapshot;
   const completion = {
     ...rest,
     id,
-    choices: choices.map(({ message, finish_reason, index, logprobs, ...choiceRest }) => {
+    choices: mapCapturedSnapshotArray(choices, MAX_STREAM_CHOICES, "choice", (choice) => {
+      const validated = validatedMessages.get(choice);
+      if (!validated) {
+        throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+      }
+      const stableChoice = new Proxy(choice, {
+        get(target, property, receiver) {
+          return property === "message" ? validated.message : Reflect.get(target, property, receiver);
+        }
+      });
+      const { message: sourceMessage, finish_reason, index, logprobs, ...choiceRest } = stableChoice;
+      const message = new Proxy(sourceMessage, {
+        get(target, property, receiver) {
+          if (property === "content") {
+            return validated.content;
+          }
+          if (property === "refusal") {
+            return validated.refusal;
+          }
+          if (property === "tool_calls") {
+            return validated.toolCallCollection;
+          }
+          return Reflect.get(target, property, receiver);
+        }
+      });
       const { content = null, function_call, tool_calls, audio, ...messageRest } = message;
       const finishReason = finish_reason ?? (audioDoneChoiceIndexes.has(index) && isCompleteAudio(audio) ? "stop" : null);
       if (!finishReason) {
@@ -4046,17 +7354,50 @@ function finalizeChatCompletion(snapshot, params, audioDoneChoiceIndexes) {
             role,
             content,
             refusal: message.refusal ?? null,
-            tool_calls: tool_calls.map((tool_call, i) => {
-              if (tool_call.type == null) {
-                throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].type
-${str(snapshot)}`);
+            tool_calls: mapCapturedSnapshotArray(tool_calls, MAX_STREAM_TOOL_CALLS, "tool-call", (tool_call, i) => {
+              const captured = validated.toolCalls.get(i);
+              if (!captured) {
+                const identity = ownFunctionToolIdentity(tool_call);
+                if (identity && shouldParseToolCall(params, {
+                  type: identity.type,
+                  function: { name: identity.name }
+                })) {
+                  throw new OpenAIError("Chat completion stream contains an unsafe structured JSON snapshot");
+                }
               }
-              if (tool_call.type === "custom") {
-                const { custom, type: type2, id: id3, ...toolRest2 } = tool_call;
+              if (captured && captured.tool !== tool_call) {
+                throw new OpenAIError("Chat completion stream contains a changed tool call identity");
+              }
+              const stableFunction = captured && new Proxy(captured.function, {
+                get(target, property, receiver) {
+                  if (property === "arguments") {
+                    return captured.arguments;
+                  }
+                  if (property === "name") {
+                    return captured.name;
+                  }
+                  return Reflect.get(target, property, receiver);
+                }
+              });
+              const stableTool = captured && stableFunction ? new Proxy(tool_call, {
+                get(target, property, receiver) {
+                  if (property === "type") {
+                    return captured.type;
+                  }
+                  if (property === "function") {
+                    return stableFunction;
+                  }
+                  return Reflect.get(target, property, receiver);
+                }
+              }) : tool_call;
+              if (stableTool.type == null) {
+                throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].type`);
+              }
+              if (stableTool.type === "custom") {
+                const { custom, type: type2, id: id3, ...toolRest2 } = stableTool;
                 const { input = "", name: name2, ...customRest } = custom || {};
                 if (name2 == null) {
-                  throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].custom.name
-${str(snapshot)}`);
+                  throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].custom.name`);
                 }
                 return {
                   ...toolRest2,
@@ -4065,15 +7406,13 @@ ${str(snapshot)}`);
                   custom: { ...customRest, name: name2, input }
                 };
               }
-              const { function: fn, type, id: id2, ...toolRest } = tool_call;
+              const { function: fn, type, id: id2, ...toolRest } = stableTool;
               const { arguments: args, name, ...fnRest } = fn || {};
               if (name == null) {
-                throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].function.name
-${str(snapshot)}`);
+                throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].function.name`);
               }
               if (args == null) {
-                throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].function.arguments
-${str(snapshot)}`);
+                throw new OpenAIError(`missing choices[${index}].tool_calls[${i}].function.arguments`);
               }
               return {
                 ...toolRest,
@@ -4102,9 +7441,6 @@ ${str(snapshot)}`);
 }
 function isCompleteAudio(audio) {
   return audio?.id != null && audio.data != null && audio.transcript != null && audio.expires_at != null;
-}
-function str(x) {
-  return JSON.stringify(x);
 }
 function assertIsEmpty(obj) {
   void obj;
@@ -7186,7 +10522,7 @@ var Responses = class extends APIResource {
    * ```ts
    * const betaCompactedResponse =
    *   await client.beta.responses.compact({
-   *     model: 'gpt-5.6-sol',
+   *     model: 'gpt-6-astra',
    *   });
    * ```
    */
@@ -7309,13 +10645,13 @@ var Steps = class extends APIResource {
 };
 
 // node_modules/openai/internal/utils/base64.mjs
-var fromBase64 = (str2) => {
+var fromBase64 = (str) => {
   if (typeof globalThis.Buffer !== "undefined") {
-    const buf = globalThis.Buffer.from(str2, "base64");
+    const buf = globalThis.Buffer.from(str, "base64");
     return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
   }
   if (typeof atob !== "undefined") {
-    const bstr = atob(str2);
+    const bstr = atob(str);
     const buf = new Uint8Array(bstr.length);
     for (let i = 0; i < bstr.length; i++) {
       buf[i] = bstr.charCodeAt(i);
@@ -7341,11 +10677,15 @@ var toFloat32Array = (base64Str) => {
 
 // node_modules/openai/internal/utils/env.mjs
 var readEnv = (env) => {
-  if (typeof globalThis.process !== "undefined") {
-    return globalThis.process.env?.[env]?.trim() || void 0;
-  }
-  if (typeof globalThis.Deno !== "undefined") {
-    return globalThis.Deno.env?.get?.(env)?.trim() || void 0;
+  try {
+    if (typeof globalThis.process !== "undefined") {
+      return globalThis.process.env?.[env]?.trim() || void 0;
+    }
+    if (typeof globalThis.Deno !== "undefined") {
+      return globalThis.Deno.env?.get?.(env)?.trim() || void 0;
+    }
+  } catch {
+    return void 0;
   }
   return void 0;
 };
@@ -7353,6 +10693,27 @@ var readEnv = (env) => {
 // node_modules/openai/internal/assistant-stream-delta.mjs
 var MAX_ASSISTANT_STREAM_ARRAY_GROWTH = 1024;
 var MAX_EXTERNALLY_MUTABLE_ASSISTANT_STREAM_ARRAY_LENGTH = 65536;
+function getAssistantStreamDiagnosticProperty(property) {
+  switch (property) {
+    case "value":
+    case "arguments":
+    case "input":
+    case "text":
+    case "content":
+    case "annotations":
+    case "metadata":
+    case "name":
+    case "role":
+    case "status":
+    case "tool_calls":
+    case "step_details": {
+      return property;
+    }
+    default: {
+      return "unknown";
+    }
+  }
+}
 var assistantStreamArrayStates = /* @__PURE__ */ new WeakMap();
 var externallyMutableAssistantStreamValues = /* @__PURE__ */ new WeakSet();
 function createAssistantStreamDeltaProjection(cacheArrays) {
@@ -7398,14 +10759,14 @@ function getAssistantStreamArrayOwnEntryCount(accumulator, enforceSparseHoleBudg
 function getAssistantStreamDeltaIndex(deltaEntry, kind, baselineLength) {
   const { index } = deltaEntry;
   if (kind === "array" && (index === null || index === void 0)) {
-    console.error(deltaEntry);
     throw new Error("Expected array delta entry to have an `index` property");
   }
   if (kind === "array" && typeof index !== "number") {
-    throw new TypeError(`Expected array delta entry \`index\` property to be a number but got ${index}`);
+    throw new TypeError("Expected array delta entry `index` property to be a number but got an invalid value");
   }
   if (!Number.isSafeInteger(index) || index < 0 || index >= baselineLength + MAX_ASSISTANT_STREAM_ARRAY_GROWTH || index >= MAX_EXTERNALLY_MUTABLE_ASSISTANT_STREAM_ARRAY_LENGTH) {
-    throw new OpenAIError(`Assistant stream delta contains an invalid ${kind} index: ${index}`);
+    const safeIndex = typeof index === "number" ? index : "unknown";
+    throw new OpenAIError(`Assistant stream delta contains an invalid ${kind} index: ${safeIndex}`);
   }
   return index;
 }
@@ -7426,7 +10787,7 @@ function assertValidAssistantStreamArrayDelta(accumulator, delta, kind, projecti
   }
   for (const deltaEntry of delta) {
     if (!isObj(deltaEntry)) {
-      throw new Error(`Expected array delta entry to be an object but got: ${deltaEntry}`);
+      throw new Error("Expected array delta entry to be an object but got an invalid value");
     }
     const validatedIndex = getAssistantStreamDeltaIndex(deltaEntry, kind, projectedArray.baselineLength);
     let accumulatedEntry;
@@ -7510,11 +10871,10 @@ function defineAssistantStreamArrayEntry(accumulator, index, value) {
 function getRequiredAssistantStreamArrayIndex(deltaEntry) {
   const { index } = deltaEntry;
   if (index === null || index === void 0) {
-    console.error(deltaEntry);
     throw new Error("Expected array delta entry to have an `index` property");
   }
   if (typeof index !== "number") {
-    throw new TypeError(`Expected array delta entry \`index\` property to be a number but got ${index}`);
+    throw new TypeError("Expected array delta entry `index` property to be a number but got an invalid value");
   }
   return index;
 }
@@ -7526,7 +10886,7 @@ function applyAssistantStreamArrayDelta(accumulator, delta, applyRecord) {
   }
   for (const deltaEntry of delta) {
     if (!isObj(deltaEntry)) {
-      throw new Error(`Expected array delta entry to be an object but got: ${deltaEntry}`);
+      throw new Error("Expected array delta entry to be an object but got an invalid value");
     }
     const index = getRequiredAssistantStreamArrayIndex(deltaEntry);
     if (hasOwn(accumulator, index)) {
@@ -7579,7 +10939,7 @@ function applyAssistantStreamDelta(accumulator, delta) {
       applyAssistantStreamArrayDelta(accumulatedValue, deltaValue, applyAssistantStreamDelta);
       continue;
     } else {
-      throw new TypeError(`Unhandled record type: ${key}, deltaValue: ${deltaValue}, accValue: ${accumulatedValue}`);
+      throw new TypeError(`Unhandled record type: ${getAssistantStreamDiagnosticProperty(key)}`);
     }
     accumulator[key] = accumulatedValue;
   }
@@ -7615,10 +10975,13 @@ function createAssistantStreamArrayDeltaCommit(accumulator, delta, kind, cacheAr
 
 // node_modules/openai/lib/AssistantStream.mjs
 var _AssistantStream_instances;
-var _AssistantStream_events;
 var _AssistantStream_runStepSnapshots;
+var _AssistantStream_runStepIDOwners;
+var _AssistantStream_activeRunStepID;
 var _AssistantStream_messageSnapshots;
+var _AssistantStream_messageIDOwners;
 var _AssistantStream_messageSnapshot;
+var _AssistantStream_activeMessageID;
 var _AssistantStream_finalRun;
 var _AssistantStream_currentContentIndex;
 var _AssistantStream_currentContent;
@@ -7629,6 +10992,10 @@ var _AssistantStream_currentRunSnapshot;
 var _AssistantStream_currentRunStepSnapshot;
 var _AssistantStream_addEvent;
 var _AssistantStream_endRequest;
+var _AssistantStream_validateRunStepEvent;
+var _AssistantStream_reserveRunStepAlias;
+var _AssistantStream_validateMessageEvent;
+var _AssistantStream_reserveMessageAlias;
 var _AssistantStream_handleMessage;
 var _AssistantStream_handleRunStep;
 var _AssistantStream_emitExposed;
@@ -7637,14 +11004,41 @@ var _AssistantStream_accumulateRunStep;
 var _AssistantStream_accumulateMessage;
 var _AssistantStream_accumulateContent;
 var _AssistantStream_handleRun;
+function stabilizeAssistantStreamEvent(event) {
+  const eventDescriptor = Object.getOwnPropertyDescriptor(event, "event");
+  const dataDescriptor = Object.getOwnPropertyDescriptor(event, "data");
+  const eventType = Reflect.get(event, "event", event);
+  const data = Reflect.get(event, "data", event);
+  let stableData = data;
+  if (eventType === "thread.message.created" || eventType === "thread.message.in_progress" || eventType === "thread.message.delta" || eventType === "thread.message.completed" || eventType === "thread.message.incomplete" || eventType === "thread.run.step.created" || eventType === "thread.run.step.in_progress" || eventType === "thread.run.step.delta" || eventType === "thread.run.step.completed" || eventType === "thread.run.step.failed" || eventType === "thread.run.step.cancelled" || eventType === "thread.run.step.expired") {
+    const messageID = Object.getOwnPropertyDescriptor(data, "id");
+    if (messageID && "value" in messageID && Reflect.get(data, "id", data) !== messageID.value) {
+      const canonicalID = messageID.value;
+      stableData = new Proxy(data, {
+        get(target, property) {
+          return property === "id" ? canonicalID : Reflect.get(target, property, target);
+        }
+      });
+    }
+  }
+  const stableEvent = Object.freeze({ event: eventType, data: stableData });
+  const ordinaryEvent = eventDescriptor !== void 0 && "value" in eventDescriptor && eventDescriptor.value === eventType && dataDescriptor !== void 0 && "value" in dataDescriptor && dataDescriptor.value === data && stableData === data;
+  return {
+    event: stableEvent,
+    exposedEvent: ordinaryEvent ? event : { event: eventType, data: stableData }
+  };
+}
 var AssistantStream = class _AssistantStream extends EventStream {
   constructor() {
     super(...arguments);
     _AssistantStream_instances.add(this);
-    _AssistantStream_events.set(this, []);
     _AssistantStream_runStepSnapshots.set(this, /* @__PURE__ */ Object.create(null));
+    _AssistantStream_runStepIDOwners.set(this, /* @__PURE__ */ new Map());
+    _AssistantStream_activeRunStepID.set(this, void 0);
     _AssistantStream_messageSnapshots.set(this, /* @__PURE__ */ Object.create(null));
+    _AssistantStream_messageIDOwners.set(this, /* @__PURE__ */ new Map());
     _AssistantStream_messageSnapshot.set(this, void 0);
+    _AssistantStream_activeMessageID.set(this, void 0);
     _AssistantStream_finalRun.set(this, void 0);
     _AssistantStream_currentContentIndex.set(this, void 0);
     _AssistantStream_currentContent.set(this, void 0);
@@ -7655,7 +11049,7 @@ var AssistantStream = class _AssistantStream extends EventStream {
     _AssistantStream_currentRunStepSnapshot.set(this, void 0);
   }
   /** Iterates over cloned raw assistant events; stopping early aborts the underlying request. */
-  [(_AssistantStream_events = /* @__PURE__ */ new WeakMap(), _AssistantStream_runStepSnapshots = /* @__PURE__ */ new WeakMap(), _AssistantStream_messageSnapshots = /* @__PURE__ */ new WeakMap(), _AssistantStream_messageSnapshot = /* @__PURE__ */ new WeakMap(), _AssistantStream_finalRun = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentContentIndex = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentContent = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentToolCallIndex = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentToolCall = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentEvent = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentRunSnapshot = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentRunStepSnapshot = /* @__PURE__ */ new WeakMap(), _AssistantStream_instances = /* @__PURE__ */ new WeakSet(), Symbol.asyncIterator)]() {
+  [(_AssistantStream_runStepSnapshots = /* @__PURE__ */ new WeakMap(), _AssistantStream_runStepIDOwners = /* @__PURE__ */ new WeakMap(), _AssistantStream_activeRunStepID = /* @__PURE__ */ new WeakMap(), _AssistantStream_messageSnapshots = /* @__PURE__ */ new WeakMap(), _AssistantStream_messageIDOwners = /* @__PURE__ */ new WeakMap(), _AssistantStream_messageSnapshot = /* @__PURE__ */ new WeakMap(), _AssistantStream_activeMessageID = /* @__PURE__ */ new WeakMap(), _AssistantStream_finalRun = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentContentIndex = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentContent = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentToolCallIndex = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentToolCall = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentEvent = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentRunSnapshot = /* @__PURE__ */ new WeakMap(), _AssistantStream_currentRunStepSnapshot = /* @__PURE__ */ new WeakMap(), _AssistantStream_instances = /* @__PURE__ */ new WeakSet(), Symbol.asyncIterator)]() {
     return this._createIterator((push) => {
       const onEvent = (event) => push(structuredClone(event));
       this.on("event", onEvent);
@@ -7817,9 +11211,45 @@ _AssistantStream_addEvent = function _AssistantStream_addEvent2(event) {
   if (this.ended) {
     return;
   }
-  __classPrivateFieldSet(this, _AssistantStream_currentEvent, event, "f");
-  __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_handleEvent).call(this, event);
-  switch (event.event) {
+  const { event: stableEvent, exposedEvent } = stabilizeAssistantStreamEvent(event);
+  let messageID;
+  let messageData;
+  let runStepID;
+  let runStepData;
+  switch (stableEvent.event) {
+    case "thread.message.created":
+    case "thread.message.in_progress":
+    case "thread.message.delta":
+    case "thread.message.completed":
+    case "thread.message.incomplete": {
+      messageID = __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_validateMessageEvent).call(this, stableEvent);
+      messageData = stableEvent.data;
+      break;
+    }
+    case "thread.run.step.created":
+    case "thread.run.step.in_progress":
+    case "thread.run.step.delta":
+    case "thread.run.step.completed":
+    case "thread.run.step.failed":
+    case "thread.run.step.cancelled":
+    case "thread.run.step.expired": {
+      runStepID = __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_validateRunStepEvent).call(this, stableEvent);
+      runStepData = stableEvent.data;
+      break;
+    }
+  }
+  __classPrivateFieldSet(this, _AssistantStream_currentEvent, exposedEvent, "f");
+  __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_handleEvent).call(this, exposedEvent);
+  if (messageID !== void 0 && messageData !== void 0) {
+    __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_reserveMessageAlias).call(this, messageData, messageID);
+  }
+  if (runStepID !== void 0 && runStepData !== void 0) {
+    __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_reserveRunStepAlias).call(this, runStepData, runStepID);
+  }
+  if (runStepID === void 0 && __classPrivateFieldGet(this, _AssistantStream_activeRunStepID, "f") !== void 0 && __classPrivateFieldGet(this, _AssistantStream_currentRunStepSnapshot, "f")) {
+    __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_reserveRunStepAlias).call(this, __classPrivateFieldGet(this, _AssistantStream_currentRunStepSnapshot, "f"), __classPrivateFieldGet(this, _AssistantStream_activeRunStepID, "f"));
+  }
+  switch (stableEvent.event) {
     case "thread.created": {
       break;
     }
@@ -7833,7 +11263,7 @@ _AssistantStream_addEvent = function _AssistantStream_addEvent2(event) {
     case "thread.run.cancelling":
     case "thread.run.cancelled":
     case "thread.run.expired": {
-      __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_handleRun).call(this, event);
+      __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_handleRun).call(this, stableEvent);
       break;
     }
     case "thread.run.step.created":
@@ -7843,7 +11273,19 @@ _AssistantStream_addEvent = function _AssistantStream_addEvent2(event) {
     case "thread.run.step.failed":
     case "thread.run.step.cancelled":
     case "thread.run.step.expired": {
-      __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_handleRunStep).call(this, event);
+      if (runStepID === void 0) {
+        throw new OpenAIError("Received assistant run-step event without a canonical run-step ID");
+      }
+      const activeRunStep = __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[runStepID];
+      if (activeRunStep) {
+        __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_reserveRunStepAlias).call(this, activeRunStep, runStepID);
+      }
+      __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_handleRunStep).call(this, stableEvent, runStepID);
+      __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_reserveRunStepAlias).call(this, stableEvent.data, runStepID);
+      const retainedRunStep = __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[runStepID];
+      if (retainedRunStep) {
+        __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_reserveRunStepAlias).call(this, retainedRunStep, runStepID);
+      }
       break;
     }
     case "thread.message.created":
@@ -7851,14 +11293,21 @@ _AssistantStream_addEvent = function _AssistantStream_addEvent2(event) {
     case "thread.message.delta":
     case "thread.message.completed":
     case "thread.message.incomplete": {
-      __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_handleMessage).call(this, event);
+      __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_handleMessage).call(this, stableEvent);
+      if (messageID !== void 0) {
+        __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_reserveMessageAlias).call(this, stableEvent.data, messageID);
+        const retainedMessage = __classPrivateFieldGet(this, _AssistantStream_messageSnapshots, "f")[messageID];
+        if (retainedMessage) {
+          __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_reserveMessageAlias).call(this, retainedMessage, messageID);
+        }
+      }
       break;
     }
     case "error": {
       throw new Error("Encountered an error event in event processing - errors should be processed earlier");
     }
     default: {
-      assertNever2(event);
+      assertNever2(stableEvent);
     }
   }
 }, _AssistantStream_endRequest = function _AssistantStream_endRequest2() {
@@ -7869,10 +11318,99 @@ _AssistantStream_addEvent = function _AssistantStream_addEvent2(event) {
     throw new Error("Final run has not been received");
   }
   return __classPrivateFieldGet(this, _AssistantStream_finalRun, "f");
+}, _AssistantStream_validateRunStepEvent = function _AssistantStream_validateRunStepEvent2(event) {
+  const descriptor = Object.getOwnPropertyDescriptor(event.data, "id");
+  const runStepID = descriptor && "value" in descriptor ? descriptor.value : void 0;
+  if (typeof runStepID !== "string" || runStepID.length === 0) {
+    throw new OpenAIError("Received assistant run-step event with an invalid run-step ID");
+  }
+  if (event.event === "thread.run.step.created") {
+    if (__classPrivateFieldGet(this, _AssistantStream_activeRunStepID, "f") !== void 0) {
+      throw new OpenAIError(`Received run-step creation for "${runStepID}" before the active run step "${__classPrivateFieldGet(this, _AssistantStream_activeRunStepID, "f")}" reached a terminal state`);
+    }
+    if (hasOwn(__classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f"), runStepID) || __classPrivateFieldGet(this, _AssistantStream_runStepIDOwners, "f").has(runStepID)) {
+      throw new OpenAIError(`Received run-step creation for run step "${runStepID}", which has already been created`);
+    }
+    __classPrivateFieldSet(this, _AssistantStream_activeRunStepID, runStepID, "f");
+    __classPrivateFieldGet(this, _AssistantStream_runStepIDOwners, "f").set(runStepID, runStepID);
+    return runStepID;
+  }
+  if (__classPrivateFieldGet(this, _AssistantStream_activeRunStepID, "f") !== void 0) {
+    if (runStepID !== __classPrivateFieldGet(this, _AssistantStream_activeRunStepID, "f")) {
+      throw new OpenAIError(`Received ${event.event} for run step "${runStepID}", which does not match the active run step "${__classPrivateFieldGet(this, _AssistantStream_activeRunStepID, "f")}"`);
+    }
+    return runStepID;
+  }
+  if (event.event === "thread.run.step.delta") {
+    if (!hasOwn(__classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f"), runStepID)) {
+      throw new OpenAIError("Received a RunStepDelta before creation of a snapshot");
+    }
+    throw new OpenAIError(`Received run-step delta for "${runStepID}" with no active run step`);
+  }
+  if (hasOwn(__classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f"), runStepID) || __classPrivateFieldGet(this, _AssistantStream_runStepIDOwners, "f").has(runStepID)) {
+    throw new OpenAIError(`Received run-step event for run step "${runStepID}", which has already been created`);
+  }
+  __classPrivateFieldGet(this, _AssistantStream_runStepIDOwners, "f").set(runStepID, runStepID);
+  if (event.event === "thread.run.step.in_progress") {
+    __classPrivateFieldSet(this, _AssistantStream_activeRunStepID, runStepID, "f");
+  }
+  return runStepID;
+}, _AssistantStream_reserveRunStepAlias = function _AssistantStream_reserveRunStepAlias2(data, canonicalID) {
+  const descriptor = Object.getOwnPropertyDescriptor(data, "id");
+  const runStepID = descriptor && "value" in descriptor ? descriptor.value : void 0;
+  if (typeof runStepID !== "string" || runStepID.length === 0) {
+    throw new OpenAIError("Received assistant run-step event with an invalid run-step ID");
+  }
+  const owner = __classPrivateFieldGet(this, _AssistantStream_runStepIDOwners, "f").get(runStepID);
+  if (owner !== void 0 && owner !== canonicalID) {
+    throw new OpenAIError(`Received run-step creation for run step "${runStepID}", which has already been created`);
+  }
+  __classPrivateFieldGet(this, _AssistantStream_runStepIDOwners, "f").set(runStepID, canonicalID);
+}, _AssistantStream_validateMessageEvent = function _AssistantStream_validateMessageEvent2(event) {
+  const descriptor = Object.getOwnPropertyDescriptor(event.data, "id");
+  const messageID = descriptor && "value" in descriptor ? descriptor.value : void 0;
+  if (typeof messageID !== "string" || messageID.length === 0) {
+    throw new OpenAIError("Received assistant message event with an invalid message ID");
+  }
+  if (event.event === "thread.message.created") {
+    if (__classPrivateFieldGet(this, _AssistantStream_messageSnapshot, "f")) {
+      throw new OpenAIError(`Received message creation for "${messageID}" before the active message "${__classPrivateFieldGet(this, _AssistantStream_activeMessageID, "f")}" reached a terminal state`);
+    }
+    if (hasOwn(__classPrivateFieldGet(this, _AssistantStream_messageSnapshots, "f"), messageID) || __classPrivateFieldGet(this, _AssistantStream_messageIDOwners, "f").has(messageID)) {
+      throw new OpenAIError(`Received message creation for message "${messageID}", which has already been created`);
+    }
+    __classPrivateFieldSet(this, _AssistantStream_activeMessageID, messageID, "f");
+    __classPrivateFieldGet(this, _AssistantStream_messageIDOwners, "f").set(messageID, messageID);
+    return messageID;
+  }
+  if (!__classPrivateFieldGet(this, _AssistantStream_messageSnapshot, "f")) {
+    if (event.event === "thread.message.delta") {
+      throw new OpenAIError("Received a delta with no existing snapshot (there should be one from message creation)");
+    }
+    throw new OpenAIError("Received thread message event with no existing snapshot");
+  }
+  if (messageID !== __classPrivateFieldGet(this, _AssistantStream_activeMessageID, "f")) {
+    throw new OpenAIError(`Received ${event.event} for message "${messageID}", which does not match the active message "${__classPrivateFieldGet(this, _AssistantStream_activeMessageID, "f")}"`);
+  }
+  return messageID;
+}, _AssistantStream_reserveMessageAlias = function _AssistantStream_reserveMessageAlias2(data, canonicalID) {
+  const descriptor = Object.getOwnPropertyDescriptor(data, "id");
+  const messageID = descriptor && "value" in descriptor ? descriptor.value : void 0;
+  if (typeof messageID !== "string" || messageID.length === 0) {
+    throw new OpenAIError("Received assistant message event with an invalid message ID");
+  }
+  const owner = __classPrivateFieldGet(this, _AssistantStream_messageIDOwners, "f").get(messageID);
+  if (owner !== void 0 && owner !== canonicalID) {
+    throw new OpenAIError(`Received message creation for message "${messageID}", which has already been created`);
+  }
+  __classPrivateFieldGet(this, _AssistantStream_messageIDOwners, "f").set(messageID, canonicalID);
 }, _AssistantStream_handleMessage = function _AssistantStream_handleMessage2(event) {
   const [accumulatedMessage, newContent] = __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_accumulateMessage).call(this, event, __classPrivateFieldGet(this, _AssistantStream_messageSnapshot, "f"));
   __classPrivateFieldSet(this, _AssistantStream_messageSnapshot, accumulatedMessage, "f");
-  __classPrivateFieldGet(this, _AssistantStream_messageSnapshots, "f")[accumulatedMessage.id] = accumulatedMessage;
+  if (!__classPrivateFieldGet(this, _AssistantStream_activeMessageID, "f")) {
+    throw new OpenAIError("Received thread message event with no active message ID");
+  }
+  __classPrivateFieldGet(this, _AssistantStream_messageSnapshots, "f")[__classPrivateFieldGet(this, _AssistantStream_activeMessageID, "f")] = accumulatedMessage;
   for (const content of newContent) {
     const snapshotContent = accumulatedMessage.content[content.index];
     if (snapshotContent?.type === "text") {
@@ -7945,10 +11483,11 @@ _AssistantStream_addEvent = function _AssistantStream_addEvent2(event) {
       __classPrivateFieldSet(this, _AssistantStream_currentContentIndex, void 0, "f");
       __classPrivateFieldSet(this, _AssistantStream_currentContent, void 0, "f");
       __classPrivateFieldSet(this, _AssistantStream_messageSnapshot, void 0, "f");
+      __classPrivateFieldSet(this, _AssistantStream_activeMessageID, void 0, "f");
     }
   }
-}, _AssistantStream_handleRunStep = function _AssistantStream_handleRunStep2(event) {
-  const accumulatedRunStep = __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_accumulateRunStep).call(this, event);
+}, _AssistantStream_handleRunStep = function _AssistantStream_handleRunStep2(event, runStepID) {
+  const accumulatedRunStep = __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_accumulateRunStep).call(this, event, runStepID);
   __classPrivateFieldSet(this, _AssistantStream_currentRunStepSnapshot, accumulatedRunStep, "f");
   switch (event.event) {
     case "thread.run.step.created": {
@@ -7983,6 +11522,7 @@ _AssistantStream_addEvent = function _AssistantStream_addEvent2(event) {
     case "thread.run.step.cancelled":
     case "thread.run.step.expired": {
       __classPrivateFieldSet(this, _AssistantStream_currentRunStepSnapshot, void 0, "f");
+      __classPrivateFieldSet(this, _AssistantStream_activeRunStepID, void 0, "f");
       const details = event.data.step_details;
       if (details.type === "tool_calls" && __classPrivateFieldGet(this, _AssistantStream_currentToolCall, "f")) {
         __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_emitExposed).call(this, "toolCallDone", __classPrivateFieldGet(this, _AssistantStream_currentToolCall, "f"));
@@ -8004,37 +11544,36 @@ _AssistantStream_addEvent = function _AssistantStream_addEvent2(event) {
   }
   this._emit(event, ...args);
 }, _AssistantStream_handleEvent = function _AssistantStream_handleEvent2(event) {
-  __classPrivateFieldGet(this, _AssistantStream_events, "f").push(event);
   __classPrivateFieldGet(this, _AssistantStream_instances, "m", _AssistantStream_emitExposed).call(this, "event", event);
-}, _AssistantStream_accumulateRunStep = function _AssistantStream_accumulateRunStep2(event) {
+}, _AssistantStream_accumulateRunStep = function _AssistantStream_accumulateRunStep2(event, runStepID) {
   switch (event.event) {
     case "thread.run.step.created": {
-      __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[event.data.id] = event.data;
+      __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[runStepID] = event.data;
       return event.data;
     }
     case "thread.run.step.delta": {
-      const snapshot = __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[event.data.id];
+      const snapshot = __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[runStepID];
       if (!snapshot) {
         throw new Error("Received a RunStepDelta before creation of a snapshot");
       }
       const data = event.data;
       if (data.delta) {
         const accumulated = accumulateAssistantStreamDelta(snapshot, data.delta, true);
-        __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[event.data.id] = accumulated;
+        __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[runStepID] = accumulated;
       }
-      return __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[event.data.id];
+      return __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[runStepID];
     }
     case "thread.run.step.completed":
     case "thread.run.step.failed":
     case "thread.run.step.cancelled":
     case "thread.run.step.expired":
     case "thread.run.step.in_progress": {
-      __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[event.data.id] = event.data;
+      __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[runStepID] = event.data;
       break;
     }
   }
-  if (__classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[event.data.id]) {
-    return __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[event.data.id];
+  if (__classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[runStepID]) {
+    return __classPrivateFieldGet(this, _AssistantStream_runStepSnapshots, "f")[runStepID];
   }
   throw new Error("No snapshot available");
 }, _AssistantStream_accumulateMessage = function _AssistantStream_accumulateMessage2(event, snapshot) {
@@ -8110,6 +11649,118 @@ _AssistantStream_addEvent = function _AssistantStream_addEvent2(event) {
 };
 function assertNever2(_x) {
   return _x;
+}
+
+// node_modules/openai/lib/polling.mjs
+function sleepUntilAborted(milliseconds, signal) {
+  return new Promise((resolve, reject) => {
+    let timer;
+    let registered;
+    let settled = false;
+    const removeAbortListener = (listener) => {
+      try {
+        signal.removeEventListener("abort", listener);
+      } catch {
+      }
+    };
+    const cleanup = () => {
+      if (timer !== void 0) {
+        clearTimeout(timer);
+        timer = void 0;
+      }
+      if (registered) {
+        const listener = registered;
+        registered = void 0;
+        removeAbortListener(listener);
+      }
+    };
+    const abort = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      try {
+        const error = new APIUserAbortError();
+        Object.defineProperty(error, "cause", {
+          value: signal.reason,
+          writable: true,
+          configurable: true
+        });
+        reject(error);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    if (signal.aborted) {
+      abort();
+      return;
+    }
+    timer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolve();
+    }, milliseconds);
+    registered = abort;
+    try {
+      signal.addEventListener("abort", abort, { once: true });
+      if (settled) {
+        removeAbortListener(abort);
+      } else if (signal.aborted) {
+        abort();
+      }
+    } catch (error) {
+      if (settled) {
+        removeAbortListener(abort);
+      } else {
+        settled = true;
+        cleanup();
+        reject(error);
+      }
+    }
+  });
+}
+async function pollWithResponse(retrieve, intermediateStatuses, terminalStatuses, options) {
+  const headers = buildHeaders([
+    options?.headers,
+    {
+      "X-Stainless-Poll-Helper": "true",
+      "X-Stainless-Custom-Poll-Interval": options?.pollIntervalMs?.toString() ?? void 0
+    }
+  ]);
+  while (true) {
+    const { data, response } = await retrieve(headers).withResponse();
+    const { status } = data;
+    if (intermediateStatuses.includes(status)) {
+      let sleepInterval = 5e3;
+      if (options?.pollIntervalMs) {
+        sleepInterval = options.pollIntervalMs;
+      } else {
+        const headerInterval = response.headers.get("openai-poll-after-ms");
+        if (headerInterval) {
+          const headerIntervalMs = Number.parseInt(headerInterval);
+          if (!Number.isNaN(headerIntervalMs)) {
+            sleepInterval = headerIntervalMs;
+          }
+        }
+      }
+      const signal = options && Object.prototype.propertyIsEnumerable.call(options, "signal") ? options.signal : void 0;
+      await (signal ? sleepUntilAborted(sleepInterval, signal) : sleep(sleepInterval));
+    } else if (terminalStatuses.includes(status)) {
+      return data;
+    }
+  }
+}
+
+// node_modules/openai/lib/assistant-run-polling.mjs
+function pollAssistantRun(resource, runID, params, options) {
+  return pollWithResponse((headers) => resource.retrieve(runID, params, {
+    ...options,
+    headers: { ...options?.headers, ...headers }
+  }), ["queued", "in_progress", "cancelling"], ["requires_action", "incomplete", "cancelled", "completed", "failed", "expired"], options);
 }
 
 // node_modules/openai/resources/beta/threads/runs/runs.mjs
@@ -8206,47 +11857,7 @@ var Runs = class extends APIResource {
    * https://platform.openai.com/docs/assistants/how-it-works/runs-and-run-steps
    */
   async poll(runId, params, options) {
-    const headers = buildHeaders([
-      options?.headers,
-      {
-        "X-Stainless-Poll-Helper": "true",
-        "X-Stainless-Custom-Poll-Interval": options?.pollIntervalMs?.toString() ?? void 0
-      }
-    ]);
-    while (true) {
-      const { data: run, response } = await this.retrieve(runId, params, {
-        ...options,
-        headers: { ...options?.headers, ...headers }
-      }).withResponse();
-      switch (run.status) {
-        //If we are in any sort of intermediate state we poll
-        case "queued":
-        case "in_progress":
-        case "cancelling":
-          let sleepInterval = 5e3;
-          if (options?.pollIntervalMs) {
-            sleepInterval = options.pollIntervalMs;
-          } else {
-            const headerInterval = response.headers.get("openai-poll-after-ms");
-            if (headerInterval) {
-              const headerIntervalMs = parseInt(headerInterval);
-              if (!isNaN(headerIntervalMs)) {
-                sleepInterval = headerIntervalMs;
-              }
-            }
-          }
-          await sleep(sleepInterval);
-          break;
-        //We return the run in any terminal state.
-        case "requires_action":
-        case "incomplete":
-        case "cancelled":
-        case "completed":
-        case "failed":
-        case "expired":
-          return run;
-      }
-    }
+    return await pollAssistantRun(this, runId, params, options);
   }
   /**
    * Create a Run stream
@@ -8613,35 +12224,45 @@ var Conversations = class extends APIResource {
 };
 Conversations.Items = Items;
 
+// node_modules/openai/lib/embeddings.mjs
+function createEmbedding(client, body, options) {
+  const hasUserProvidedEncodingFormat = !!body.encoding_format;
+  const encodingFormat = hasUserProvidedEncodingFormat ? body.encoding_format : "base64";
+  if (hasUserProvidedEncodingFormat) {
+    loggerFor(client).debug("embeddings/user defined encoding_format:", body.encoding_format);
+  }
+  const response = client.post("/embeddings", {
+    body: {
+      ...body,
+      encoding_format: encodingFormat
+    },
+    ...options,
+    __security: { bearerAuth: true }
+  });
+  if (hasUserProvidedEncodingFormat) {
+    return response;
+  }
+  loggerFor(client).debug("embeddings/decoding base64 embeddings from base64");
+  return response._thenUnwrap((data) => {
+    if (data && data.data) {
+      const embeddings = data.data;
+      const { length } = embeddings;
+      for (let index = 0; index < length; index += 1) {
+        if (index in embeddings) {
+          const embeddingBase64Obj = embeddings[index];
+          const embeddingBase64Str = embeddingBase64Obj.embedding;
+          embeddingBase64Obj.embedding = toFloat32Array(embeddingBase64Str);
+        }
+      }
+    }
+    return data;
+  });
+}
+
 // node_modules/openai/resources/embeddings.mjs
 var Embeddings = class extends APIResource {
   create(body, options) {
-    const hasUserProvidedEncodingFormat = !!body.encoding_format;
-    let encoding_format = hasUserProvidedEncodingFormat ? body.encoding_format : "base64";
-    if (hasUserProvidedEncodingFormat) {
-      loggerFor(this._client).debug("embeddings/user defined encoding_format:", body.encoding_format);
-    }
-    const response = this._client.post("/embeddings", {
-      body: {
-        ...body,
-        encoding_format
-      },
-      ...options,
-      __security: { bearerAuth: true }
-    });
-    if (hasUserProvidedEncodingFormat) {
-      return response;
-    }
-    loggerFor(this._client).debug("embeddings/decoding base64 embeddings from base64");
-    return response._thenUnwrap((response2) => {
-      if (response2 && response2.data) {
-        response2.data.forEach((embeddingBase64Obj) => {
-          const embeddingBase64Str = embeddingBase64Obj.embedding;
-          embeddingBase64Obj.embedding = toFloat32Array(embeddingBase64Str);
-        });
-      }
-      return response2;
-    });
+    return createEmbedding(this._client, body, options);
   }
 };
 
@@ -8775,6 +12396,23 @@ var Evals = class extends APIResource {
 };
 Evals.Runs = Runs2;
 
+// node_modules/openai/lib/file-processing.mjs
+async function waitForFileProcessing(resource, id, pollInterval, maxWait) {
+  const terminalStates = /* @__PURE__ */ new Set(["processed", "error", "deleted"]);
+  const start = Date.now();
+  let file = await resource.retrieve(id);
+  while (!file.status || !terminalStates.has(file.status)) {
+    await sleep(pollInterval);
+    file = await resource.retrieve(id);
+    if (Date.now() - start > maxWait) {
+      throw new APIConnectionTimeoutError({
+        message: `Giving up on waiting for file ${id} to finish processing after ${maxWait} milliseconds.`
+      });
+    }
+  }
+  return file;
+}
+
 // node_modules/openai/resources/files.mjs
 var Files2 = class extends APIResource {
   /**
@@ -8846,19 +12484,7 @@ var Files2 = class extends APIResource {
    * Waits for the given file to be processed, default timeout is 30 mins.
    */
   async waitForProcessing(id, { pollInterval = 5e3, maxWait = 30 * 60 * 1e3 } = {}) {
-    const TERMINAL_STATES = /* @__PURE__ */ new Set(["processed", "error", "deleted"]);
-    const start = Date.now();
-    let file = await this.retrieve(id);
-    while (!file.status || !TERMINAL_STATES.has(file.status)) {
-      await sleep(pollInterval);
-      file = await this.retrieve(id);
-      if (Date.now() - start > maxWait) {
-        throw new APIConnectionTimeoutError({
-          message: `Giving up on waiting for file ${id} to finish processing after ${maxWait} milliseconds.`
-        });
-      }
-    }
-    return file;
+    return await waitForFileProcessing(this, id, pollInterval, maxWait);
   }
 };
 
@@ -9263,8 +12889,73 @@ var Moderations = class extends APIResource {
   }
 };
 
+// node_modules/openai/internal/multipart-encoding.mjs
+async function encodedMultipartFormRequestOptions(options, client, encodings, rawBodyField = null) {
+  if (options.body === null || typeof options.body !== "object" || Array.isArray(options.body)) {
+    throw new TypeError("Multipart request body must be an object");
+  }
+  const body = Object.fromEntries(Object.entries(options.body).filter(([, value]) => value !== void 0));
+  if (rawBodyField !== null && Object.keys(body).length === 1 && Object.prototype.hasOwnProperty.call(body, rawBodyField)) {
+    const value = body[rawBodyField];
+    if (typeof value !== "string")
+      throw new TypeError("Raw multipart alternative must be a string");
+    return {
+      ...options,
+      body: value,
+      headers: buildHeaders([options.headers, { "content-type": encodings[rawBodyField].content_type }])
+    };
+  }
+  const encoded = [];
+  for (const [name, encoding] of Object.entries(encodings)) {
+    if (!Object.prototype.hasOwnProperty.call(body, name))
+      continue;
+    const value = body[name];
+    const data = encoding.json ? JSON.stringify(value) : value;
+    if (typeof data !== "string")
+      throw new TypeError(`Multipart field ${name} must encode as a string`);
+    encoded.push([name, makeFile([data], "", { type: encoding.content_type })]);
+    delete body[name];
+  }
+  const multipart = await multipartFormRequestOptions({ ...options, body }, client);
+  const form = multipart.body;
+  if (!(form instanceof FormData)) {
+    await form.cancel();
+    throw new TypeError("Unexpected streaming upload in typed multipart request body");
+  }
+  for (const [name, part] of encoded)
+    form.append(name, part, "");
+  return {
+    ...options,
+    body: form,
+    headers: buildHeaders([options.headers, { "content-type": null }])
+  };
+}
+
 // node_modules/openai/resources/realtime/calls.mjs
 var Calls = class extends APIResource {
+  /**
+   * Create a new Realtime API call over WebRTC and receive the SDP answer needed to
+   * complete the peer connection.
+   *
+   * @example
+   * ```ts
+   * await client.realtime.calls.create({
+   *   sdp: 'sdp',
+   * });
+   * ```
+   */
+  create(body, options) {
+    return this._client.post("/realtime/calls", encodedMultipartFormRequestOptions({
+      body,
+      ...options,
+      headers: buildHeaders([{ Accept: "application/sdp" }, options?.headers]),
+      __security: { bearerAuth: true },
+      __binaryResponse: true
+    }, this._client, {
+      sdp: { content_type: "application/sdp", json: false },
+      session: { content_type: "application/json", json: true }
+    }, "sdp"));
+  }
   /**
    * Accept an incoming SIP call and configure the realtime session that will handle
    * it.
@@ -9478,7 +13169,7 @@ function parseToolCall2(params, toolCall) {
   if (isAutoParsableTool2(inputTool)) {
     parsedArguments = inputTool.$parseRaw(toolCall.arguments);
   } else if (inputTool?.strict) {
-    parsedArguments = JSON.parse(toolCall.arguments);
+    parsedArguments = parseResponseFormatContent({ type: "json_schema", $parseRaw: void 0 }, toolCall.arguments);
   }
   return {
     ...toolCall,
@@ -9602,9 +13293,7 @@ function ensureCanonicalOutputText(context, snapshot) {
     text += outputText;
     outputTextIndex.append(outputText.length);
   }
-  if (snapshot.output_text !== text) {
-    snapshot.output_text = text;
-  }
+  snapshot.output_text = text;
   context.outputTextIndex = outputTextIndex;
   context.canonicalSnapshot = snapshot;
 }
@@ -9678,6 +13367,7 @@ function updateOutputText(context, snapshot, outputIndex, previousText, nextText
 }
 
 // node_modules/openai/internal/responses/response-accumulator.mjs
+var responseOutputIdentityIndexes = /* @__PURE__ */ new WeakMap();
 function validateArrayIndex(collection, index, kind, allowAppend = false) {
   if (!Number.isSafeInteger(index) || index < 0 || index > collection.length || (index === collection.length ? !allowAppend || index in collection : !hasOwn(collection, index))) {
     throw new OpenAIError(`missing ${kind} at index ${index}`);
@@ -9696,6 +13386,170 @@ function getOutput(snapshot, outputIndex) {
     throw new OpenAIError(`missing output at index ${outputIndex}`);
   }
   return output;
+}
+function hasRoutedOutputCallIdentity(output) {
+  return output.type === "function_call" || output.type === "custom_tool_call" || output.type === "shell_call" || output.type === "shell_call_output";
+}
+function getOutputItemIdentityKeys(output, eventType) {
+  if (!hasOwn(output, "type") || typeof output.type !== "string") {
+    throw new OpenAIError(`expected an own output item type for ${eventType}`);
+  }
+  const optionalPlatformID = output.type === "function_call" || output.type === "custom_tool_call";
+  const identities = [];
+  if (hasOwn(output, "id")) {
+    if (typeof output.id !== "string" || output.id.length === 0) {
+      throw new OpenAIError(`expected a non-empty output item id for ${eventType}`);
+    }
+    identities.push(`id:${output.id}`);
+  } else if (!optionalPlatformID) {
+    throw new OpenAIError(`expected a non-empty output item id for ${eventType}`);
+  }
+  if (hasRoutedOutputCallIdentity(output)) {
+    if (!hasOwn(output, "call_id") || typeof output.call_id !== "string" || output.call_id.length === 0) {
+      throw new OpenAIError(`expected a non-empty output item call_id for ${eventType}`);
+    }
+    identities.push(`call:${output.type}:${output.call_id}`);
+  }
+  return identities;
+}
+function assertOutputItemIdentitiesAvailable(identities, keys) {
+  for (const key of keys) {
+    if (identities.has(key)) {
+      throw new OpenAIError(`duplicate output item identity '${key}'`);
+    }
+  }
+}
+function addOutputItemIdentities(identities, keys) {
+  assertOutputItemIdentitiesAvailable(identities, keys);
+  for (const key of keys) {
+    identities.add(key);
+  }
+}
+function createResponseOutputIdentityIndex(snapshot) {
+  const identityIndex = {
+    snapshot,
+    output: snapshot.output,
+    length: snapshot.output.length,
+    identities: /* @__PURE__ */ new Set()
+  };
+  for (let index = 0; index < snapshot.output.length; index += 1) {
+    const output = getOutput(snapshot, index);
+    addOutputItemIdentities(identityIndex.identities, getOutputItemIdentityKeys(output, "response snapshot"));
+  }
+  return identityIndex;
+}
+function getResponseOutputIdentityIndex(context, snapshot) {
+  const cached = responseOutputIdentityIndexes.get(context);
+  if (cached && cached.snapshot === snapshot && cached.output === snapshot.output && cached.length === snapshot.output.length) {
+    return cached;
+  }
+  const identityIndex = createResponseOutputIdentityIndex(snapshot);
+  responseOutputIdentityIndexes.set(context, identityIndex);
+  return identityIndex;
+}
+function cloneValidatedResponse(context, response) {
+  const nextContext = createCanonicalResponseContext();
+  const snapshot = cloneResponse(nextContext, response);
+  const identityIndex = createResponseOutputIdentityIndex(snapshot);
+  context.canonicalSnapshot = nextContext.canonicalSnapshot;
+  context.outputTextLengths = nextContext.outputTextLengths;
+  context.outputTextIndex = nextContext.outputTextIndex;
+  responseOutputIdentityIndexes.set(context, identityIndex);
+  return snapshot;
+}
+var expectedOutputItemTypes = {
+  "response.output_text.delta": "message",
+  "response.output_text.done": "message",
+  "response.output_text.annotation.added": "message",
+  "response.refusal.delta": "message",
+  "response.refusal.done": "message",
+  "response.function_call_arguments.delta": "function_call",
+  "response.function_call_arguments.done": "function_call",
+  "response.custom_tool_call_input.delta": "custom_tool_call",
+  "response.custom_tool_call_input.done": "custom_tool_call",
+  "response.mcp_call_arguments.delta": "mcp_call",
+  "response.mcp_call_arguments.done": "mcp_call",
+  "response.mcp_call.in_progress": "mcp_call",
+  "response.mcp_call.completed": "mcp_call",
+  "response.mcp_call.failed": "mcp_call",
+  "response.shell_call_output_content.delta": "shell_call_output",
+  "response.shell_call_output_content.done": "shell_call_output",
+  "response.reasoning_text.delta": "reasoning",
+  "response.reasoning_text.done": "reasoning",
+  "response.reasoning_summary_part.added": "reasoning",
+  "response.reasoning_summary_part.done": "reasoning",
+  "response.reasoning_summary_text.delta": "reasoning",
+  "response.reasoning_summary_text.done": "reasoning",
+  "response.code_interpreter_call_code.delta": "code_interpreter_call",
+  "response.code_interpreter_call_code.done": "code_interpreter_call",
+  "response.code_interpreter_call.in_progress": "code_interpreter_call",
+  "response.code_interpreter_call.interpreting": "code_interpreter_call",
+  "response.code_interpreter_call.completed": "code_interpreter_call",
+  "response.file_search_call.in_progress": "file_search_call",
+  "response.file_search_call.searching": "file_search_call",
+  "response.file_search_call.completed": "file_search_call",
+  "response.web_search_call.in_progress": "web_search_call",
+  "response.web_search_call.searching": "web_search_call",
+  "response.web_search_call.completed": "web_search_call",
+  "response.image_generation_call.in_progress": "image_generation_call",
+  "response.image_generation_call.generating": "image_generation_call",
+  "response.image_generation_call.completed": "image_generation_call",
+  "response.image_generation_call.partial_image": "image_generation_call",
+  "response.mcp_list_tools.in_progress": "mcp_list_tools",
+  "response.mcp_list_tools.completed": "mcp_list_tools",
+  "response.mcp_list_tools.failed": "mcp_list_tools"
+};
+function getExpectedOutputItemType(event) {
+  if (event.type === "response.content_part.added" || event.type === "response.content_part.done") {
+    return event.part.type === "reasoning_text" ? "reasoning" : "message";
+  }
+  return expectedOutputItemTypes[event.type];
+}
+function validateCompletedOutputItemIdentity(event, snapshot) {
+  const output = getOutput(snapshot, event.output_index);
+  const replacement = event.item;
+  getOutputItemIdentityKeys(output, event.type);
+  getOutputItemIdentityKeys(replacement, event.type);
+  if (!hasOwn(replacement, "type") || output.type !== replacement.type) {
+    throw new OpenAIError(`expected output item type '${output.type}', got '${replacement.type}'`);
+  }
+  const outputID = hasOwn(output, "id") ? output.id : void 0;
+  const replacementID = hasOwn(replacement, "id") ? replacement.id : void 0;
+  if (outputID !== replacementID) {
+    throw new OpenAIError(`expected output item id '${outputID}', got '${replacementID}'`);
+  }
+  if (hasRoutedOutputCallIdentity(output) && hasRoutedOutputCallIdentity(replacement) && output.call_id !== replacement.call_id) {
+    throw new OpenAIError(`expected output item call_id '${output.call_id}', got '${replacement.call_id}'`);
+  }
+}
+function validateOutputItemIdentity(event, snapshot, rejectInvalidShellTargets) {
+  if (event.type === "response.output_item.done") {
+    validateCompletedOutputItemIdentity(event, snapshot);
+    return;
+  }
+  if (rejectInvalidShellTargets && (event.type === "response.shell_call_command.added" || event.type === "response.shell_call_command.delta" || event.type === "response.shell_call_command.done")) {
+    const output2 = getOutput(snapshot, event.output_index);
+    if (!hasOwn(output2, "type") || output2.type !== "shell_call") {
+      throw new OpenAIError(`expected output item type 'shell_call', got '${output2.type}'`);
+    }
+    return;
+  }
+  if (event.type !== "response.content_part.added" && event.type !== "response.content_part.done" && !hasOwn(expectedOutputItemTypes, event.type)) {
+    return;
+  }
+  const itemEvent = event;
+  if (!hasOwn(event, "item_id") || typeof itemEvent.item_id !== "string" || itemEvent.item_id.length === 0) {
+    throw new OpenAIError(`expected a non-empty item_id for ${event.type}`);
+  }
+  const output = getOutput(snapshot, itemEvent.output_index);
+  const outputID = hasOwn(output, "id") ? output.id : void 0;
+  if (outputID !== itemEvent.item_id) {
+    throw new OpenAIError(`expected item_id '${outputID}', got '${itemEvent.item_id}'`);
+  }
+  const expectedType = getExpectedOutputItemType(itemEvent);
+  if (output.type !== expectedType) {
+    throw new OpenAIError(`expected output item type '${expectedType}', got '${output.type}'`);
+  }
 }
 function getContent(content, contentIndex) {
   validateArrayIndex(content, contentIndex, "content");
@@ -9721,18 +13575,129 @@ function getShellOutputContent(snapshot, output, commandIndex) {
   }
   return getContent(output.output, commandIndex);
 }
-function assertNever3(value) {
-  throw new OpenAIError(`Unhandled response stream event: ${JSON.stringify(value)}`);
+function createSupportedResponseEventTypes(eventTypes) {
+  return new Set(eventTypes);
+}
+var supportedResponseEventTypes = createSupportedResponseEventTypes([
+  "response.output_item.added",
+  "response.output_item.done",
+  "response.content_part.added",
+  "response.content_part.done",
+  "response.output_text.delta",
+  "response.output_text.done",
+  "response.output_text.annotation.added",
+  "response.refusal.delta",
+  "response.refusal.done",
+  "response.function_call_arguments.delta",
+  "response.function_call_arguments.done",
+  "response.custom_tool_call_input.delta",
+  "response.custom_tool_call_input.done",
+  "response.mcp_call_arguments.delta",
+  "response.mcp_call_arguments.done",
+  "response.shell_call_command.added",
+  "response.shell_call_command.done",
+  "response.shell_call_command.delta",
+  "response.shell_call_output_content.delta",
+  "response.shell_call_output_content.done",
+  "response.reasoning_text.delta",
+  "response.reasoning_text.done",
+  "response.reasoning_summary_part.added",
+  "response.reasoning_summary_part.done",
+  "response.reasoning_summary_text.delta",
+  "response.reasoning_summary_text.done",
+  "response.code_interpreter_call_code.delta",
+  "response.code_interpreter_call_code.done",
+  "response.code_interpreter_call.in_progress",
+  "response.code_interpreter_call.interpreting",
+  "response.code_interpreter_call.completed",
+  "response.file_search_call.in_progress",
+  "response.file_search_call.searching",
+  "response.file_search_call.completed",
+  "response.web_search_call.in_progress",
+  "response.web_search_call.searching",
+  "response.web_search_call.completed",
+  "response.image_generation_call.in_progress",
+  "response.image_generation_call.generating",
+  "response.image_generation_call.completed",
+  "response.mcp_call.in_progress",
+  "response.mcp_call.completed",
+  "response.mcp_call.failed",
+  "response.created",
+  "response.queued",
+  "response.in_progress",
+  "response.completed",
+  "response.failed",
+  "response.incomplete",
+  "response.audio.delta",
+  "response.audio.done",
+  "response.audio.transcript.delta",
+  "response.audio.transcript.done",
+  "response.image_generation_call.partial_image",
+  "response.mcp_list_tools.in_progress",
+  "response.mcp_list_tools.completed",
+  "response.mcp_list_tools.failed",
+  "keepalive",
+  "error"
+]);
+function assertNever3(_value) {
+  throw new OpenAIError("Unhandled response stream event: unknown");
+}
+var responseEventRoutingFields = [
+  "item_id",
+  "output_index",
+  "content_index",
+  "annotation_index",
+  "command_index",
+  "summary_index"
+];
+function sanitizeResponseEvent(event) {
+  let descriptor;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(event, "type");
+  } catch {
+    return assertNever3(event);
+  }
+  const type = descriptor?.value;
+  if (typeof type !== "string" || !supportedResponseEventTypes.has(type)) {
+    return assertNever3(event);
+  }
+  const stableValues = /* @__PURE__ */ new Map([["type", type]]);
+  const itemScoped = type === "response.output_item.added" || type === "response.output_item.done" || type === "response.content_part.added" || type === "response.content_part.done" || type === "response.shell_call_command.added" || type === "response.shell_call_command.delta" || type === "response.shell_call_command.done" || hasOwn(expectedOutputItemTypes, type);
+  if (itemScoped) {
+    try {
+      for (const field of responseEventRoutingFields) {
+        const routingDescriptor = Object.getOwnPropertyDescriptor(event, field);
+        stableValues.set(field, routingDescriptor ? Reflect.get(event, field, event) : void 0);
+      }
+      if (type === "response.output_item.done") {
+        stableValues.set("item", structuredClone(Reflect.get(event, "item", event)));
+      } else if (type === "response.content_part.added" || type === "response.content_part.done") {
+        stableValues.set("part", structuredClone(Reflect.get(event, "part", event)));
+      }
+    } catch {
+      return assertNever3(event);
+    }
+  }
+  return new Proxy(event, {
+    get(target, property) {
+      return stableValues.has(property) ? stableValues.get(property) : Reflect.get(target, property, target);
+    }
+  });
 }
 function accumulateOutputItemEvent(event, snapshot, context) {
   switch (event.type) {
     case "response.output_item.added": {
       validateArrayAppend(snapshot.output, event.output_index, "output");
+      const identityIndex = getResponseOutputIdentityIndex(context, snapshot);
       const output = structuredClone(event.item);
+      const identities = getOutputItemIdentityKeys(output, event.type);
+      assertOutputItemIdentitiesAvailable(identityIndex.identities, identities);
       if (output.type === "message") {
         ensureCanonicalOutputText(context, snapshot);
       }
       snapshot.output.push(output);
+      addOutputItemIdentities(identityIndex.identities, identities);
+      identityIndex.length = snapshot.output.length;
       const text = getOutputText(context, output);
       if (context.canonicalSnapshot === snapshot) {
         context.outputTextIndex.append(text.length);
@@ -9745,7 +13710,7 @@ function accumulateOutputItemEvent(event, snapshot, context) {
     case "response.output_item.done": {
       const output = getOutput(snapshot, event.output_index);
       const previousText = getOutputText(context, output);
-      const replacement = structuredClone(event.item);
+      const replacement = event.item;
       if (output.type === "message" || replacement.type === "message") {
         ensureCanonicalOutputText(context, snapshot);
       }
@@ -9770,7 +13735,7 @@ function accumulateContentPartAddedEvent(event, snapshot, context) {
       const { part } = event;
       if (type === "message" && part.type !== "reasoning_text") {
         validateArrayAppend(output.content, event.content_index, "content");
-        const content = structuredClone(part);
+        const content = part;
         if (content.type === "output_text") {
           ensureCanonicalOutputText(context, snapshot);
         }
@@ -9785,7 +13750,7 @@ function accumulateContentPartAddedEvent(event, snapshot, context) {
         if (!output.content) {
           output.content = content;
         }
-        content.push(structuredClone(part));
+        content.push(part);
       }
       return true;
     }
@@ -9802,7 +13767,7 @@ function accumulateContentPartDoneEvent(event, snapshot, context) {
       if (output.type === "message" && part.type !== "reasoning_text") {
         const content = getContent(output.content, event.content_index);
         const previousText = content.type === "output_text" ? content.text : "";
-        const replacement = structuredClone(part);
+        const replacement = part;
         if (content.type === "output_text" || replacement.type === "output_text") {
           ensureCanonicalOutputText(context, snapshot);
         }
@@ -9816,7 +13781,7 @@ function accumulateContentPartDoneEvent(event, snapshot, context) {
           throw new OpenAIError(`missing content at index ${event.content_index}`);
         }
         getContent(content, event.content_index);
-        content[event.content_index] = structuredClone(part);
+        content[event.content_index] = part;
       }
       return true;
     }
@@ -10236,50 +14201,55 @@ function isIgnoredResponseEvent(event) {
 function createResponseContext() {
   return createCanonicalResponseContext();
 }
-function accumulateResponseWithContext(event, snapshot, context) {
+function accumulateResponseWithContext(event, snapshot, context, rejectInvalidShellTargets = false, onSanitizedEvent) {
+  const dispatchEvent = sanitizeResponseEvent(event);
+  if (onSanitizedEvent && dispatchEvent.type !== "keepalive") {
+    onSanitizedEvent(dispatchEvent);
+  }
   if (!snapshot) {
-    if (event.type !== "response.created") {
-      throw new OpenAIError(`When snapshot hasn't been set yet, expected 'response.created' event, got ${event.type}`);
+    if (dispatchEvent.type !== "response.created") {
+      throw new OpenAIError(`When snapshot hasn't been set yet, expected 'response.created' event, got ${dispatchEvent.type}`);
     }
-    return cloneResponse(context, event.response);
+    return cloneValidatedResponse(context, dispatchEvent.response);
   }
-  if (accumulateOutputItemEvent(event, snapshot, context)) {
+  validateOutputItemIdentity(dispatchEvent, snapshot, rejectInvalidShellTargets);
+  if (accumulateOutputItemEvent(dispatchEvent, snapshot, context)) {
     return snapshot;
   }
-  if (accumulateContentPartAddedEvent(event, snapshot, context)) {
+  if (accumulateContentPartAddedEvent(dispatchEvent, snapshot, context)) {
     return snapshot;
   }
-  if (accumulateContentPartDoneEvent(event, snapshot, context)) {
+  if (accumulateContentPartDoneEvent(dispatchEvent, snapshot, context)) {
     return snapshot;
   }
-  if (accumulateOutputTextEvent(event, snapshot, context)) {
+  if (accumulateOutputTextEvent(dispatchEvent, snapshot, context)) {
     return snapshot;
   }
-  if (accumulateRefusalAndArgumentsEvent(event, snapshot)) {
+  if (accumulateRefusalAndArgumentsEvent(dispatchEvent, snapshot)) {
     return snapshot;
   }
-  if (accumulateShellEvent(event, snapshot)) {
+  if (accumulateShellEvent(dispatchEvent, snapshot)) {
     return snapshot;
   }
-  if (accumulateReasoningEvent(event, snapshot)) {
+  if (accumulateReasoningEvent(dispatchEvent, snapshot)) {
     return snapshot;
   }
-  if (accumulateCodeInterpreterEvent(event, snapshot)) {
+  if (accumulateCodeInterpreterEvent(dispatchEvent, snapshot)) {
     return snapshot;
   }
-  if (accumulateSearchStatusEvent(event, snapshot)) {
+  if (accumulateSearchStatusEvent(dispatchEvent, snapshot)) {
     return snapshot;
   }
-  if (accumulateImageAndMcpStatusEvent(event, snapshot)) {
+  if (accumulateImageAndMcpStatusEvent(dispatchEvent, snapshot)) {
     return snapshot;
   }
-  if (isResponseLifecycleEvent(event)) {
-    return cloneResponse(context, event.response);
+  if (isResponseLifecycleEvent(dispatchEvent)) {
+    return cloneValidatedResponse(context, dispatchEvent.response);
   }
-  if (isIgnoredResponseEvent(event)) {
+  if (isIgnoredResponseEvent(dispatchEvent)) {
     return snapshot;
   }
-  return assertNever3(event);
+  return assertNever3(dispatchEvent);
 }
 
 // node_modules/openai/lib/responses/ResponseStream.mjs
@@ -10370,45 +14340,55 @@ var ResponseStream = class _ResponseStream extends EventStream {
       const error = "error" in event && typeof event.error === "object" && event.error !== null ? event.error : event;
       throw new APIError(void 0, error, event.message, void 0);
     }
-    const response = accumulateResponseWithContext(event, __classPrivateFieldGet(this, _ResponseStream_currentResponseSnapshot, "f"), __classPrivateFieldGet(this, _ResponseStream_accumulatorContext, "f"));
+    let dispatchEvent = event;
+    const response = accumulateResponseWithContext(event, __classPrivateFieldGet(this, _ResponseStream_currentResponseSnapshot, "f"), __classPrivateFieldGet(this, _ResponseStream_accumulatorContext, "f"), true, (sanitizedEvent) => {
+      dispatchEvent = sanitizedEvent;
+    });
     __classPrivateFieldSet(this, _ResponseStream_currentResponseSnapshot, response, "f");
     maybeEmit("event", event);
-    switch (event.type) {
+    switch (dispatchEvent.type) {
       case "response.output_text.delta": {
-        const output = response.output[event.output_index];
+        const output = response.output[dispatchEvent.output_index];
         if (!output) {
-          throw new OpenAIError(`missing output at index ${event.output_index}`);
+          throw new OpenAIError(`missing output at index ${dispatchEvent.output_index}`);
         }
         if (output.type === "message") {
-          const content = output.content[event.content_index];
+          const content = output.content[dispatchEvent.content_index];
           if (!content) {
-            throw new OpenAIError(`missing content at index ${event.content_index}`);
+            throw new OpenAIError(`missing content at index ${dispatchEvent.content_index}`);
           }
           if (content.type !== "output_text") {
             throw new OpenAIError(`expected content to be 'output_text', got ${content.type}`);
           }
           maybeEmit("response.output_text.delta", {
-            ...event,
+            ...dispatchEvent,
+            type: dispatchEvent.type,
+            item_id: dispatchEvent.item_id,
+            output_index: dispatchEvent.output_index,
+            content_index: dispatchEvent.content_index,
             snapshot: content.text
           });
         }
         break;
       }
       case "response.function_call_arguments.delta": {
-        const output = response.output[event.output_index];
+        const output = response.output[dispatchEvent.output_index];
         if (!output) {
-          throw new OpenAIError(`missing output at index ${event.output_index}`);
+          throw new OpenAIError(`missing output at index ${dispatchEvent.output_index}`);
         }
         if (output.type === "function_call") {
           maybeEmit("response.function_call_arguments.delta", {
-            ...event,
+            ...dispatchEvent,
+            type: dispatchEvent.type,
+            item_id: dispatchEvent.item_id,
+            output_index: dispatchEvent.output_index,
             snapshot: output.arguments
           });
         }
         break;
       }
       default: {
-        maybeEmit(event.type, event);
+        maybeEmit(dispatchEvent.type, event);
         break;
       }
     }
@@ -10581,7 +14561,7 @@ var Responses2 = class extends APIResource {
    * @example
    * ```ts
    * const compactedResponse = await client.responses.compact({
-   *   model: 'gpt-5.6-sol',
+   *   model: 'gpt-6-astra',
    * });
    * ```
    */
@@ -10591,6 +14571,25 @@ var Responses2 = class extends APIResource {
 };
 Responses2.InputItems = InputItems2;
 Responses2.InputTokens = InputTokens2;
+
+// node_modules/openai/resources/safety/alerts.mjs
+var Alerts = class extends APIResource {
+  /**
+   * Get a safety alert belonging to the authenticated API project.
+   */
+  retrieve(id, options) {
+    return this._client.get(path`/safety/alerts/${id}`, { ...options, __security: { bearerAuth: true } });
+  }
+};
+
+// node_modules/openai/resources/safety/safety.mjs
+var Safety = class extends APIResource {
+  constructor() {
+    super(...arguments);
+    this.alerts = new Alerts(this._client);
+  }
+};
+Safety.Alerts = Alerts;
 
 // node_modules/openai/resources/skills/content.mjs
 var Content2 = class extends APIResource {
@@ -10811,15 +14810,24 @@ var Uploads = class extends APIResource {
 };
 Uploads.Parts = Parts;
 
+// node_modules/openai/lib/vector-store-polling.mjs
+function pollVectorStoreFile(resource, vectorStoreID, fileID, options) {
+  return pollWithResponse((headers) => resource.retrieve(fileID, { vector_store_id: vectorStoreID }, { ...options, headers }), ["in_progress"], ["failed", "completed"], options);
+}
+function pollVectorStoreFileBatch(resource, vectorStoreID, batchID, options) {
+  return pollWithResponse((headers) => resource.retrieve(batchID, { vector_store_id: vectorStoreID }, { ...options, headers }), ["in_progress"], ["failed", "cancelled", "completed"], options);
+}
+
 // node_modules/openai/lib/Util.mjs
 var allSettledWithThrow = async (promises) => {
   const results = await Promise.allSettled(promises);
   const rejected = results.filter((result) => result.status === "rejected");
   if (rejected.length) {
-    for (const result of rejected) {
-      console.error(result.reason);
-    }
-    throw new Error(`${rejected.length} promise(s) failed - see the above errors`);
+    throw Object.defineProperty(new Error(`${rejected.length} promise(s) failed`), "rejections", {
+      configurable: true,
+      value: rejected.map(({ reason }) => reason),
+      writable: true
+    });
   }
   const values = [];
   for (const result of results) {
@@ -10829,6 +14837,30 @@ var allSettledWithThrow = async (promises) => {
   }
   return values;
 };
+
+// node_modules/openai/lib/vector-store-upload.mjs
+async function uploadAndPollVectorStoreFileBatch(resource, client, vectorStoreId, files, fileIds, options) {
+  if (files === null || files === void 0 || files.length === 0) {
+    throw new Error("No `files` provided to process. If you've already uploaded files you should use `.createAndPoll()` instead");
+  }
+  const configuredConcurrency = options?.maxConcurrency ?? 5;
+  const concurrencyLimit = Math.min(configuredConcurrency, files.length);
+  const fileIterator = files.values();
+  const allFileIds = [...fileIds];
+  async function processFiles(iterator) {
+    for (const item of iterator) {
+      const fileObj = await client.files.create({ file: item, purpose: "assistants" }, options);
+      allFileIds.push(fileObj.id);
+    }
+  }
+  const workers = [];
+  workers.length = concurrencyLimit;
+  for (let index = 0; index < workers.length; index += 1) {
+    workers[index] = processFiles(fileIterator);
+  }
+  await allSettledWithThrow(workers);
+  return await resource.createAndPoll(vectorStoreId, { file_ids: allFileIds }, options);
+}
 
 // node_modules/openai/resources/vector-stores/file-batches.mjs
 var FileBatches = class extends APIResource {
@@ -10892,40 +14924,7 @@ var FileBatches = class extends APIResource {
    * check batch.file_counts.failed_count to handle this case.
    */
   async poll(vectorStoreID, batchID, options) {
-    const headers = buildHeaders([
-      options?.headers,
-      {
-        "X-Stainless-Poll-Helper": "true",
-        "X-Stainless-Custom-Poll-Interval": options?.pollIntervalMs?.toString() ?? void 0
-      }
-    ]);
-    while (true) {
-      const { data: batch, response } = await this.retrieve(batchID, { vector_store_id: vectorStoreID }, {
-        ...options,
-        headers
-      }).withResponse();
-      switch (batch.status) {
-        case "in_progress":
-          let sleepInterval = 5e3;
-          if (options?.pollIntervalMs) {
-            sleepInterval = options.pollIntervalMs;
-          } else {
-            const headerInterval = response.headers.get("openai-poll-after-ms");
-            if (headerInterval) {
-              const headerIntervalMs = parseInt(headerInterval);
-              if (!isNaN(headerIntervalMs)) {
-                sleepInterval = headerIntervalMs;
-              }
-            }
-          }
-          await sleep(sleepInterval);
-          break;
-        case "failed":
-        case "cancelled":
-        case "completed":
-          return batch;
-      }
-    }
+    return await pollVectorStoreFileBatch(this, vectorStoreID, batchID, options);
   }
   /**
    * Uploads the given files concurrently and then creates a vector store file batch.
@@ -10933,25 +14932,7 @@ var FileBatches = class extends APIResource {
    * The concurrency limit is configurable using the `maxConcurrency` parameter.
    */
   async uploadAndPoll(vectorStoreId, { files, fileIds = [] }, options) {
-    if (files == null || files.length == 0) {
-      throw new Error(`No \`files\` provided to process. If you've already uploaded files you should use \`.createAndPoll()\` instead`);
-    }
-    const configuredConcurrency = options?.maxConcurrency ?? 5;
-    const concurrencyLimit = Math.min(configuredConcurrency, files.length);
-    const client = this._client;
-    const fileIterator = files.values();
-    const allFileIds = [...fileIds];
-    async function processFiles(iterator) {
-      for (let item of iterator) {
-        const fileObj = await client.files.create({ file: item, purpose: "assistants" }, options);
-        allFileIds.push(fileObj.id);
-      }
-    }
-    const workers = Array(concurrencyLimit).fill(fileIterator).map(processFiles);
-    await allSettledWithThrow(workers);
-    return await this.createAndPoll(vectorStoreId, {
-      file_ids: allFileIds
-    }, options);
+    return await uploadAndPollVectorStoreFileBatch(this, this._client, vectorStoreId, files, fileIds, options);
   }
 };
 
@@ -11032,39 +15013,7 @@ var Files3 = class extends APIResource {
    * file.last_error and file.status to handle these cases
    */
   async poll(vectorStoreID, fileID, options) {
-    const headers = buildHeaders([
-      options?.headers,
-      {
-        "X-Stainless-Poll-Helper": "true",
-        "X-Stainless-Custom-Poll-Interval": options?.pollIntervalMs?.toString() ?? void 0
-      }
-    ]);
-    while (true) {
-      const fileResponse = await this.retrieve(fileID, {
-        vector_store_id: vectorStoreID
-      }, { ...options, headers }).withResponse();
-      const file = fileResponse.data;
-      switch (file.status) {
-        case "in_progress":
-          let sleepInterval = 5e3;
-          if (options?.pollIntervalMs) {
-            sleepInterval = options.pollIntervalMs;
-          } else {
-            const headerInterval = fileResponse.response.headers.get("openai-poll-after-ms");
-            if (headerInterval) {
-              const headerIntervalMs = parseInt(headerInterval);
-              if (!isNaN(headerIntervalMs)) {
-                sleepInterval = headerIntervalMs;
-              }
-            }
-          }
-          await sleep(sleepInterval);
-          break;
-        case "failed":
-        case "completed":
-          return file;
-      }
-    }
+    return await pollVectorStoreFile(this, vectorStoreID, fileID, options);
   }
   /**
    * Upload a file to the `files` API and then attach it to the given vector store.
@@ -11273,6 +15222,103 @@ var Videos = class extends APIResource {
   }
 };
 
+// node_modules/openai/lib/webhook-signature.mjs
+var MAX_DIRECT_WEBHOOK_VERIFICATIONS = 32;
+var SHA256_SIGNATURE_LENGTH = 32;
+function webhookSignatureRequiresSigning(signatureHeader) {
+  return signatureHeader.split(" ", MAX_DIRECT_WEBHOOK_VERIFICATIONS + 1).length > MAX_DIRECT_WEBHOOK_VERIFICATIONS;
+}
+function* signatureCandidates(signatureHeader) {
+  let start = 0;
+  while (start <= signatureHeader.length) {
+    const separator = signatureHeader.indexOf(" ", start);
+    const candidate = signatureHeader.slice(start, separator === -1 ? void 0 : separator);
+    yield candidate.startsWith("v1,") ? candidate.slice(3) : candidate;
+    if (separator === -1) {
+      break;
+    }
+    start = separator + 1;
+  }
+}
+function decodeSignature(signature) {
+  try {
+    const signatureBytes = fromBase64(signature);
+    return signatureBytes.byteLength === SHA256_SIGNATURE_LENGTH ? signatureBytes : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function firstValidLengthSignature(signatureHeader) {
+  for (const signature of signatureCandidates(signatureHeader)) {
+    const signatureBytes = decodeSignature(signature);
+    if (signatureBytes) {
+      return signatureBytes;
+    }
+  }
+  return void 0;
+}
+function selectMatchingSignature(signatureHeader, expectedSignature, firstSignature) {
+  let matchingSignature = firstSignature;
+  for (const signature of signatureCandidates(signatureHeader)) {
+    const signatureBytes = decodeSignature(signature);
+    if (!signatureBytes) {
+      continue;
+    }
+    let difference = 0;
+    for (const [index, byte] of signatureBytes.entries()) {
+      difference |= byte ^ (expectedSignature[index] ?? 0);
+    }
+    if (difference === 0) {
+      matchingSignature = signatureBytes;
+    }
+  }
+  return matchingSignature;
+}
+async function verifyWebhookSignature(payload, signatureHeader, timestamp, webhookId, secret, tolerance) {
+  const timestampSeconds = Number.parseInt(timestamp, 10);
+  if (Number.isNaN(timestampSeconds)) {
+    throw new InvalidWebhookSignatureError("Invalid webhook timestamp format");
+  }
+  const nowSeconds = Math.floor(Date.now() / 1e3);
+  if (nowSeconds - timestampSeconds > tolerance) {
+    throw new InvalidWebhookSignatureError("Webhook timestamp is too old");
+  }
+  if (timestampSeconds > nowSeconds + tolerance) {
+    throw new InvalidWebhookSignatureError("Webhook timestamp is too new");
+  }
+  const useBoundedVerification = webhookSignatureRequiresSigning(signatureHeader);
+  const firstSignature = useBoundedVerification ? firstValidLengthSignature(signatureHeader) : void 0;
+  if (useBoundedVerification && !firstSignature) {
+    throw new InvalidWebhookSignatureError("The given webhook signature does not match the expected signature");
+  }
+  const decodedSecret = Uint8Array.from(secret.startsWith("whsec_") ? fromBase64(secret.slice("whsec_".length)) : encodeUTF8(secret));
+  const signedPayload = webhookId ? `${webhookId}.${timestamp}.${payload}` : `${timestamp}.${payload}`;
+  const signedPayloadBytes = Uint8Array.from(encodeUTF8(signedPayload));
+  const key = await crypto.subtle.importKey("raw", decodedSecret, { name: "HMAC", hash: "SHA-256" }, false, useBoundedVerification ? ["sign", "verify"] : ["verify"]);
+  if (useBoundedVerification && firstSignature) {
+    const expectedSignature = new Uint8Array(await crypto.subtle.sign("HMAC", key, signedPayloadBytes));
+    const signatureToVerify = selectMatchingSignature(signatureHeader, expectedSignature, firstSignature);
+    try {
+      if (await crypto.subtle.verify("HMAC", key, Uint8Array.from(signatureToVerify), signedPayloadBytes)) {
+        return;
+      }
+    } catch {
+    }
+    throw new InvalidWebhookSignatureError("The given webhook signature does not match the expected signature");
+  }
+  for (const signature of signatureCandidates(signatureHeader)) {
+    try {
+      const signatureBytes = Uint8Array.from(fromBase64(signature));
+      const isValid = await crypto.subtle.verify("HMAC", key, signatureBytes, signedPayloadBytes);
+      if (isValid) {
+        return;
+      }
+    } catch {
+    }
+  }
+  throw new InvalidWebhookSignatureError("The given webhook signature does not match the expected signature");
+}
+
 // node_modules/openai/resources/webhooks/webhooks.mjs
 var _Webhooks_instances;
 var _Webhooks_validateSecret;
@@ -11300,7 +15346,7 @@ var Webhooks = class extends APIResource {
    * @param tolerance - Maximum age of the webhook in seconds (default: 300 = 5 minutes)
    */
   async verifySignature(payload, headers, secret = this._client.webhookSecret, tolerance = 300) {
-    if (typeof crypto === "undefined" || typeof crypto.subtle.importKey !== "function" || typeof crypto.subtle.verify !== "function") {
+    if (typeof crypto === "undefined" || typeof crypto.subtle?.importKey !== "function" || typeof crypto.subtle.verify !== "function") {
       throw new Error("Webhook signature verification is only supported when the `crypto` global is defined");
     }
     __classPrivateFieldGet(this, _Webhooks_instances, "m", _Webhooks_validateSecret).call(this, secret);
@@ -11308,34 +15354,10 @@ var Webhooks = class extends APIResource {
     const signatureHeader = __classPrivateFieldGet(this, _Webhooks_instances, "m", _Webhooks_getRequiredHeader).call(this, headersObj, "webhook-signature");
     const timestamp = __classPrivateFieldGet(this, _Webhooks_instances, "m", _Webhooks_getRequiredHeader).call(this, headersObj, "webhook-timestamp");
     const webhookId = __classPrivateFieldGet(this, _Webhooks_instances, "m", _Webhooks_getRequiredHeader).call(this, headersObj, "webhook-id");
-    const timestampSeconds = parseInt(timestamp, 10);
-    if (isNaN(timestampSeconds)) {
-      throw new InvalidWebhookSignatureError("Invalid webhook timestamp format");
+    if (webhookSignatureRequiresSigning(signatureHeader) && typeof crypto.subtle.sign !== "function") {
+      throw new Error("Webhook signature verification is only supported when the `crypto` global is defined");
     }
-    const nowSeconds = Math.floor(Date.now() / 1e3);
-    if (nowSeconds - timestampSeconds > tolerance) {
-      throw new InvalidWebhookSignatureError("Webhook timestamp is too old");
-    }
-    if (timestampSeconds > nowSeconds + tolerance) {
-      throw new InvalidWebhookSignatureError("Webhook timestamp is too new");
-    }
-    const signatures = signatureHeader.split(" ").map((part) => part.startsWith("v1,") ? part.substring(3) : part);
-    const decodedSecret = Uint8Array.from(secret.startsWith("whsec_") ? fromBase64(secret.slice("whsec_".length)) : encodeUTF8(secret));
-    const signedPayload = webhookId ? `${webhookId}.${timestamp}.${payload}` : `${timestamp}.${payload}`;
-    const signedPayloadBytes = Uint8Array.from(encodeUTF8(signedPayload));
-    const key = await crypto.subtle.importKey("raw", decodedSecret, { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
-    for (const signature of signatures) {
-      try {
-        const signatureBytes = Uint8Array.from(fromBase64(signature));
-        const isValid = await crypto.subtle.verify("HMAC", key, signatureBytes, signedPayloadBytes);
-        if (isValid) {
-          return;
-        }
-      } catch {
-        continue;
-      }
-    }
-    throw new InvalidWebhookSignatureError("The given webhook signature does not match the expected signature");
+    return await verifyWebhookSignature(payload, signatureHeader, timestamp, webhookId, secret, tolerance);
   }
 };
 _Webhooks_instances = /* @__PURE__ */ new WeakSet(), _Webhooks_validateSecret = function _Webhooks_validateSecret2(secret) {
@@ -11371,8 +15393,12 @@ function configureProvider(provider) {
 
 // node_modules/openai/client.mjs
 var _OpenAI_instances;
-var _a2;
+var _a3;
 var _OpenAI_encoder;
+var _OpenAI_x509Authentication;
+var _OpenAI_x509Credential;
+var _OpenAI_x509Fetch;
+var _OpenAI_explicitDataResidency;
 var _OpenAI_responseAttempts;
 var _OpenAI_baseURLOverridden;
 function isRunningInBrowserOrBrowserWorker() {
@@ -11382,6 +15408,7 @@ function isRunningInBrowserOrBrowserWorker() {
   return typeof scope.WorkerGlobalScope === "function" && scope instanceof scope.WorkerGlobalScope && typeof scope.WorkerNavigator === "function" && scope.navigator instanceof scope.WorkerNavigator && typeof scope.navigator?.userAgent === "string" && scope.navigator.userAgent !== "Cloudflare-Workers" && scope.process?.versions?.node === void 0 && scope.Deno === void 0 && scope.Bun === void 0 && scope.EdgeRuntime === void 0 && scope.WebSocketPair === void 0;
 }
 var WORKLOAD_IDENTITY_API_KEY_PLACEHOLDER = "workload-identity-auth";
+var inheritedDataResidencySelection = /* @__PURE__ */ Symbol("inheritedDataResidencySelection");
 var OpenAI = class {
   /**
    * API Client for interfacing with the OpenAI API.
@@ -11404,6 +15431,10 @@ var OpenAI = class {
   constructor(clientOptions = {}) {
     _OpenAI_instances.add(this);
     _OpenAI_encoder.set(this, void 0);
+    _OpenAI_x509Authentication.set(this, void 0);
+    _OpenAI_x509Credential.set(this, void 0);
+    _OpenAI_x509Fetch.set(this, void 0);
+    _OpenAI_explicitDataResidency.set(this, false);
     _OpenAI_responseAttempts.set(this, /* @__PURE__ */ new WeakMap());
     this.completions = new Completions2(this);
     this.chat = new Chat(this);
@@ -11417,6 +15448,7 @@ var OpenAI = class {
     this.fineTuning = new FineTuning(this);
     this.graders = new Graders2(this);
     this.vectorStores = new VectorStores(this);
+    this.safety = new Safety(this);
     this.webhooks = new Webhooks(this);
     this.beta = new Beta(this);
     this.batches = new Batches(this);
@@ -11429,14 +15461,20 @@ var OpenAI = class {
     this.containers = new Containers(this);
     this.skills = new Skills(this);
     this.videos = new Videos(this);
+    const { credential, options: normalizedOptions } = normalizeX509CredentialOptions(clientOptions);
+    clientOptions = normalizedOptions;
+    const residencyBaseURL = resolveDataResidency(clientOptions);
     const provider = clientOptions.provider;
+    const { baseURL = provider ? null : readEnv("OPENAI_BASE_URL"), dataResidency: _dataResidency, [inheritedDataResidencySelection]: inheritedResidencySelection = false, apiKey = provider ? null : readEnv("OPENAI_API_KEY") ?? null, adminAPIKey = provider ? null : readEnv("OPENAI_ADMIN_KEY") ?? null, organization = provider ? null : readEnv("OPENAI_ORG_ID") ?? null, project = provider ? null : readEnv("OPENAI_PROJECT_ID") ?? null, webhookSecret = readEnv("OPENAI_WEBHOOK_SECRET") ?? null, workloadIdentity, x509Transport, credential: _credential, ...opts } = clientOptions;
     if (provider) {
-      const conflictingOptions = ["apiKey", "adminAPIKey", "workloadIdentity", "baseURL"].filter((key) => clientOptions[key] != null);
+      const conflictingOptions = ["apiKey", "adminAPIKey", "workloadIdentity", "x509Transport", "baseURL", "dataResidency"].filter((key) => (key === "workloadIdentity" ? workloadIdentity : clientOptions[key]) != null);
       if (conflictingOptions.length) {
         throw new OpenAIError(`The \`provider\` option cannot be used with ${conflictingOptions.map((key) => `\`${key}\``).join(", ")}. Configure authentication and the base URL through the provider instead.`);
       }
     }
-    const { baseURL = provider ? null : readEnv("OPENAI_BASE_URL"), apiKey = provider ? null : readEnv("OPENAI_API_KEY") ?? null, adminAPIKey = provider ? null : readEnv("OPENAI_ADMIN_KEY") ?? null, organization = provider ? null : readEnv("OPENAI_ORG_ID") ?? null, project = provider ? null : readEnv("OPENAI_PROJECT_ID") ?? null, webhookSecret = readEnv("OPENAI_WEBHOOK_SECRET") ?? null, workloadIdentity, ...opts } = clientOptions;
+    const identity = isX509WorkloadIdentity(workloadIdentity) ? { x509: workloadIdentity, legacy: void 0 } : { x509: void 0, legacy: workloadIdentity };
+    const x509Identity = identity.x509;
+    const usesX509Identity = x509Identity !== void 0;
     const providerRuntime = provider ? configureProvider(provider) : void 0;
     const options = {
       apiKey,
@@ -11445,10 +15483,27 @@ var OpenAI = class {
       project,
       webhookSecret,
       workloadIdentity,
+      x509Transport,
       provider,
       ...opts,
-      baseURL: providerRuntime?.baseURL ?? (baseURL || `https://api.openai.com/v1`)
+      baseURL: providerRuntime?.baseURL ?? residencyBaseURL ?? (baseURL || (usesX509Identity ? X509_API_BASE_URL : `https://api.openai.com/v1`))
     };
+    if (x509Transport && !usesX509Identity) {
+      throw new OpenAIError("An X.509 transport requires an X.509 workload identity.");
+    }
+    if (usesX509Identity) {
+      if (residencyBaseURL !== void 0 || inheritedResidencySelection) {
+        throw new OpenAIError("X.509 workload identity does not support data residency selection.");
+      }
+      if (clientOptions.fetch !== void 0) {
+        throw new OpenAIError("X.509 workload identity does not support a custom fetch implementation.");
+      }
+      assertX509APIOrigin(options.baseURL);
+      assertX509RequestOptions(options.fetchOptions);
+      if (this.fetchWithAuth !== _a3.prototype.fetchWithAuth || this.fetchWithTimeout !== _a3.prototype.fetchWithTimeout) {
+        throw new OpenAIError("X.509 workload identity does not support overridden fetch dispatch hooks.");
+      }
+    }
     if (apiKey && workloadIdentity) {
       throw new OpenAIError("The `apiKey` and `workloadIdentity` options are mutually exclusive");
     }
@@ -11459,7 +15514,8 @@ var OpenAI = class {
       throw new OpenAIError("It looks like you're running in a browser-like environment.\n\nThis is disabled by default, as it risks exposing your secret API credentials to attackers.\nIf you understand the risks and have appropriate mitigations in place,\nyou can set the `dangerouslyAllowBrowser` option to `true`, e.g.,\n\nnew OpenAI({ apiKey, dangerouslyAllowBrowser: true });\n\nhttps://help.openai.com/en/articles/5112595-best-practices-for-api-key-safety\n");
     }
     this.baseURL = options.baseURL;
-    this.timeout = options.timeout ?? _a2.DEFAULT_TIMEOUT;
+    __classPrivateFieldSet(this, _OpenAI_explicitDataResidency, residencyBaseURL !== void 0 || inheritedResidencySelection, "f");
+    this.timeout = options.timeout ?? _a3.DEFAULT_TIMEOUT;
     this.logger = options.logger ?? console;
     const defaultLogLevel = "warn";
     this.logLevel = defaultLogLevel;
@@ -11468,7 +15524,7 @@ var OpenAI = class {
     this.maxRetries = options.maxRetries ?? 2;
     this.fetch = options.fetch ?? getDefaultFetch();
     __classPrivateFieldSet(this, _OpenAI_encoder, FallbackEncoder, "f");
-    const customHeadersEnv = provider ? void 0 : readEnv("OPENAI_CUSTOM_HEADERS");
+    const customHeadersEnv = provider || credential ? void 0 : readEnv("OPENAI_CUSTOM_HEADERS");
     if (customHeadersEnv) {
       const parsed = {};
       for (const line of customHeadersEnv.split("\n")) {
@@ -11481,8 +15537,16 @@ var OpenAI = class {
     }
     this._options = options;
     this._provider = providerRuntime;
-    if (workloadIdentity) {
-      this._workloadIdentityAuth = new WorkloadIdentityAuth(workloadIdentity, this.fetch);
+    if (x509Identity) {
+      const authentication = new X509WorkloadIdentityAuth(x509Identity, x509Transport, organization, project);
+      this._workloadIdentityAuth = authentication;
+      __classPrivateFieldSet(this, _OpenAI_x509Authentication, authentication, "f");
+      __classPrivateFieldSet(this, _OpenAI_x509Credential, credential, "f");
+      __classPrivateFieldSet(this, _OpenAI_x509Fetch, authentication.fetch(), "f");
+      this.fetch = __classPrivateFieldGet(this, _OpenAI_x509Fetch, "f");
+      markApprovedX509Client2(this);
+    } else if (identity.legacy) {
+      this._workloadIdentityAuth = new WorkloadIdentityAuth(identity.legacy, this.fetch);
     }
     this.apiKey = typeof apiKey === "string" ? apiKey : null;
     this.adminAPIKey = adminAPIKey;
@@ -11494,8 +15558,8 @@ var OpenAI = class {
    * Create a new client instance re-using the same options given to the current client with optional overriding.
    */
   withOptions(options) {
-    const inheritedProvider = this._options.provider;
-    const provider = options.provider ?? inheritedProvider;
+    const residencyBaseURL = resolveDataResidency(options);
+    const x509Authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f");
     const inheritedOptions = {
       ...this._options,
       baseURL: this.baseURL,
@@ -11503,31 +15567,45 @@ var OpenAI = class {
       timeout: this.timeout,
       logger: this.logger,
       logLevel: this.logLevel,
-      fetch: this.fetch,
+      fetch: __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f") ? void 0 : this.fetch,
       fetchOptions: this.fetchOptions,
       apiKey: this._options.apiKey,
       adminAPIKey: this.adminAPIKey,
-      workloadIdentity: this._options.workloadIdentity,
+      workloadIdentity: x509Authentication?.identitySnapshot() ?? this._options.workloadIdentity,
+      x509Transport: this._options.x509Transport,
       organization: this.organization,
       project: this.project,
       webhookSecret: this.webhookSecret
     };
-    if (provider) {
-      delete inheritedOptions.apiKey;
-      delete inheritedOptions.adminAPIKey;
-      delete inheritedOptions.workloadIdentity;
+    const { credential, provider } = prepareX509ClientClone(inheritedOptions, options, __classPrivateFieldGet(this, _OpenAI_x509Credential, "f"), x509Authentication !== void 0);
+    if (residencyBaseURL !== void 0) {
       delete inheritedOptions.baseURL;
-      if (provider !== inheritedProvider) {
-        delete inheritedOptions.organization;
-        delete inheritedOptions.project;
-        delete inheritedOptions.defaultHeaders;
-      }
     }
-    const client = new this.constructor({
+    const clientOptions = {
       ...inheritedOptions,
       ...options,
-      provider
-    });
+      credential,
+      provider,
+      [inheritedDataResidencySelection]: __classPrivateFieldGet(this, _OpenAI_explicitDataResidency, "f") && residencyBaseURL === void 0 && !hasOwn(options, "baseURL") && options.credential === void 0 && !provider
+    };
+    const client = new this.constructor(clientOptions);
+    if (provider && new URL(client.baseURL).origin !== new URL(this.baseURL).origin) {
+      Object.assign(client._options, {
+        defaultHeaders: options.defaultHeaders,
+        defaultQuery: options.defaultQuery,
+        fetchOptions: options.fetchOptions,
+        fetch: options.fetch
+      });
+      client.fetchOptions = options.fetchOptions;
+      client.fetch = options.fetch ?? getDefaultFetch();
+      client.organization = options.organization ?? null;
+      client.project = options.project ?? null;
+    }
+    if (__classPrivateFieldGet(this, _OpenAI_x509Authentication, "f") && __classPrivateFieldGet(client, _OpenAI_x509Authentication, "f") && this.baseURL === client.baseURL && __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f").matches(__classPrivateFieldGet(client, _OpenAI_x509Authentication, "f"))) {
+      client._workloadIdentityAuth = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f");
+      __classPrivateFieldSet(client, _OpenAI_x509Authentication, __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f"), "f");
+      __classPrivateFieldSet(client, _OpenAI_x509Fetch, __classPrivateFieldGet(this, _OpenAI_x509Fetch, "f"), "f");
+    }
     return client;
   }
   defaultQuery() {
@@ -11552,14 +15630,35 @@ var OpenAI = class {
     bearerAuth: true,
     adminAPIKeyAuth: true
   }) {
+    const authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f") ?? this._workloadIdentityAuth;
+    if (authentication instanceof X509WorkloadIdentityAuth && schemes.adminAPIKeyAuth && this.adminAPIKey !== null) {
+      return await this.adminAPIKeyAuth(opts);
+    }
     return buildHeaders([
       schemes.bearerAuth ? await this.bearerAuth(opts) : null,
       schemes.adminAPIKeyAuth ? await this.adminAPIKeyAuth(opts) : null
     ]);
   }
   async bearerAuth(opts) {
-    if (this._workloadIdentityAuth) {
-      return buildHeaders([{ Authorization: `Bearer ${await this._workloadIdentityAuth.getToken()}` }]);
+    const authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f") ?? this._workloadIdentityAuth;
+    if (authentication) {
+      if (authentication instanceof X509WorkloadIdentityAuth) {
+        if (authentication === this._workloadIdentityAuth && (this.fetchWithAuth !== _a3.prototype.fetchWithAuth || this.fetchWithTimeout !== _a3.prototype.fetchWithTimeout)) {
+          throw new OpenAIError("X.509 workload identity does not support overridden fetch dispatch hooks.");
+        }
+        const snapshots = authentication.headerSnapshots();
+        if (!X509WorkloadIdentityAuth.shouldAuthenticate(opts, snapshots.defaultHeaders, snapshots.requestHeaders)) {
+          return void 0;
+        }
+      }
+      const token = authentication instanceof X509WorkloadIdentityAuth ? await authentication.getToken(opts, {
+        apiURL: authentication.requestAPIURL(),
+        ...authentication.headerSnapshots(),
+        ...authentication.requestSnapshot(),
+        signal: authentication.effectiveSignal(),
+        ...authentication.tenantSnapshot()
+      }) : await authentication.getToken();
+      return buildHeaders([{ Authorization: `Bearer ${token}` }]);
     }
     if (this.apiKey == null) {
       return void 0;
@@ -11662,10 +15761,15 @@ var OpenAI = class {
     }));
   }
   request(options, remainingRetries = null) {
-    return this.responsePromise(this.makeRequest(options, remainingRetries, void 0));
+    const authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f") ?? this._workloadIdentityAuth;
+    const request = authentication instanceof X509WorkloadIdentityAuth ? Promise.resolve(options).then((resolved) => authentication.runRequest(() => this.makeRequest(resolved, remainingRetries, void 0), this)) : this.makeRequest(options, remainingRetries, void 0);
+    return this.responsePromise(request);
   }
   responsePromise(request, parse = (client, props) => this.parseResponseWithTimeout(client, props)) {
-    const promise = new APIPromise(this, request, parse);
+    const promise = new APIPromise(this, request, (client, props) => {
+      const resume = __classPrivateFieldGet(this, _OpenAI_responseAttempts, "f").get(props.controller)?.continueRequest;
+      return resume ? resume(() => parse(client, props)) : parse(client, props);
+    });
     promise.withResponse = async () => {
       const data = await promise;
       const { response } = await request;
@@ -11681,14 +15785,24 @@ var OpenAI = class {
     while (true) {
       const attempt = __classPrivateFieldGet(this, _OpenAI_responseAttempts, "f").get(props.controller);
       const timeout = attempt?.timeout ?? props.options.timeout ?? this.timeout;
-      const remaining = Math.max(0, props.startTime + timeout - Date.now());
-      const callerSignal = props.options.signal;
+      const x509Authentication = attempt?.authentication;
+      const callerSignal = x509Authentication ? props.controller.signal : props.options.signal;
+      const abortError = () => x509Authentication && callerSignal ? this._makeUserAbortError(callerSignal) : new APIUserAbortError();
+      let remaining;
+      try {
+        remaining = x509Authentication?.remainingTimeout(props.options, timeout) ?? Math.max(0, props.startTime + timeout - Date.now());
+      } catch (error) {
+        const cancellation = callerSignal?.aborted ? abortError() : void 0;
+        props.controller.abort();
+        void CancelReadableStream(props.response.body).catch(() => void 0);
+        throw cancellation ?? error;
+      }
       let timer;
       let abortListener;
       let timedOut = false;
       try {
-        if (callerSignal?.aborted && props.options.__metadata?.["helperMethod"] !== "runTools") {
-          throw new APIUserAbortError();
+        if (callerSignal?.aborted && attempt?.helperMethod !== "runTools") {
+          throw abortError();
         }
         const timeoutPromise = new Promise((_, reject) => {
           timer = setTimeout(() => {
@@ -11697,20 +15811,31 @@ var OpenAI = class {
             reject(new APIConnectionTimeoutError());
           }, remaining);
           if (callerSignal) {
-            abortListener = () => reject(new APIUserAbortError());
+            abortListener = () => {
+              if (!timedOut)
+                reject(abortError());
+            };
             callerSignal.addEventListener("abort", abortListener, { once: true });
           }
         });
         return await Promise.race([defaultParseResponse(client, props), timeoutPromise]);
       } catch (error) {
-        if (callerSignal?.aborted) {
-          throw new APIUserAbortError();
+        if (callerSignal?.aborted && !timedOut) {
+          throw abortError();
         }
         if (!timedOut) {
+          if (x509Authentication && error instanceof SyntaxError) {
+            throw new SyntaxError("X.509 workload identity API response contains invalid JSON.");
+          }
+          if (x509Authentication && !(error instanceof OpenAIError)) {
+            throw new APIConnectionError({
+              message: "X.509 workload identity API response body could not be read."
+            });
+          }
           throw error;
         }
         const retriesRemaining = attempt?.retriesRemaining ?? 0;
-        if (!retriesRemaining || props.options.__metadata?.["hasStreamingBody"] || globalThis.ReadableStream && props.options.body instanceof globalThis.ReadableStream || typeof props.options.body === "object" && props.options.body !== null && (Symbol.asyncIterator in props.options.body || Symbol.iterator in props.options.body && "next" in props.options.body && typeof props.options.body.next === "function")) {
+        if (!retriesRemaining || attempt?.hasStreamingBody || props.options.__metadata?.["hasStreamingBody"] || globalThis.ReadableStream && props.options.body instanceof globalThis.ReadableStream || typeof props.options.body === "object" && props.options.body !== null && (Symbol.asyncIterator in props.options.body || Symbol.iterator in props.options.body && "next" in props.options.body && typeof props.options.body.next === "function")) {
           throw new APIConnectionTimeoutError();
         }
         if (timer !== void 0)
@@ -11728,49 +15853,143 @@ var OpenAI = class {
       }
     }
   }
+  /** Keeps terminal X.509 error-body consumption inside the original logical request deadline. */
+  async readX509ResponseError(response, options, timeout, controller, authentication) {
+    const deadline = new AbortController();
+    const callerSignal = controller.signal;
+    let timedOut = false;
+    const cancel = () => deadline.abort(callerSignal.reason);
+    callerSignal.addEventListener("abort", cancel, { once: true });
+    if (callerSignal.aborted) {
+      cancel();
+    }
+    try {
+      const remaining = authentication.remainingTimeout(options, timeout);
+      const expiration = authentication.waitForRetry(remaining, deadline.signal).then(() => {
+        throw new APIConnectionTimeoutError();
+      });
+      const body = await Promise.race([
+        response.text().catch(() => "X.509 workload identity API response body could not be read."),
+        expiration
+      ]);
+      if (callerSignal.aborted) {
+        throw this._makeUserAbortError(callerSignal);
+      }
+      return body;
+    } catch (error) {
+      if (error instanceof APIConnectionTimeoutError) {
+        timedOut = !callerSignal.aborted;
+        controller.abort();
+        void CancelReadableStream(response.body).catch(() => void 0);
+      }
+      if (callerSignal.aborted && !timedOut) {
+        throw this._makeUserAbortError(callerSignal);
+      }
+      throw error;
+    } finally {
+      callerSignal.removeEventListener("abort", cancel);
+      deadline.abort();
+    }
+  }
   async makeRequest(optionsInput, retriesRemaining, retryOfRequestLogID) {
     const options = await optionsInput;
     const maxRetries = options.maxRetries ?? this.maxRetries;
     if (retriesRemaining == null) {
       retriesRemaining = maxRetries;
     }
+    const x509Authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f");
+    x509Authentication?.beginRequestPreparation();
     await this.prepareOptions(options);
-    const { req, url, timeout } = await this.buildRequest(options, {
-      retryCount: maxRetries - retriesRemaining
-    });
-    const hasStreamingBody = options.__metadata?.["hasStreamingBody"] === true;
-    await this.prepareRequest(req, { url, options });
-    await this._provider?.prepareRequest?.(req, { url, options });
+    x509Authentication?.beginRequestPlanning();
+    let built;
+    try {
+      const candidate = await this.buildRequest(options, {
+        retryCount: maxRetries - retriesRemaining
+      });
+      built = { req: candidate.req, url: candidate.url, timeout: candidate.timeout };
+      if (x509Authentication) {
+        validatePositiveInteger("timeout", built.timeout);
+        x509Authentication.authorizePlannedRequest(built.url, built.req, built.timeout);
+        if (X509WorkloadIdentityAuth.isStreamingRequestBody(built.req.body)) {
+          options.__metadata = { ...options.__metadata, hasStreamingBody: true };
+        }
+        await this.prepareRequest(built.req, { url: built.url, options });
+        await this._provider?.prepareRequest?.(built.req, { url: built.url, options });
+        x509Authentication.beginRequestPlanning();
+        x509Authentication.authorizePlannedRequest(built.url, built.req, built.timeout, true);
+        if (X509WorkloadIdentityAuth.isStreamingRequestBody(built.req.body)) {
+          options.__metadata = { ...options.__metadata, hasStreamingBody: true };
+        }
+        const callerSignal2 = x509Authentication.requestSnapshot().signal;
+        if (callerSignal2?.aborted || built.req.signal?.aborted) {
+          throw this._makeUserAbortError(callerSignal2?.aborted ? callerSignal2 : built.req.signal);
+        }
+        x509Authentication.setEffectiveSignal(built.req.signal || callerSignal2 ? createRequestController(built.req.signal ?? callerSignal2, callerSignal2).signal : void 0);
+        x509Authentication.beginRequestNetwork();
+        const security2 = options.__security ?? { bearerAuth: true };
+        const authenticationHeaders = await this.authHeaders(options, security2);
+        const suppliedHeaders = x509Authentication.headerSnapshots();
+        const supplied = buildHeaders([suppliedHeaders.defaultHeaders, suppliedHeaders.requestHeaders]);
+        for (const [name, value] of authenticationHeaders?.values ?? []) {
+          if (!supplied.nulls.has(name) && !built.req.headers.has(name)) {
+            built.req.headers.set(name, value);
+          }
+        }
+        this.validateHeaders(buildHeaders([supplied, built.req.headers]), security2);
+      }
+    } catch (error) {
+      x509Authentication?.retireRequestBody();
+      if (x509Authentication && retriesRemaining && !options.__metadata?.["hasStreamingBody"] && X509WorkloadIdentityAuth.isRetryableFailure(error)) {
+        return await this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? "x509-token-exchange", X509WorkloadIdentityAuth.retryHeaders(error));
+      }
+      throw error;
+    }
+    const { req, url } = built;
+    const timeout = x509Authentication ? Math.min(built.timeout, x509Authentication.requestSnapshot().timeout) : built.timeout;
+    x509Authentication?.bindRequest(options, req, this.adminAPIKey);
+    let hasStreamingBody = options.__metadata?.["hasStreamingBody"] === true;
+    if (!x509Authentication) {
+      await this.prepareRequest(req, { url, options });
+      await this._provider?.prepareRequest?.(req, { url, options });
+    }
+    x509Authentication?.adoptRequestHeaders(req);
+    if (x509Authentication && X509WorkloadIdentityAuth.isStreamingRequestBody(req.body)) {
+      hasStreamingBody = true;
+    }
     const requestLogID = "log_" + (Math.random() * (1 << 24) | 0).toString(16).padStart(6, "0");
     const retryLogStr = retryOfRequestLogID === void 0 ? "" : `, retryOf: ${retryOfRequestLogID}`;
-    const startTime = Date.now();
+    const startTime = x509Authentication?.requestStartedAt(options) ?? Date.now();
     loggerFor(this).debug(`[${requestLogID}] sending request`, formatRequestDetails({
       retryOfRequestLogID,
       method: options.method,
       url,
-      options,
+      options: x509Authentication ? { body: req.body, ...x509Authentication.requestSnapshot() } : options,
       headers: req.headers
     }));
-    if (options.signal?.aborted || req.signal?.aborted) {
-      throw this._makeUserAbortError(options.signal?.aborted ? options.signal : req.signal);
+    const callerSignal = x509Authentication ? x509Authentication.requestSnapshot().signal : options.signal;
+    if (callerSignal?.aborted || req.signal?.aborted) {
+      throw this._makeUserAbortError(callerSignal?.aborted ? callerSignal : req.signal);
     }
     const security = options.__security ?? { bearerAuth: true };
-    const controller = this.fetchWithTimeout === _a2.prototype.fetchWithTimeout ? createRequestController(req.signal) : new AbortController();
-    const response = await this.fetchWithAuth(url, req, timeout, controller, security).catch(castToError);
+    const controller = x509Authentication || this.fetchWithTimeout === _a3.prototype.fetchWithTimeout ? createRequestController(req.signal ?? (x509Authentication ? callerSignal : void 0), x509Authentication ? callerSignal : void 0) : new AbortController();
+    const remainingTimeout = x509Authentication?.remainingTimeout(options, timeout) ?? timeout;
+    const fetchWithAuth = x509Authentication ? _a3.prototype.fetchWithAuth : this.fetchWithAuth;
+    x509Authentication?.releaseRequestBody(req.body);
+    const response = await fetchWithAuth.call(this, url, req, remainingTimeout, controller, security).catch(castToError);
     const headersTime = Date.now();
     if (response instanceof globalThis.Error) {
       const retryMessage = `retrying, ${retriesRemaining} attempts remaining`;
-      if (options.signal?.aborted || req.signal?.aborted) {
-        throw this._makeUserAbortError(options.signal?.aborted ? options.signal : req.signal);
+      if (callerSignal?.aborted || req.signal?.aborted) {
+        throw this._makeUserAbortError(callerSignal?.aborted ? callerSignal : req.signal);
       }
       const isTimeout = isAbortError(response) || /timed? ?out/i.test(String(response) + ("cause" in response ? String(response.cause) : ""));
-      if (retriesRemaining && !hasStreamingBody) {
+      if (retriesRemaining && !hasStreamingBody && (!x509Authentication || isTransientX509ConnectionError2(response))) {
         loggerFor(this).info(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} - ${retryMessage}`);
         loggerFor(this).debug(`[${requestLogID}] connection ${isTimeout ? "timed out" : "failed"} (${retryMessage})`, formatRequestDetails({
           retryOfRequestLogID,
           url,
           durationMs: headersTime - startTime,
-          message: response.message
+          message: x509Authentication ? "X.509 workload identity API connection failed." : response.message
         }));
         return this.retryRequest(options, retriesRemaining, retryOfRequestLogID ?? requestLogID);
       }
@@ -11780,7 +15999,7 @@ var OpenAI = class {
         retryOfRequestLogID,
         url,
         durationMs: headersTime - startTime,
-        message: response.message
+        message: x509Authentication ? "X.509 workload identity API connection failed." : response.message
       }));
       if (response instanceof OAuthError || response instanceof SubjectTokenProviderError) {
         throw response;
@@ -11791,7 +16010,13 @@ var OpenAI = class {
         const timeoutError = isHeadersTimeout ? new APIConnectionTimeoutError({
           message: "Request timed out. Node.js fetch timed out waiting for response headers; configure a matching undici fetch and fetchOptions.dispatcher with an Agent whose headersTimeout is at least the SDK timeout."
         }) : new APIConnectionTimeoutError();
+        if (x509Authentication) {
+          throw new APIConnectionTimeoutError();
+        }
         throw Object.assign(timeoutError, { cause: response });
+      }
+      if (x509Authentication) {
+        throw new APIConnectionError({ message: "X.509 workload identity API connection failed." });
       }
       throw new APIConnectionError({
         message: getConnectionErrorMessage(response),
@@ -11799,23 +16024,36 @@ var OpenAI = class {
       });
     }
     const specialHeaders = [...response.headers.entries()].filter(([name]) => name === "x-request-id").map(([name, value]) => ", " + name + ": " + JSON.stringify(value)).join("");
-    const responseInfo = `[${requestLogID}${retryLogStr}${specialHeaders}] ${req.method} ${url} ${response.ok ? "succeeded" : "failed"} with status ${response.status} in ${headersTime - startTime}ms`;
+    const responseInfo = `[${requestLogID}${retryLogStr}${specialHeaders}] ${req.method} ${redactURL(url)} ${response.ok ? "succeeded" : "failed"} with status ${response.status} in ${headersTime - startTime}ms`;
     if (!response.ok) {
-      if (response.status === 401 && this._workloadIdentityAuth && security.bearerAuth && !options.__metadata?.["hasStreamingBody"] && !options.__metadata?.["workloadIdentityTokenRefreshed"]) {
-        await CancelReadableStream(response.body);
-        this._workloadIdentityAuth.invalidateToken();
-        return this.makeRequest({
+      const rejectedX509Credential = response.status === 401 && x509Authentication && security.bearerAuth && x509Authentication.usedWorkloadToken(options);
+      if (rejectedX509Credential) {
+        x509Authentication.invalidateToken();
+      }
+      if (response.status === 401 && (x509Authentication || this._workloadIdentityAuth) && security.bearerAuth && (!x509Authentication || x509Authentication.usedWorkloadToken(options)) && (!x509Authentication || retriesRemaining > 0) && !hasStreamingBody && !options.__metadata?.["workloadIdentityTokenRefreshed"]) {
+        if (x509Authentication) {
+          void CancelReadableStream(response.body).catch(() => void 0);
+        } else {
+          await CancelReadableStream(response.body);
+          this._workloadIdentityAuth?.invalidateToken();
+        }
+        const replayOptions = {
           ...options,
           __metadata: {
             ...options.__metadata,
             workloadIdentityTokenRefreshed: true
           }
-        }, retriesRemaining, retryOfRequestLogID ?? requestLogID);
+        };
+        return this.makeRequest(replayOptions, x509Authentication ? retriesRemaining - 1 : retriesRemaining, retryOfRequestLogID ?? requestLogID);
       }
-      const shouldRetry = await this.shouldRetry(response);
+      const shouldRetry = rejectedX509Credential && options.__metadata?.["workloadIdentityTokenRefreshed"] ? false : await this.shouldRetry(response);
       if (retriesRemaining && shouldRetry && !hasStreamingBody) {
         const retryMessage2 = `retrying, ${retriesRemaining} attempts remaining`;
-        await CancelReadableStream(response.body);
+        if (x509Authentication) {
+          void CancelReadableStream(response.body).catch(() => void 0);
+        } else {
+          await CancelReadableStream(response.body);
+        }
         loggerFor(this).info(`${responseInfo} - ${retryMessage2}`);
         loggerFor(this).debug(`[${requestLogID}] response error (${retryMessage2})`, formatRequestDetails({
           retryOfRequestLogID,
@@ -11828,7 +16066,7 @@ var OpenAI = class {
       }
       const retryMessage = shouldRetry ? hasStreamingBody ? `error; streaming body cannot be retried` : `error; no more retries left` : `error; not retryable`;
       loggerFor(this).info(`${responseInfo} - ${retryMessage}`);
-      const errText = await response.text().catch((err2) => castToError(err2).message);
+      const errText = x509Authentication ? await this.readX509ResponseError(response, options, timeout, controller, x509Authentication) : await response.text().catch((err2) => castToError(err2).message);
       const errJSON = safeJSON(errText);
       const errMessage = errJSON ? void 0 : errText;
       loggerFor(this).debug(`[${requestLogID}] response error (${retryMessage})`, formatRequestDetails({
@@ -11850,14 +16088,24 @@ var OpenAI = class {
       headers: response.headers,
       durationMs: headersTime - startTime
     }));
-    __classPrivateFieldGet(this, _OpenAI_responseAttempts, "f").set(controller, { timeout, retriesRemaining });
+    const continueRequest = x509Authentication?.continuation();
+    x509Authentication?.releaseRequestCredentials();
+    __classPrivateFieldGet(this, _OpenAI_responseAttempts, "f").set(controller, {
+      timeout,
+      retriesRemaining,
+      hasStreamingBody,
+      ...x509Authentication ? { authentication: x509Authentication } : {},
+      helperMethod: options.__metadata?.["helperMethod"],
+      ...continueRequest ? { continueRequest } : {}
+    });
     return { response, options, controller, requestLogID, retryOfRequestLogID, startTime };
   }
   getAPIList(path2, Page2, opts) {
     return this.requestAPIList(Page2, opts && "then" in opts ? opts.then((opts2) => ({ method: "get", path: path2, ...opts2 })) : { method: "get", path: path2, ...opts });
   }
   requestAPIList(Page2, options) {
-    const request = this.makeRequest(options, null, void 0);
+    const authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f") ?? this._workloadIdentityAuth;
+    const request = authentication instanceof X509WorkloadIdentityAuth ? Promise.resolve(options).then((resolved) => authentication.runRequest(() => this.makeRequest(resolved, null, void 0), this)) : this.makeRequest(options, null, void 0);
     const page = new PagePromise(this, request, Page2);
     const guarded = this.responsePromise(request, async (client, props) => {
       const body = await this.parseResponseWithTimeout(client, props);
@@ -11874,7 +16122,7 @@ var OpenAI = class {
     bearerAuth: true,
     adminAPIKeyAuth: true
   }) {
-    if (this._workloadIdentityAuth && schemes.bearerAuth) {
+    if (this._workloadIdentityAuth && !__classPrivateFieldGet(this, _OpenAI_x509Fetch, "f") && schemes.bearerAuth) {
       const headers = init.headers;
       const authHeader = headers.get("Authorization");
       if (!authHeader || authHeader === `Bearer ${WORKLOAD_IDENTITY_API_KEY_PLACEHOLDER}`) {
@@ -11882,7 +16130,8 @@ var OpenAI = class {
         headers.set("Authorization", `Bearer ${token}`);
       }
     }
-    const response = await this.fetchWithTimeout(url, init, timeout, controller);
+    const fetchWithTimeout = __classPrivateFieldGet(this, _OpenAI_x509Fetch, "f") ? _a3.prototype.fetchWithTimeout : this.fetchWithTimeout;
+    const response = await fetchWithTimeout.call(this, url, init, timeout, controller);
     return response;
   }
   async fetchWithTimeout(url, init, ms, controller) {
@@ -11903,7 +16152,7 @@ var OpenAI = class {
       fetchOptions.method = method.toUpperCase();
     }
     try {
-      return await this.fetch.call(void 0, url, fetchOptions);
+      return await (__classPrivateFieldGet(this, _OpenAI_x509Fetch, "f") ?? this.fetch).call(void 0, url, fetchOptions);
     } catch (err) {
       if (signal && !composed)
         signal.removeEventListener("abort", abort);
@@ -11950,7 +16199,18 @@ var OpenAI = class {
       const maxRetries = options.maxRetries ?? this.maxRetries;
       timeoutMillis = this.calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries);
     }
-    await sleep(timeoutMillis);
+    const x509Authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f");
+    if (x509Authentication) {
+      const remaining = x509Authentication.remainingTimeout(options, x509Authentication.requestSnapshot().timeout);
+      if (timeoutMillis >= remaining) {
+        throw new APIConnectionTimeoutError();
+      }
+    }
+    if (x509Authentication) {
+      await x509Authentication.waitForRetry(timeoutMillis, x509Authentication.effectiveSignal());
+    } else {
+      await sleep(timeoutMillis);
+    }
     return this.makeRequest(options, retriesRemaining - 1, requestLogID);
   }
   calculateDefaultRetryTimeoutMillis(retriesRemaining, maxRetries) {
@@ -11962,32 +16222,71 @@ var OpenAI = class {
     return sleepSeconds * jitter * 1e3;
   }
   async buildRequest(inputOptions, { retryCount = 0 } = {}) {
+    if (__classPrivateFieldGet(this, _OpenAI_x509Authentication, "f") && !__classPrivateFieldGet(this, _OpenAI_x509Authentication, "f").inRequest(this)) {
+      const authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f");
+      return await authentication.runRequest(async () => {
+        const built = await _a3.prototype.buildRequest.call(this, inputOptions, { retryCount });
+        authentication.releaseRequestBody(built.req.body);
+        return built;
+      }, this);
+    }
     const options = { ...inputOptions };
+    const x509Authentication = __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f");
+    const x509Tenant = x509Authentication?.snapshotTenant(this.organization, this.project);
+    const x509Headers = x509Authentication?.snapshotHeaders(this._options.defaultHeaders, options.headers);
+    if (x509Headers) {
+      options.headers = x509Headers.requestHeaders;
+    }
+    const x509ClientFetchOptions = x509Authentication ? snapshotX509RequestOptions(this.fetchOptions) : void 0;
+    const x509RequestFetchOptions = x509Authentication ? snapshotX509RequestOptions(options.fetchOptions) : void 0;
     const { method, path: path2, query, defaultBaseURL } = options;
     const url = this.buildURL(path2, query, defaultBaseURL);
-    if ("timeout" in options)
+    x509Authentication?.snapshotAPIURL(url);
+    const explicitTimeout = "timeout" in options;
+    if (explicitTimeout)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
+    if (x509Authentication && x509RequestFetchOptions) {
+      x509Authentication.snapshotRequest(options.signal, options.timeout, x509RequestFetchOptions);
+    }
+    if (x509Authentication) {
+      const snapshot = x509Authentication.requestSnapshot();
+      options.timeout = snapshot.timeout;
+      if (snapshot.signal === void 0) {
+        delete options.signal;
+      } else {
+        options.signal = snapshot.signal;
+      }
+    }
     const { bodyHeaders, body, isStreamingBody } = this.buildBody({ options });
     if (isStreamingBody) {
       inputOptions.__metadata = {
         ...inputOptions.__metadata,
         hasStreamingBody: true
       };
+      x509Authentication?.ownRequestBody(body, options.body);
     }
-    const reqHeaders = await this.buildHeaders({ options: inputOptions, method, bodyHeaders, retryCount });
+    const reqHeaders = await this.buildHeaders({
+      options: inputOptions,
+      method,
+      bodyHeaders,
+      retryCount,
+      x509Headers,
+      x509Timeout: explicitTimeout ? options.timeout : void 0,
+      x509Tenant
+    });
     const req = {
       method,
       headers: reqHeaders,
       ...options.signal && { signal: options.signal },
       ...globalThis.ReadableStream && body instanceof globalThis.ReadableStream && { duplex: "half" },
       ...body && { body },
-      ...this.fetchOptions ?? {},
-      ...options.fetchOptions ?? {}
+      ...(x509Authentication ? x509ClientFetchOptions : this.fetchOptions) ?? {},
+      ...(x509Authentication ? x509RequestFetchOptions : options.fetchOptions) ?? {}
     };
     return { req, url, timeout: options.timeout };
   }
-  async buildHeaders({ options, method, bodyHeaders, retryCount }) {
+  async buildHeaders({ options, method, bodyHeaders, retryCount, x509Headers, x509Timeout, x509Tenant }) {
     let idempotencyHeaders = {};
     if (this.idempotencyHeader && method !== "get") {
       if (!options.idempotencyKey)
@@ -11995,24 +16294,25 @@ var OpenAI = class {
       idempotencyHeaders[this.idempotencyHeader] = options.idempotencyKey;
     }
     const helperMethod = options.__metadata?.["helperMethod"];
+    const timeout = x509Headers ? x509Timeout : options.timeout;
     const headers = buildHeaders([
       idempotencyHeaders,
       {
         Accept: "application/json",
         ...!isRunningInBrowserOrBrowserWorker() ? { "User-Agent": this.getUserAgent() } : void 0,
         "X-Stainless-Retry-Count": String(retryCount),
-        ...options.timeout ? { "X-Stainless-Timeout": String(Math.trunc(options.timeout / 1e3)) } : {},
+        ...timeout ? { "X-Stainless-Timeout": String(Math.trunc(timeout / 1e3)) } : {},
         ...getPlatformHeaders(),
         ...typeof helperMethod === "string" ? { "X-Stainless-Helper-Method": helperMethod } : {},
-        "OpenAI-Organization": this.organization,
-        "OpenAI-Project": this.project
+        "OpenAI-Organization": x509Tenant ? x509Tenant.organization : this.organization,
+        "OpenAI-Project": x509Tenant ? x509Tenant.project : this.project
       },
-      this._provider ? void 0 : await this.authHeaders(options, options.__security ?? { bearerAuth: true }),
-      this._options.defaultHeaders,
+      this._provider || __classPrivateFieldGet(this, _OpenAI_x509Authentication, "f")?.isPlanningRequest() ? void 0 : await this.authHeaders(options, options.__security ?? { bearerAuth: true }),
+      x509Headers?.defaultHeaders ?? this._options.defaultHeaders,
       bodyHeaders,
-      options.headers
+      x509Headers?.requestHeaders ?? options.headers
     ]);
-    if (!this._provider) {
+    if (!this._provider && !__classPrivateFieldGet(this, _OpenAI_x509Authentication, "f")?.isPlanningRequest()) {
       this.validateHeaders(headers, options.__security ?? { bearerAuth: true });
     }
     return headers.values;
@@ -12063,10 +16363,10 @@ var OpenAI = class {
     }
   }
 };
-_a2 = OpenAI, _OpenAI_encoder = /* @__PURE__ */ new WeakMap(), _OpenAI_responseAttempts = /* @__PURE__ */ new WeakMap(), _OpenAI_instances = /* @__PURE__ */ new WeakSet(), _OpenAI_baseURLOverridden = function _OpenAI_baseURLOverridden2() {
-  return this._provider !== void 0 || this.baseURL !== "https://api.openai.com/v1";
+_a3 = OpenAI, _OpenAI_encoder = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Authentication = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Credential = /* @__PURE__ */ new WeakMap(), _OpenAI_x509Fetch = /* @__PURE__ */ new WeakMap(), _OpenAI_explicitDataResidency = /* @__PURE__ */ new WeakMap(), _OpenAI_responseAttempts = /* @__PURE__ */ new WeakMap(), _OpenAI_instances = /* @__PURE__ */ new WeakSet(), _OpenAI_baseURLOverridden = function _OpenAI_baseURLOverridden2() {
+  return __classPrivateFieldGet(this, _OpenAI_explicitDataResidency, "f") || this._provider !== void 0 || this.baseURL !== "https://api.openai.com/v1";
 };
-OpenAI.OpenAI = _a2;
+OpenAI.OpenAI = _a3;
 OpenAI.DEFAULT_TIMEOUT = 6e5;
 OpenAI.OpenAIError = OpenAIError;
 OpenAI.APIError = APIError;
@@ -12096,6 +16396,7 @@ OpenAI.Models = Models;
 OpenAI.FineTuning = FineTuning;
 OpenAI.Graders = Graders2;
 OpenAI.VectorStores = VectorStores;
+OpenAI.Safety = Safety;
 OpenAI.Webhooks = Webhooks;
 OpenAI.Beta = Beta;
 OpenAI.Batches = Batches;
@@ -12109,7 +16410,7 @@ OpenAI.Containers = Containers;
 OpenAI.Skills = Skills;
 OpenAI.Videos = Videos;
 var composedCallerSignals = /* @__PURE__ */ new WeakMap();
-function createRequestController(callerSignal) {
+function createRequestController(callerSignal, originalSignal) {
   const controller = new AbortController();
   if (!callerSignal)
     return controller;
@@ -12118,7 +16419,11 @@ function createRequestController(callerSignal) {
     return controller;
   }
   try {
-    const composed = nativeAbortSignal.any([controller.signal, callerSignal]);
+    const signals = [controller.signal, callerSignal];
+    if (originalSignal && originalSignal !== callerSignal) {
+      signals.push(originalSignal);
+    }
+    const composed = nativeAbortSignal.any(signals);
     Object.defineProperty(controller, "signal", { value: composed, configurable: true });
     composedCallerSignals.set(controller, callerSignal);
   } catch {
@@ -12147,8 +16452,8 @@ function isUndiciDispatcherVersionMismatchError(error) {
 var brand_privateBedrockClient = /* @__PURE__ */ Symbol.for("openai.privateBedrockClient");
 
 // node_modules/openai/bedrock.mjs
-var _a3;
-_a3 = brand_privateBedrockClient;
+var _a4;
+_a4 = brand_privateBedrockClient;
 
 // node_modules/@quilltap/plugin-utils/dist/index.mjs
 var import_fs = require("fs");
