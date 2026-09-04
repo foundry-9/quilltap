@@ -30,7 +30,7 @@ Quilltap Instance Registry
 Usage: quilltap instances <verb> [args]
 
 Verbs:
-  list                          List registered instances (default)
+  list [--json]                 List registered instances (default)
   show <name>                   Show one instance (passphrase status only)
   path                          Print the path to instances.json
   add <name> [<path>]           Register an instance (prompts for missing path / passphrase)
@@ -366,9 +366,15 @@ async function instancesCommand(args) {
       case 'passphrase':
         await cmdSetPassphrase(rest);
         return;
-      case 'default':
-        cmdDefault(rest);
+      case 'default': {
+        // `--json` has to be lifted out of the positionals as well as read:
+        // cmdDefault treats args[0] as the instance name to set, so leaving the
+        // flag in place made `instances default --json` try to set an instance
+        // literally named "--json" and left cmdDefault's json branch unreachable.
+        const json = rest.includes('--json');
+        cmdDefault(rest.filter((a) => a !== '--json'), { json });
         return;
+      }
       case 'rename':
         cmdRename(rest);
         return;

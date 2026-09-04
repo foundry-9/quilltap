@@ -99,7 +99,10 @@ quilltap instances list                                  # Registered instances 
 quilltap instances default Friday                        # Make it the fall-through for flag-free runs
 quilltap instances rename Friday Weekday                 # Rename, preserving the stored passphrase
 quilltap instances remove Friday                         # Unregister
+quilltap instances restore-key Friday                    # Rebuild a lost or passphrase-locked .dbkey
 ```
+
+If an instance's `quilltap.dbkey` goes missing — or its passphrase does — `instances restore-key` rebuilds it. The file only *wraps* the pepper; the pepper itself is the database key, so an operator who kept the one printed at first-run setup can get back in. The pepper is read from `ENCRYPTION_MASTER_PEPPER` or prompted for hidden, never passed as a flag, and it is proved against the encrypted databases on disk before anything is written. Run it with the server down — the command refuses while the instance lock is held. Flags: `--passphrase <pass>` / `--no-passphrase` (the new wrapping), `-d, --data-dir <path>`, `--force`, `-y, --yes`.
 
 Every subcommand then accepts `--instance <name>` in place of `--data-dir`. The registry lives at `<app-support>/Quilltap/instances.json` (mode 0600; e.g. `~/Library/Application Support/Quilltap/instances.json` on macOS). **Resolution precedence:** `--data-dir` > `--instance` > registered default > `QUILLTAP_DATA_DIR` > the OS platform default. Pass the **instance root** (e.g. `~/iCloud/Quilltap/Friday`), not its `data/` subdirectory.
 

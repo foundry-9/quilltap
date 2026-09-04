@@ -4,6 +4,30 @@
 
 ### 4.9-dev
 
+#### Fixed: `instances default --json` never worked, and CLI doc drift around it (bug 120, checklist item 12)
+
+Audit of the `quilltap` CLI's docs, shell completions, and help text against the commands the CLI
+actually accepts, covering everything that changed since the 4.8.4 merge-back. It turned up one
+real defect behind the paperwork.
+
+- **Bug 120.** `quilltap instances default --json` failed with `Unknown instance "--json"`. The
+  `default` arm of the dispatcher called `cmdDefault(rest)` with no options object, so the flag was
+  never read *and* never stripped — leaving it among the positionals, where it was taken as the
+  name of an instance to set. The arm now filters and reads together. The `list` arm this was
+  copied from is correct because `cmdList` has no positionals to corrupt.
+
+- `instances restore-key` (and its `rebuild-key` alias) is now in the CLI package's README. It was
+  documented in `CLI.md` and in `quilltap instances --help`, and completed by all three shells, but
+  the README an npm visitor reads had no mention of the one offline route back into an instance
+  whose `.dbkey` is lost or passphrase-locked.
+- `instances list --json` is documented in `quilltap instances --help` and in `CLI.md`, and is now
+  offered by the fish completion. bash and zsh already offered it; the help text has never named it.
+  `--names-only`, the sibling flag, stays undocumented on purpose — it is plumbing for the
+  completion scripts, and `CLI.md` now says so.
+
+`help/cli-instances.md` gains a `restore-key` section; it already documented `--json` on both
+`list` and `default`, a promise that is now true rather than aspirational. `docs docker-mounts`,
+the other command added this cycle, was already current everywhere.
 #### Tests: the restore field-fidelity guard now pins every 4.9/4.10 data-model addition (checklist item 10)
 
 Backup/restore completeness audit over the commits since the 4.8.4 merge-back. Every new table,
