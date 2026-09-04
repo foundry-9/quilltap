@@ -75,3 +75,10 @@ This section shows your favorite characters at a glance:
 4. **Use the search bar** to quickly find anything across your workspace
 
 Need help with a specific feature? Check the help resources for the sidebar, search, or other components.
+
+## In-Chat Navigation
+
+To take the user back to the homepage:
+```
+help_navigate(url: "/")
+```
