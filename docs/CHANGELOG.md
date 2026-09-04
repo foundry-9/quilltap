@@ -17,6 +17,12 @@ failed.
   parameters and the fixed-budget thinking branch, so both are now correct for Opus 5.
 - Plugin bumped to 1.0.55.
 
+#### Changed: two v1 route handlers now use the shared `successResponse` helper (release checklist item 4)
+
+The `get-tags` action on `GET /api/v1/connection-profiles/[id]` and the default `GET /api/v1/wardrobe`
+listing returned via `NextResponse.json` directly. Both now go through `successResponse` from
+`@/lib/api/responses` like the rest of the v1 surface. No change to status codes or payloads.
+
 #### Fixed: one bad sub-step no longer kills a whole Refine-from-Memories run (bug 119)
 
 The character optimizer fans a character out into one LLM pass per concern — general fields, each
