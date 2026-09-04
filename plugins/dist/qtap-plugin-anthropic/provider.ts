@@ -80,13 +80,15 @@ export class AnthropicProvider implements TextProvider {
   readonly supportedMimeTypes = ANTHROPIC_SUPPORTED_MIME_TYPES
   readonly supportsWebSearch = false
 
-  // Claude Sonnet 5, the Opus 4.7+ family, and Fable/Mythos models remove
+  // Claude Sonnet 5, Claude Opus 5, the Opus 4.7/4.8 family, and Fable/Mythos
+  // models remove
   // temperature/top_p/top_k entirely — sending either returns
   // "`temperature` is deprecated for this model" (400), independent of
   // whether extended thinking is enabled. Matched by prefix since these are
   // stable aliases (no dated snapshots).
   private static readonly SAMPLING_PARAMS_REJECTED_MODELS = [
     /^claude-sonnet-5(-|$)/,
+    /^claude-opus-5(-|$)/,
     /^claude-opus-4-7(-|$)/,
     /^claude-opus-4-8(-|$)/,
     /^claude-fable-5(-|$)/,
@@ -377,7 +379,7 @@ export class AnthropicProvider implements TextProvider {
       : (profileParams?.extendedThinking === true ? 4096 : 0)
     const thinkingEnabled = thinkingBudget > 0
 
-    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject both fixed-budget thinking
+    // Sonnet 5 / Opus 5 / Opus 4.7+ / Fable / Mythos reject both fixed-budget thinking
     // and sampling params (temperature/top_p/top_k) — computed once and used
     // for both decisions below.
     const samplingParamsRejected = this.modelRejectsSamplingParams(params.model)
@@ -572,7 +574,7 @@ export class AnthropicProvider implements TextProvider {
       : (profileParams?.extendedThinking === true ? 4096 : 0)
     const streamThinkingEnabled = streamThinkingBudget > 0
 
-    // Sonnet 5 / Opus 4.7+ / Fable / Mythos reject both fixed-budget thinking
+    // Sonnet 5 / Opus 5 / Opus 4.7+ / Fable / Mythos reject both fixed-budget thinking
     // and sampling params (temperature/top_p/top_k) — computed once and used
     // for both decisions below.
     const streamSamplingParamsRejected = this.modelRejectsSamplingParams(params.model)

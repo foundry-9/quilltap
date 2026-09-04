@@ -23710,13 +23710,15 @@ var AnthropicProvider = class _AnthropicProvider {
     this.supportsWebSearch = false;
   }
   static {
-    // Claude Sonnet 5, the Opus 4.7+ family, and Fable/Mythos models remove
+    // Claude Sonnet 5, Claude Opus 5, the Opus 4.7/4.8 family, and Fable/Mythos
+    // models remove
     // temperature/top_p/top_k entirely — sending either returns
     // "`temperature` is deprecated for this model" (400), independent of
     // whether extended thinking is enabled. Matched by prefix since these are
     // stable aliases (no dated snapshots).
     this.SAMPLING_PARAMS_REJECTED_MODELS = [
       /^claude-sonnet-5(-|$)/,
+      /^claude-opus-5(-|$)/,
       /^claude-opus-4-7(-|$)/,
       /^claude-opus-4-8(-|$)/,
       /^claude-fable-5(-|$)/,
