@@ -4,6 +4,19 @@
 
 ### 4.9-dev
 
+#### Fixed: Claude Opus 5 no longer gets sampling parameters it rejects
+
+`AnthropicProvider.SAMPLING_PARAMS_REJECTED_MODELS` listed Sonnet 5, Opus 4.7, Opus 4.8 and the
+Fable/Mythos families, but not `claude-opus-5`. Opus 5 removes `temperature`, `top_p` and `top_k`
+and rejects fixed-budget thinking, so a request carrying either returned a 400
+("`temperature` is deprecated for this model"). The Anthropic plugin lists models live through
+`client.models.list()`, so Opus 5 was selectable in a connection profile and every send against it
+failed.
+
+- Added `/^claude-opus-5(-|$)/` to the rejection list. The one flag gates both the sampling
+  parameters and the fixed-budget thinking branch, so both are now correct for Opus 5.
+- Plugin bumped to 1.0.55.
+
 #### Fixed: one bad sub-step no longer kills a whole Refine-from-Memories run (bug 119)
 
 The character optimizer fans a character out into one LLM pass per concern — general fields, each
