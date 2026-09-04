@@ -53,6 +53,54 @@ schema check:
 
 Each case was mutation-tested against `restore.ts`: dropping the field fails that guard and no other.
 
+#### Changed: documentation-freshness sweep, second pass (checklist item 13)
+
+Second walk of the release checklist's documentation list, covering everything since the 4.8.4
+merge-back (`115539440`) and in particular the 46 commits that landed after the first sweep.
+
+- **README** — the Discord badge's colour field had been overwritten with the invite code
+  (`Discord-join-fnTPEZDE4`), so shields.io rendered it grey; restored to `5865F2` with the invite
+  left on the link. Added the three late headline features the features list had no entry for:
+  connection-profile understudies and tier stand-ins, LoRA adapters with the HuggingFace **Query**
+  button and provider-driven model options, and the Concierge's four states with the New Chat
+  form control.
+- **API.md** — added a v4.9-dev freshness note (realtime socket, fallback chains, LoRA and model
+  options, four-state Concierge, the scenario action, archivable rows) whose current chat-action
+  list supersedes the stale "current action set" in the v4.3 note. Documented fourteen live
+  `?action=` values that had no entry: `group-stores` and `outfit-summary` on chats; nine on
+  `/api/v1/memories` (`housekeep-sweep`; the `GET` and `PUT` forms of `embeddings`; the read/write
+  pairs for `housekeeping-config`, `extraction-limits-config`, `extraction-concurrency`,
+  `recall-config`, `backfill-embeddings` and `regenerate-all`; and the read-only
+  `character-memory-counts`); `semantic-search` on mount-points; `theme-preference` on the user
+  profile; and
+  `attach-mount-file` on chat files. `POST /api/v1/system/backup` was documented twice — an older
+  stub under System Backup & Restore and a fuller one stranded at the end of Background Jobs; they
+  are merged into the one entry, which now carries the `compact` body. Fixed the credentials
+  example, which still called the pre-2.8 `/api/characters`. Every `route.ts` path and every
+  `action === '…'` literal under `app/api/v1/` now appears in the document, and no endpoint heading
+  appears twice.
+- **CLAUDE.md** — two chokepoints from this cycle were undocumented. A chat's Concierge posture is
+  derived with `getConciergeState` and asked about with `shouldUseUncensoredRoute` /
+  `shouldShowDangerStyling` / `isClassifierOnDuty`, never by re-reading `conciergeOverride` and
+  `isDangerousChat`, and every transition goes through `applyConciergeFlip`. Provider fallback is
+  built by `lib/llm/fallback` — three attempts, no recursion, no stickiness — rather than
+  hand-rolled at a call site.
+- **About page** — the Lantern, Concierge and multi-provider bullets now carry LoRA adapters and
+  per-model options, the four-state per-chat control, and profile understudies.
+- **Release notes (4.9.0)** — the defect count said forty-six; fifty-four bugs (66–119) were fixed
+  in the cycle. Added two paragraphs covering the seven repairs that landed after the notes were
+  written (bugs 113–119).
+- **CHANGELOG** — the two `qt-*` sweeps of this cycle shared a heading verbatim; they are now
+  distinguished as first and second pass.
+- **help/** — `salon-host-introductions.md` navigated to `/salon` where its own `url` and every
+  other Salon page use `/salon/:id`; `help-chat.md` and `brahma-console.md` declared `url`s
+  (`/help-chat`, `/brahma-console`) that are not routes, corrected to the sidebar they actually
+  describe; `homepage.md` had no **In-Chat Navigation** section at all. All 120 help files now
+  carry a `url` whose value matches a `help_navigate(...)` call in the same file (the three
+  `url: *` pages excepted, having no single target).
+
+DEVELOPMENT.md was checked and needed nothing.
+
 #### Changed: published packages pinned to their released versions everywhere they are consumed
 
 `@quilltap/plugin-utils` 2.6.0, `@quilltap/plugin-types` 2.6.0 and `create-quilltap-theme` 2.0.19
@@ -192,7 +240,7 @@ failed.
   parameters and the fixed-budget thinking branch, so both are now correct for Opus 5.
 - Plugin bumped to 1.0.55.
 
-#### Changed: qt-* theme utility sweep (checklist item 7)
+#### Changed: qt-* theme utility sweep, second pass (checklist item 7)
 
 Reviewed the 164 `.tsx` files changed since the 4.8.4 merge (`115539440`) for hard-coded Tailwind
 that themes cannot reach. The sweep found no palette shades, hex values, `dark:` variants, or raw
@@ -1328,7 +1376,7 @@ model-ID prefix branch is intact. The remaining undeclared bare requires in othe
 transitive dependencies of declared packages or app-provided externals, and are already accounted for
 by the standalone tarball's `pruneRedundantPluginModules`.
 
-#### Changed: qt-* theme utility sweep (checklist item 7)
+#### Changed: qt-* theme utility sweep, first pass (checklist item 7)
 
 Reviewed the 118 `.tsx` files changed since 4.8.4 for hard-coded Tailwind that themes cannot reach,
 and converted 20 sites across 15 files.

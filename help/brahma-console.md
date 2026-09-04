@@ -1,6 +1,6 @@
 ---
 title: Brahma Console
-url: /brahma-console
+url: /
 tags: [help, chat, console, llm, model, tools, brahma]
 ---
 

@@ -1,6 +1,6 @@
 ---
 title: Help Chat
-url: /help-chat
+url: /
 tags: [help, chat, assistant, navigation, tools]
 ---
 

@@ -53,4 +53,4 @@ When several absent characters are mentioned together for the first time in the 
 
 Characters with help tools enabled can navigate directly to this page:
 
-`help_navigate(url: "/salon")`
+`help_navigate(url: "/salon/:id")`

@@ -20,6 +20,16 @@ API reference for Quilltap v4.3 and later.
 > - **New `systemSender` values** — `carina` (inline-query answers) and `suparna` (Post Office mail-delivery announcements).
 > - **Scriptorium per-document policy flags** — mounted markdown may carry `embed` / `character_read` / `character_write` frontmatter flags (stored on `doc_mount_file_links`), governing characters only.
 
+> **Freshness note (v4.9-dev):** Additions since v4.7:
+>
+> - **Realtime invalidation socket** — `GET /api/v1/system/realtime/stream` (WebSocket). Frames say *what* changed, never *what it changed to*; the client invalidates and re-reads through this API. See [System Realtime Stream](#system-realtime-stream).
+> - **Connection-profile fallback chains** — `fallbackProfileId` (the understudy) and `allowTierFallback` on connection profiles. Chains are capped at three attempts and never recurse. See [Connection Profiles](#connection-profiles).
+> - **Image-profile LoRA adapters and model options** — the reserved `loras` parameter key (validated by `ImageLoraSpecSchema`), the per-model `loraSupport` block on the models response, and `POST /api/v1/image-profiles?action=lora-metadata` for reading a LoRA source's public HuggingFace card.
+> - **Four-state Concierge** — `conciergeState` (`'monitored' | 'flagged' | 'vouched' | 'uncensored'`) on `POST /api/v1/chats` and `PUT /api/v1/chats/[id]`, applied through the one transition chokepoint `applyConciergeFlip`.
+> - **Chat-action set (current)** — `accessible-stores`, `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `cost`, `danger-classification`, `documents`, `export`, `export-markdown`, `group-stores`, `mailbox`, `memories`, `merge`, `outfit`, `outfit-summary`, `participants`, `photo-albums`, `recall-replay`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `scenario`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`. This supersedes the v4.3 list above.
+> - **Scenario changed mid-chat** — `POST /api/v1/chats/[id]?action=scenario`; the Host announces the change as a revision.
+> - **Archivable scenarios and wardrobe items** — archived rows drop out of every listing unless `includeArchived` is passed.
+
 ## Table of Contents
 
 - [API Versioning](#api-versioning)
@@ -157,7 +167,7 @@ Returns the current user session.
 For consistency, include credentials in requests:
 
 ```javascript
-fetch('/api/characters', {
+fetch('/api/v1/characters', {
   credentials: 'include',
   headers: {
     'Content-Type': 'application/json',
@@ -378,6 +388,18 @@ Update current user's profile.
 **Response**: `200 OK`
 
 Returns updated profile (same format as GET).
+
+#### `GET /api/v1/user/profile?action=theme-preference`
+
+Read the user's theme preference. Chat settings are created with defaults on first read if absent.
+
+**Response**: `200 OK` — `{ activeThemeId, colorMode, showNavThemeSelector }`.
+
+#### `PUT /api/v1/user/profile?action=theme-preference`
+
+Update the theme preference, merging the fields you send over the stored ones. `colorMode` must be
+one of `light`, `dark`, `system`; `activeThemeId` must be a theme the registry knows (or `null` for
+the default). Either violation is a `400`.
 
 #### `PATCH /api/v1/user/profile?action=set-avatar`
 
@@ -2594,6 +2616,18 @@ Every slot is an **array** of wardrobe item ids (empty when nothing is worn ther
 }
 ```
 
+#### `GET /api/v1/chats/[id]?action=outfit-summary`
+
+The same equipped state as `?action=outfit`, with each item id resolved to its title so a caller
+can render the outfit without a second round trip. Composites are expanded to their components at
+read time, exactly as `?action=outfit` does.
+
+#### `GET /api/v1/chats/[id]?action=group-stores`
+
+List the document stores belonging to the groups that this chat's **user-persona** characters
+(`type: 'CHARACTER'`, `controlledBy: 'user'`) are members of. Backs the "Group Files" section the
+library file picker shows above the Projects section. Returns `404` when the chat does not exist.
+
 #### `POST /api/v1/chats/[id]?action=equip`
 
 Mutate a character's equipped outfit. Dispatches on `mode`:
@@ -3237,6 +3271,23 @@ List files for a chat, including both uploaded attachments and generated images.
 
 Upload a file for a chat. Uses `multipart/form-data`.
 
+Two `?action=` values divert this route before the upload flow: `?action=link` links an existing
+file to the chat, and `?action=attach-mount-file` attaches a file that already lives in a document
+store (below). Without an action the body is read as form data.
+
+#### `POST /api/v1/chats/[id]/files?action=attach-mount-file`
+
+Attach a Scriptorium file to the chat without re-uploading it.
+
+**Request Body**: `{ "mountPointId": "mount-uuid", "relativePath": "notes/chapter-3.md" }` — both
+required, both `400` when missing.
+
+Blob-backed files attach from their blob row. Native-text files (`.md` / `.txt` / `.json`) PUT into
+a database store become documents with no blob row; those are served to the Librarian as documents
+instead, so the picker's own listings all attach (bug 38). A path with neither a blob nor a
+document row is refused. `404` when the mount-point file does not exist.
+
+
 **Request**: `multipart/form-data`
 - `file` (required) - The file to upload
 - `resolution` (optional) - Conflict resolution: `"replace"`, `"rename"`, `"skip"`
@@ -3599,6 +3650,88 @@ Generate embeddings for memories missing them.
 
 **Query Parameters**:
 - `characterId` (required) - Character to generate embeddings for
+
+#### `GET /api/v1/memories?action=embeddings`
+
+Embedding coverage for one character.
+
+**Query Parameters**:
+- `characterId` (required)
+
+**Response**: `200 OK` — `{ total, withEmbeddings, withoutEmbeddings, percentComplete, embeddingProfileConfigured, embeddingProfileName }`.
+
+#### `PUT /api/v1/memories?action=embeddings`
+
+Rebuild the vector index for one character. `PUT` without `?action=embeddings` is a `400`.
+
+**Request Body**: `{ "characterId": "char-uuid" }`
+
+#### `POST /api/v1/memories?action=housekeep-sweep`
+
+Enqueue a manual instance-wide housekeeping sweep (`MEMORY_HOUSEKEEPING`, `reason: 'manual'`)
+rather than running it inline. Takes no body.
+
+**Response**: `200 OK` — `{ "success": true, "jobId": "job-uuid" }`
+
+#### `GET` / `POST /api/v1/memories?action=housekeeping-config`
+
+Read and write the per-user automatic-housekeeping settings stored on chat settings. `POST` merges
+the fields you send over the stored ones; both return `{ success, settings }`.
+
+**Settings**: `enabled`, `perCharacterCap` (default 2000), `perCharacterCapOverrides`,
+`autoMergeSimilarThreshold` (default 0.90), `mergeSimilar`.
+
+#### `GET` / `POST /api/v1/memories?action=extraction-limits-config`
+
+Read and write the **instance-wide** memory-extraction rate limits. `POST` merges over the stored
+values; both return `{ success, settings }`.
+
+**Settings**: `enabled`, `maxPerHour`, `softStartFraction`, `softFloor`.
+
+#### `GET` / `POST /api/v1/memories?action=extraction-concurrency`
+
+Read and write the **instance-wide** memory-extraction concurrency. A write also pushes the value
+into the job processor's runtime cache, so it takes effect on the next claim tick rather than at
+the next cache refresh.
+
+**Request Body** (POST): `{ "concurrency": 3 }` · **Response**: `{ success, concurrency }`.
+
+#### `GET` / `POST /api/v1/memories?action=recall-config`
+
+Read and write the **instance-wide** recall settings. `POST` merges over the stored values; both
+return `{ success, settings }`.
+
+**Settings**: `scopePolicy`, `expandRelated`, `perTurnConversationSummaries` (the Settings →
+Memory → Recall Relevance switch that re-runs the past-conversation search every turn, reusing the
+vector the turn's memory search already embedded).
+
+#### `GET /api/v1/memories?action=backfill-embeddings`
+
+Progress for the embedding backfill: `{ success, progress: { remaining, inFlight } }`, where
+`remaining` counts memories with no embedding and `inFlight` counts this user's PENDING/PROCESSING
+`EMBEDDING_GENERATE` jobs whose payload `entityType` is `MEMORY`.
+
+#### `POST /api/v1/memories?action=backfill-embeddings`
+
+Start the backfill. Optional body `{ characterId?, batchSize? }` narrows it to one character and
+sets the batch size.
+
+#### `GET /api/v1/memories?action=character-memory-counts`
+
+Every character owned by this user with its memory count, sorted count-descending so the busiest
+surface first. Returns `{ success, characters: [{ id, name, memoryCount }] }`.
+
+#### `POST /api/v1/memories?action=regenerate-all`
+
+Wipe and re-extract every memory. Pressing it again is an explicit "kill the previous sweep and
+start over": all PENDING/PROCESSING `MEMORY_REGENERATE_ALL`, `MEMORY_REGENERATE_CHAT`,
+`MEMORY_EXTRACTION` and `INTER_CHARACTER_MEMORY` jobs are deleted before the fresh fan-out is
+enqueued. The standard and dangerous-compatible cheap profiles are resolved up front and travel in
+the job payload, so the fan-out is self-contained.
+
+#### `GET /api/v1/memories?action=regenerate-all`
+
+Status of the sweep: `{ success, inFlightFanOut, inFlightWipes, inFlightExtractions, inFlight }`.
 
 ---
 
@@ -4198,6 +4331,30 @@ List all mount points, enriched with `embeddedChunkCount`.
 }
 ```
 
+#### `POST /api/v1/mount-points?action=semantic-search`
+
+Semantic search across document-store chunks. Backs the search bar's **Documents** chip. The query
+is embedded with the user's default embedding profile at `interactive` priority; an embedding
+failure returns `400` with `code: "EMBEDDING_FAILED"`.
+
+**Request Body**:
+
+```json
+{
+  "query": "a crimson entrance",
+  "mountPointIds": ["mount-uuid"],
+  "projectId": "project-uuid",
+  "pathPrefix": "chapters/",
+  "top": 20,
+  "threshold": 0.5
+}
+```
+
+Only `query` is required. `top` defaults to 20 (max 500) and `threshold` to 0.5. This is the
+operator's search: it sets `includeBlocked`, so documents flagged `character_read: false` are
+returned. The per-character retrieval paths (knowledge injector, `search` tool) keep the default
+filtering.
+
 #### `POST /api/v1/mount-points`
 
 Create a mount point. The body is validated: `basePath` is required for `filesystem` and `obsidian` types but ignored for `database`.
@@ -4543,7 +4700,20 @@ Modern backup and restore API (v1).
 
 #### `POST /api/v1/system/backup`
 
-Create a new backup for download. Returns a temporary backup ID.
+Create a backup and stage it for download. Returns a temporary backup ID.
+
+**Body (optional):**
+
+```json
+{ "compact": true }
+```
+
+`compact` defaults to `false`. When true the archive omits every embedding-derived payload — memory
+embeddings are nulled and `conversation-chunks.json`, `vector-entries.json`,
+`vector-index-metas.json`, `tfidf-vocabularies.json`, `embedding-status.json` and
+`doc-mount-chunks.json` are not written at all — and the manifest records `compact: true`. Restore
+keys off that flag to enqueue a full `EMBEDDING_REINDEX_ALL`. A malformed body is treated as absent
+rather than rejected.
 
 **Response**: `201 Created`
 
@@ -5386,19 +5556,6 @@ Scoping notes, because they are not uniform:
 - `instance-settings` is keyed by **setting key**, not a UUID — the table has no id column — and omits the keys that only make sense inside the exporting instance (the three mount-point pointers, `lastMaintenanceSweepAt`, `highest_app_version`).
 
 An unknown `type` returns 400.
-
-#### `POST /api/v1/system/backup`
-
-Create a backup and stage it for download.
-
-**Body (optional):**
-```json
-{ "compact": true }
-```
-
-`compact` defaults to `false`. When true the archive omits every embedding-derived payload — memory embeddings are nulled and `conversation-chunks.json`, `vector-entries.json`, `vector-index-metas.json`, `tfidf-vocabularies.json`, `embedding-status.json`, and `doc-mount-chunks.json` are not written at all — and the manifest records `compact: true`. Restore keys off that flag to enqueue a full `EMBEDDING_REINDEX_ALL`. A malformed body is treated as absent rather than rejected.
-
-**Response:** `201` with `{ "success": true, "backupId": "…", "manifest": { … } }`.
 
 ---
 
