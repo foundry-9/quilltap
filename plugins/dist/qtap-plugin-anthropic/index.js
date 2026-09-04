@@ -3691,6 +3691,41 @@ var init_user_profiles = __esm({
   }
 });
 
+// node_modules/standardwebhooks/dist/timing_safe_equal.js
+var require_timing_safe_equal = __commonJS({
+  "node_modules/standardwebhooks/dist/timing_safe_equal.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.timingSafeEqual = void 0;
+    function assert(expr, msg = "") {
+      if (!expr) {
+        throw new Error(msg);
+      }
+    }
+    function timingSafeEqual(a, b) {
+      if (a.byteLength !== b.byteLength) {
+        return false;
+      }
+      if (!(a instanceof DataView)) {
+        a = new DataView(ArrayBuffer.isView(a) ? a.buffer : a);
+      }
+      if (!(b instanceof DataView)) {
+        b = new DataView(ArrayBuffer.isView(b) ? b.buffer : b);
+      }
+      assert(a instanceof DataView);
+      assert(b instanceof DataView);
+      const length = a.byteLength;
+      let out = 0;
+      let i = -1;
+      while (++i < length) {
+        out |= a.getUint8(i) ^ b.getUint8(i);
+      }
+      return out === 0;
+    }
+    exports2.timingSafeEqual = timingSafeEqual;
+  }
+});
+
 // node_modules/@stablelib/base64/lib/base64.js
 var require_base64 = __commonJS({
   "node_modules/@stablelib/base64/lib/base64.js"(exports2) {
@@ -4328,49 +4363,15 @@ var require_sha256 = __commonJS({
   }
 });
 
-// node_modules/standardwebhooks/dist/timing_safe_equal.js
-var require_timing_safe_equal = __commonJS({
-  "node_modules/standardwebhooks/dist/timing_safe_equal.js"(exports2) {
-    "use strict";
-    Object.defineProperty(exports2, "__esModule", { value: true });
-    exports2.timingSafeEqual = timingSafeEqual;
-    function assert(expr, msg = "") {
-      if (!expr) {
-        throw new Error(msg);
-      }
-    }
-    function timingSafeEqual(a, b) {
-      if (a.byteLength !== b.byteLength) {
-        return false;
-      }
-      if (!(a instanceof DataView)) {
-        a = new DataView(ArrayBuffer.isView(a) ? a.buffer : a);
-      }
-      if (!(b instanceof DataView)) {
-        b = new DataView(ArrayBuffer.isView(b) ? b.buffer : b);
-      }
-      assert(a instanceof DataView);
-      assert(b instanceof DataView);
-      const length = a.byteLength;
-      let out = 0;
-      let i = -1;
-      while (++i < length) {
-        out |= a.getUint8(i) ^ b.getUint8(i);
-      }
-      return out === 0;
-    }
-  }
-});
-
 // node_modules/standardwebhooks/dist/index.js
 var require_dist = __commonJS({
   "node_modules/standardwebhooks/dist/index.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.Webhook = exports2.WebhookVerificationError = void 0;
+    var timing_safe_equal_1 = require_timing_safe_equal();
     var base64 = require_base64();
     var sha256 = require_sha256();
-    var timing_safe_equal_1 = require_timing_safe_equal();
     var WEBHOOK_TOLERANCE_IN_SECONDS = 5 * 60;
     var ExtendableError = class _ExtendableError extends Error {
       constructor(message) {
@@ -4390,6 +4391,9 @@ var require_dist = __commonJS({
     exports2.WebhookVerificationError = WebhookVerificationError;
     var Webhook2 = class _Webhook {
       constructor(secret, options) {
+        if (!secret) {
+          throw new Error("Secret can't be empty.");
+        }
         if ((options === null || options === void 0 ? void 0 : options.format) === "raw") {
           if (secret instanceof Uint8Array) {
             this.key = secret;
@@ -4405,20 +4409,15 @@ var require_dist = __commonJS({
           }
           this.key = base64.decode(secret);
         }
-        if (this.key.length === 0) {
-          throw new Error("Secret can't be empty.");
-        }
       }
-      verify(payload, headers, options) {
-        var _a4;
-        const jsonParse = (_a4 = options === null || options === void 0 ? void 0 : options.jsonParse) !== null && _a4 !== void 0 ? _a4 : true;
-        const normalizedHeaders = {};
-        for (const key of Object.keys(headers)) {
-          normalizedHeaders[key.toLowerCase()] = headers[key];
+      verify(payload, headers_) {
+        const headers = {};
+        for (const key of Object.keys(headers_)) {
+          headers[key.toLowerCase()] = headers_[key];
         }
-        const msgId = normalizedHeaders["webhook-id"];
-        const msgSignature = normalizedHeaders["webhook-signature"];
-        const msgTimestamp = normalizedHeaders["webhook-timestamp"];
+        const msgId = headers["webhook-id"];
+        const msgSignature = headers["webhook-signature"];
+        const msgTimestamp = headers["webhook-timestamp"];
         if (!msgSignature || !msgId || !msgTimestamp) {
           throw new WebhookVerificationError("Missing required headers");
         }
@@ -4433,15 +4432,7 @@ var require_dist = __commonJS({
             continue;
           }
           if ((0, timing_safe_equal_1.timingSafeEqual)(encoder2.encode(signature), encoder2.encode(expectedSignature))) {
-            const payloadString = payload.toString();
-            if (payloadString === "") {
-              return void 0;
-            }
-            if (jsonParse) {
-              return JSON.parse(payloadString);
-            } else {
-              return void 0;
-            }
+            return JSON.parse(payload.toString());
           }
         }
         throw new WebhookVerificationError("No matching signature found");
@@ -4462,7 +4453,7 @@ var require_dist = __commonJS({
       verifyTimestamp(timestampHeader) {
         const now = Math.floor(Date.now() / 1e3);
         const timestamp = parseInt(timestampHeader, 10);
-        if (Number.isNaN(timestamp)) {
+        if (isNaN(timestamp)) {
           throw new WebhookVerificationError("Invalid Signature Headers");
         }
         if (now - timestamp > WEBHOOK_TOLERANCE_IN_SECONDS) {
