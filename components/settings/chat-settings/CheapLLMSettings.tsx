@@ -126,7 +126,7 @@ export function CheapLLMSettings({
             checked={settings?.cheapLLMSettings.fallbackToLocal ?? true}
             onChange={(e) => onUpdate({ fallbackToLocal: e.target.checked })}
             disabled={saving}
-            className="rounded"
+            className="qt-checkbox"
           />
           <div className="flex-1">
             <div className="font-medium text-sm">Fallback to Local</div>
@@ -143,7 +143,7 @@ export function CheapLLMSettings({
             checked={settings?.cheapLLMSettings.allowCheapFallback ?? false}
             onChange={(e) => onUpdate({ allowCheapFallback: e.target.checked })}
             disabled={saving}
-            className="rounded"
+            className="qt-checkbox"
           />
           <div className="flex-1">
             <div className="font-medium text-sm">Allow a Similar-Tier Stand-In</div>

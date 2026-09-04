@@ -4,6 +4,23 @@
 
 ### 4.9-dev
 
+#### Changed: qt-* theme utility sweep (checklist item 7)
+
+Reviewed the 164 `.tsx` files changed since the 4.8.4 merge (`115539440`) for hard-coded Tailwind
+that themes cannot reach. The sweep found no palette shades, hex values, `dark:` variants, or raw
+semantic fills (`bg-destructive`, `bg-success`, `hover:bg-primary`) on any added line; every
+variant-prefixed `qt-*` reference resolves to a hand-written escaped rule, and every `qt-*` class
+added to `app/styles/` in the range is already mirrored in `packages/theme-storybook`.
+
+One conversion: the "Allow a Similar-Tier Stand-In" checkbox added to
+`components/settings/chat-settings/CheapLLMSettings.tsx` copied its pre-existing "Fallback to
+Local" sibling's raw `className="rounded"`. Both now use `qt-checkbox`, joining every other
+checkbox in the settings tree and closing the last of the raw chat-settings checkboxes recorded as a
+gap in the previous sweep.
+
+`text-foreground` (and `hover:text-foreground`) stays raw, as before — it maps to the same theme
+token as `qt-text`, and Tailwind remains the house convention there.
+
 #### Changed: two v1 route handlers now use the shared `successResponse` helper (release checklist item 4)
 
 The `get-tags` action on `GET /api/v1/connection-profiles/[id]` and the default `GET /api/v1/wardrobe`
