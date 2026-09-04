@@ -159,11 +159,11 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Lantern &ndash; Story Backgrounds</strong> &ndash; AI-generated atmospheric background images derived from chat context</span>
+            <span><strong>The Lantern &ndash; Story Backgrounds</strong> &ndash; AI-generated atmospheric background images derived from chat context, with LoRA adapters and per-model options taken from the provider&apos;s own advertised capabilities</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Concierge &ndash; Alternative Content Provision and Routing</strong> &ndash; content classification with detection, auto-routing to uncensored providers, and quick-hide integration</span>
+            <span><strong>The Concierge &ndash; Alternative Content Provision and Routing</strong> &ndash; content classification with detection, auto-routing to uncensored providers, quick-hide integration, and a four-state per-chat control (Monitored, Flagged, Vouched Safe, Uncensored) settable at creation as well as mid-conversation</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -215,7 +215,7 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Multi-provider support</strong> &ndash; Anthropic, OpenAI, Google Gemini, Grok, DeepSeek, Z.AI, NanoGPT, Ollama, OpenRouter, and OpenAI-compatible APIs</span>
+            <span><strong>Multi-provider support</strong> &ndash; Anthropic, OpenAI, Google Gemini, Grok, DeepSeek, Z.AI, NanoGPT, Ollama, OpenRouter, and OpenAI-compatible APIs, each profile able to name an understudy to take the call when its provider falls over</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
