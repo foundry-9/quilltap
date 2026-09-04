@@ -15,7 +15,7 @@ import { createContextParamsHandler, RequestContext, resolveEditorTags } from '@
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, badRequest, serverError, conflict } from '@/lib/api/responses';
+import { notFound, forbidden, badRequest, serverError, conflict, successResponse } from '@/lib/api/responses';
 import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
@@ -98,7 +98,7 @@ export const GET = createContextParamsHandler<{ id: string }>(
         const getActionHandlers: Record<ConnectionProfileItemGetAction, () => Promise<NextResponse>> = {
           'get-tags': async () => {
             const tags = await resolveEditorTags(profile.tags, repos);
-            return NextResponse.json({ tags });
+            return successResponse({ tags });
           },
         };
 
