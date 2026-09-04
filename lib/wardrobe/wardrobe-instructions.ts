@@ -22,8 +22,7 @@ import {
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import {
   writeDatabaseDocument,
-  deleteDatabaseDocument,
-  DatabaseStoreError,
+  deleteDatabaseDocumentIfExists,
 } from '@/lib/mount-index/database-store';
 import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 
@@ -110,13 +109,7 @@ export async function writeWardrobeInstructionsFile(
 ): Promise<void> {
   const content = instructions?.trim() ?? '';
   if (content.length === 0) {
-    try {
-      await deleteDatabaseDocument(mountPointId, WARDROBE_INSTRUCTIONS_PATH);
-    } catch (error) {
-      if (!(error instanceof DatabaseStoreError && error.code === 'NOT_FOUND')) {
-        throw error;
-      }
-    }
+    await deleteDatabaseDocumentIfExists(mountPointId, WARDROBE_INSTRUCTIONS_PATH);
     logger.debug('[WardrobeInstructions] Dressing instructions cleared', { mountPointId });
     return;
   }

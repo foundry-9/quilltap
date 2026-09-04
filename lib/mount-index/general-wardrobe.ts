@@ -16,10 +16,12 @@
  * @module mount-index/general-wardrobe
  */
 
-import { logger } from '@/lib/logger';
-import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
-import { SHARED_WARDROBE_FOLDER, readSharedWardrobe } from '@/lib/mount-index/shared-wardrobe';
+import {
+  SHARED_WARDROBE_FOLDER,
+  ensureSharedWardrobeFolder,
+  readSharedWardrobe,
+} from '@/lib/mount-index/shared-wardrobe';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 /** Shared archetypes live under the same `Wardrobe/` folder name as character vaults. */
@@ -28,7 +30,9 @@ export const GENERAL_WARDROBE_FOLDER = SHARED_WARDROBE_FOLDER;
 /**
  * Idempotent: ensure the `Wardrobe/` folder exists in the "Quilltap General"
  * mount. Returns `{ mountPointId: null, folderId: null }` when the mount has
- * not yet been provisioned — write paths must tolerate this.
+ * not yet been provisioned — write paths must tolerate this. Delegates to
+ * `ensureSharedWardrobeFolder`, which also returns `folderId: null` (after a
+ * warn) when the folder cannot be created.
  */
 export async function ensureGeneralWardrobeFolder(): Promise<{
   mountPointId: string | null;
@@ -38,16 +42,8 @@ export async function ensureGeneralWardrobeFolder(): Promise<{
   if (!mountPointId) {
     return { mountPointId: null, folderId: null };
   }
-  try {
-    const folderId = await ensureFolderPath(mountPointId, GENERAL_WARDROBE_FOLDER);
-    return { mountPointId, folderId };
-  } catch (error) {
-    logger.warn('[GeneralWardrobe] Failed to ensure Wardrobe folder', {
-      mountPointId,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return { mountPointId, folderId: null };
-  }
+  const { folderId } = await ensureSharedWardrobeFolder(mountPointId);
+  return { mountPointId, folderId };
 }
 
 /**

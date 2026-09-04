@@ -102,6 +102,19 @@ export type DocMountFile = z.infer<typeof DocMountFileSchema>;
  */
 export const EDITABLE_TEXT_FILE_TYPES = ['markdown', 'txt', 'json', 'jsonl'] as const;
 
+export type EditableTextFileType = (typeof EDITABLE_TEXT_FILE_TYPES)[number];
+
+/**
+ * Whether `fileType` is one of {@link EDITABLE_TEXT_FILE_TYPES} — text-native
+ * content whose bytes live in `doc_mount_documents` (and travel in a `.qtap`
+ * as `doc_mount_document` records) rather than in a blob. Every consumer that
+ * splits "text document" from "blob" must use this one predicate, or the
+ * writer, the verifier, and the reindexer drift apart.
+ */
+export function isTextDocumentFileType(fileType: string): fileType is EditableTextFileType {
+  return (EDITABLE_TEXT_FILE_TYPES as readonly string[]).includes(fileType);
+}
+
 // ============================================================================
 // DOCUMENT MOUNT FILE LINK (the hard link — per-(mountPoint, relativePath))
 // ============================================================================

@@ -3,23 +3,14 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { NewChatForm } from './NewChatForm'
 import { CharacterPickerPanel } from './CharacterPickerPanel'
 import { useNewChat } from './hooks'
+import { toAutonomousSettingsHint } from './autonomous-settings-hint'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 import type { PreviousOutfitSummary } from '@/components/wardrobe'
-
-interface ChatSettingsResponse {
-  autonomousRoomSettings?: {
-    visibilityDefault?: 'owner_only' | 'household' | 'open'
-    destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
-    defaultFreshnessWindowMs?: number
-  }
-}
 
 interface NewChatModalProps {
   isOpen: boolean
@@ -80,21 +71,9 @@ export function NewChatModal({
 
   // Autonomous-room defaults to surface as hints in the form (visibility,
   // destructive-tool policy, freshness window). Only fetched in autonomous mode.
-  const { data: chatSettings } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
+  const { data: autonomousHint } = useChatSettingsQuery(toAutonomousSettingsHint, {
     enabled: isOpen && Boolean(autonomous),
   })
-  const autonomousHint = chatSettings?.autonomousRoomSettings
-    ? {
-        visibilityDefault: chatSettings.autonomousRoomSettings.visibilityDefault,
-        destructiveToolPolicy: chatSettings.autonomousRoomSettings.destructiveToolPolicy,
-        defaultFreshnessHours:
-          chatSettings.autonomousRoomSettings.defaultFreshnessWindowMs != null
-            ? Math.round(chatSettings.autonomousRoomSettings.defaultFreshnessWindowMs / (60 * 60 * 1000))
-            : undefined,
-      }
-    : undefined
 
   // Continuation mode: per-character per-slot summary of what was equipped at
   // the end of the source chat. Threaded through NewChatForm to OutfitSelector

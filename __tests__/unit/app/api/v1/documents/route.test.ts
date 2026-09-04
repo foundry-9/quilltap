@@ -434,11 +434,13 @@ describe('POST ?action=write-document', () => {
     );
   });
 
+  // The core translates the writers' mtime-mismatch errors into a
+  // DocumentConflictError (see writeDocumentFile); the route maps the type.
   it.each([
     ['mtime mismatch', 'mtime mismatch: expected 1, found 2'],
     ['an outside edit', 'file was modified by another process'],
   ])('409s on %s', async (_label, message) => {
-    writeDoc.mockRejectedValue(new Error(message));
+    writeDoc.mockRejectedValue(new DocumentConflictError(message));
     const { ctx } = makeCtx();
 
     const res = await POST(req('write-document', { filePath: 'Notes/a.md', content: 'x' }), ctx);

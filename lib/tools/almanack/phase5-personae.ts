@@ -13,7 +13,8 @@
  */
 
 import { logger } from '@/lib/logger';
-import { mainRows, mountRows, num } from './db';
+import { inClause, mainRows, mountRows, num } from './db';
+import { statefulMountIds } from './state-files';
 import type { GroupRow, PersonaeInfo, ProjectRow, TopCharacterRow } from './types';
 
 const moduleLogger = logger.child({ module: 'almanack:personae' });
@@ -42,7 +43,7 @@ const COUNT_REMOVED_PARTICIPANTS = true;
 
 /** Chats participated in, per character id — one pass over the whole table. */
 async function collectChatCountsByCharacter(userId: string): Promise<Map<string, number>> {
-  const typePlaceholders = EXCLUDED_CHAT_TYPES.map(() => '?').join(', ');
+  const excludedTypes = inClause(EXCLUDED_CHAT_TYPES);
   const statusClause = COUNT_REMOVED_PARTICIPANTS
     ? ''
     : `AND COALESCE(json_extract(p.value, '$.status'), 'active') != 'removed'`;
@@ -52,11 +53,11 @@ async function collectChatCountsByCharacter(userId: string): Promise<Map<string,
             COUNT(DISTINCT c."id")                 AS chats
      FROM "chats" c, json_each(c."participants") p
      WHERE c."userId" = ?
-       AND COALESCE(c."chatType", 'salon') NOT IN (${typePlaceholders})
+       AND COALESCE(c."chatType", 'salon') NOT IN ${excludedTypes.sql}
        AND json_valid(c."participants")
        ${statusClause}
      GROUP BY characterId`,
-    [userId, ...EXCLUDED_CHAT_TYPES],
+    [userId, ...excludedTypes.params],
     'personae.chatCountsByCharacter',
   );
 
@@ -96,10 +97,11 @@ export async function collectTopCharacters(
   const vaultIds = characters.map(c => c.vaultId).filter((id): id is string => !!id);
   const vaultSizes = new Map<string, number>();
   if (vaultIds.length > 0) {
+    const vaults = inClause(vaultIds);
     const sizeRows = mountRows<{ id: string; totalSizeBytes: number }>(
       `SELECT "id", "totalSizeBytes" FROM "doc_mount_points"
-       WHERE "id" IN (${vaultIds.map(() => '?').join(', ')})`,
-      vaultIds,
+       WHERE "id" IN ${vaults.sql}`,
+      vaults.params,
       'personae.vaultSizes',
     );
     for (const row of sizeRows) {
@@ -153,12 +155,12 @@ export async function collectProjects(): Promise<ProjectRow[]> {
   const chatsByProject = new Map(chatCounts.map(r => [r.projectId, num(r.n)]));
   const filesByProject = new Map(fileCounts.map(r => [r.projectId, num(r.n)]));
 
-  const projectIds = projects.map(p => p.id);
+  const projectIds = inClause(projects.map(p => p.id));
   const linkRows = mountRows<{ projectId: string; n: number }>(
     `SELECT "projectId", COUNT(*) AS n FROM "project_doc_mount_links"
-     WHERE "projectId" IN (${projectIds.map(() => '?').join(', ')})
+     WHERE "projectId" IN ${projectIds.sql}
      GROUP BY "projectId"`,
-    projectIds,
+    projectIds.params,
     'personae.projectStoreLinks',
   );
   const storesByProject = new Map(linkRows.map(r => [r.projectId, num(r.n)]));
@@ -168,29 +170,18 @@ export async function collectProjects(): Promise<ProjectRow[]> {
     .filter((id): id is string => !!id);
 
   const documentCounts = new Map<string, number>();
-  const statefulMounts = new Set<string>();
+  let statefulMounts = new Set<string>();
   if (mountIds.length > 0) {
-    const placeholders = mountIds.map(() => '?').join(', ');
+    const mounts = inClause(mountIds);
     for (const row of mountRows<{ mountPointId: string; n: number }>(
       `SELECT "mountPointId", COUNT(*) AS n FROM "doc_mount_file_links"
-       WHERE "mountPointId" IN (${placeholders}) GROUP BY "mountPointId"`,
-      mountIds,
+       WHERE "mountPointId" IN ${mounts.sql} GROUP BY "mountPointId"`,
+      mounts.params,
       'personae.projectDocuments',
     )) {
       documentCounts.set(row.mountPointId, num(row.n));
     }
-    for (const row of mountRows<{ mountPointId: string }>(
-      `SELECT DISTINCT l."mountPointId" AS mountPointId
-       FROM "doc_mount_file_links" l
-       JOIN "doc_mount_documents" d ON d."fileId" = l."fileId"
-       WHERE l."mountPointId" IN (${placeholders})
-         AND lower(l."relativePath") = 'state.json'
-         AND trim(d."content") NOT IN ('', '{}')`,
-      mountIds,
-      'personae.projectState',
-    )) {
-      statefulMounts.add(row.mountPointId);
-    }
+    statefulMounts = statefulMountIds(mountIds, 'personae.projectState');
   }
 
   return projects.map(project => ({
@@ -221,21 +212,20 @@ export async function collectGroups(): Promise<GroupRow[]> {
   );
   if (groups.length === 0) return [];
 
-  const groupIds = groups.map(g => g.id);
-  const placeholders = groupIds.map(() => '?').join(', ');
+  const groupIds = inClause(groups.map(g => g.id));
 
   // Membership and store links live in the mount index; the character NAMES
   // live in the main DB, so the two halves are joined in application code.
   const memberRows = mountRows<{ groupId: string; characterId: string }>(
     `SELECT "groupId", "characterId" FROM "group_character_members"
-     WHERE "groupId" IN (${placeholders})`,
-    groupIds,
+     WHERE "groupId" IN ${groupIds.sql}`,
+    groupIds.params,
     'personae.groupMembers',
   );
   const linkRows = mountRows<{ groupId: string; n: number }>(
     `SELECT "groupId", COUNT(*) AS n FROM "group_doc_mount_links"
-     WHERE "groupId" IN (${placeholders}) GROUP BY "groupId"`,
-    groupIds,
+     WHERE "groupId" IN ${groupIds.sql} GROUP BY "groupId"`,
+    groupIds.params,
     'personae.groupStoreLinks',
   );
   const storesByGroup = new Map(linkRows.map(r => [r.groupId, num(r.n)]));
@@ -243,10 +233,11 @@ export async function collectGroups(): Promise<GroupRow[]> {
   const characterIds = [...new Set(memberRows.map(r => r.characterId))];
   const namesById = new Map<string, string>();
   if (characterIds.length > 0) {
+    const members = inClause(characterIds);
     const nameRows = await mainRows<{ id: string; name: string }>(
       `SELECT "id", "name" FROM "characters"
-       WHERE "id" IN (${characterIds.map(() => '?').join(', ')})`,
-      characterIds,
+       WHERE "id" IN ${members.sql}`,
+      members.params,
       'personae.groupMemberNames',
     );
     for (const row of nameRows) namesById.set(row.id, row.name);
@@ -267,6 +258,16 @@ export async function collectGroups(): Promise<GroupRow[]> {
     linkedStores: storesByGroup.get(group.id) ?? 0,
     hasOfficialStore: !!group.officialMountPointId,
   }));
+}
+
+/** An empty cast list, for when the collector fails. */
+export function emptyPersonae(): PersonaeInfo {
+  return {
+    topCharacters: [],
+    countsRemovedParticipants: COUNT_REMOVED_PARTICIPANTS,
+    projects: [],
+    groups: [],
+  };
 }
 
 /** The whole cast list. */

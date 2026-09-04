@@ -40,6 +40,7 @@ import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import {
   WARDROBE_SLOT_TYPES,
   allEquippedItemIds,
+  bySlot,
 } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
@@ -73,9 +74,7 @@ export interface ResolvedEquippedOutfit {
 
 /** Fresh per-slot record with an empty array in every slot. */
 function emptyBySlot<T>(): Record<WardrobeItemType, T[]> {
-  return Object.fromEntries(
-    WARDROBE_SLOT_TYPES.map((slot) => [slot, [] as T[]]),
-  ) as Record<WardrobeItemType, T[]>;
+  return bySlot<T[]>(() => []);
 }
 
 function emptyResolved(): ResolvedEquippedOutfit {

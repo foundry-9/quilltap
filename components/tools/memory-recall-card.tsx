@@ -1,8 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { readErrorText } from './hooks/api-error-text'
 
 type ScopePolicy = 'down-weight' | 'exclude'
 
@@ -17,6 +21,8 @@ const DEFAULT_CONFIG: RecallConfig = {
   expandRelated: false,
   perTurnConversationSummaries: false,
 }
+
+const RECALL_CONFIG_URL = '/api/v1/memories?action=recall-config'
 
 const SCOPE_POLICY_OPTIONS: ReadonlyArray<{
   value: ScopePolicy
@@ -44,40 +50,35 @@ const SCOPE_POLICY_OPTIONS: ReadonlyArray<{
  */
 export function MemoryRecallCard() {
   const [config, setConfig] = useState<RecallConfig>(DEFAULT_CONFIG)
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const {
+    data: loaded,
+    isLoading: loading,
+    error: loadError,
+  } = useQuery({
+    queryKey: queryKeys.memories.recallConfig,
+    queryFn: ({ signal }) =>
+      apiFetch<{ settings?: Partial<RecallConfig> }>(RECALL_CONFIG_URL, { signal }),
+  })
+
+  // Seed the editable form from the server's settings whenever a fresh read lands.
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const response = await fetch('/api/v1/memories?action=recall-config')
-        if (!response.ok) {
-          throw new Error('Failed to load recall settings')
-        }
-        const data = await response.json()
-        if (!cancelled && data.settings) {
-          setConfig({ ...DEFAULT_CONFIG, ...data.settings })
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(getErrorMessage(err, 'Failed to load recall settings'))
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the form is local state seeded from the query
+    if (loaded?.settings) setConfig({ ...DEFAULT_CONFIG, ...loaded.settings })
+  }, [loaded])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- surface the read failure in the shared error line
+    if (loadError) setError(readErrorText(loadError, 'Failed to load recall settings'))
+  }, [loadError])
 
   const saveConfig = async (next: Partial<RecallConfig>) => {
     setSaving(true)
     setError(null)
     try {
-      const response = await fetch('/api/v1/memories?action=recall-config', {
+      const response = await fetch(RECALL_CONFIG_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(next),

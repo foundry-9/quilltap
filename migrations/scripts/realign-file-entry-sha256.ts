@@ -46,9 +46,8 @@
  * Migration ID: realign-file-entry-sha256-v1
  */
 
-import Database, { Database as DatabaseType } from 'better-sqlite3';
+import type { Database as DatabaseType } from 'better-sqlite3';
 import fs from 'fs';
-import path from 'path';
 import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import { reportProgress } from '../lib/progress';
@@ -56,33 +55,13 @@ import {
   isSQLiteBackend,
   getSQLiteDatabase,
   sqliteTableExists,
+  openMountIndexDbIfPresent,
 } from '../lib/database-utils';
 import { getMountIndexDatabasePath } from '../../lib/paths';
 
 const MIGRATION_ID = 'realign-file-entry-sha256-v1';
 const STORAGE_KEY_PREFIX = 'mount-blob:';
 const BATCH_SIZE = 500;
-
-function openMountIndexDb(): DatabaseType | null {
-  const dbPath = getMountIndexDatabasePath();
-  if (!fs.existsSync(path.dirname(dbPath))) return null;
-  if (!fs.existsSync(dbPath)) return null;
-  const db = new Database(dbPath);
-  try {
-    const pepper = process.env.ENCRYPTION_MASTER_PEPPER;
-    if (pepper) {
-      const keyHex = Buffer.from(pepper, 'base64').toString('hex');
-      db.pragma(`key = "x'${keyHex}'"`);
-    }
-    db.pragma('journal_mode = WAL');
-    db.pragma('busy_timeout = 5000');
-    db.pragma('foreign_keys = ON');
-    return db;
-  } catch (error) {
-    try { db.close(); } catch { /* ignore */ }
-    throw error;
-  }
-}
 
 /** `mount-blob:<mountPointId>:<blobId>` → `<blobId>`. */
 function parseBlobId(storageKey: string): string | null {
@@ -136,7 +115,7 @@ export const realignFileEntrySha256Migration: Migration = {
     let malformedKey = 0;
 
     try {
-      mountDb = openMountIndexDb();
+      mountDb = openMountIndexDbIfPresent({ foreignKeys: true });
       if (!mountDb) {
         return {
           id: MIGRATION_ID,

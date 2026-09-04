@@ -21,8 +21,9 @@
  * nothing outside this script may import it.
  */
 
-import { writeFileSync, mkdirSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join } from 'node:path';
+
+import { finalizeCharIndexEntries, writeCharIndex } from './lib/char-index-output';
 
 import emojibaseData from 'emojibase-data/en/data.json';
 import emojibaseMessages from 'emojibase-data/en/messages.json';
@@ -105,22 +106,12 @@ const entries: OutputEntry[] = (emojibaseData as RawEmoji[])
     }
 
     return { c: raw.emoji, n: name, s: shortcodes, k: keywords, g: group, o: raw.order as number };
-  })
-  // Emit in presentation order so the picker's grid and the empty-query result
-  // are correct even before the index applies its own comparator.
-  .sort((a, b) => {
-    const groupDelta = groupSlugs.indexOf(a.g) - groupSlugs.indexOf(b.g);
-    return groupDelta !== 0 ? groupDelta : a.o - b.o;
   });
 
-if (entries.length === 0) {
-  throw new Error('Refusing to write an empty emoji index — check the emojibase-data import.');
-}
-
-const duplicateChars = entries.length - new Set(entries.map((entry) => entry.c)).size;
-if (duplicateChars > 0) {
-  throw new Error(`Refusing to write emoji index: ${duplicateChars} duplicate characters.`);
-}
+finalizeCharIndexEntries(entries, groupSlugs, {
+  empty: 'Refusing to write an empty emoji index — check the emojibase-data import.',
+  duplicates: (count) => `Refusing to write emoji index: ${count} duplicate characters.`,
+});
 
 const emojibaseVersion = (
   require('emojibase-data/package.json') as { version: string }
@@ -136,8 +127,7 @@ const payload = {
   emoji: entries,
 };
 
-mkdirSync(dirname(OUT_PATH), { recursive: true });
-writeFileSync(OUT_PATH, JSON.stringify(payload), 'utf8');
+writeCharIndex(OUT_PATH, payload);
 
 console.log(
   `Wrote ${entries.length} emoji (${payload.groups.length} groups) to ${OUT_PATH}`,

@@ -162,10 +162,10 @@ Four vantage-point fields plus a foundational one (`manifesto`). **Not interchan
 
 ### Personified-feature avatars
 
-When a personified feature "speaks" via a synthetic message, its avatar lives at `public/images/avatars/<feature>-avatar.webp` (lowercase, hyphenated; e.g. `lantern-avatar.webp`). Referenced as `/images/avatars/<feature>-avatar.webp`; resolved in `getMessageAvatar` (`app/salon/[id]/page.tsx`), keyed off `systemSender`.
+When a personified feature "speaks" via a synthetic message, its avatar lives at `public/images/avatars/<feature>-avatar.webp` (lowercase, hyphenated; e.g. `lantern-avatar.webp`). Referenced as `/images/avatars/<feature>-avatar.webp`; the `systemSender` → avatar/title table is `STAFF_AVATARS` / `STAFF_TITLES` in `lib/chat/staff-display-names.ts` (looked up by `staffAvatar(sender)` from `getMessageAvatar` in `app/salon/[id]/SalonView.tsx`).
 
 - **Always WebP.** Convert with `cwebp -q 82 -m 6 -mt in.png -o out.webp`, then delete the PNG — every byte ships with the app.
-- **Adding a sender** means updating the `systemSender` Zod enum in `lib/schemas/chat.types.ts` **and** the matching `chat_messages` SQLite column, adding a `getMessageAvatar` branch, and adding the value to `public/schemas/qtap-export.schema.json`.
+- **Adding a sender** means updating the `systemSender` Zod enum in `lib/schemas/chat.types.ts` **and** the matching `chat_messages` SQLite column, adding a row to `STAFF_AVATARS` (and `STAFF_TITLES` if the sender has an epithet) in `lib/chat/staff-display-names.ts`, and adding the value to `public/schemas/qtap-export.schema.json`.
 - **The authoritative `systemSender` list is the enum in `lib/schemas/chat.types.ts`** — read it there rather than trusting a copy here. Per-sender responsibilities: `lantern` (image pipeline), `aurora` (avatar/wardrobe), `librarian` (Document-Mode + `doc_*`), `concierge` (dangerous-content), `host` (participation + autonomous-room), `prospero` (tool-use / connection-profile / Run-Tool bubbles; `private:true` runs hide via `targetParticipantIds`), `commonplaceBook` (memory-recall whispers, targeted), `ariel` (terminal PTY open/close), `carina` (renders with the **answerer's own** avatar — no `carina-avatar.webp`), `suparna` (Suparṇā's Post Office mail-delivery announcements — new letters in a character's vault `Mail/` folder), `pascal` (Pascal the Croupier's custom-tool (pseudo-tool) roll outcomes; the roll record lives in `pascalMeta`, posted server-side so a model cannot fudge a failure into a success).
 
 ## Instances and the CLI

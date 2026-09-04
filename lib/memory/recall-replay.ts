@@ -20,12 +20,11 @@
 import { getRepositories } from '@/lib/repositories/factory'
 import { extractMemorySearchKeywords, stripToolArtifacts, type MemorySearchExtraction } from './cheap-llm-tasks'
 import { searchMemoriesSemantic, type SemanticSearchResult } from './memory-service'
-import { recentlyWhisperedIdSet } from './recall-history'
 import { getMemoryRecallSettings } from '@/lib/instance-settings'
 import { partitionMessagesIntoTurns } from '@/lib/chat/context-summary'
 import { DYNAMIC_HEAD_DEFAULT_SIZE, RETRO_HEAD_SIZE } from '@/lib/chat/context/memory-injector'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
-import type { RecallContext } from './recall-tags'
+import { buildRetrospectiveProbes, buildTurnRecallContext } from './recall-tags'
 import type { MessageEvent } from '@/lib/schemas/types'
 import { createServiceLogger } from '@/lib/logging/create-logger'
 
@@ -173,19 +172,19 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     .filter(p => p.status !== 'removed' && p.characterId)
     .map(p => p.characterId)
 
-  const baseCtx: RecallContext = {
-    currentProjectId: chat.projectId ?? null,
-    scopePolicy: recallSettings.scopePolicy,
+  // Same assembly as the two live consumers (see lib/memory/recall-tags.ts).
+  // The OLD path leaves the retrospective flag off entirely so its episodic
+  // signals stay inert.
+  const baseCtx = buildTurnRecallContext({
+    chat,
+    recallSettings,
     turnContext: signals?.context ?? null,
     turnTemporal: signals?.temporal ?? null,
     presentAboutCharacterIds,
-    expandRelated: recallSettings.expandRelated,
-    recentlyWhisperedIds: recentlyWhisperedIdSet(chat.commonplaceRecallHistory),
     // Fresh-event boost against the REPLAYED TURN's clock, not wall-clock now —
     // replaying an old turn must reproduce what recall would have done then.
-    currentChatId: input.chatId,
     nowMs: Date.parse(clockIso),
-  }
+  })
 
   // OLD path — episodic signals inert (byte-identical to pre-overhaul recall).
   const oldResults = await searchMemoriesSemantic(character.id, query, {
@@ -197,16 +196,7 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
 
   // NEW path — retrospective flip + window + entity anchors + multi-probe.
   const retrospective = signals?.retrospective === true
-  const extraProbes: string[] = []
-  if (retrospective && signals) {
-    const entityProbe = (signals.entities ?? []).join(' ').trim()
-    if (entityProbe) extraProbes.push(entityProbe)
-    if (signals.paraphrase && signals.timeRange) {
-      extraProbes.push(
-        `${signals.paraphrase} (around ${signals.timeRange.from.slice(0, 10)} to ${signals.timeRange.to.slice(0, 10)})`,
-      )
-    }
-  }
+  const extraProbes = buildRetrospectiveProbes(signals, retrospective)
   const newResults = await searchMemoriesSemantic(character.id, query, {
     userId: input.userId,
     limit,
@@ -216,7 +206,7 @@ export async function runRecallReplay(input: RunRecallReplayInput): Promise<Reca
     // Ungated from the retrospective flag, exactly as the two live consumers
     // are — the replay is only useful while it mirrors production.
     occurredWithin: signals?.timeRange ?? null,
-    extraProbes: extraProbes.length > 0 ? extraProbes : undefined,
+    extraProbes,
   })
 
   logger.info('Recall replay complete', {

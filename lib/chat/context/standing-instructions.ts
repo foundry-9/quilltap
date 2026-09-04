@@ -152,11 +152,21 @@ export function renderStandingInstructionsSection(
 /**
  * Convenience wrapper: resolve + render in one call. Used by the async call
  * sites (`buildContext`, Carina, `self_inventory`) that hand the finished
- * string to a synchronous builder.
+ * string to a synchronous builder. Never throws: every lookup in
+ * {@link resolveStandingInstructions} fails soft and the renderer is pure, so
+ * callers need no backstop of their own.
  */
 export async function resolveStandingInstructionsSection(options: {
   projectId?: string | null
   characterId?: string | null
 }): Promise<string | null> {
-  return renderStandingInstructionsSection(await resolveStandingInstructions(options))
+  const section = renderStandingInstructionsSection(await resolveStandingInstructions(options))
+  if (section) {
+    logger.debug('[StandingInstructions] Standing instructions section rendered', {
+      projectId: options.projectId ?? null,
+      characterId: options.characterId ?? null,
+      sectionLength: section.length,
+    })
+  }
+  return section
 }

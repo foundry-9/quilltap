@@ -1,5 +1,6 @@
 'use client'
 
+import { patchChat } from '@/lib/chat/patch-chat'
 import type { Message } from '../types'
 import type { ActiveDocument, DocumentMode } from './useDocumentMode'
 
@@ -85,11 +86,7 @@ export async function persistChatDocumentState(
   chatId: string,
   updates: Partial<{ documentMode: DocumentMode; dividerPosition: number }>,
 ): Promise<void> {
-  await fetch(`/api/v1/chats/${chatId}`, {
-    method: 'PUT',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ chat: updates }),
-  })
+  await patchChat(chatId, updates)
 }
 
 export async function fetchActiveDocumentRecord(chatId: string): Promise<ActiveDocumentResponse> {

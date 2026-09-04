@@ -25,7 +25,7 @@ import {
 import { resolveStaleChatDays, retentionCutoff } from '@/lib/background-jobs/maintenance/retention-constants';
 import { isStale } from '@/lib/background-jobs/maintenance/collapse-stale-chat-assets';
 import { getErrorMessage } from '@/lib/error-utils';
-import { mainRow, mainRows, num } from './db';
+import { mainCount, mainRow, mainRows, num } from './db';
 import type {
   AutonomousRoomInfo,
   BackgroundJobInfo,
@@ -45,13 +45,182 @@ import type {
 const moduleLogger = logger.child({ module: 'almanack:ledgers' });
 
 /** `COUNT(*)` for a table, 0 when the table is missing or the query fails. */
-async function countRows(table: string, where = '', params: unknown[] = []): Promise<number> {
-  const row = await mainRow<{ n: number }>(
-    `SELECT COUNT(*) AS n FROM "${table}" ${where}`,
-    params,
-    `ledgers.count:${table}`,
-  );
-  return num(row?.n);
+function countRows(table: string, where = '', params: unknown[] = []): Promise<number> {
+  return mainCount(`SELECT COUNT(*) AS n FROM "${table}" ${where}`, params, `ledgers.count:${table}`);
+}
+
+// ---------------------------------------------------------------------------
+// Empty shapes — what each collector's section reads as when it fails.
+// ---------------------------------------------------------------------------
+
+/** The census with nothing counted. */
+export function emptyDatabaseStats(): EnhancedDatabaseStats {
+  return {
+    characters: 0,
+    favoriteCharacters: 0,
+    chats: 0,
+    memories: 0,
+    tags: 0,
+    projects: 0,
+    groups: 0,
+    connectionProfiles: {
+      total: 0,
+      webSearchEnabled: 0,
+      toolUseEnabled: 0,
+      dangerousCompatible: 0,
+    },
+    imageProfiles: 0,
+    embeddingProfiles: 0,
+    promptTemplates: { total: 0, builtIn: 0, custom: 0 },
+    roleplayTemplates: { total: 0, builtIn: 0, custom: 0 },
+  };
+}
+
+/** Chat totals with nothing tallied. */
+export function emptyChatStats(): ChatStatsInfo {
+  return {
+    totalEstimatedCostUSD: 0,
+    totalPromptTokens: 0,
+    totalCompletionTokens: 0,
+    totalMessages: 0,
+    agentModeChats: 0,
+    dangerousChats: 0,
+  };
+}
+
+/** The shape of the chats, with no chats. */
+export function emptyChatBreakdown(): ChatBreakdownInfo {
+  return {
+    byType: [],
+    participantHistogram: [],
+    pausedChats: 0,
+    documentModeChats: 0,
+    chatDocumentRows: 0,
+    multiDocumentChats: 0,
+    chatsWithEquippedOutfit: 0,
+    pendingOutfitNotificationChats: 0,
+    narrativeTimelineChats: 0,
+    chatsWithNonEmptyState: 0,
+  };
+}
+
+/** No autonomous rooms at all. */
+export function emptyAutonomousRooms(): AutonomousRoomInfo {
+  return {
+    total: 0,
+    byRunState: [],
+    scheduled: 0,
+    overdue: 0,
+    withTurnBudget: 0,
+    withTokenBudget: 0,
+    withWallClockBudget: 0,
+    withSpendCap: 0,
+    destructiveToolsAllowed: 0,
+    byVisibility: [],
+  };
+}
+
+/** What {@link collectMemoryBreakdown} returns: the section plus the per-character counts Phase 5 needs. */
+export interface MemoryCollectionResult {
+  breakdown: MemoryBreakdownInfo;
+  byCharacter: Map<string, number>;
+}
+
+/** An empty Commonplace Book. */
+export function emptyMemoryResult(): MemoryCollectionResult {
+  return {
+    breakdown: {
+      total: 0,
+      byKind: [],
+      bySource: [],
+      byWitnessedContext: [],
+      withOccurredAt: 0,
+      withNarrativeTime: 0,
+      withEntities: 0,
+      withEmbedding: 0,
+      reinforcedTotal: 0,
+      maxReinforcementCount: 0,
+      charactersWithMemories: 0,
+    },
+    byCharacter: new Map<string, number>(),
+  };
+}
+
+/** No characters in the cast. */
+export function emptyCharacterBreakdown(): CharacterBreakdownInfo {
+  return {
+    total: 0,
+    vaultLinked: 0,
+    vaultless: 0,
+    npcs: 0,
+    userControlled: 0,
+    carinaAnswerers: 0,
+    systemTransparent: 0,
+    canDressThemselves: 0,
+    canCreateOutfits: 0,
+    coreWhisperOverrides: 0,
+  };
+}
+
+/**
+ * Instance settings as they read with no rows written — the same defaults
+ * the settings readers fall back to, so a failed collector still reports
+ * what an unconfigured instance genuinely looks like.
+ */
+export function defaultInstanceSettings(): InstanceSettingsInfo {
+  return {
+    staleChatDays: 30,
+    chatsEligibleForNextSweep: 0,
+    maxConcurrentJobs: 4,
+    memoryRecall: { scopePolicy: 'down-weight', expandRelated: false },
+    memoryExtractionLimits: {
+      enabled: false,
+      maxPerHour: 20,
+      softStartFraction: 0.7,
+      softFloor: 0.7,
+    },
+    lastMaintenanceSweepAt: null,
+  };
+}
+
+/** An empty job queue. */
+export function emptyBackgroundJobs(): BackgroundJobInfo {
+  return {
+    byStatus: [],
+    byType: [],
+    failed: [],
+    attemptsExhausted: 0,
+    oldestPendingScheduledAt: null,
+  };
+}
+
+/** An embedding pipeline with nothing in it. */
+export function emptyEmbeddingPipeline(): EmbeddingPipelineInfo {
+  return {
+    statusByEntityType: [],
+    failed: 0,
+    conversationChunks: { total: 0, unembedded: 0 },
+    helpDocs: { total: 0, unembedded: 0 },
+    storedDimensions: [],
+    activeProfileDimensions: null,
+    dimensionMismatch: false,
+  };
+}
+
+/** No terminal sessions. */
+export function emptyTerminal(): TerminalInfo {
+  return { totalSessions: 0, liveSessions: 0, nonZeroExits: 0, distinctShells: [] };
+}
+
+/** An empty legacy file ledger. */
+export function emptyStorageStats(): StorageStats {
+  return {
+    totalFiles: 0,
+    totalSize: 0,
+    folders: [],
+    notOkFiles: 0,
+    generatedImagesByModel: [],
+  };
 }
 
 /** The headline census. */
@@ -304,10 +473,7 @@ export async function collectAutonomousRooms(userId: string): Promise<Autonomous
  * Also returns the per-character memory counts, which Phase 5's top-ten table
  * needs — one GROUP BY instead of one query per character.
  */
-export async function collectMemoryBreakdown(): Promise<{
-  breakdown: MemoryBreakdownInfo;
-  byCharacter: Map<string, number>;
-}> {
+export async function collectMemoryBreakdown(): Promise<MemoryCollectionResult> {
   const [totals, byKind, bySource, byWitnessed, perCharacter] = await Promise.all([
     mainRow<{
       total: number;

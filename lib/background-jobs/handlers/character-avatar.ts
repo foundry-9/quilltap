@@ -34,7 +34,8 @@ import {
   isImageModerationError,
   resolveUncensoredImageProfileForReroute,
 } from '@/lib/services/dangerous-content/provider-routing.service';
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import type { CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { resolveCheapLLMSelectionForUser } from '@/lib/llm/cheap-llm-user-selection';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
@@ -139,23 +140,8 @@ export async function handleCharacterAvatarGeneration(job: BackgroundJob): Promi
   if (dangerSettings.mode !== 'OFF' && dangerSettings.scanImagePrompts) {
     let cheapLLMSelection: CheapLLMSelection | null = null;
     try {
-      const allProfiles = await repos.connections.findByUserId(job.userId);
-      const cheapLLMConfig: CheapLLMConfig = chatSettings?.cheapLLMSettings ? {
-        strategy: chatSettings.cheapLLMSettings.strategy,
-        userDefinedProfileId: chatSettings.cheapLLMSettings.userDefinedProfileId ?? undefined,
-        defaultCheapProfileId: chatSettings.cheapLLMSettings.defaultCheapProfileId ?? undefined,
-        fallbackToLocal: chatSettings.cheapLLMSettings.fallbackToLocal,
-      } : DEFAULT_CHEAP_LLM_CONFIG;
-
-      const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-      if (defaultProfile) {
-        cheapLLMSelection = getCheapLLMProvider(
-          defaultProfile,
-          cheapLLMConfig,
-          allProfiles,
-          false
-        );
-      }
+      const resolved = await resolveCheapLLMSelectionForUser(repos, job.userId, chatSettings);
+      cheapLLMSelection = resolved?.selection ?? null;
     } catch (error) {
       logger.warn('[CharacterAvatar] Failed to build cheap LLM selection for danger classification', {
         context: 'background-jobs.character-avatar',

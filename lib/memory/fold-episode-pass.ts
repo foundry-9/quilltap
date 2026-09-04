@@ -24,7 +24,7 @@ import {
   type FoldEpisodeMessage,
 } from './cheap-llm-tasks'
 import { createMemoryWithGate } from './memory-service'
-import { resolveWhenPhrase } from './episodic'
+import { resolveEpisodicAnchors } from './episodic-anchors'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { MessageEvent } from '@/lib/schemas/types'
 import { isParticipantPresent } from '@/lib/schemas/types'
@@ -126,12 +126,15 @@ export async function runFoldEpisodePass(
     const sourceMessageId = lastStamped?.id ?? windowMessages[windowMessages.length - 1]?.id ?? null
 
     for (const episode of extraction.result) {
-      const resolved = episode.when ? resolveWhenPhrase(episode.when, clock.nowIso) : null
-      const occurredAt = resolved ?? windowStartIso
-      const narrativeTime =
-        input.timelineMode === 'narrative'
-          ? (episode.narrativeTime ?? episode.when ?? null)
-          : (episode.narrativeTime ?? null)
+      // The phrase resolves against the window's newest message (the clock the
+      // model was told), falling back to its oldest.
+      const { occurredAt, narrativeTime } = resolveEpisodicAnchors({
+        when: episode.when,
+        referenceIso: clock.nowIso,
+        fallbackIso: windowStartIso,
+        timelineMode: input.timelineMode,
+        narrativeTime: episode.narrativeTime,
+      })
 
       for (const participant of presentParticipants) {
         const characterId = participant.characterId

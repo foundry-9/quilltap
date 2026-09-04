@@ -17,16 +17,18 @@
 
 import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
+import { CONTAINMENT_KEYS, ORDERING_KEYS, type ComparatorKey } from '@/lib/pascal/custom-tool.types'
 import {
-  CONTAINMENT_COMPARATORS,
-  ORDERING_COMPARATORS,
-  type ComparatorKey,
+  gateConditionSlotKey,
+  nextDraftId,
+  reseatOperandForComparator,
   type DraftGateCondition,
   type DraftIssue,
   type GateMode,
   type ToolDraft,
 } from '@/lib/pascal/tool-draft'
 import { COMPARATOR_LABELS } from './comparator-labels'
+import { LiteralOperandField } from './LiteralOperandField'
 
 interface GateSectionProps {
   draft: ToolDraft
@@ -52,8 +54,6 @@ const MODE_OPTIONS: Array<{ mode: GateMode; label: string; title: string }> = [
 /** Every comparator is on offer: a metadata key's stored type is unknowable here. */
 const COMPARATORS: ComparatorKey[] = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains']
 
-let gateIdCounter = 0
-
 export function GateSection({ draft, issues, onChange, disabled = false }: Readonly<GateSectionProps>) {
   const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null)
 
@@ -78,19 +78,18 @@ export function GateSection({ draft, issues, onChange, disabled = false }: Reado
   }
 
   const addCondition = () => {
-    gateIdCounter += 1
     setDuplicateNotice(null)
     setConditions([
       ...draft.gateConditions,
-      { id: `new-gate-${gateIdCounter}`, key: '', comparator: 'eq', operand: { kind: 'boolean', value: true } },
+      { id: nextDraftId('new-gate'), key: '', comparator: 'eq', operand: { kind: 'boolean', value: true } },
     ])
   }
 
   const updateCondition = (id: string, next: DraftGateCondition) => {
     // One comparator object carries each key once, so a duplicate key+comparator
     // pair is blocked at the door rather than silently overwriting its twin.
-    const slot = `${next.key}:${next.comparator}`
-    const collision = draft.gateConditions.some((c) => c.id !== id && `${c.key}:${c.comparator}` === slot)
+    const slot = gateConditionSlotKey(next)
+    const collision = draft.gateConditions.some((c) => c.id !== id && gateConditionSlotKey(c) === slot)
     if (collision) {
       setDuplicateNotice(`The gate can test “${next.key}” with ${COMPARATOR_LABELS[next.comparator]} only once.`)
       return
@@ -196,20 +195,11 @@ interface GateChipProps {
 }
 
 function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonly<GateChipProps>) {
-  const ordering = ORDERING_COMPARATORS.has(condition.comparator)
-  const containment = CONTAINMENT_COMPARATORS.has(condition.comparator)
-  const operand = condition.operand
+  const ordering = ORDERING_KEYS.has(condition.comparator)
+  const containment = CONTAINMENT_KEYS.has(condition.comparator)
 
-  const handleComparatorChange = (comparator: ComparatorKey) => {
-    // Re-seat the operand in the widget the new comparator can actually use.
-    let next = operand
-    if (ORDERING_COMPARATORS.has(comparator) && operand.kind !== 'number') {
-      next = { kind: 'number', text: operand.kind === 'string' ? operand.text : '' }
-    } else if (CONTAINMENT_COMPARATORS.has(comparator) && operand.kind !== 'string') {
-      next = { kind: 'string', text: operand.kind === 'number' ? operand.text : '' }
-    }
-    onChange({ ...condition, comparator, operand: next })
-  }
+  const handleComparatorChange = (comparator: ComparatorKey) =>
+    onChange({ ...condition, comparator, operand: reseatOperandForComparator(condition.operand, comparator) })
 
   return (
     <div className={`flex items-center gap-1 flex-wrap rounded border px-2 py-1 ${hasError ? 'qt-input-error' : ''}`}>
@@ -243,60 +233,14 @@ function GateChip({ condition, hasError, disabled, onChange, onDelete }: Readonl
 
       {/* eq/neq alone need a type picker: with the stored type unknowable, only
           the author can say whether they mean 3, "3", or true. */}
-      {!ordering && !containment && (
-        <select
-          value={operand.kind}
-          onChange={(e) => {
-            const kind = e.target.value as 'number' | 'string' | 'boolean'
-            if (kind === 'number') {
-              onChange({ ...condition, operand: { kind: 'number', text: operand.kind === 'string' ? operand.text : '' } })
-            } else if (kind === 'string') {
-              onChange({ ...condition, operand: { kind: 'string', text: operand.kind === 'number' ? operand.text : '' } })
-            } else {
-              onChange({ ...condition, operand: { kind: 'boolean', value: true } })
-            }
-          }}
-          disabled={disabled}
-          className="qt-select qt-select-sm w-24 shrink-0"
-          aria-label="Literal type"
-        >
-          <option value="number">number</option>
-          <option value="string">text</option>
-          <option value="boolean">true/false</option>
-        </select>
-      )}
-
-      {operand.kind === 'boolean' ? (
-        <select
-          value={operand.value ? 'true' : 'false'}
-          onChange={(e) => onChange({ ...condition, operand: { kind: 'boolean', value: e.target.value === 'true' } })}
-          disabled={disabled}
-          className="qt-select qt-select-sm w-20"
-          aria-label="Operand value"
-        >
-          <option value="true">true</option>
-          <option value="false">false</option>
-        </select>
-      ) : operand.kind === 'string' ? (
-        <input
-          type="text"
-          value={operand.text}
-          onChange={(e) => onChange({ ...condition, operand: { kind: 'string', text: e.target.value } })}
-          disabled={disabled}
-          className="qt-input w-32 text-sm"
-          aria-label="Operand text"
-        />
-      ) : (
-        <input
-          type="number"
-          step="any"
-          value={operand.text}
-          onChange={(e) => onChange({ ...condition, operand: { kind: 'number', text: e.target.value } })}
-          disabled={disabled}
-          className="qt-input w-24 text-sm"
-          aria-label="Operand number"
-        />
-      )}
+      <LiteralOperandField
+        operand={condition.operand}
+        onChange={(operand) => onChange({ ...condition, operand })}
+        disabled={disabled}
+        showTypePicker={!ordering && !containment}
+        pickerClassName="w-24 shrink-0"
+        textClassName="w-32"
+      />
 
       {(ordering || containment) && (
         <span

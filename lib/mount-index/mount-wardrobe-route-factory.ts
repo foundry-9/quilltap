@@ -36,7 +36,8 @@ import {
 } from '@/lib/database/repositories/vault-overlay/wardrobe-writes';
 import { createWardrobeSchema, updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import { archivedPatch } from '@/lib/wardrobe/archived-patch';
+import { wardrobeItemFromCreateBody } from '@/lib/wardrobe/create-body';
+import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
 import {
   parseWardrobeInstructionsBody,
   handleReadWardrobeInstructions,
@@ -86,6 +87,67 @@ export interface MountWardrobeItemHandlers {
 }
 
 // ============================================================================
+// Shared steps — owner → official store resolution, cycle rejection
+// ============================================================================
+
+type OwnerRow = { id: string; name: string };
+
+type OwnerStoreResolution =
+  | { ok: true; mountPointId: string }
+  | { ok: false; response: NextResponse };
+
+/**
+ * The tier's owner-lookup and store-ensure steps, each mapped to the response
+ * the collection routes have always returned on failure: an unknown owner is
+ * `notFound(ownerLabel)`, an un-ensurable store is a 500. `resolveOwnerStore`
+ * composes the two; the create-shaped handlers call them separately so the
+ * body parse stays between them (an invalid body must never provision a store).
+ */
+function makeOwnerStoreSteps(config: MountWardrobeRouteConfig) {
+  const { ownerLabel, findOwner, ensureOfficialStore } = config;
+  const owner = ownerLabel.toLowerCase();
+
+  async function findOwnerRow(
+    repos: RequestContext['repos'],
+    id: string,
+  ): Promise<{ ok: true; row: OwnerRow } | { ok: false; response: NextResponse }> {
+    const row = await findOwner(repos, id);
+    if (!row) return { ok: false, response: notFound(ownerLabel) };
+    return { ok: true, row };
+  }
+
+  async function ensureStore(row: OwnerRow): Promise<OwnerStoreResolution> {
+    const ensured = await ensureOfficialStore(row.id, row.name);
+    if (!ensured) {
+      return { ok: false, response: serverError(`Failed to ensure ${owner} document store`) };
+    }
+    return { ok: true, mountPointId: ensured.mountPointId };
+  }
+
+  async function resolveOwnerStore(
+    repos: RequestContext['repos'],
+    id: string,
+  ): Promise<OwnerStoreResolution> {
+    const found = await findOwnerRow(repos, id);
+    if (!found.ok) return found;
+    return ensureStore(found.row);
+  }
+
+  return { findOwnerRow, ensureStore, resolveOwnerStore };
+}
+
+/**
+ * Cycle rejection from the vault writer surfaces as a plain Error → 400.
+ * Anything else is rethrown untouched. Use as `catch (e) { return ...(e) }`.
+ */
+function componentCycleToBadRequest(error: unknown): NextResponse {
+  if (error instanceof Error && error.message.includes('component cycle')) {
+    return badRequest(error.message);
+  }
+  throw error;
+}
+
+// ============================================================================
 // Collection — GET (list) / POST (create), each with ?action=instructions
 // ============================================================================
 
@@ -100,13 +162,12 @@ export function createMountWardrobeHandlers(
     ownerLabel,
     logTag,
     logIdKey,
-    findOwner,
-    ensureOfficialStore,
     readWardrobe,
     ensureWardrobeFolder,
     logListedItems,
   } = config;
   const owner = ownerLabel.toLowerCase();
+  const { findOwnerRow, ensureStore, resolveOwnerStore } = makeOwnerStoreSteps(config);
 
   // GET /api/v1/<owner>s/[id]/wardrobe?action=instructions
   async function handleGetInstructions(
@@ -114,16 +175,14 @@ export function createMountWardrobeHandlers(
     { repos }: RequestContext,
     { id }: { id: string },
   ): Promise<NextResponse> {
-    const row = await findOwner(repos, id);
-    if (!row) return notFound(ownerLabel);
+    const resolved = await resolveOwnerStore(repos, id);
+    if (!resolved.ok) return resolved.response;
+    const { mountPointId } = resolved;
 
-    const ensured = await ensureOfficialStore(row.id, row.name);
-    if (!ensured) return serverError(`Failed to ensure ${owner} document store`);
-
-    return handleReadWardrobeInstructions(ensured.mountPointId, ({ present }) => {
+    return handleReadWardrobeInstructions(mountPointId, ({ present }) => {
       logger.debug(`${logTag} Read ${owner} dressing instructions`, {
         [logIdKey]: id,
-        mountPointId: ensured.mountPointId,
+        mountPointId,
         present,
         context: 'wardrobe',
       });
@@ -136,20 +195,21 @@ export function createMountWardrobeHandlers(
     { user, repos }: RequestContext,
     { id }: { id: string },
   ): Promise<NextResponse> {
-    const row = await findOwner(repos, id);
-    if (!row) return notFound(ownerLabel);
+    const found = await findOwnerRow(repos, id);
+    if (!found.ok) return found.response;
 
     const body = await parseWardrobeInstructionsBody(req);
 
-    const ensured = await ensureOfficialStore(row.id, row.name);
-    if (!ensured) return serverError(`Failed to ensure ${owner} document store`);
-    await ensureWardrobeFolder(ensured.mountPointId);
+    const store = await ensureStore(found.row);
+    if (!store.ok) return store.response;
+    const { mountPointId } = store;
+    await ensureWardrobeFolder(mountPointId);
 
-    return handleWriteWardrobeInstructions(ensured.mountPointId, body, ({ cleared }) => {
+    return handleWriteWardrobeInstructions(mountPointId, body, ({ cleared }) => {
       logger.info(`${logTag} ${ownerLabel} dressing instructions updated`, {
         [logIdKey]: id,
         userId: user.id,
-        mountPointId: ensured.mountPointId,
+        mountPointId,
         cleared,
         context: 'wardrobe',
       });
@@ -160,26 +220,16 @@ export function createMountWardrobeHandlers(
   const GET = createContextParamsHandler<{ id: string }>(
     withActionDispatch({ instructions: handleGetInstructions },
     async (req: NextRequest, { repos }: RequestContext, { id }) => {
-      const row = await findOwner(repos, id);
-      if (!row) return notFound(ownerLabel);
+      const resolved = await resolveOwnerStore(repos, id);
+      if (!resolved.ok) return resolved.response;
+      const { mountPointId } = resolved;
+      await ensureWardrobeFolder(mountPointId);
 
-      const ensured = await ensureOfficialStore(row.id, row.name);
-      if (!ensured) {
-        return serverError(`Failed to ensure ${owner} document store`);
-      }
-      await ensureWardrobeFolder(ensured.mountPointId);
+      const wardrobeItems = await readWardrobe(mountPointId, readIncludeArchived(req));
 
-      const wardrobeItems = await readWardrobe(
-        ensured.mountPointId,
-        readIncludeArchived(req),
-      );
+      logListedItems?.({ ownerId: id, mountPointId, count: wardrobeItems.length });
 
-      logListedItems?.({ ownerId: id, mountPointId: ensured.mountPointId, count: wardrobeItems.length });
-
-      return successResponse({
-        mountPointId: ensured.mountPointId,
-        wardrobeItems,
-      });
+      return successResponse({ mountPointId, wardrobeItems });
     }),
   );
 
@@ -187,31 +237,21 @@ export function createMountWardrobeHandlers(
   const POST = createContextParamsHandler<{ id: string }>(
     withActionDispatch({ instructions: handlePostInstructions },
     async (req: NextRequest, { user, repos }: RequestContext, { id }) => {
-      const row = await findOwner(repos, id);
-      if (!row) return notFound(ownerLabel);
+      const found = await findOwnerRow(repos, id);
+      if (!found.ok) return found.response;
 
       const body = await req.json();
       const validated = createWardrobeSchema.parse(body);
 
-      const ensured = await ensureOfficialStore(row.id, row.name);
-      if (!ensured) {
-        return serverError(`Failed to ensure ${owner} document store`);
-      }
-      await ensureWardrobeFolder(ensured.mountPointId);
+      const store = await ensureStore(found.row);
+      if (!store.ok) return store.response;
+      const { mountPointId } = store;
+      await ensureWardrobeFolder(mountPointId);
 
       const now = new Date().toISOString();
       const item: WardrobeItem = {
         id: randomUUID(),
-        characterId: null,
-        title: validated.title,
-        description: validated.description ?? null,
-        imagePrompt: validated.imagePrompt ?? null,
-        types: validated.types,
-        componentItemIds: validated.componentItemIds ?? [],
-        appropriateness: validated.appropriateness ?? null,
-        isDefault: validated.isDefault ?? false,
-        replace: validated.replace ?? false,
-        migratedFromClothingRecordId: null,
+        ...wardrobeItemFromCreateBody(validated, null),
         archivedAt: null,
         createdAt: now,
         updatedAt: now,
@@ -219,31 +259,23 @@ export function createMountWardrobeHandlers(
 
       let stored;
       try {
-        stored = await createProjectWardrobeItem(ensured.mountPointId, item);
+        stored = await createProjectWardrobeItem(mountPointId, item);
       } catch (error) {
-        // Cycle rejection from the vault writer surfaces as a plain Error → 400.
-        if (error instanceof Error && error.message.includes('component cycle')) {
-          return badRequest(error.message);
-        }
-        throw error;
+        return componentCycleToBadRequest(error);
       }
 
       logger.info(`${logTag} Created ${owner} wardrobe item`, {
         [logIdKey]: id,
         userId: user.id,
-        mountPointId: ensured.mountPointId,
+        mountPointId,
         itemId: stored.id,
         title: stored.title,
         context: 'wardrobe',
       });
 
       // Return the freshly listed items so the client doesn't need a follow-up GET.
-      const wardrobeItems = await readWardrobe(ensured.mountPointId, true);
-      return created({
-        mountPointId: ensured.mountPointId,
-        wardrobeItem: stored,
-        wardrobeItems,
-      });
+      const wardrobeItems = await readWardrobe(mountPointId, true);
+      return created({ mountPointId, wardrobeItem: stored, wardrobeItems });
     }),
   );
 
@@ -260,18 +292,22 @@ export function createMountWardrobeHandlers(
 export function createMountWardrobeItemHandlers(
   config: MountWardrobeRouteConfig,
 ): MountWardrobeItemHandlers {
-  const { ownerLabel, logTag, logIdKey, findOwner, ensureOfficialStore, readWardrobe } = config;
+  const { ownerLabel, logTag, logIdKey, readWardrobe } = config;
   const owner = ownerLabel.toLowerCase();
+  const { resolveOwnerStore } = makeOwnerStoreSteps(config);
 
-  /** Resolve the tier's official store mount, or null when unavailable. */
+  /**
+   * Resolve the tier's official store mount, or null when unavailable. The
+   * item routes have always collapsed both failures (unknown owner, store not
+   * ensurable) to `notFound(ownerLabel)`, so the resolver's response is
+   * deliberately not surfaced here.
+   */
   async function resolveMount(
     repos: RequestContext['repos'],
     ownerId: string,
   ): Promise<string | null> {
-    const row = await findOwner(repos, ownerId);
-    if (!row) return null;
-    const ensured = await ensureOfficialStore(row.id, row.name);
-    return ensured?.mountPointId ?? null;
+    const resolved = await resolveOwnerStore(repos, ownerId);
+    return resolved.ok ? resolved.mountPointId : null;
   }
 
   // GET — fetch one item
@@ -304,7 +340,7 @@ export function createMountWardrobeItemHandlers(
         const items = await readWardrobe(mountPointId, true);
         const current = items.find((i) => i.id === itemId);
         if (!current) return notFound(`${ownerLabel} wardrobe item`);
-        archivePatch = archivedPatch(current.archivedAt, archived, new Date().toISOString());
+        archivePatch = applyArchiveFlag(current.archivedAt, archived);
       }
 
       let item;
@@ -314,11 +350,7 @@ export function createMountWardrobeItemHandlers(
           ...(archivePatch ?? {}),
         });
       } catch (error) {
-        // Cycle rejection from the vault writer surfaces as a plain Error → 400.
-        if (error instanceof Error && error.message.includes('component cycle')) {
-          return badRequest(error.message);
-        }
-        throw error;
+        return componentCycleToBadRequest(error);
       }
       if (!item) return notFound(`${ownerLabel} wardrobe item`);
 
@@ -341,19 +373,11 @@ export function createMountWardrobeItemHandlers(
       const mountPointId = await resolveMount(repos, id);
       if (!mountPointId) return notFound(ownerLabel);
 
-      // Clean up equipped references before deleting. Composite items may still
-      // reference this id in `componentItemIds`, but `expandComposites` tolerates
-      // unknown ids, so dangling references are harmless.
-      try {
-        await repos.chats.removeEquippedItemFromAllChats(itemId);
-      } catch (cleanupError) {
-        logger.warn(`${logTag} Cleanup of equipped references had issues, proceeding with delete`, {
-          [logIdKey]: id,
-          itemId,
-          context: 'wardrobe',
-          cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-        });
-      }
+      await cleanupEquippedRefs(repos.chats, itemId, logTag, {
+        [logIdKey]: id,
+        itemId,
+        context: 'wardrobe',
+      });
 
       const success = await deleteProjectWardrobeItem(mountPointId, itemId);
       if (!success) return notFound(`${ownerLabel} wardrobe item`);

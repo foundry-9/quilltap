@@ -13,6 +13,8 @@
  * below is type-only and erased at compile time.
  *
  * @param select Optional projection, passed straight to TanStack's `select`.
+ * @param options.enabled Gate the fetch (e.g. a modal that only needs the row
+ *   while open). Defaults to `true`.
  *
  * @module hooks/useChatSettingsQuery
  */
@@ -23,10 +25,14 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import type { ChatSettings } from '@/components/settings/chat-settings/types'
 
-export function useChatSettingsQuery<T = ChatSettings>(select?: (settings: ChatSettings) => T) {
+export function useChatSettingsQuery<T = ChatSettings>(
+  select?: (settings: ChatSettings) => T,
+  options?: { enabled?: boolean },
+) {
   return useQuery({
     queryKey: queryKeys.settings.chat,
     queryFn: ({ signal }) => apiFetch<ChatSettings>('/api/v1/settings/chat', { signal }),
     select,
+    enabled: options?.enabled,
   })
 }

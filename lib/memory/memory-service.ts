@@ -488,22 +488,13 @@ export async function createMemoryWithGate(
 }
 
 /**
- * Direct memory creation without gate (original flow).
- * Used when skipGate or skipEmbedding is true.
+ * The row persisted for a brand-new memory, shared by the direct and the
+ * gate-fed create paths so both stamp exactly the same fields (episodic
+ * spine included). `importance` is passed in because the caller keeps using
+ * the resolved value afterwards.
  */
-async function createMemoryDirect(
-  data: CreateMemoryOptions,
-  options: MemoryServiceOptions
-): Promise<Memory> {
-  const repos = getRepositories()
-  const importance = data.importance ?? 0.5
-
-  // Build create options for timestamp override (batch extraction)
-  const createOpts = data.sourceMessageTimestamp
-    ? { createdAt: data.sourceMessageTimestamp, updatedAt: data.sourceMessageTimestamp }
-    : undefined
-
-  const memory = await repos.memories.create({
+function memoryRowFromOptions(data: CreateMemoryOptions, importance: number) {
+  return {
     characterId: data.characterId,
     content: data.content,
     summary: data.summary,
@@ -523,7 +514,34 @@ async function createMemoryDirect(
     reinforcementCount: 1,
     relatedMemoryIds: [],
     reinforcedImportance: importance,
-  }, createOpts)
+  }
+}
+
+/**
+ * Create options for a new memory row: batch extraction overrides
+ * createdAt/updatedAt with the source message's timestamp.
+ */
+function memoryCreateOptions(data: CreateMemoryOptions): { createdAt: string; updatedAt: string } | undefined {
+  return data.sourceMessageTimestamp
+    ? { createdAt: data.sourceMessageTimestamp, updatedAt: data.sourceMessageTimestamp }
+    : undefined
+}
+
+/**
+ * Direct memory creation without gate (original flow).
+ * Used when skipGate or skipEmbedding is true.
+ */
+async function createMemoryDirect(
+  data: CreateMemoryOptions,
+  options: MemoryServiceOptions
+): Promise<Memory> {
+  const repos = getRepositories()
+  const importance = data.importance ?? 0.5
+
+  const memory = await repos.memories.create(
+    memoryRowFromOptions(data, importance),
+    memoryCreateOptions(data)
+  )
 
   if (options.skipEmbedding) {
     return memory
@@ -574,32 +592,10 @@ async function createMemoryDirectWithEmbedding(
   const repos = getRepositories()
   const importance = data.importance ?? 0.5
 
-  // Build create options for timestamp override (batch extraction)
-  const createOpts = data.sourceMessageTimestamp
-    ? { createdAt: data.sourceMessageTimestamp, updatedAt: data.sourceMessageTimestamp }
-    : undefined
-
-  const memory = await repos.memories.create({
-    characterId: data.characterId,
-    content: data.content,
-    summary: data.summary,
-    keywords: data.keywords || [],
-    tags: data.tags || [],
-    importance,
-    aboutCharacterId: data.aboutCharacterId || null,
-    chatId: data.chatId || null,
-    projectId: data.projectId ?? null,
-    source: data.source || 'MANUAL',
-    sourceMessageId: data.sourceMessageId || null,
-    witnessedContext: data.witnessedContext ?? null,
-    occurredAt: data.occurredAt ?? null,
-    narrativeTime: data.narrativeTime ?? null,
-    entities: data.entities ?? [],
-    kind: data.kind ?? 'semantic',
-    reinforcementCount: 1,
-    relatedMemoryIds: [],
-    reinforcedImportance: importance,
-  }, createOpts)
+  const memory = await repos.memories.create(
+    memoryRowFromOptions(data, importance),
+    memoryCreateOptions(data)
+  )
 
   if (embedding) {
     // Use the pre-computed embedding from the gate

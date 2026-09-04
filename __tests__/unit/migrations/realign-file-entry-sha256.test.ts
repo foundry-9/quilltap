@@ -18,9 +18,16 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 
-jest.mock('@/lib/logger', () => ({
-  logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
-}));
+jest.mock('@/lib/logger', () => {
+  const logger: Record<string, unknown> = {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  };
+  logger.child = jest.fn(() => logger);
+  return { logger };
+});
 
 jest.mock('../../../migrations/lib/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -34,6 +41,10 @@ jest.mock('../../../migrations/lib/database-utils', () => ({
   isSQLiteBackend: jest.fn(() => true),
   sqliteTableExists: jest.fn(() => true),
   getSQLiteDatabase: jest.fn(() => (global as Record<string, unknown>).__testMainDb),
+  // The mount-index side is opened for real (against the temp file the
+  // `lib/paths` mock below points at) so the SQLCipher key path is exercised.
+  openMountIndexDbIfPresent: jest.requireActual('../../../migrations/lib/database-utils')
+    .openMountIndexDbIfPresent,
 }));
 
 jest.mock('../../../lib/paths', () => ({

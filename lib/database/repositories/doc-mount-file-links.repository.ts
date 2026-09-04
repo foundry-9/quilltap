@@ -37,7 +37,11 @@ import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { ensureLinkNocaseUniqueIndex, ensureLinkGroupColumn } from './mount-index-case-repair';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
 import { LIKE_ESCAPE_CHAR, likeContainsPattern } from './like-escape';
-import { reapOrphanedStoreChildren, type OrphanedStoreChildrenSwept } from '@/lib/mount-index/orphan-store-reaper';
+import {
+  gcOrphanedFileRow,
+  reapOrphanedStoreChildren,
+  type OrphanedStoreChildrenSwept,
+} from '@/lib/mount-index/orphan-store-reaper';
 
 // Minimal subset of better-sqlite3's Database that the inline folder helper
 // uses. Avoids dragging the type into every link* method signature.
@@ -45,7 +49,7 @@ type SyncDb = {
   prepare(sql: string): {
     get(...params: unknown[]): unknown;
     all(...params: unknown[]): unknown[];
-    run(...params: unknown[]): unknown;
+    run(...params: unknown[]): { changes: number };
   };
 };
 
@@ -114,59 +118,6 @@ function fanOutGroupFileId(
   }
 
   return siblings;
-}
-
-/**
- * Drop a content row that no link references any more.
- *
- * Every write to a database-backed mount is content-addressed: it finds-or-
- * creates a `doc_mount_files` row for the NEW sha and repoints the link at it.
- * Without this the row the link just left behind lingers forever, holding its
- * `doc_mount_documents` / `doc_mount_blobs` payload — a slow leak that had
- * accumulated dozens of orphans in the wild. Content rows still referenced by
- * some other link (a real hard link, or an unrelated file that happens to have
- * identical bytes) are left alone.
- *
- * The payload rows are deleted explicitly rather than left to the FK cascade.
- * `ON DELETE CASCADE` is only present on databases whose tables came from the
- * add-doc-mount-file-links migration; tables created from the Zod schema by
- * generateDDL carry no foreign keys at all, so on those instances a cascade
- * would silently keep every payload forever. Deleting children first is a
- * no-op where the cascade does exist.
- *
- * The payload tables are created lazily by their repositories on first access
- * (`doc_mount_blobs` has no Zod schema, so `generateDDL` never mints it; a
- * document-only or restored-from-old-backup index may likewise never have held
- * a blob). Deleting from a table that has never been created throws
- * `no such table` — a hard failure on the second write to any path. So each
- * payload delete is guarded behind a table-existence check; a missing table has
- * nothing to collect anyway.
- *
- * Runs synchronously inside the caller's `db.transaction(...)`.
- *
- * @returns true when the row was collected
- */
-function tableExistsSync(db: SyncDb, name: string): boolean {
-  const row = db.prepare(
-    `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`
-  ).get(name) as { name: string } | undefined;
-  return Boolean(row);
-}
-
-function gcOrphanedFileRow(db: SyncDb, fileId: string | null): boolean {
-  if (!fileId) return false;
-  const still = db.prepare(
-    'SELECT COUNT(*) AS count FROM doc_mount_file_links WHERE fileId = ?'
-  ).get(fileId) as { count: number } | undefined;
-  if ((still?.count ?? 0) > 0) return false;
-  if (tableExistsSync(db, 'doc_mount_documents')) {
-    db.prepare('DELETE FROM doc_mount_documents WHERE fileId = ?').run(fileId);
-  }
-  if (tableExistsSync(db, 'doc_mount_blobs')) {
-    db.prepare('DELETE FROM doc_mount_blobs WHERE fileId = ?').run(fileId);
-  }
-  db.prepare('DELETE FROM doc_mount_files WHERE id = ?').run(fileId);
-  return true;
 }
 
 /**
@@ -765,8 +716,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           }
 
           // Last link gone — drop the file row and its payload. Shared with
-          // the write path so both collect content the same way.
-          return gcOrphanedFileRow(db, link.fileId);
+          // the write path and the store cascade so all collect content the
+          // same way.
+          return gcOrphanedFileRow(db, link.fileId) !== null;
         });
 
         const fileGC = tx();

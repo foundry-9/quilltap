@@ -18,11 +18,11 @@
 
 import { useMemo } from 'react'
 import {
-  ARCHIVED_OPTION_SUFFIX,
   CUSTOM_SCENARIO_VALUE,
   GENERAL_SCENARIO_PREFIX,
   GROUP_SCENARIO_PREFIX,
   PROJECT_SCENARIO_PREFIX,
+  scenarioOptionLabel,
   scenarioSelectionToValue,
   scenarioValueToSelection,
   type CharacterScenario,
@@ -105,10 +105,7 @@ export function ScenarioSelect({
         <optgroup label="Project Scenarios">
           {projectScenarios.map((s) => (
             <option key={`project:${s.path}`} value={`${PROJECT_SCENARIO_PREFIX}${s.path}`}>
-              {s.name}
-              {s.isDefault ? ' (project default)' : ''}
-              {s.archived ? ARCHIVED_OPTION_SUFFIX : ''}
-              {s.description ? ` — ${s.description}` : ''}
+              {scenarioOptionLabel(s, ' (project default)')}
             </option>
           ))}
         </optgroup>
@@ -117,10 +114,7 @@ export function ScenarioSelect({
         <optgroup label="General Scenarios">
           {generalScenarios.map((s) => (
             <option key={`general:${s.path}`} value={`${GENERAL_SCENARIO_PREFIX}${s.path}`}>
-              {s.name}
-              {s.isDefault ? ' (general default)' : ''}
-              {s.archived ? ARCHIVED_OPTION_SUFFIX : ''}
-              {s.description ? ` — ${s.description}` : ''}
+              {scenarioOptionLabel(s, ' (general default)')}
             </option>
           ))}
         </optgroup>
@@ -129,10 +123,7 @@ export function ScenarioSelect({
         <optgroup key={`group:${groupId}`} label={`Group Scenarios: ${groupName}`}>
           {scenarios.map((s) => (
             <option key={`group:${groupId}:${s.path}`} value={`${GROUP_SCENARIO_PREFIX}${groupId}:${s.path}`}>
-              {s.name}
-              {s.isDefault ? ' (group default)' : ''}
-              {s.archived ? ARCHIVED_OPTION_SUFFIX : ''}
-              {s.description ? ` — ${s.description}` : ''}
+              {scenarioOptionLabel(s, ' (group default)')}
             </option>
           ))}
         </optgroup>
@@ -141,10 +132,10 @@ export function ScenarioSelect({
         <optgroup label="Character Scenarios">
           {characterScenarios.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.title}
-              {characterDefaultScenarioId === s.id ? ' (character default)' : ''}
-              {s.archived ? ARCHIVED_OPTION_SUFFIX : ''}
-              {s.description ? ` — ${s.description}` : ''}
+              {scenarioOptionLabel(
+                { name: s.title, isDefault: characterDefaultScenarioId === s.id, archived: s.archived, description: s.description },
+                ' (character default)'
+              )}
             </option>
           ))}
         </optgroup>

@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { useRealtimeConnected, useRealtimeTopic } from '@/hooks/useRealtime'
+import { useRealtimeFallbackPoll, useRealtimeTopic } from '@/hooks/useRealtime'
 import ChatSidebar from '@/components/chat/ChatSidebar'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
@@ -27,6 +27,7 @@ import {
 import { Tooltip } from '@/components/ui/Tooltip'
 import { ConciergeTooltipBody } from '@/components/chat/ConciergeMark'
 import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer'
+import { staffAvatar } from '@/lib/chat/staff-display-names'
 import {
   type TurnState,
   type TurnSelectionResult,
@@ -39,7 +40,7 @@ import {
   isUserDrivenSeat,
   findActiveUserParticipant,
 } from '@/lib/chat/turn-manager'
-import type { ChatEvent, ChatParticipantBase, Character } from '@/lib/schemas/types'
+import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
 
 // Import extracted hooks
@@ -61,6 +62,8 @@ import {
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
 import { groupToolMessagesIntoAssistants } from './group-tool-messages'
+import { toTurnEvents } from './turn-events'
+import { appendMessageOnce } from './hooks/useSSEStreaming'
 import { buildRenderItems } from './announcement-render-items'
 import { isMessageVisibleToOperator } from './whisper-visibility'
 import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
@@ -263,14 +266,11 @@ export function SalonView({ chatId }: SalonViewProps) {
     if (avatarWatch) void checkAvatarUpdate(avatarWatch)
   }, id)
 
-  const realtimeConnected = useRealtimeConnected()
-  useEffect(() => {
-    if (!avatarWatch || realtimeConnected) return
-    const interval = setInterval(() => {
-      void checkAvatarUpdate(avatarWatch)
-    }, AVATAR_POLL_INTERVAL_MS)
-    return () => clearInterval(interval)
-  }, [avatarWatch, realtimeConnected, checkAvatarUpdate])
+  useRealtimeFallbackPoll(
+    () => { if (avatarWatch) void checkAvatarUpdate(avatarWatch) },
+    AVATAR_POLL_INTERVAL_MS,
+    avatarWatch != null,
+  )
 
   useEffect(() => {
     if (!avatarWatch) return
@@ -366,10 +366,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   // The Librarian announces document opens and saves as ASSISTANT-role system messages, so the
   // user never loses their turn. The hook hands us the server-persisted message; we just append.
   const appendLibrarianMessage = useCallback((message: Message) => {
-    setMessages(prev => {
-      if (prev.some(m => m.id === message.id)) return prev
-      return [...prev, message]
-    })
+    setMessages(prev => appendMessageOnce(prev, message))
   }, [setMessages])
   const documentModeHook = useDocumentMode({
     chatId: id,
@@ -674,22 +671,10 @@ export function SalonView({ chatId }: SalonViewProps) {
   )
 
   // --- Unpause callback for turn management ---
-  const unpauseChat = useCallback(async () => {
-    setIsPaused(false)
-    chatControls.userStoppedStreamRef.current = false
-    try {
-      const response = await fetch(`/api/v1/chats/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { isPaused: false } }),
-      })
-      if (!response.ok) {
-        console.error('[Chat] Failed to persist unpause state', response.status)
-      }
-    } catch (error) {
-      console.error('[Chat] Error persisting unpause state', error)
-    }
-  }, [id, chatControls.userStoppedStreamRef])
+  // The pause setter without its toast: clears the local pause and the
+  // user-stopped flag, then persists.
+  const { setPauseState } = chatControls
+  const unpauseChat = useCallback(() => setPauseState(false), [setPauseState])
 
   // Stable callback wrapper using ref
   const stableTriggerContinueMode = useCallback(
@@ -744,26 +729,8 @@ export function SalonView({ chatId }: SalonViewProps) {
   useEffect(() => {
     if (participantsWithImpersonation.participantsAsBase.length === 0 || messages.length === 0) return
 
-    const messageEvents = messages.map(m => ({
-      type: 'message' as const,
-      id: m.id,
-      role: m.role as 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL',
-      content: m.content,
-      participantId: m.participantId,
-      createdAt: m.createdAt,
-      attachments: m.attachments?.map(a => a.id) ?? [],
-      targetParticipantIds: m.targetParticipantIds ?? null,
-      // Staff fields so turn-pass records (systemSender='host', systemKind='turn-pass')
-      // are recognized by calculateTurnStateFromHistory / the skip guard.
-      systemSender: m.systemSender ?? null,
-      systemKind: m.systemKind ?? null,
-      hostEvent: m.hostEvent ?? null,
-    }))
-
     const newTurnState = calculateTurnStateFromHistory({
-      // Cast: the client Message shape carries nullable hostEvent fields the
-      // schema MessageEvent narrows; the turn-state reader only reads them.
-      messages: messageEvents as unknown as Parameters<typeof calculateTurnStateFromHistory>[0]['messages'],
+      messages: toTurnEvents(messages) as Parameters<typeof calculateTurnStateFromHistory>[0]['messages'],
       participants: participantsWithImpersonation.participantsAsBase,
       userParticipantId: participantsWithImpersonation.userParticipantId,
       spokenThisCycleParticipantIds: chat?.spokenThisCycleParticipantIds,
@@ -1221,35 +1188,12 @@ export function SalonView({ chatId }: SalonViewProps) {
         }
       }
     }
-    if (message.systemSender === 'lantern') {
-      return { name: 'The Lantern', title: null, avatarUrl: '/images/avatars/lantern-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'aurora') {
-      return { name: 'Aurora', title: null, avatarUrl: '/images/avatars/aurora-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'librarian') {
-      return { name: 'The Librarian', title: null, avatarUrl: '/images/avatars/librarian-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'concierge') {
-      return { name: 'The Concierge', title: null, avatarUrl: '/images/avatars/concierge-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'prospero') {
-      return { name: 'Prospero', title: null, avatarUrl: '/images/avatars/prospero-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'host') {
-      return { name: 'The Host', title: null, avatarUrl: '/images/avatars/host-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'commonplaceBook') {
-      return { name: 'The Commonplace Book', title: null, avatarUrl: '/images/avatars/commonplace-book-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'ariel') {
-      return { name: 'Ariel', title: null, avatarUrl: '/images/avatars/ariel-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'suparna') {
-      return { name: 'Suparṇā', title: null, avatarUrl: '/images/avatars/suparna-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'pascal') {
-      return { name: 'Pascal', title: 'the Croupier', avatarUrl: '/images/avatars/pascal-avatar.webp', defaultImage: null }
+    // Staff-authored messages render with the member's own name and face,
+    // from the one table in lib/chat/staff-display-names.ts. Carina (null
+    // there) and an unrecognised sender fall through.
+    const staff = staffAvatar(message.systemSender)
+    if (staff) {
+      return { ...staff, defaultImage: null }
     }
     // Carina (inline LLM queries): a reference answer renders with the ANSWERER
     // character's own avatar — there is no dedicated Carina staff avatar. Resolve
@@ -1528,21 +1472,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           let mustSpeak = false
           try {
             if (next.character) {
-              const events = messages.map(m => ({
-                type: 'message' as const,
-                id: m.id,
-                role: m.role,
-                content: m.content,
-                participantId: m.participantId,
-                createdAt: m.createdAt,
-                targetParticipantIds: m.targetParticipantIds ?? null,
-                systemSender: m.systemSender ?? null,
-                systemKind: m.systemKind ?? null,
-                hostEvent: m.hostEvent ?? null,
-                isSilentMessage: m.isSilentMessage,
-              })) as unknown as ChatEvent[]
               const eligibility = computeSkipEligibility({
-                events,
+                events: toTurnEvents(messages),
                 participants: participantsWithImpersonation.participantsAsBase as unknown as ChatParticipantBase[],
                 respondingParticipantId: next.id,
                 respondingCharacter: next.character as unknown as Character,

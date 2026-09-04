@@ -143,6 +143,20 @@ export function findActiveUserParticipant(
 }
 
 /**
+ * The character seats present in the room this turn: CHARACTER participants
+ * whose status is present (active or silent) and who carry a `characterId`.
+ * The one predicate for "who is in the scene" — turn skipping, cycle wrap,
+ * responder resolution, and the multi-seat guard all read it.
+ */
+export function getPresentCharacterSeats(
+  participants: ReadonlyArray<ChatParticipantBase>
+): ChatParticipantBase[] {
+  return participants.filter(p =>
+    p.type === 'CHARACTER' && isParticipantPresent(p.status) && !!p.characterId
+  );
+}
+
+/**
  * Gets all user-controlled participants (controlledBy === 'user').
  */
 export function findUserControlledParticipants(

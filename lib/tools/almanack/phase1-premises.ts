@@ -80,6 +80,11 @@ async function statSize(label: string, filePath: string): Promise<DatabaseSizeIn
   }
 }
 
+/** Security info with nothing known — no passphrase, no databases found. */
+export function emptyDatabaseSecurity(): DatabaseSecurityInfo {
+  return { passphraseProtected: false, databases: [], highestAppVersion: null };
+}
+
 /**
  * Collect database security information.
  *
@@ -177,6 +182,16 @@ export async function collectBackupStatus(): Promise<BackupInfo[]> {
       totalSizeBytes: bucket.bytes,
     };
   });
+}
+
+/** Migration state with nothing recorded. */
+export function emptyMigrationState(): MigrationStateInfo {
+  return {
+    appliedCount: 0,
+    lastMigrationId: null,
+    lastMigrationAt: null,
+    lastMigrationVersion: null,
+  };
 }
 
 /** How far up the migration ladder this database has climbed. */

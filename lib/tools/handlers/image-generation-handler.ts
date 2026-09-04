@@ -25,7 +25,8 @@ import {
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { preparePromptExpansion, buildExpansionContext, parsePlaceholders, resolvePlaceholders } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { buildCheapLLMConfig, resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { resolveCheapLLMSelectionForUser, selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
 import type { CheapLLMSettings, DangerousContentSettings } from '@/lib/schemas/settings.types';
 import type { ChatSettings } from '@/lib/schemas/types';
 import {
@@ -58,25 +59,6 @@ import {
   resolveDepictionGuidelines,
   getProjectOfficialMountPointId,
 } from '@/lib/image-gen/aesthetic';
-
-/**
- * Build the cheap-LLM config for this handler's ad-hoc LLM calls from a chat's
- * `cheapLLMSettings`, falling back to the global default when unset. Shared by
- * the prompt-expansion, appearance-resolution, and danger-classification paths
- * so all three resolve the cheap model identically.
- */
-function buildCheapLLMConfigFromSettings(
-  cheapLLMSettings: CheapLLMSettings | null | undefined,
-): CheapLLMConfig {
-  return cheapLLMSettings
-    ? {
-        strategy: cheapLLMSettings.strategy,
-        userDefinedProfileId: cheapLLMSettings.userDefinedProfileId ?? undefined,
-        defaultCheapProfileId: cheapLLMSettings.defaultCheapProfileId ?? undefined,
-        fallbackToLocal: cheapLLMSettings.fallbackToLocal,
-      }
-    : DEFAULT_CHEAP_LLM_CONFIG;
-}
 
 /**
  * Execution context for image generation tool
@@ -611,12 +593,9 @@ async function expandPromptWithDescriptions(
 
     // If no override selection, use the standard cheap LLM logic
     if (!cheapLLMSelection) {
-      // Build config from user settings if provided, otherwise use defaults
-      const cheapLLMConfig = buildCheapLLMConfigFromSettings(cheapLLMSettings);
+      const resolved = selectCheapLLMFromProfiles(allProfiles, buildCheapLLMConfig({ cheapLLMSettings }));
 
-      const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-
-      if (!defaultProfile) {
+      if (!resolved) {
         // No profiles available, return original prompt
         return {
           expandedPrompt: originalPrompt,
@@ -624,13 +603,7 @@ async function expandPromptWithDescriptions(
         };
       }
 
-      cheapLLMSelection = getCheapLLMProvider(
-        defaultProfile,
-        cheapLLMConfig,
-        allProfiles,
-        false // ollamaAvailable - could be detected
-      );
-
+      cheapLLMSelection = resolved.selection;
     }
 
     // Resolve default aesthetics (scene + figures, project-over-global) and the
@@ -933,18 +906,8 @@ async function resolveAppearances(
       // Build a cheap LLM selection for appearance resolution
       let appearanceLLMSelection = cheapLLMSelection;
       if (!appearanceLLMSelection) {
-        const allProfiles = await repos.connections.findByUserId(context.userId);
-        const cheapLLMConfig = buildCheapLLMConfigFromSettings(chatSettings?.cheapLLMSettings);
-
-        const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-        if (defaultProfile) {
-          appearanceLLMSelection = getCheapLLMProvider(
-            defaultProfile,
-            cheapLLMConfig,
-            allProfiles,
-            false
-          );
-        }
+        const resolved = await resolveCheapLLMSelectionForUser(repos, context.userId, chatSettings);
+        appearanceLLMSelection = resolved?.selection ?? null;
       }
 
       // For dangerous chats, use uncensored provider for appearance resolution
@@ -1154,19 +1117,8 @@ async function loadSettingsAndBuildCheapLLM(
   let cheapLLMSelection: CheapLLMSelection | null = null;
   if (dangerSettings.mode !== 'OFF' && (dangerSettings.scanImagePrompts || dangerSettings.scanImageGeneration)) {
     try {
-      const repos = getRepositories();
-      const allProfiles = await repos.connections.findByUserId(userId);
-      const cheapLLMConfig = buildCheapLLMConfigFromSettings(chatSettings?.cheapLLMSettings);
-
-      const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-      if (defaultProfile) {
-        cheapLLMSelection = getCheapLLMProvider(
-          defaultProfile,
-          cheapLLMConfig,
-          allProfiles,
-          false
-        );
-      }
+      const resolved = await resolveCheapLLMSelectionForUser(getRepositories(), userId, chatSettings);
+      cheapLLMSelection = resolved?.selection ?? null;
     } catch (error) {
       logger.warn('[Image Generation] Failed to build cheap LLM selection for danger classification', {
         errorMessage: getErrorMessage(error),

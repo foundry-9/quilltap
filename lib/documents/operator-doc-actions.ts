@@ -35,6 +35,7 @@ import {
 } from '@/lib/mount-index/database-store';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
+import type { ChatMetadata } from '@/lib/schemas/types';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -54,7 +55,28 @@ export const STANDALONE_ACCESS_CONTEXT: DocumentAccessContext = Object.freeze({
   characterIds: [],
 });
 
-/** The file already exists where a rename/create wants to land. */
+/**
+ * The access context a chat's Document Mode resolves against: the chat's
+ * project plus every character participant (deduped). The chat-scoped document
+ * actions and the qtap:// target stream both derive it from the same row.
+ */
+export function documentAccessContextForChat(
+  chat: Pick<ChatMetadata, 'projectId' | 'participants'>,
+): DocumentAccessContext {
+  const characterIds = new Set<string>();
+  // A partially-hydrated row (fixtures, older callers) may lack the array.
+  const participants = Array.isArray(chat.participants) ? chat.participants : [];
+  for (const participant of participants) {
+    if (participant?.characterId) characterIds.add(participant.characterId);
+  }
+  return { projectId: chat.projectId ?? undefined, characterIds: Array.from(characterIds) };
+}
+
+/**
+ * The document changed underneath the caller: a rename/create target already
+ * exists, or a write's mtime precondition failed because the file was edited
+ * elsewhere since it was read. Routes map it to a 409.
+ */
 export class DocumentConflictError extends Error {}
 
 /** The requested document does not exist. */
@@ -278,9 +300,20 @@ export async function openDocumentFile(
 }
 
 /**
+ * The mtime precondition failure as minted by the three store writers
+ * (`writeFileWithMtimeCheck` on disk, the database store, the mount-index
+ * file store) — recognised by message, since two of them throw plain Errors.
+ */
+function isMtimeConflict(error: unknown): boolean {
+  const message = getErrorMessage(error);
+  return message.includes('mtime mismatch') || message.includes('modified by another process');
+}
+
+/**
  * Write a document's content with mtime conflict detection, scheduling the
- * store re-index for document_store scope. Propagates the mtime-mismatch
- * error from {@link writeFileWithMtimeCheck} for the route to map to a 409.
+ * store re-index for document_store scope. An mtime mismatch from
+ * {@link writeFileWithMtimeCheck} surfaces as a {@link DocumentConflictError}
+ * (keeping the writer's own message) for the route to map to a 409.
  */
 export async function writeDocumentFile(
   ctx: DocumentAccessContext,
@@ -299,7 +332,21 @@ export async function writeDocumentFile(
     mountPoint: params.mountPoint,
   });
 
-  const { mtime } = await writeFileWithMtimeCheck(resolved, params.content, params.mtime);
+  let mtime: number;
+  try {
+    ({ mtime } = await writeFileWithMtimeCheck(resolved, params.content, params.mtime));
+  } catch (error) {
+    if (isMtimeConflict(error)) {
+      logger.debug('writeDocumentFile: mtime conflict', {
+        filePath: params.filePath,
+        scope: params.scope,
+        mountPoint: params.mountPoint,
+        error: getErrorMessage(error),
+      });
+      throw new DocumentConflictError(getErrorMessage(error));
+    }
+    throw error;
+  }
 
   if (params.scope === 'document_store' && resolved.mountPointId) {
     scheduleDocumentStoreRefresh(

@@ -24,7 +24,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { LoadedPlugin } from '@/lib/plugins/manifest-loader';
-import { mainRows, num } from './db';
+import { mainCount, mainRows, num } from './db';
 import type {
   ApiKeyUsageRow,
   DesignatedProfileInfo,
@@ -53,6 +53,19 @@ async function getPluginVersion(plugin: LoadedPlugin): Promise<string> {
   } catch {
     return plugin.manifest.version;
   }
+}
+
+/** No plugins at all — the section's shape when the collector fails. */
+export function emptyPluginBreakdown(): PluginBreakdown {
+  return {
+    enabled: [],
+    disabled: [],
+    byCapability: [],
+    npmInstalled: 0,
+    bundled: 0,
+    pluginConfigRows: 0,
+    characterPluginDataRows: 0,
+  };
 }
 
 /**
@@ -92,13 +105,9 @@ export async function collectPluginInfo(userId: string): Promise<PluginBreakdown
   enabled.sort((a, b) => a.title.localeCompare(b.title));
   disabled.sort((a, b) => a.title.localeCompare(b.title));
 
-  const [configRows, characterDataRows] = await Promise.all([
-    mainRows<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM "plugin_configs"`,
-      [],
-      'machinery.pluginConfigs',
-    ),
-    mainRows<{ n: number }>(
+  const [pluginConfigRows, characterPluginDataRows] = await Promise.all([
+    mainCount(`SELECT COUNT(*) AS n FROM "plugin_configs"`, [], 'machinery.pluginConfigs'),
+    mainCount(
       `SELECT COUNT(*) AS n FROM "character_plugin_data"`,
       [],
       'machinery.characterPluginData',
@@ -115,8 +124,8 @@ export async function collectPluginInfo(userId: string): Promise<PluginBreakdown
       .sort((a, b) => b.count - a.count || a.capability.localeCompare(b.capability)),
     npmInstalled: [...enabled, ...disabled].filter(p => p.installedFromNpm).length,
     bundled: [...enabled, ...disabled].filter(p => !p.installedFromNpm).length,
-    pluginConfigRows: num(configRows[0]?.n),
-    characterPluginDataRows: num(characterDataRows[0]?.n),
+    pluginConfigRows,
+    characterPluginDataRows,
   };
 }
 
@@ -325,16 +334,18 @@ export async function collectApiKeyUsage(userId: string): Promise<ApiKeyUsageRow
   }));
 }
 
+/** The three fields the report shows for a designated profile; `{}` when there is none. */
+function designated(
+  profile: { provider: string; modelName: string; name: string } | null | undefined,
+): DesignatedProfileInfo {
+  if (!profile) return {};
+  return { provider: profile.provider, model: profile.modelName, profileName: profile.name };
+}
+
 /** The profile designated as the cheap background worker. */
 export async function collectCheapLLMInfo(userId: string): Promise<DesignatedProfileInfo> {
   const profiles = await getUserRepositories(userId).connections.findAll();
-  const cheapProfile = profiles.find(p => p.isCheap);
-  if (!cheapProfile) return {};
-  return {
-    provider: cheapProfile.provider,
-    model: cheapProfile.modelName,
-    profileName: cheapProfile.name,
-  };
+  return designated(profiles.find(p => p.isCheap));
 }
 
 /** The separate override used for expanding image prompts, if configured. */
@@ -346,83 +357,80 @@ export async function collectImagePromptLLMInfo(userId: string): Promise<Designa
   const profileId = chatSettings?.cheapLLMSettings?.imagePromptProfileId;
   if (!profileId) return {};
 
-  const profile = await repos.connections.findById(profileId);
-  if (!profile) return {};
-  return { provider: profile.provider, model: profile.modelName, profileName: profile.name };
+  return designated(await repos.connections.findById(profileId));
 }
 
 /** The default embedding profile. */
 export async function collectEmbeddingInfo(userId: string): Promise<DesignatedProfileInfo> {
-  const defaultProfile = await getRepositories().embeddingProfiles.findDefault(userId);
-  if (!defaultProfile) return {};
-  return {
-    provider: defaultProfile.provider,
-    model: defaultProfile.modelName,
-    profileName: defaultProfile.name,
-  };
+  return designated(await getRepositories().embeddingProfiles.findDefault(userId));
+}
+
+/** A provider plugin as {@link collectProvidersWithModels} sees it. */
+type CapableProvider = ReturnType<typeof getProvidersByCapability>[number];
+
+/**
+ * Every provider with `capability`, listing its models of `modelType` from the
+ * discovery cache first and, when the cache is cold, from `staticModels` —
+ * the plugin's own hard-coded list, if it ships one.
+ */
+async function collectProvidersWithModels(
+  capability: Parameters<typeof getProvidersByCapability>[0],
+  modelType: 'image' | 'embedding',
+  staticModels: (provider: CapableProvider) => Array<{ id?: string; name: string }> | undefined,
+): Promise<Array<{ provider: string; displayName: string; models: string[] }>> {
+  const globalRepos = getRepositories();
+  const result: Array<{ provider: string; displayName: string; models: string[] }> = [];
+
+  for (const provider of getProvidersByCapability(capability)) {
+    let models: string[] = [];
+    const cachedModels = await globalRepos.providerModels.findByProvider(
+      provider.metadata.providerName,
+      modelType,
+    );
+    if (cachedModels.length > 0) {
+      models = cachedModels.map(m => m.modelId);
+    } else {
+      const fallback = staticModels(provider);
+      if (fallback) models = fallback.map(m => m.id || m.name);
+    }
+    result.push({
+      provider: provider.metadata.providerName,
+      displayName: provider.metadata.displayName,
+      models: models.sort((a, b) => a.localeCompare(b)),
+    });
+  }
+
+  return result.sort((a, b) => a.displayName.localeCompare(b.displayName));
 }
 
 /** Image-capable providers and their models (cache first, static fallback). */
-export async function collectImageProviders(): Promise<ImageProviderInfo[]> {
-  const globalRepos = getRepositories();
-  const result: ImageProviderInfo[] = [];
-
-  for (const provider of getProvidersByCapability('imageGeneration')) {
-    let models: string[] = [];
-    const cachedModels = await globalRepos.providerModels.findByProvider(
-      provider.metadata.providerName,
-      'image',
-    );
-    if (cachedModels.length > 0) {
-      models = cachedModels.map(m => m.modelId);
-    } else if (provider.getImageGenerationModels) {
-      models = provider.getImageGenerationModels().map(m => m.id || m.name);
-    }
-    result.push({
-      provider: provider.metadata.providerName,
-      displayName: provider.metadata.displayName,
-      models: models.sort((a, b) => a.localeCompare(b)),
-    });
-  }
-
-  return result.sort((a, b) => a.displayName.localeCompare(b.displayName));
+export function collectImageProviders(): Promise<ImageProviderInfo[]> {
+  return collectProvidersWithModels('imageGeneration', 'image', provider =>
+    provider.getImageGenerationModels?.(),
+  );
 }
 
 /** Embedding-capable providers and their models (cache first, static fallback). */
-export async function collectEmbeddingProviders(): Promise<EmbeddingProviderInfo[]> {
-  const globalRepos = getRepositories();
-  const result: EmbeddingProviderInfo[] = [];
-
-  for (const provider of getProvidersByCapability('embeddings')) {
-    let models: string[] = [];
-    const cachedModels = await globalRepos.providerModels.findByProvider(
-      provider.metadata.providerName,
-      'embedding',
-    );
-    if (cachedModels.length > 0) {
-      models = cachedModels.map(m => m.modelId);
-    } else if (provider.getEmbeddingModels) {
-      models = provider.getEmbeddingModels().map(m => m.id || m.name);
-    }
-    result.push({
-      provider: provider.metadata.providerName,
-      displayName: provider.metadata.displayName,
-      models: models.sort((a, b) => a.localeCompare(b)),
-    });
-  }
-
-  return result.sort((a, b) => a.displayName.localeCompare(b.displayName));
+export function collectEmbeddingProviders(): Promise<EmbeddingProviderInfo[]> {
+  return collectProvidersWithModels('embeddings', 'embedding', provider =>
+    provider.getEmbeddingModels?.(),
+  );
 }
 
-/** MCP server configuration — names only, never URLs or auth fields. */
-export async function collectMCPServers(userId: string): Promise<MCPServersInfo> {
-  const defaults: MCPServersInfo = {
+/** No MCP servers configured, with the reconnect dials at their defaults. */
+export function emptyMCPServers(): MCPServersInfo {
+  return {
     configured: 0,
     enabled: 0,
     serverNames: [],
     autoReconnect: true,
     maxReconnectAttempts: 5,
   };
+}
+
+/** MCP server configuration — names only, never URLs or auth fields. */
+export async function collectMCPServers(userId: string): Promise<MCPServersInfo> {
+  const defaults = emptyMCPServers();
 
   try {
     const mcpConfig = await getRepositories().pluginConfigs.findByUserAndPlugin(
@@ -468,6 +476,19 @@ export async function collectMCPServers(userId: string): Promise<MCPServersInfo>
   }
 }
 
+/** No themes known, on the default (`system`) colour mode. */
+export function emptyThemeInfo(): ThemeReportInfo {
+  return {
+    activeThemeId: null,
+    colorMode: 'system',
+    stats: { total: 0, withDarkMode: 0, withCssOverrides: 0, errors: 0 },
+    themes: [],
+    themesWithIcons: 0,
+    totalIconOverrides: 0,
+    totalUnknownIconOverrides: 0,
+  };
+}
+
 /**
  * Theme inventory, including icon-override statistics.
  *
@@ -480,12 +501,7 @@ export async function collectThemeInfo(userId: string): Promise<ThemeReportInfo>
   const activeThemeId = chatSettings?.themePreference?.activeThemeId ?? null;
   const colorMode = chatSettings?.themePreference?.colorMode ?? 'system';
 
-  let stats: ThemeReportInfo['stats'] = {
-    total: 0,
-    withDarkMode: 0,
-    withCssOverrides: 0,
-    errors: 0,
-  };
+  let stats: ThemeReportInfo['stats'] = emptyThemeInfo().stats;
   try {
     const rawStats = getThemeStats();
     stats = {

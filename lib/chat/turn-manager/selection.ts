@@ -202,34 +202,51 @@ function buildResult(
   };
 }
 
+/**
+ * Weighted-random pick: each item's chance is its weight over the total. When
+ * the weights sum to nothing (every candidate at 0 talkativeness) every item is
+ * equally likely instead, and `equalWeights` says so. `weights` is parallel to
+ * `items` and `randomValue` is the draw, both for the caller's debug trail.
+ * Shared by the per-turn speaker selection and the opening-character pick at
+ * chat creation, so the two can never drift apart.
+ */
+export function pickWeightedRandom<T>(
+  items: T[],
+  weightOf: (item: T) => number,
+): { item: T; weights: number[]; randomValue: number; equalWeights: boolean } {
+  const weights = items.map(weightOf);
+  let totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
+  const equalWeights = totalWeight <= 0;
+  if (equalWeights) {
+    weights.fill(1);
+    totalWeight = items.length;
+  }
+  const randomValue = Math.random() * totalWeight;
+  let cumulative = 0;
+  for (let i = 0; i < items.length; i++) {
+    cumulative += weights[i];
+    if (randomValue < cumulative) {
+      return { item: items[i], weights, randomValue, equalWeights };
+    }
+  }
+  return { item: items[items.length - 1], weights, randomValue, equalWeights };
+}
+
 function pickWeighted(
   candidates: ChatParticipantBase[],
   characters: Map<string, Character>,
 ): { participant: ChatParticipantBase; weights: Record<string, number>; randomValue: number } {
-  const weights: Record<string, number> = {};
-  let totalWeight = 0;
-  for (const p of candidates) {
-    const character = characters.get(p.characterId!);
+  const picked = pickWeightedRandom(candidates, (p) => {
     // Per-chat override (participant.talkativeness) wins; fall back to the
     // character's value; final default is 0.5.
-    const talkativeness = p.talkativeness ?? character?.talkativeness ?? 0.5;
-    weights[p.id] = talkativeness;
-    totalWeight += talkativeness;
-  }
-  if (totalWeight === 0) {
+    return p.talkativeness ?? characters.get(p.characterId!)?.talkativeness ?? 0.5;
+  });
+  if (picked.equalWeights) {
     logger.warn('[Turn Manager] Total talkativeness is 0, using equal weights');
-    for (const p of candidates) {
-      weights[p.id] = 1;
-      totalWeight += 1;
-    }
   }
-  const randomValue = Math.random() * totalWeight;
-  let cumulative = 0;
-  for (const p of candidates) {
-    cumulative += weights[p.id];
-    if (randomValue < cumulative) {
-      return { participant: p, weights, randomValue };
-    }
-  }
-  return { participant: candidates[candidates.length - 1], weights, randomValue };
+  const weights: Record<string, number> = {};
+  candidates.forEach((p, i) => {
+    weights[p.id] = picked.weights[i];
+  });
+  return { participant: picked.item, weights, randomValue: picked.randomValue };
 }

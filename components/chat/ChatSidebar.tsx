@@ -14,7 +14,8 @@
 
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
+import { patchChat } from '@/lib/chat/patch-chat'
 import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
@@ -1046,15 +1047,7 @@ function ChatSection({
   const handleTimelineModeChange = async (value: 'realtime' | 'narrative') => {
     try {
       setTimelineModeSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { timelineMode: value } }),
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
+      await patchChat(chatId, { timelineMode: value })
       showSuccessToast(
         value === 'narrative'
           ? 'The story now keeps its own hours'
@@ -1062,8 +1055,7 @@ function ChatSection({
       )
       onChatUpdated?.()
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || "Failed to change the story's clock")
+      showErrorToast(apiErrorMessage(error, "Failed to change the story's clock"))
     } finally {
       setTimelineModeSaving(false)
     }

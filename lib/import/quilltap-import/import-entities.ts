@@ -65,9 +65,7 @@ export async function importTags(
       const { id: _, userId: __, createdAt, updatedAt, ...tagData } = tag;
       const createData = options.preserveIds ? { ...tagData, id: tag.id } : tagData;
       const createOptions = getPreserveIdsCreateOptions(tag.id, options);
-      const newTag = options.preserveIds
-        ? await repos.tags.create(createData, createOptions)
-        : await repos.tags.create(createData);
+      const newTag = await repos.tags.create(createData, createOptions);
       idMaps.tags.set(tag.id, newTag.id);
       imported++;
     } catch (error) {
@@ -162,15 +160,10 @@ export async function importRoleplayTemplates(
       const { id: _, createdAt, updatedAt, ...templateData } = template;
       const createData = options.preserveIds ? { ...templateData, id: template.id } : templateData;
       const createOptions = getPreserveIdsCreateOptions(template.id, options);
-      const newTemplate = options.preserveIds
-        ? await globalRepos.roleplayTemplates.create({
-            ...createData,
-            userId,
-          }, createOptions)
-        : await globalRepos.roleplayTemplates.create({
-            ...createData,
-            userId,
-          });
+      const newTemplate = await globalRepos.roleplayTemplates.create(
+        { ...createData, userId },
+        createOptions
+      );
       idMaps.roleplayTemplates.set(template.id, newTemplate.id);
       imported++;
     } catch (error) {
@@ -237,9 +230,7 @@ export async function importProjects(
       const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...projectData } = project;
       const createData = options.preserveIds ? { ...projectData, id: project.id } : projectData;
       const createOptions = getPreserveIdsCreateOptions(project.id, options);
-      const newProject = options.preserveIds
-        ? await repos.projects.create(createData, createOptions)
-        : await repos.projects.create(createData);
+      const newProject = await repos.projects.create(createData, createOptions);
       idMaps.projects.set(project.id, newProject.id);
       imported++;
     } catch (error) {
@@ -304,9 +295,7 @@ export async function importGroups(
       const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...groupData } = group;
       const createData = options.preserveIds ? { ...groupData, id: group.id } : groupData;
       const createOptions = getPreserveIdsCreateOptions(group.id, options);
-      const newGroup = options.preserveIds
-        ? await repos.groups.create(createData, createOptions)
-        : await repos.groups.create(createData);
+      const newGroup = await repos.groups.create(createData, createOptions);
       idMaps.groups.set(group.id, newGroup.id);
       imported++;
     } catch (error) {
@@ -383,9 +372,7 @@ export async function importChats(
       const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
       const createData = options.preserveIds ? { ...chatData, id: chat.id } : chatData;
       const createOptions = getPreserveIdsCreateOptions(chat.id, options);
-      const newChat = options.preserveIds
-        ? await repos.chats.create(createData, createOptions)
-        : await repos.chats.create(createData);
+      const newChat = await repos.chats.create(createData, createOptions);
       idMaps.chats.set(chat.id, newChat.id);
 
       // Add messages
@@ -508,9 +495,7 @@ export async function importMemories(
         projectId: newProjectId,
         tags: newTags,
       };
-      const created = options.preserveIds
-        ? await repos.memories.create(payload, createOptions)
-        : await repos.memories.create(payload);
+      const created = await repos.memories.create(payload, createOptions);
       createdIds.push({ id: created.id, characterId: newCharacterId });
       imported++;
     } catch (error) {

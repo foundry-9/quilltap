@@ -14,7 +14,8 @@ import { promises as fs } from 'fs'
 import { createContextParamsHandler, type RequestContext } from '@/lib/api/middleware'
 import { badRequest, notFound, serverError } from '@/lib/api/responses'
 import { logger } from '@/lib/logger'
-import { resolveDocEditPath, type DocEditScope } from '@/lib/doc-edit'
+import type { DocEditScope } from '@/lib/doc-edit'
+import { documentAccessContextForChat, resolveOperatorDocPath } from '@/lib/documents/operator-doc-actions'
 import { readMountFileBytes } from '@/lib/mount-index/read-file'
 import { mimeForExtension } from '@/lib/mount-index/path-utils'
 
@@ -25,20 +26,6 @@ const querySchema = z.object({
   scope: z.enum(['project', 'document_store', 'general']).default('project'),
   mountPoint: z.string().optional(),
 })
-
-function getProjectId(chat: unknown): string | undefined {
-  return (chat as Record<string, unknown>).projectId as string | undefined
-}
-
-function getParticipantCharacterIds(chat: unknown): string[] {
-  const participants = (chat as { participants?: Array<{ characterId?: string | null }> }).participants
-  if (!Array.isArray(participants)) return []
-  const ids = new Set<string>()
-  for (const participant of participants) {
-    if (participant?.characterId) ids.add(participant.characterId)
-  }
-  return Array.from(ids)
-}
 
 export const GET = createContextParamsHandler<Params>(
   async (req: NextRequest, ctx: RequestContext, { id: chatId }) => {
@@ -57,11 +44,10 @@ export const GET = createContextParamsHandler<Params>(
     }
 
     try {
-      const resolved = await resolveDocEditPath(parsed.data.scope as DocEditScope, parsed.data.filePath, {
-        projectId: getProjectId(chat),
-        characterIds: getParticipantCharacterIds(chat),
+      const resolved = await resolveOperatorDocPath(documentAccessContextForChat(chat), {
+        scope: parsed.data.scope as DocEditScope,
+        filePath: parsed.data.filePath,
         mountPoint: parsed.data.mountPoint,
-        operatorOverride: true,
       })
 
       let bytes: Buffer

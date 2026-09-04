@@ -16,7 +16,8 @@
 
 import type { ChatEvent, MessageEvent, ChatParticipantBase } from '@/lib/schemas/types'
 import type { Character } from '@/lib/schemas/types'
-import { isParticipantPresent } from '@/lib/schemas/chat.types'
+import { hasWhisperTargets } from '@/lib/schemas/chat.types'
+import { getPresentCharacterSeats } from './utils'
 import { normalizeContentBlockFormat, stripCharacterNamePrefix } from '@/lib/llm/response-normalizer'
 import { isVisibleConversationalTurn } from '@/lib/chat/context/core-whisper-trigger'
 import { escapeRegex } from '@/lib/utils/regex'
@@ -179,9 +180,7 @@ export function findSkippedSinceLastSubstantive(events: ReadonlyArray<ChatEvent>
       continue
     }
     if ((m.role === 'USER' || m.role === 'ASSISTANT') && m.participantId) {
-      const isWhisper = Array.isArray((m as MessageEvent).targetParticipantIds)
-        && ((m as MessageEvent).targetParticipantIds?.length ?? 0) > 0
-      if (!isWhisper) break
+      if (!hasWhisperTargets(m)) break
     }
   }
   return skipped
@@ -201,9 +200,7 @@ export function findSkippedSinceLastSubstantive(events: ReadonlyArray<ChatEvent>
 export function qualifiesForTurnSkipping(
   participants: ReadonlyArray<ChatParticipantBase>,
 ): boolean {
-  const activeChars = participants.filter(
-    p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && !!p.characterId,
-  )
+  const activeChars = getPresentCharacterSeats(participants)
   if (activeChars.length > 2) return true
   const llmChars = activeChars.filter(p => p.controlledBy !== 'user')
   return llmChars.length >= 2
@@ -297,8 +294,7 @@ export function isRecentlyAddressed(
     if (m.role !== 'ASSISTANT') continue
     if (m.participantId !== respondingParticipantId) continue
     if (m.systemSender) continue
-    const isWhisper = Array.isArray(m.targetParticipantIds) && (m.targetParticipantIds?.length ?? 0) > 0
-    if (isWhisper) continue
+    if (hasWhisperTargets(m)) continue
     lastOwnIdx = i
     break
   }
@@ -397,12 +393,8 @@ export function computeSkipEligibility(
     if (skipped.has(respondingParticipantId)) {
       mustSpeakReason = 'already-skipped'
     } else {
-      const otherActiveCharacters = participants.filter(
-        p =>
-          p.type === 'CHARACTER' &&
-          isParticipantPresent(p.status) &&
-          !!p.characterId &&
-          p.id !== respondingParticipantId,
+      const otherActiveCharacters = getPresentCharacterSeats(participants).filter(
+        p => p.id !== respondingParticipantId,
       )
       const allOthersSkipped = otherActiveCharacters.every(p => skipped.has(p.id))
       if (allOthersSkipped) {

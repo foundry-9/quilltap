@@ -59,6 +59,7 @@ import {
   GENERAL_CONTAINER,
   decodeWardrobeContainer,
   encodeWardrobeContainer,
+  homeContainerForItem,
   wardrobeCollectionUrl,
   wardrobeItemUrl,
   type WardrobeContainer,
@@ -305,6 +306,19 @@ function WardrobeControlDialogInner({
   )
   const outfit = useOutfit(chatId, characterIdsForOutfit)
 
+  /**
+   * What every item mutation (edit / create / duplicate / delete / transfer)
+   * does afterwards: reload the list on display and, in chat, drop the outfit
+   * chain's cached wardrobe for this character and re-read what they wear.
+   */
+  const refreshAfterMutation = useCallback(async (): Promise<void> => {
+    await reloadActiveItems()
+    if (isInChat && selectedCharacterId) {
+      outfit.invalidateWardrobe(selectedCharacterId)
+      await outfit.refreshOutfit()
+    }
+  }, [reloadActiveItems, isInChat, selectedCharacterId, outfit])
+
   // ---------------------------------------------------------------------------
   // Load the container catalogue (characters, projects, groups) once when the
   // dialog opens — every place a wardrobe item can live gets a menu entry.
@@ -481,11 +495,10 @@ function WardrobeControlDialogInner({
       if (!selectedContainer) return
       // Browsing a shared container, the item lives there; in the character
       // view only character-owned items reach this handler (kebab gating).
-      const url = isCharacterScope
-        ? item.characterId
-          ? `/api/v1/characters/${item.characterId}/wardrobe/${item.id}`
-          : `/api/v1/wardrobe/${item.id}`
-        : wardrobeItemUrl(selectedContainer, item.id)
+      const url = wardrobeItemUrl(
+        isCharacterScope ? homeContainerForItem(item) : selectedContainer,
+        item.id,
+      )
       setUpdatingDefaultId(item.id)
       try {
         const result = await fetchJson<{ wardrobeItem: WardrobeItem }>(url, {
@@ -514,11 +527,10 @@ function WardrobeControlDialogInner({
   const handleToggleArchived = useCallback(
     async (item: WardrobeItem) => {
       if (!selectedContainer) return
-      const url = isCharacterScope
-        ? item.characterId
-          ? `/api/v1/characters/${item.characterId}/wardrobe/${item.id}`
-          : `/api/v1/wardrobe/${item.id}`
-        : wardrobeItemUrl(selectedContainer, item.id)
+      const url = wardrobeItemUrl(
+        isCharacterScope ? homeContainerForItem(item) : selectedContainer,
+        item.id,
+      )
       const result = await fetchJson<{ wardrobeItem: WardrobeItem }>(url, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -537,32 +549,19 @@ function WardrobeControlDialogInner({
     async (item: WardrobeItem) => {
       if (!selectedContainer) return
       if (!(await requestConfirmation(`Delete "${item.title}"? This cannot be undone.`))) return
-      const url = isCharacterScope
-        ? item.characterId
-          ? `/api/v1/characters/${item.characterId}/wardrobe/${item.id}`
-          : `/api/v1/wardrobe/${item.id}`
-        : wardrobeItemUrl(selectedContainer, item.id)
+      const url = wardrobeItemUrl(
+        isCharacterScope ? homeContainerForItem(item) : selectedContainer,
+        item.id,
+      )
       const result = await fetchJson(url, { method: 'DELETE' })
       if (!result.ok) {
         showErrorToast(result.error || 'Failed to delete item')
         return
       }
       showSuccessToast(`Deleted "${item.title}"`)
-      await reloadActiveItems()
-      if (isInChat && selectedCharacterId) {
-        outfit.invalidateWardrobe(selectedCharacterId)
-        await outfit.refreshOutfit()
-      }
+      await refreshAfterMutation()
     },
-    [
-      selectedContainer,
-      isCharacterScope,
-      selectedCharacterId,
-      reloadActiveItems,
-      isInChat,
-      outfit,
-      requestConfirmation,
-    ],
+    [selectedContainer, isCharacterScope, refreshAfterMutation, requestConfirmation],
   )
 
   const handleDuplicate = useCallback(
@@ -611,21 +610,9 @@ function WardrobeControlDialogInner({
         return
       }
       showSuccessToast(`Duplicated "${item.title}"`)
-      await reloadActiveItems()
-      if (isInChat && selectedCharacterId) {
-        outfit.invalidateWardrobe(selectedCharacterId)
-        await outfit.refreshOutfit()
-      }
+      await refreshAfterMutation()
     },
-    [
-      selectedContainer,
-      isCharacterScope,
-      selectedCharacterId,
-      listItems,
-      reloadActiveItems,
-      isInChat,
-      outfit,
-    ],
+    [selectedContainer, isCharacterScope, selectedCharacterId, listItems, refreshAfterMutation],
   )
 
   // Lookup map shared between Live-tab staging mutators and Builder-tab
@@ -1515,11 +1502,7 @@ function WardrobeControlDialogInner({
             setEditingItem(null)
             setCreatingNew(null)
             setCreateBundleComponents([])
-            await reloadActiveItems()
-            if (isInChat && selectedCharacterId) {
-              outfit.invalidateWardrobe(selectedCharacterId)
-              await outfit.refreshOutfit()
-            }
+            await refreshAfterMutation()
           }}
         />
       )}
@@ -1551,11 +1534,7 @@ function WardrobeControlDialogInner({
           onTransferred={async () => {
             setTransferringItem(null)
             setTransferIntent(null)
-            await reloadActiveItems()
-            if (isInChat && selectedCharacterId) {
-              outfit.invalidateWardrobe(selectedCharacterId)
-              await outfit.refreshOutfit()
-            }
+            await refreshAfterMutation()
           }}
         />
       )}

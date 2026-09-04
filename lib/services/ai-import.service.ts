@@ -12,7 +12,7 @@
 import { createLLMProvider } from '@/lib/llm';
 import { profileParams } from '@/lib/llm/cheap-llm';
 import { parseLLMJson } from '@/lib/llm/llm-json';
-import { sanitizePronouns } from '@/lib/characters/sanitize-pronouns';
+import { describeGeneratedProperties, parseGeneratedProperties } from '@/lib/characters/generated-properties';
 
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
@@ -1030,28 +1030,16 @@ export async function runAIImportStreaming(
           PROPERTIES_EXTRACTION_PROMPT,
           { temperature: 0.3, maxTokens: 300, ...llmOpts }
         );
-        const parsed = parseLLMJson<{ pronouns?: unknown; aliases?: unknown }>(raw);
-        // Tolerate a model answering with the bare pronouns object (the
-        // pre-aliases response shape) instead of the wrapper.
-        stepResults.pronouns = sanitizePronouns(parsed?.pronouns) ?? sanitizePronouns(parsed);
-        stepResults.aliases = Array.isArray(parsed?.aliases)
-          ? parsed.aliases
-              .filter((a): a is string => typeof a === 'string' && a.trim().length > 0)
-              .map((a) => a.trim())
-          : [];
-        const pronounText = stepResults.pronouns
-          ? `${stepResults.pronouns.subject}/${stepResults.pronouns.object}/${stepResults.pronouns.possessive}`
-          : 'pronouns not derivable — left blank';
-        const aliasText = stepResults.aliases.length > 0
-          ? `aliases: ${stepResults.aliases.join(', ')}`
-          : 'no aliases';
-        if (!stepResults.pronouns) {
+        const props = parseGeneratedProperties(raw);
+        stepResults.pronouns = props.pronouns ?? undefined;
+        stepResults.aliases = props.aliases;
+        if (!props.pronouns) {
           logger.info('[AIImport] Pronouns not derivable from source — leaving null');
         }
         onProgress({
           type: 'step_complete',
           step: 'pronouns',
-          snippet: `${pronounText}; ${aliasText}`,
+          snippet: describeGeneratedProperties(props, 'pronouns not derivable — left blank'),
         });
       } catch (error) {
         const msg = error instanceof Error ? error.message : 'Properties extraction failed';

@@ -12,16 +12,12 @@
 
 import { z } from 'zod'
 import {
-  DEFAULT_SPLIT_RATIO,
-  MAX_SPLIT_RATIO,
-  MIN_SPLIT_RATIO,
-  type PaneId,
+  TAB_KINDS,
   type PaneState,
-  type TabKind,
   type WorkspaceState,
   type WorkspaceTab,
 } from './types'
-import { createInitialState } from './workspace-reducer'
+import { clampSplitRatio, createInitialState, normalizePanes } from './workspace-reducer'
 
 /** localStorage key base. Scoped per instance by {@link workspaceStorageKey}. */
 export const WORKSPACE_STORAGE_KEY_BASE = 'quilltap.workspace.layout'
@@ -35,42 +31,10 @@ export function workspaceStorageKey(instanceId?: string | null): string {
   return instanceId ? `${WORKSPACE_STORAGE_KEY_BASE}.${instanceId}` : WORKSPACE_STORAGE_KEY_BASE
 }
 
-// Must list every `TabKind`. The `satisfies` clause rejects typos/removed kinds,
-// and the exhaustiveness assertion below rejects a `TabKind` added to the type
-// but forgotten here — either would otherwise let a valid persisted tab fail
+// `TAB_KINDS` (lib/workspace/types.ts) lists every `TabKind` with a
+// compile-time exhaustiveness check, so a valid persisted tab can never fail
 // validation. (Deserialization is resilient to unknown kinds regardless: an
-// unlisted kind now drops only its own tab, never the whole saved layout.)
-const TAB_KINDS = [
-  'home',
-  'salon',
-  'salon-list',
-  'terminal',
-  'document',
-  'aurora',
-  'prospero',
-  'scriptorium',
-  'settings',
-  'files',
-  'photos',
-  'scenarios',
-  'brahma',
-  'wardrobe',
-  'profile',
-  'about',
-  'generate-image',
-  'document-standalone',
-  'character-new',
-  'character-edit',
-  'character-view',
-  'settings-wizard',
-  'custom-tools',
-] as const satisfies readonly TabKind[]
-
-// Compile-time exhaustiveness: errors if any `TabKind` is missing above.
-type _MissingTabKinds = Exclude<TabKind, (typeof TAB_KINDS)[number]>
-const _assertAllTabKindsListed: _MissingTabKinds extends never ? true : never = true
-void _assertAllTabKindsListed
-
+// unlisted kind drops only its own tab, never the whole saved layout.)
 const WorkspaceTabSchema = z.object({
   id: z.string().min(1),
   kind: z.enum(TAB_KINDS),
@@ -131,11 +95,6 @@ export function deserializeWorkspaceState(raw: string | null | undefined): Works
   } catch {
     return null
   }
-}
-
-function clampRatio(ratio: number): number {
-  if (!Number.isFinite(ratio)) return DEFAULT_SPLIT_RATIO
-  return Math.min(MAX_SPLIT_RATIO, Math.max(MIN_SPLIT_RATIO, ratio))
 }
 
 export interface PruneOptions {
@@ -220,9 +179,9 @@ export function pruneWorkspaceState(
     state.panes.left.activeTabId && leftOrder.includes(state.panes.left.activeTabId)
       ? state.panes.left.activeTabId
       : leftOrder[0] ?? null
-  let left: PaneState = { order: leftOrder, activeTabId: leftActive }
+  const left: PaneState = { order: leftOrder, activeTabId: leftActive }
 
-  let right: PaneState | null =
+  const right: PaneState | null =
     rightOrder && rightOrder.length > 0
       ? {
           order: rightOrder,
@@ -233,27 +192,12 @@ export function pruneWorkspaceState(
         }
       : null
 
-  let focusedPane: PaneId = state.focusedPane
-  if (focusedPane === 'right' && !right) focusedPane = 'left'
-
-  // Promote right→left if the left pane emptied.
-  if (left.order.length === 0 && right && right.order.length > 0) {
-    left = right
-    right = null
-    focusedPane = 'left'
-  }
-
-  // Everything gone — home fallback.
-  if (left.order.length === 0 && (!right || right.order.length === 0)) {
-    return createInitialState(homeFallbackId)
-  }
-
-  return {
-    tabs,
-    panes: { left, right },
-    focusedPane,
-    splitRatio: clampRatio(state.splitRatio),
-  }
+  // 5. Collapse / promote / home-fallback, exactly as the reducer does after
+  //    a close.
+  return normalizePanes(
+    { tabs, panes: { left, right }, focusedPane: state.focusedPane, splitRatio: clampSplitRatio(state.splitRatio) },
+    homeFallbackId,
+  )
 }
 
 /**

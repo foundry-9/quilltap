@@ -36,7 +36,7 @@ import type {
   MessageEvent,
 } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
-import { Cron } from 'croner';
+import { computeNextRunFromCron } from '@/lib/services/chat-message/autonomous-room-cron';
 import type { AutonomousRoomTurnPayload } from '../queue-service';
 import { enqueueAutonomousRoomTurn } from '../queue-service';
 import { runWithAutonomousRunId } from '../autonomous-run-context';
@@ -374,17 +374,16 @@ async function transitionRunState(
  */
 function recomputeNextRun(cronExpr: string | null | undefined, anchor: Date): string | null {
   if (!cronExpr) return null;
-  try {
-    const next = new Cron(cronExpr).nextRun(anchor);
-    return next ? next.toISOString() : null;
-  } catch (error) {
+  const next = computeNextRunFromCron(cronExpr, anchor);
+  if (!next.ok) {
     logger.warn('Autonomous-room: invalid cron expression at run end', {
       context: HANDLER,
       cronExpr,
-      error: error instanceof Error ? error.message : String(error),
+      error: next.error,
     });
     return null;
   }
+  return next.nextRunAt;
 }
 
 /**

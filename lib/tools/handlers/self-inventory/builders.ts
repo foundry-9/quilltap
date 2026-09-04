@@ -518,14 +518,10 @@ export async function buildPromptSection(
   // they are substantive conduct guidance a character should be able to
   // introspect, and the repos are already in hand. Fails soft like the live
   // path.
-  let standingInstructions: string | null = null;
-  try {
-    standingInstructions = await resolveStandingInstructionsSection({
-      projectId: chat.projectId ?? null,
-      characterId: character.id,
-    });
-  } catch (err) {
-  }
+  const standingInstructions = await resolveStandingInstructionsSection({
+    projectId: chat.projectId ?? null,
+    characterId: character.id,
+  });
 
   const systemPrompt = buildSystemPrompt({
     character,

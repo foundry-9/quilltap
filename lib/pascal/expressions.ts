@@ -17,9 +17,12 @@
  * - **Eval failure is fail-soft at run time** — the effect is skipped with a
  *   debug log; a broken effect never sinks a roll.
  *
- * Pure and client-safe: no logging, no I/O, no imports. The Workbench runs the
- * parser in the browser for its warning pass.
+ * Pure and client-safe: no logging, no I/O, and the one import is the equally
+ * pure placeholder classifier. The Workbench runs the parser in the browser for
+ * its warning pass.
  */
+
+import { classifyPlaceholder } from './placeholders';
 
 export type ExprValue = number | string | boolean;
 
@@ -83,11 +86,7 @@ type Token =
 
 /** The reference families the grammar admits — `renderTemplate`'s, verbatim. */
 function isKnownRef(name: string): boolean {
-  if (name === 'value' || name === 'roll' || name === 'dice' || name === 'llm') return true;
-  for (const prefix of ['params.', 'metadata.', 'state.']) {
-    if (name.startsWith(prefix) && name.length > prefix.length) return true;
-  }
-  return false;
+  return classifyPlaceholder(name).kind !== 'unknown';
 }
 
 class ExpressionError extends Error {}

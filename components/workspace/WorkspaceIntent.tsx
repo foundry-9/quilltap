@@ -20,33 +20,9 @@ import { useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useWorkspace } from '@/components/providers/workspace-provider'
 import { useNewChatModalOptional } from '@/components/providers/new-chat-provider'
-import { standaloneDocKey, type DocumentStandaloneTabPayload, type TabKind } from '@/lib/workspace/types'
+import { TAB_KINDS, standaloneDocKey, type DocumentStandaloneTabPayload, type TabKind } from '@/lib/workspace/types'
 
-const OPENABLE_KINDS: ReadonlySet<TabKind> = new Set<TabKind>([
-  'home',
-  'salon',
-  'salon-list',
-  'terminal',
-  'document',
-  'aurora',
-  'prospero',
-  'scriptorium',
-  'settings',
-  'files',
-  'photos',
-  'scenarios',
-  'brahma',
-  'wardrobe',
-  'profile',
-  'about',
-  'generate-image',
-  'document-standalone',
-  'character-new',
-  'character-edit',
-  'character-view',
-  'settings-wizard',
-  'custom-tools',
-])
+const OPENABLE_KINDS: ReadonlySet<TabKind> = new Set<TabKind>(TAB_KINDS)
 
 const CHAT_KINDS: ReadonlySet<TabKind> = new Set<TabKind>(['salon', 'terminal', 'document'])
 

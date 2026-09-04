@@ -24,14 +24,13 @@ import {
   resolveWardrobeItemAcrossTiers,
   wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
+import type { WardrobeRepos } from './wardrobe-handler-shared';
 
 export interface WardrobeReadToolContext {
   userId: string;
   chatId: string;
   characterId: string;
 }
-
-type WardrobeRepos = ReturnType<typeof getRepositories>;
 
 /**
  * Build the full read-shaped output for a resolved wardrobe item. Shared by

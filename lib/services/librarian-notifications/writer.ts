@@ -90,6 +90,16 @@ export type LibrarianActorOrigin =
   | { kind: 'by-user' }
   | { kind: 'by-character'; characterName: string };
 
+/**
+ * The open announcement predates {@link LibrarianActorOrigin} and keeps its
+ * own `opened-by-*` kinds; this is the one place the two vocabularies meet.
+ */
+export function toLibrarianOpenKind(origin: LibrarianActorOrigin): LibrarianOpenKind {
+  return origin.kind === 'by-character'
+    ? { kind: 'opened-by-character', characterName: origin.characterName }
+    : { kind: 'opened-by-user' };
+}
+
 export interface LibrarianOpenAnnouncement {
   chatId: string;
   displayTitle: string;

@@ -11,7 +11,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, bySlot } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 
 const OUTFIT_HASH_LENGTH = 16;
@@ -26,9 +26,7 @@ const OUTFIT_HASH_LENGTH = 16;
 export function hashEquippedSlots(slots: EquippedSlots | null | undefined): string {
   // Object key order is the canonical slot order, so the serialization stays
   // deterministic as slots are added.
-  const normalized = Object.fromEntries(
-    WARDROBE_SLOT_TYPES.map((slot) => [slot, slots?.[slot] ?? []]),
-  );
+  const normalized = bySlot((slot) => slots?.[slot] ?? []);
   return createHash('sha256')
     .update(JSON.stringify(normalized))
     .digest('hex')

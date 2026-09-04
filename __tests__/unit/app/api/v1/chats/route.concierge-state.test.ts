@@ -60,6 +60,10 @@ jest.mock('@/lib/llm/model-context-data', () => ({
 
 jest.mock('@/lib/wardrobe/apply-outfit-selections', () => ({
   applyOutfitSelections: jest.fn().mockResolvedValue(undefined),
+}))
+
+jest.mock('@/lib/llm/cheap-llm', () => ({
+  ...jest.requireActual('@/lib/llm/cheap-llm'),
   buildCheapLLMConfig: jest.fn().mockReturnValue(null),
 }))
 

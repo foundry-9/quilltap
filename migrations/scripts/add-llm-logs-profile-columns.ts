@@ -13,43 +13,19 @@
  * Migration ID: add-llm-logs-profile-columns-v1
  */
 
-import Database from 'better-sqlite3'
-import path from 'path'
-import fs from 'fs'
+import type { Database as DatabaseType } from 'better-sqlite3'
 import type { Migration, MigrationResult } from '../types'
 import { logger } from '../lib/logger'
-import { isSQLiteBackend } from '../lib/database-utils'
-import { getDataDir } from '../../lib/paths'
+import {
+  isSQLiteBackend,
+  openLlmLogsDbIfPresent,
+  tableExists,
+  columnExists,
+} from '../lib/database-utils'
 
 const MIGRATION_ID = 'add-llm-logs-profile-columns-v1'
 
 const NEW_COLUMNS = ['connectionProfileId', 'imageProfileId'] as const
-
-function getLLMLogsDbPath(): string {
-  return process.env.SQLITE_LLM_LOGS_PATH || path.join(getDataDir(), 'quilltap-llm-logs.db')
-}
-
-function openLogsDb(logsDbPath: string): Database.Database {
-  const db = new Database(logsDbPath)
-  const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER
-  if (sqlcipherKey) {
-    const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex')
-    db.pragma(`key = "x'${keyHex}'"`)
-  }
-  db.pragma('journal_mode = WAL')
-  db.pragma('busy_timeout = 5000')
-  return db
-}
-
-function tableHasColumn(db: Database.Database, table: string, column: string): boolean {
-  const rows = db.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>
-  return rows.some(r => r.name === column)
-}
-
-function tableExists(db: Database.Database, table: string): boolean {
-  const row = db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table)
-  return !!row
-}
 
 export const addLLMLogsProfileColumnsMigration: Migration = {
   id: MIGRATION_ID,
@@ -61,19 +37,15 @@ export const addLLMLogsProfileColumnsMigration: Migration = {
     if (!isSQLiteBackend()) {
       return false
     }
-    const logsDbPath = getLLMLogsDbPath()
-    if (!fs.existsSync(logsDbPath)) {
+    let db: DatabaseType | null = null
+    try {
       // Fresh installs create the table from the Zod-derived DDL on first
       // access; the columns will be there from the start.
-      return false
-    }
-    let db: Database.Database | null = null
-    try {
-      db = openLogsDb(logsDbPath)
-      if (!tableExists(db, 'llm_logs')) {
+      db = openLlmLogsDbIfPresent()
+      if (!db || !tableExists(db, 'llm_logs')) {
         return false
       }
-      return NEW_COLUMNS.some(column => !tableHasColumn(db!, 'llm_logs', column))
+      return NEW_COLUMNS.some(column => !columnExists(db!, 'llm_logs', column))
     } catch {
       return false
     } finally {
@@ -83,13 +55,12 @@ export const addLLMLogsProfileColumnsMigration: Migration = {
 
   async run(): Promise<MigrationResult> {
     const startTime = Date.now()
-    const logsDbPath = getLLMLogsDbPath()
-    let db: Database.Database | null = null
+    let db: DatabaseType | null = null
 
     try {
-      db = openLogsDb(logsDbPath)
+      db = openLlmLogsDbIfPresent()
 
-      if (!tableExists(db, 'llm_logs')) {
+      if (!db || !tableExists(db, 'llm_logs')) {
         return {
           id: MIGRATION_ID,
           success: true,
@@ -102,7 +73,7 @@ export const addLLMLogsProfileColumnsMigration: Migration = {
 
       let added = 0
       for (const column of NEW_COLUMNS) {
-        if (!tableHasColumn(db, 'llm_logs', column)) {
+        if (!columnExists(db, 'llm_logs', column)) {
           db.exec(`ALTER TABLE "llm_logs" ADD COLUMN "${column}" TEXT DEFAULT NULL`)
           added++
           logger.info(`Added ${column} column to llm_logs`, {

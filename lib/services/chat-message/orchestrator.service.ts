@@ -17,9 +17,9 @@ import {
   findActiveUserParticipant,
   isUserDrivenSeat,
   selectNextSpeakerAfterUserMessage,
+  getPresentCharacterSeats,
 } from '@/lib/chat/turn-manager'
 import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
-import { isParticipantPresent } from '@/lib/schemas/chat.types'
 import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
@@ -1799,9 +1799,7 @@ async function maybePauseForUserSeatTurn(
   // NB: `getActiveCharacterParticipants` is a misnomer — it returns LLM seats
   // only — so filter the full roster here; a user-controlled seat (and the
   // impersonated overlay) must both count.
-  const activeChars = chat.participants.filter(p =>
-    p.type === 'CHARACTER' && isParticipantPresent(p.status) && !!p.characterId,
-  )
+  const activeChars = getPresentCharacterSeats(chat.participants)
   const userDrivenSeatCount = activeChars.filter(p =>
     isUserDrivenSeat(p, chat.impersonatingParticipantIds),
   ).length

@@ -10,7 +10,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useProjects } from './hooks/useProjects'
 import { ProjectsGrid, CreateProjectDialog, DeleteProjectDialog } from './components'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
-import { useOnTabActivated, useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
+import { useInTabDrilldown } from '@/components/workspace/useInTabDrilldown'
 import dynamic from 'next/dynamic'
 
 // Lazy so the list bundle doesn't pull in the detail (and its Lexical editors)
@@ -30,8 +31,11 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null)
   // In a workspace tab, drilling into a project renders in place (keep-alive).
-  const inTab = useWorkspaceTabId() != null
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId ?? null)
+  const {
+    inTab,
+    selectedId: selectedProjectId,
+    setSelectedId: setSelectedProjectId,
+  } = useInTabDrilldown(initialProjectId)
 
   useEffect(() => {
     fetchProjects()
@@ -42,15 +46,6 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
   useOnTabActivated(() => {
     void fetchProjects({ silent: true })
   })
-
-  // A deep-link re-open refreshes the tab payload; follow it into the project.
-  // Adjusting state during render is React's sanctioned derive-from-prop-change
-  // pattern (re-renders immediately, nothing committed in between).
-  const [prevInitialProjectId, setPrevInitialProjectId] = useState(initialProjectId)
-  if (initialProjectId !== prevInitialProjectId) {
-    setPrevInitialProjectId(initialProjectId)
-    if (initialProjectId) setSelectedProjectId(initialProjectId)
-  }
 
   const handleCreate = async (name: string, description: string | null) => {
     const result = await createProject(name, description)

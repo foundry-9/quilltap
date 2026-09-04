@@ -20,7 +20,8 @@ import type {
 } from '../types'
 import type { TimestampConfig } from '@/lib/schemas/types'
 import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
-import { toScenarioOption, type ScenarioPayload } from '@/components/scenario/types'
+import { toScenarioOption, type ScenarioOption } from '@/components/scenario/types'
+import { toAutonomousSettingsHint } from '../autonomous-settings-hint'
 
 interface UseNewChatOptions {
   initialCharacterId?: string
@@ -295,7 +296,7 @@ export function useNewChat({
         let loadedGeneralScenarios: GeneralScenarioOption[] = []
         if (generalScenariosRes.ok) {
           const data = await generalScenariosRes.json()
-          loadedGeneralScenarios = (data.scenarios || []).map((s: ScenarioPayload) => toScenarioOption(s))
+          loadedGeneralScenarios = (data.scenarios || []).map((s: ScenarioOption) => toScenarioOption(s))
         } else {
           console.warn('[useNewChat] Failed to load general scenarios', {
             status: generalScenariosRes.status,
@@ -344,7 +345,7 @@ export function useNewChat({
         if (projectScenariosRes && projectScenariosRes.ok) {
           const data = await projectScenariosRes.json()
           // Server returns full ParsedProjectScenario[]; pick the fields the UI needs.
-          loadedProjectScenarios = (data.scenarios || []).map((s: ScenarioPayload) => toScenarioOption(s))
+          loadedProjectScenarios = (data.scenarios || []).map((s: ScenarioOption) => toScenarioOption(s))
         } else if (projectScenariosRes && !projectScenariosRes.ok) {
           console.warn('[useNewChat] Failed to load project scenarios', {
             projectId: selectedProjectId,
@@ -397,13 +398,9 @@ export function useNewChat({
           try {
             const settings = await chatSettingsRes.json()
             userDefaultRoleplayTemplateId = settings?.defaultRoleplayTemplateId ?? null
-            const ar = settings?.autonomousRoomSettings ?? {}
-            if (typeof ar.defaultFreshnessWindowMs === 'number' && ar.defaultFreshnessWindowMs > 0) {
-              autonomousSeedFreshnessHours = Math.round(ar.defaultFreshnessWindowMs / (60 * 60 * 1000))
-            }
-            if (ar.destructiveToolPolicy === 'always_refuse') {
-              autonomousSeedDestructivePolicyAlwaysRefuse = true
-            }
+            const hint = toAutonomousSettingsHint(settings)
+            autonomousSeedFreshnessHours = hint?.defaultFreshnessHours ?? null
+            autonomousSeedDestructivePolicyAlwaysRefuse = hint?.destructiveToolPolicy === 'always_refuse'
           } catch (err) {
             console.warn('[useNewChat] Failed to parse chat-settings response', {
               error: err instanceof Error ? err.message : String(err),

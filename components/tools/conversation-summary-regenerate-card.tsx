@@ -1,78 +1,56 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
-import { useRealtimeFallbackPoll, useRealtimeTopic } from '@/hooks/useRealtime'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useJobFanOutStatus } from './hooks/useJobFanOutStatus'
+import { writeErrorText } from './hooks/api-error-text'
 
 const STATUS_URL = '/api/v1/system/conversation-summaries?action=regenerate'
 /** Fallback poll cadence, used only while the realtime socket is down. */
 const POLL_INTERVAL_MS = 5000
 
 export function ConversationSummaryRegenerateCard() {
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [inFlight, setInFlight] = useState<number>(0)
-
-  const loadStatus = useCallback(async () => {
-    try {
-      const res = await fetch(STATUS_URL)
-      if (res.ok) {
-        const data = await res.json()
-        setInFlight(data.inFlight ?? 0)
-      }
-    } catch {
-      // Status failures aren't fatal — the button still works.
-    }
-  }, [])
-
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      if (!cancelled) await loadStatus()
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [loadStatus])
+  const queryClient = useQueryClient()
 
   // The regeneration is a fan-out of background jobs, so it drains on the
   // `jobs` topic — but only while something is in flight, matching the old
   // poll's scope rather than re-reading on every unrelated job.
-  useRealtimeTopic('jobs', () => {
-    if (inFlight > 0) void loadStatus()
+  const { data: status } = useJobFanOutStatus<{ inFlight?: number }>({
+    queryKey: queryKeys.system.conversationSummaryRegenerate,
+    url: STATUS_URL,
+    pollMs: POLL_INTERVAL_MS,
+    inFlightOf: s => s.inFlight ?? 0,
   })
+  const inFlight = status?.inFlight ?? 0
 
-  // Fallback: a timer while work is in flight and the socket is down.
-  useRealtimeFallbackPoll(() => {
-    void loadStatus()
-  }, POLL_INTERVAL_MS, inFlight > 0)
-
-  const handleClick = async () => {
-    setSubmitting(true)
-    setError(null)
-    try {
-      const res = await fetch(STATUS_URL, {
+  const regenerate = useMutation({
+    mutationFn: () =>
+      apiFetch<{ message?: string }>(STATUS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to start regeneration')
-      }
-      const data = await res.json()
+      }),
+    onSuccess: async data => {
       showSuccessToast(data.message || 'Conversation summaries are being re-mirrored in the background')
       notifyQueueChange()
-      await loadStatus()
-    } catch (err) {
-      const msg = getErrorMessage(err, 'Failed to start regeneration')
+      await queryClient.invalidateQueries({ queryKey: queryKeys.system.conversationSummaryRegenerate })
+    },
+    onError: err => {
+      const msg = writeErrorText(err, 'Failed to start regeneration')
       setError(msg)
       showErrorToast(msg)
-    } finally {
-      setSubmitting(false)
-    }
+    },
+  })
+  const submitting = regenerate.isPending
+
+  const handleClick = () => {
+    setError(null)
+    regenerate.mutate()
   }
 
   return (

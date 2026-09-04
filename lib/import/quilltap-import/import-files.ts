@@ -20,8 +20,7 @@
 
 import { logger } from '@/lib/logger';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
-import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
+import { writeLibraryFileBytes } from '@/lib/file-storage/library-file-writer';
 import type { ExportedFolder, ExportedFileWithBytes } from '@/lib/export/types';
 import type { ImportOptions, IdMappingState } from './types';
 
@@ -230,34 +229,19 @@ export async function importFiles(
       // Same two bridges the backup restore uses: project-bound files land in
       // their project's own store, everything else in the Quilltap Uploads
       // mount under `imported/`.
-      let storageKey: string;
-      let storedMimeType: string;
-      let sizeBytes: number;
-      let storedSha256: string;
-      if (projectId) {
-        const uploaded = await fileStorageManager.uploadFile({
-          filename: file.originalFilename,
-          content: bytes,
-          contentType: file.mimeType,
-          projectId,
-          folderPath: file.folderPath || '/',
-        });
-        storageKey = uploaded.storageKey;
-        storedMimeType = uploaded.storedMimeType;
-        sizeBytes = uploaded.sizeBytes;
-        storedSha256 = uploaded.sha256;
-      } else {
-        const written = await writeUserUploadToMountStore({
-          filename: file.originalFilename,
-          content: bytes,
-          contentType: file.mimeType,
-          subfolder: 'imported',
-        });
-        storageKey = written.storageKey;
-        storedMimeType = written.storedMimeType;
-        sizeBytes = written.sizeBytes;
-        storedSha256 = written.sha256;
-      }
+      const {
+        storageKey,
+        storedMimeType,
+        sizeBytes,
+        sha256: storedSha256,
+      } = await writeLibraryFileBytes({
+        filename: file.originalFilename,
+        content: bytes,
+        contentType: file.mimeType,
+        projectId,
+        folderPath: file.folderPath,
+        subfolder: 'imported',
+      });
 
       const { kept, dropped } = await remapLinkedTo(
         file.linkedTo ?? [],

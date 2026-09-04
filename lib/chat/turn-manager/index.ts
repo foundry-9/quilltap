@@ -65,6 +65,7 @@ export {
   findActiveUserParticipant,
   isUserDrivenSeat,
   findUserControlledParticipants,
+  getPresentCharacterSeats,
   getActiveCharacterParticipants,
   getActiveLLMParticipants,
   isMultiCharacterChat,

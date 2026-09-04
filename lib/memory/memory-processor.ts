@@ -43,7 +43,7 @@ import type { Pronouns } from '@/lib/schemas/character.types'
 import type { DangerousContentSettings, MemoryExtractionLimits } from '@/lib/schemas/settings.types'
 import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
 import { createMemoryWithGate } from './memory-service'
-import { resolveWhenPhrase } from './episodic'
+import { resolveEpisodicAnchors } from './episodic-anchors'
 import type { MemoryGateOutcome } from './memory-gate'
 import { logger } from '@/lib/logger'
 
@@ -232,32 +232,6 @@ interface WriteOptions {
   collected: ExtractedCandidate[]
 }
 
-/**
- * Resolve a candidate's episodic anchors against the source turn's clock.
- *
- * Stamping rules (episodic spine):
- *  - Every memory gets `occurredAt` = the source message timestamp by default
- *    (authoritative from the transcript — never asked of the model).
- *  - A retold EVENT with a `when` phrase resolves that phrase server-side
- *    against the same anchor; a successful resolution overrides the default.
- *  - On fictional timelines the raw phrase is preserved as `narrativeTime`
- *    (whether or not it also resolved to a wall-clock date).
- */
-function resolveCandidateAnchors(
-  candidate: MemoryCandidate,
-  anchorIso: string | null,
-  timelineMode: 'realtime' | 'narrative',
-): { occurredAt: string | null; narrativeTime: string | null } {
-  const fallback = anchorIso ?? null
-  let occurredAt = fallback
-  if (candidate.when && fallback) {
-    const resolved = resolveWhenPhrase(candidate.when, fallback)
-    if (resolved) occurredAt = resolved
-  }
-  const narrativeTime =
-    timelineMode === 'narrative' && candidate.when ? candidate.when : null
-  return { occurredAt, narrativeTime }
-}
 
 async function writeCandidate(opts: WriteOptions): Promise<void> {
   const timelineMode = opts.ctx.timelineMode ?? 'realtime'
@@ -266,11 +240,16 @@ async function writeCandidate(opts: WriteOptions): Promise<void> {
     opts.ctx.sourceMessageTimestamp ??
     opts.ctx.transcript.turnTimestamp ??
     new Date().toISOString()
-  const { occurredAt, narrativeTime } = resolveCandidateAnchors(
-    opts.candidate,
-    anchorIso,
+  // Episodic spine: `occurredAt` defaults to the source message timestamp
+  // (authoritative from the transcript — never asked of the model); a retold
+  // EVENT's `when` phrase resolves against that same anchor and overrides it.
+  // On fictional timelines the raw phrase is preserved as `narrativeTime`.
+  const { occurredAt, narrativeTime } = resolveEpisodicAnchors({
+    when: opts.candidate.when,
+    referenceIso: anchorIso,
+    fallbackIso: anchorIso,
     timelineMode,
-  )
+  })
 
   if (opts.ctx.dryRun) {
     opts.collected.push({

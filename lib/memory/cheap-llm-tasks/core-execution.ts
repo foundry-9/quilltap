@@ -5,7 +5,7 @@
 import { createLLMProvider } from '@/lib/llm'
 import type { LLMMessage, LLMResponse } from '@/lib/llm/base'
 import { buildCharacterCacheKey } from '@/lib/llm/cache-key'
-import { profileParams, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import { selectionFromProfile, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { getApiKeyForCheapLLMSelection } from '@/lib/services/api-key.service'
 import { getErrorMessage } from '@/lib/error-utils'
 import { logger } from '@/lib/logger'
@@ -417,14 +417,7 @@ function shouldAttemptUncensoredFallback(
   if (!uncensoredProfile) return null
 
   // Build a CheapLLMSelection for the uncensored profile
-  return {
-    provider: uncensoredProfile.provider,
-    modelName: uncensoredProfile.modelName,
-    baseUrl: uncensoredProfile.baseUrl || undefined,
-    connectionProfileId: uncensoredProfile.id,
-    isLocal: false,
-    profileParameters: profileParams(uncensoredProfile),
-  }
+  return selectionFromProfile(uncensoredProfile)
 }
 
 /**

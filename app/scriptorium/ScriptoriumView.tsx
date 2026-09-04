@@ -18,7 +18,8 @@ import {
 } from './components'
 import type { DocumentStore, CreateDocumentStoreData, UpdateDocumentStoreData } from './types'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
-import { useOnTabActivated, useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
+import { useInTabDrilldown } from '@/components/workspace/useInTabDrilldown'
 import dynamic from 'next/dynamic'
 
 // Lazy so the list bundle doesn't pull in the detail (and its file-manager deps)
@@ -56,8 +57,11 @@ export function ScriptoriumView({ initialStoreId }: ScriptoriumViewProps = {}) {
   // Inside a workspace tab, drilling into a store renders in place (keep-alive)
   // rather than navigating to /scriptorium/[id]. Outside the workspace the grid
   // routes as before.
-  const inTab = useWorkspaceTabId() != null
-  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(initialStoreId ?? null)
+  const {
+    inTab,
+    selectedId: selectedStoreId,
+    setSelectedId: setSelectedStoreId,
+  } = useInTabDrilldown(initialStoreId)
   const bgStyle = useSubsystemBackgroundStyle('scriptorium')
 
   useEffect(() => {
@@ -69,15 +73,6 @@ export function ScriptoriumView({ initialStoreId }: ScriptoriumViewProps = {}) {
   useOnTabActivated(() => {
     void fetchStores({ silent: true })
   })
-
-  // A deep-link re-open refreshes the tab payload; follow it into the store.
-  // Adjusting state during render is React's sanctioned derive-from-prop-change
-  // pattern (re-renders immediately, nothing committed in between).
-  const [prevInitialStoreId, setPrevInitialStoreId] = useState(initialStoreId)
-  if (initialStoreId !== prevInitialStoreId) {
-    setPrevInitialStoreId(initialStoreId)
-    if (initialStoreId) setSelectedStoreId(initialStoreId)
-  }
 
   const handleCreate = async (data: CreateDocumentStoreData) => {
     const result = await createStore(data)

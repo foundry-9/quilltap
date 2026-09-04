@@ -15,8 +15,14 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { Icon } from '@/components/ui/icon'
 import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
-import { displayTitle, isStateRef } from '@/lib/pascal/custom-tool.types'
+import {
+  displayTitle,
+  isStateRef,
+  scanPlaceholders,
+  type CustomToolParameter,
+} from '@/lib/pascal/custom-tool.types'
 import type { CustomToolAuditResult, CustomToolRunResult } from '@/lib/pascal/custom-tools'
+import { formatValue } from '@/lib/pascal/expressions'
 import { evaluateToolGate, type ToolGateVerdict } from '@/lib/pascal/tool-gate'
 import { definitionFromDraft, gateFromConditions, type ToolDraft } from '@/lib/pascal/tool-draft'
 import {
@@ -67,21 +73,26 @@ function extractErrorMessage(err: unknown): string {
 }
 
 export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchProps>) {
+  /** The document Save would write — what every roll, audit, and the preview send. */
+  const definition = useMemo(() => definitionFromDraft(draft), [draft])
+
+  /**
+   * The bench's parameter form, read off the serialized definition so it can
+   * never disagree with what the roll is sent. A `$state` default is dropped:
+   * the form cannot type one, and the server resolves it against mock state.
+   */
   const paramSpecs = useMemo(() => {
     const specs: Record<string, CustomToolParameterSpec> = {}
-    for (const param of draft.parameters) {
-      if (!param.name) continue
-      const numeric = param.type === 'number' || param.type === 'integer'
-      specs[param.name] = {
-        type: param.type,
-        default: param.type === 'boolean' ? Boolean(param.defaultValue) : numeric ? Number(param.defaultValue) || 0 : String(param.defaultValue),
-        description: param.description || undefined,
-        min: numeric && param.min.trim() !== '' ? Number(param.min) : undefined,
-        max: numeric && param.max.trim() !== '' ? Number(param.max) : undefined,
-      }
+    const declared = (definition.parameters ?? {}) as Record<string, CustomToolParameter>
+    for (const [name, spec] of Object.entries(declared)) {
+      if (isStateRef(spec.default)) continue
+      // A half-typed numeric default serializes as NaN (the form is already
+      // flagging it); the bench field shows 0 rather than "NaN".
+      const fallback = typeof spec.default === 'number' && !Number.isFinite(spec.default) ? 0 : spec.default
+      specs[name] = { ...spec, default: fallback }
     }
     return specs
-  }, [draft.parameters])
+  }, [definition])
 
   const [values, setValues] = useState<ParameterFormValues>({})
   const [isPrivate, setIsPrivate] = useState(false)
@@ -154,7 +165,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
     (draft.rollForm === 'range' &&
       (['min', 'max', 'multiplier', 'offset'] as const).some((f) => draft.rollRange[f].kind === 'state')) ||
     draft.parameters.some((p) => isStateRef(p.defaultValue)) ||
-    /\{\{\s*state\./.test(draft.outcomes.map((o) => o.message).join('\n'))
+    draft.outcomes.some((o) => scanPlaceholders(o.message).some((p) => p.ref.kind === 'state'))
 
   const mockStateError = useMemo(() => {
     try {
@@ -201,7 +212,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          definition: definitionFromDraft(draft),
+          definition,
           params: coerceParamValues(paramSpecs, effectiveValues),
           private: isPrivate,
           metadata: benchMetadata(),
@@ -221,7 +232,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          definition: definitionFromDraft(draft),
+          definition,
           params: coerceParamValues(paramSpecs, effectiveValues),
           metadata: benchMetadata(),
           state: benchState(),
@@ -233,7 +244,7 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
 
   const benchDisabled =
     !valid || (sheet.mode === 'manual' && manualSheetError !== null) || mockStateError !== null
-  const jsonPreview = useMemo(() => `${JSON.stringify(definitionFromDraft(draft), null, 2)}\n`, [draft])
+  const jsonPreview = useMemo(() => `${JSON.stringify(definition, null, 2)}\n`, [definition])
 
   return (
     <div className="space-y-3">
@@ -462,8 +473,8 @@ export function ProvingBench({ draft, valid, onMatched }: Readonly<ProvingBenchP
         {audit && (
           <div className="space-y-1">
             <p className="text-xs qt-text-secondary">
-              {audit.runs.toLocaleString()} draws · values {formatShort(audit.valueMin)}–{formatShort(audit.valueMax)} ·
-              mean {formatShort(audit.valueMean)}
+              {audit.runs.toLocaleString()} draws · values {formatValue(audit.valueMin)}–{formatValue(audit.valueMax)} ·
+              mean {formatValue(audit.valueMean)}
             </p>
             {audit.outcomes.map((entry) => {
               const outcome = draft.outcomes[entry.index]
@@ -544,11 +555,6 @@ function GateVerdictLine({ verdict }: Readonly<{ verdict: ToolGateVerdict | null
   )
 }
 
-function formatShort(value: number): string {
-  if (Number.isInteger(value)) return String(value)
-  return String(Number(value.toPrecision(4)))
-}
-
 /** Map an outcome state to its `--qt-alert-*` token family. */
 function stateToken(state: string | undefined): 'success' | 'warning' | 'error' | 'info' {
   switch (state) {
@@ -594,7 +600,7 @@ function MiniPascalBubble({
       {roll.diceBreakdown && <p className="text-xs qt-text-secondary font-mono">{roll.diceBreakdown}</p>}
       {roll.visibility === 'whisper' && <p className="text-xs qt-text-secondary italic">whispered</p>}
       <p className="text-xs qt-text-secondary font-mono">
-        raw {formatShort(roll.raw)} → value {formatShort(roll.value)} · matched {rowLabel} ({roll.state})
+        raw {formatValue(roll.raw)} → value {formatValue(roll.value)} · matched {rowLabel} ({roll.state})
         {roll.metadataTested &&
           ` · sheet: ${Object.entries(roll.metadataTested)
             .map(([key, value]) => `${key}=${JSON.stringify(value)}`)

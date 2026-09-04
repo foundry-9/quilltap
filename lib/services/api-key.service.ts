@@ -61,6 +61,16 @@ export type ProfileApiKeyResolution =
   | { ok: false; reason: ProfileApiKeyFailure }
 
 /**
+ * The sentence adopters of {@link resolveConnectionProfileApiKey} surface for
+ * a failed resolution — one wording for every console and help-chat path.
+ */
+export function describeProfileApiKeyFailure(reason: ProfileApiKeyFailure): string {
+  return reason === 'no-api-key-configured'
+    ? 'No API key configured for this connection profile'
+    : 'API key not found'
+}
+
+/**
  * Resolve the decrypted API key a connection profile should send.
  *
  * Asks both questions rather than one (Bug 81): a provider that *requires* a

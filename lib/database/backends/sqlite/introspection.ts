@@ -7,13 +7,20 @@
  * directly-opened file) needs the handle as a parameter, which is what these
  * take.
  *
+ * The handle is typed structurally rather than as better-sqlite3's `Database`
+ * so the repositories' minimal `SyncDb` / `RawDb` views (and a test double)
+ * qualify without a cast.
+ *
  * @module database/backends/sqlite/introspection
  */
 
-import type { Database as DatabaseType } from 'better-sqlite3'
+/** The one method table-existence needs of a synchronous SQLite handle. */
+export interface IntrospectableDb {
+  prepare(sql: string): { get(...params: unknown[]): unknown }
+}
 
 /** True when `name` is a table in the supplied database. */
-export function tableExists(db: DatabaseType, name: string): boolean {
+export function tableExists(db: IntrospectableDb, name: string): boolean {
   const row = db
     .prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name = ?`)
     .get(name) as { name: string } | undefined

@@ -26,10 +26,8 @@ import {
   postHostJoinScenarioAnnouncement,
 } from '@/lib/services/host-notifications/writer';
 import { compileIdentityStackForParticipant } from '@/lib/services/system-prompt-compiler/compiler';
-import {
-  applyOutfitSelections,
-  buildCheapLLMConfig,
-} from '@/lib/wardrobe/apply-outfit-selections';
+import { applyOutfitSelections } from '@/lib/wardrobe/apply-outfit-selections';
+import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
 import type { OutfitSelection } from '@/lib/schemas/wardrobe.types';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 

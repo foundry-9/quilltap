@@ -33,7 +33,7 @@ jest.mock('@/lib/mount-index/database-store', () => {
   return {
     __esModule: true,
     DatabaseStoreError,
-    readDatabaseDocument: jest.fn(),
+    readDatabaseDocumentIfExists: jest.fn(),
     writeDatabaseDocument: jest.fn(),
   };
 });
@@ -45,13 +45,13 @@ import {
 } from '@/lib/mount-index/general-state';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import {
-  readDatabaseDocument,
+  readDatabaseDocumentIfExists,
   writeDatabaseDocument,
-  DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 
 const getGeneralMountPointIdMock = getGeneralMountPointId as jest.MockedFunction<typeof getGeneralMountPointId>;
-const readDatabaseDocumentMock = readDatabaseDocument as jest.MockedFunction<typeof readDatabaseDocument>;
+const readDatabaseDocumentMock =
+  readDatabaseDocumentIfExists as jest.MockedFunction<typeof readDatabaseDocumentIfExists>;
 const writeDatabaseDocumentMock = writeDatabaseDocument as jest.MockedFunction<typeof writeDatabaseDocument>;
 const getRepositoriesMock = jest.requireMock('@/lib/repositories/factory').getRepositories as jest.Mock;
 
@@ -101,27 +101,33 @@ describe('readGeneralState', () => {
     expect(readDatabaseDocumentMock).not.toHaveBeenCalled();
   });
 
-  it('returns {} on NOT_FOUND', async () => {
+  it('returns {} when state.json is absent', async () => {
     getGeneralMountPointIdMock.mockResolvedValue(MOUNT_ID);
-    readDatabaseDocumentMock.mockRejectedValue(new DatabaseStoreError('missing', 'NOT_FOUND'));
+    readDatabaseDocumentMock.mockResolvedValue(null);
+    expect(await readGeneralState()).toEqual({});
+  });
+
+  it('returns {} and warns when the read itself fails', async () => {
+    getGeneralMountPointIdMock.mockResolvedValue(MOUNT_ID);
+    readDatabaseDocumentMock.mockRejectedValue(new Error('index locked'));
     expect(await readGeneralState()).toEqual({});
   });
 
   it('returns {} and warns on corrupt JSON', async () => {
     getGeneralMountPointIdMock.mockResolvedValue(MOUNT_ID);
-    readDatabaseDocumentMock.mockResolvedValue({ content: '{ not json', mtime: 0, size: 10 });
+    readDatabaseDocumentMock.mockResolvedValue('{ not json');
     expect(await readGeneralState()).toEqual({});
   });
 
   it('returns {} when the body is a non-object (array)', async () => {
     getGeneralMountPointIdMock.mockResolvedValue(MOUNT_ID);
-    readDatabaseDocumentMock.mockResolvedValue({ content: '[1,2,3]', mtime: 0, size: 7 });
+    readDatabaseDocumentMock.mockResolvedValue('[1,2,3]');
     expect(await readGeneralState()).toEqual({});
   });
 
   it('parses a valid object body', async () => {
     getGeneralMountPointIdMock.mockResolvedValue(MOUNT_ID);
-    readDatabaseDocumentMock.mockResolvedValue({ content: '{"weather":"foggy"}', mtime: 0, size: 20 });
+    readDatabaseDocumentMock.mockResolvedValue('{"weather":"foggy"}');
     expect(await readGeneralState()).toEqual({ weather: 'foggy' });
   });
 });

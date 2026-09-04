@@ -76,6 +76,30 @@ export async function readDatabaseDocument(
   };
 }
 
+/**
+ * Read a document's content, or `null` when it is genuinely absent.
+ *
+ * Only `NOT_FOUND` collapses to `null`; every other failure — an unreadable
+ * index, a repository error — is rethrown untouched, so callers can keep
+ * "nothing persisted yet" and "the read failed" apart without hand-rolling
+ * the `DatabaseStoreError` check at every site.
+ */
+export async function readDatabaseDocumentIfExists(
+  mountPointId: string,
+  relativePath: string
+): Promise<string | null> {
+  try {
+    const { content } = await readDatabaseDocument(mountPointId, relativePath);
+    return content;
+  } catch (error) {
+    if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
+      logger.debug('Document absent from database-backed store', { mountPointId, relativePath });
+      return null;
+    }
+    throw error;
+  }
+}
+
 // ============================================================================
 // WRITE (create or update)
 // ============================================================================
@@ -196,6 +220,28 @@ export async function deleteDatabaseDocument(
 
   emitDocumentDeleted({ mountPointId, relativePath: rel });
   return true;
+}
+
+/**
+ * Delete a document, treating an absent one as a no-op.
+ *
+ * Returns `true` when a document was removed and `false` when there was
+ * nothing at the path (whether reported as a `false` return or a `NOT_FOUND`
+ * error). Every other failure is rethrown untouched.
+ */
+export async function deleteDatabaseDocumentIfExists(
+  mountPointId: string,
+  relativePath: string
+): Promise<boolean> {
+  try {
+    return await deleteDatabaseDocument(mountPointId, relativePath);
+  } catch (error) {
+    if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
+      logger.debug('Document already absent on delete', { mountPointId, relativePath });
+      return false;
+    }
+    throw error;
+  }
 }
 
 // ============================================================================
