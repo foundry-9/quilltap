@@ -4,6 +4,26 @@
 
 ### 4.9-dev
 
+#### Changed: published packages pinned to their released versions everywhere they are consumed
+
+`@quilltap/plugin-utils` 2.6.0, `@quilltap/plugin-types` 2.6.0 and `create-quilltap-theme` 2.0.19
+are on npm, but the root lockfile still resolved `@quilltap/plugin-utils` to 2.4.0, so the app
+shipped the older copy. The fifteen bundled plugins declared six different ranges between them
+(`^2.2.20` through `^2.6.0`).
+
+- Root `package.json` moves to `^2.6.0` / `^2.0.19` and the lockfile re-resolves.
+- Every plugin declares `^2.6.0` for both packages, with a patch bump and a matching
+  `manifest.json` version, and was rebuilt. Five bundles change — `anthropic`, `deepseek`, `mcp`,
+  `nanogpt`, `openai-compatible` — taking up the `buildRequestBody` refactor that landed in
+  plugin-utils 2.6.0. The other ten do not bundle the changed code and are byte-identical.
+- The stale `version` fields in the `plugin-types`, `plugin-utils` and `create-quilltap-theme`
+  lockfiles are corrected.
+
+Plugin SDK versions were held at what the committed bundles already carried (`openai` 7.4.0, 7.5.0
+for nanogpt; `@openrouter/sdk` 1.2.32). The plugins have no lockfiles, so a rebuild from a clean
+checkout otherwise floats them to the newest match — `openai` 7.10.0 and `@openrouter/sdk` 1.2.103
+at the time of writing.
+
 #### Fixed: one bad sub-step no longer kills a whole Refine-from-Memories run (bug 119)
 
 The character optimizer fans a character out into one LLM pass per concern — general fields, each

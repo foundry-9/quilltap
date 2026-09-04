@@ -1,6 +1,6 @@
 {
   "name": "qtap-plugin-default-system-prompts",
-  "version": "1.1.17",
+  "version": "1.1.18",
   "description": "Default system prompt templates for Quilltap - companion and romantic prompts for various LLM models",
   "main": "index.js",
   "types": "index.d.ts",
@@ -12,8 +12,8 @@
     "clean": "rm -f index.js"
   },
   "dependencies": {
-    "@quilltap/plugin-types": "^2.5.6",
-    "@quilltap/plugin-utils": "^2.2.20"
+    "@quilltap/plugin-types": "^2.6.0",
+    "@quilltap/plugin-utils": "^2.6.0"
   },
   "devDependencies": {
     "esbuild": "^0.28.2",
