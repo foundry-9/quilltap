@@ -4,6 +4,29 @@
 
 ### 4.9-dev
 
+#### Fixed: a character no longer receives other characters' memories as their own (bug 122)
+
+A character's memory store holds what they remember about themselves and what they remember about
+everyone else in one place, told apart only by the memory's subject. Three of the four blocks that
+render memories into a character's context printed only the memory text, with no indication of whose
+life it described, and all three arrive under the heading "You remember the following entries that
+bear on this moment". A character with a long history therefore read other people's actions,
+relationships and physical history as autobiography.
+
+In the reported case a male character answered a question addressed to a female character, as that
+character — correctly and in her voice, using her children, her body and her past. Nothing errored:
+the turn completed and read well. The same memory appeared twice in one context block, correctly
+attributed under "You also recall about the others present" and unattributed as the character's own
+two sections above.
+
+Lines about another character now carry `About <Name>:` in all three blocks, matching what the
+inter-character block already did. The character's own memories are unchanged. A subject that
+cannot be resolved to a name still gets a prefix, so the line can never read as first-person.
+
+The effect was sharpest on cheap models and on connection profiles that send no per-character
+prefill, where nothing sits between those memories and the model's first word. It also applied to
+Carina answers and to character-voiced announcements, both of which recall against the whole store.
+
 #### Fixed: an attachment now reaches every character in the chat, not just the first to answer (bug 121)
 
 A file attached to a chat message was expanded into prompt text at request-assembly time and never

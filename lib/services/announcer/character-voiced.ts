@@ -28,6 +28,7 @@ import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution
 import { buildSystemPrompt } from '@/lib/chat/context/system-prompt-builder'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { formatDynamicMemoryHead } from '@/lib/chat/context/memory-injector'
+import { buildMemorySubjectContext } from '@/lib/memory/memory-subject'
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer'
 
 export interface CharacterVoicedAnnouncementParams {
@@ -124,7 +125,14 @@ export async function generateCharacterVoicedAnnouncement(
       )
 
       if (memoryResults.length > 0) {
-        const formatted = formatDynamicMemoryHead(memoryResults, profile.provider, {
+        // The recall spans the character's whole store, so it carries their
+        // memories about other people too; attribute them or the rewrite reads
+        // someone else's life as its own (bug 122).
+        const subject = await buildMemorySubjectContext(
+          character.id,
+          memoryResults.map(r => r.memory),
+        )
+        const formatted = formatDynamicMemoryHead(memoryResults, profile.provider, subject, {
           maxEntries: 12,
         })
         if (formatted.content) {

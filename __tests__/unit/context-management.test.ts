@@ -465,6 +465,9 @@ describe('Context Manager', () => {
   })
 
   describe('formatMemoriesForContext', () => {
+    // These fixtures are the character's own memories (no aboutCharacterId),
+    // so no subject prefix is expected on any line.
+    const selfSubject = { selfCharacterId: 'char1', characterNames: new Map<string, string>() }
     const mockMemories = [
       {
         memory: {
@@ -501,7 +504,7 @@ describe('Context Manager', () => {
     ]
 
     it('should format memories with header', () => {
-      const { content } = formatMemoriesForContext(mockMemories, 1000, 'OPENAI')
+      const { content } = formatMemoriesForContext(mockMemories, 1000, 'OPENAI', selfSubject)
       expect(content).toContain('## Relevant Memories')
       // Whisper lines now carry the full memory.content (not summary), so we
       // assert against the content body — "User likes coffee" — rather than
@@ -510,13 +513,13 @@ describe('Context Manager', () => {
     })
 
     it('should return empty for no memories', () => {
-      const { content, memoriesUsed } = formatMemoriesForContext([], 1000, 'OPENAI')
+      const { content, memoriesUsed } = formatMemoriesForContext([], 1000, 'OPENAI', selfSubject)
       expect(content).toBe('')
       expect(memoriesUsed).toBe(0)
     })
 
     it('should respect token limit', () => {
-      const { tokenCount } = formatMemoriesForContext(mockMemories, 50, 'OPENAI')
+      const { tokenCount } = formatMemoriesForContext(mockMemories, 50, 'OPENAI', selfSubject)
       expect(tokenCount).toBeLessThanOrEqual(50)
     })
   })

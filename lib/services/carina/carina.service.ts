@@ -55,6 +55,7 @@ import { supportsCapability } from '@/lib/plugins/provider-registry';
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service';
 import { findCharactersByName } from '@/lib/services/character-resolver';
 import { formatMemoriesForContext } from '@/lib/chat/context/memory-injector';
+import { buildMemorySubjectContext } from '@/lib/memory/memory-subject';
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer';
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
 import { postCarinaResponse } from './writer';
@@ -222,7 +223,19 @@ async function loadCarinaMemoryRecall(
     });
     if (results.length === 0) return null;
 
-    const formatted = formatMemoriesForContext(results, CARINA_MEMORY_TOKEN_BUDGET, provider);
+    // The search runs over the answerer's whole store, so it surfaces what they
+    // know about other people too — those lines must name their subject or the
+    // answerer reads them as their own life (bug 122).
+    const subject = await buildMemorySubjectContext(
+      characterId,
+      results.map(r => r.memory),
+    );
+    const formatted = formatMemoriesForContext(
+      results,
+      CARINA_MEMORY_TOKEN_BUDGET,
+      provider,
+      subject,
+    );
     if (!formatted.content || formatted.memoriesUsed === 0) return null;
 
     return buildCommonplaceLLMContext({ relevant: formatted.content });

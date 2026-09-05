@@ -10,6 +10,12 @@ import { renderRelevantConversationsBlock } from '../conversation-summary-search
 import type { SemanticSearchResult } from '../memory-service'
 import type { Memory } from '@/lib/schemas/types'
 
+/** These cases are about dates, not attribution: the memories are the character's own. */
+const SELF_SUBJECT = {
+  selfCharacterId: '22222222-2222-4222-8222-222222222222',
+  characterNames: new Map<string, string>(),
+}
+
 function makeMemory(overrides: Partial<Memory>): Memory {
   return {
     id: '11111111-1111-4111-8111-111111111111',
@@ -43,7 +49,7 @@ describe('formatDynamicMemoryHead dates', () => {
         rawWeight: 0.7,
       },
     ]
-    const formatted = formatDynamicMemoryHead(results, 'ANTHROPIC' as never)
+    const formatted = formatDynamicMemoryHead(results, 'ANTHROPIC' as never, SELF_SUBJECT)
     expect(formatted.content).toContain('[last week]')
   })
 
@@ -60,7 +66,7 @@ describe('formatDynamicMemoryHead dates', () => {
         rawWeight: 0.7,
       },
     ]
-    const formatted = formatDynamicMemoryHead(results, 'ANTHROPIC' as never)
+    const formatted = formatDynamicMemoryHead(results, 'ANTHROPIC' as never, SELF_SUBJECT)
     expect(formatted.content).toContain('[today · the third night at sea]')
   })
 })

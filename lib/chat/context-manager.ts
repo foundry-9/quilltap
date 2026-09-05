@@ -118,6 +118,7 @@ import { compressMemories } from '@/lib/memory/cheap-llm-tasks'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
+import { buildMemorySubjectContext } from '@/lib/memory/memory-subject'
 import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { extractVisibleConversation, stripToolArtifacts, extractMemorySearchKeywords, type MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
@@ -1484,10 +1485,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         budget.memoryBudget,
       )
       const archiveBudget = Math.max(0, budget.memoryBudget - dynamicHeadBudget)
-      const archiveFormatted = formatFrozenMemoryArchive(frozenArchive, archiveBudget, provider)
+
+      // Both pools below are keyed on `characterId` alone, so each carries this
+      // character's memories ABOUT other people alongside their own — and both
+      // are delivered under "You remember the following entries…". Resolve the
+      // subjects so those lines can say whose life they describe (bug 122).
+      // Names are looked up rather than taken from `participantCharacters`
+      // because a memory's subject is frequently someone not in the room.
+      const memorySubject = await buildMemorySubjectContext(
+        character.id,
+        [...frozenArchive, ...dynamicHeadResults.map(r => r.memory)],
+      )
+
+      const archiveFormatted = formatFrozenMemoryArchive(
+        frozenArchive,
+        archiveBudget,
+        provider,
+        memorySubject,
+      )
       frozenArchiveCount = archiveFormatted.memoriesUsed
 
-      const headFormatted = formatDynamicMemoryHead(dynamicHeadResults, provider, {
+      const headFormatted = formatDynamicMemoryHead(dynamicHeadResults, provider, memorySubject, {
         maxTokens: dynamicHeadBudget,
         maxEntries: isRetrospectiveTurn ? RETRO_HEAD_SIZE : DYNAMIC_HEAD_DEFAULT_SIZE,
       })

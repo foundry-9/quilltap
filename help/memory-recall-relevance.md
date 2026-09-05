@@ -61,6 +61,14 @@ A happy consequence is that the Book has learned the art of holding its tongue. 
 
 And it keeps a short memory of its own recent remarks, so as not to repeat itself. A recollection it has pressed upon you these last few turns is gently set aside to let another have its say — never barred outright, for a thing that remains the single most pertinent memory will still win out, but no longer permitted to become that tiresome guest who tells the same anecdote at every turn of the conversation.
 
+## Whose Life Is It, Anyway?
+
+A character's Commonplace Book keeps two sorts of entry side by side: what the character recalls of *themselves*, and what they have observed of *everybody else*. The two have always been filed apart — but for a time the Book, in its haste to be helpful, read out both sorts in the same breath, without troubling to say which was which. The effect, upon a character of long acquaintance and many entries, was much as you would expect: handed a page of another's doings under the heading *you remember*, it took the page at its word and answered in that person's voice, with that person's history, entirely convinced.
+
+The Book has been taught better manners. Any entry concerning somebody else is now announced as such — *About Marion:* before the recollection, and no prefix at all upon the character's own. So a character may still recall, in perfect detail, what the woman across the table confided last month, without for a moment mistaking her confidence for its own.
+
+This is the Book's own housekeeping and asks nothing of you. You will see the change in the whispers themselves, should you have the Commonplace Book's asides on view.
+
 ## In-Chat Navigation
 
 Characters with help tools enabled can navigate directly to this page:

@@ -181,6 +181,42 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
+   * Resolve character IDs to display names — **without the vault overlay**.
+   *
+   * `name` is a plain DB column, so the overlay has nothing to add here, and
+   * skipping it is the point: this runs on the per-turn context path, where a
+   * character whose vault is unreadable must cost the caller a *name*, not the
+   * whole turn (`findById` throws `CharacterVaultUnavailableError` on that
+   * shelf, by design — see the class docblock). IDs with no row, or with a
+   * blank name, are simply absent from the returned map; callers are expected
+   * to degrade rather than assume a hit.
+   *
+   * @param ids Character IDs to resolve (deduped internally; empty is fine)
+   * @returns Promise<Map<string, string>> id → name, for the IDs that resolved
+   */
+  async findNamesByIds(ids: string[]): Promise<Map<string, string>> {
+    const unique = Array.from(
+      new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))
+    );
+    if (unique.length === 0) return new Map();
+
+    return this.safeQuery(
+      async () => {
+        const rows = await super.findByIds(unique);
+        const names = new Map<string, string>();
+        for (const row of rows) {
+          const name = typeof row.name === 'string' ? row.name.trim() : '';
+          if (row.id && name.length > 0) names.set(row.id, name);
+        }
+        return names;
+      },
+      'Error resolving character names',
+      { count: unique.length },
+      new Map<string, string>()
+    );
+  }
+
+  /**
    * Find characters that use a specific image as their default
    * @param imageId The image file ID
    * @returns Promise<Character[]> Array of characters using this image as default
