@@ -2,7 +2,7 @@
 
 ## Recent Changes
 
-### 4.9-dev
+### 4.9.0
 
 #### Fixed: a character no longer receives other characters' memories as their own (bug 122)
 
