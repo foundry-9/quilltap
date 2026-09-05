@@ -18,6 +18,9 @@ import { created, successResponse } from '@/lib/api/responses';
 const createGroupSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   description: z.string().max(2000).nullable().optional(),
+  // Standing instructions ("the group prompt") — injected into the system
+  // prompt of every member character's turns. Max mirrors GroupSchema.
+  instructions: z.string().max(10000).nullable().optional(),
   color: z.string().regex(/^#(?:[0-9a-fA-F]{3}){1,2}$/).nullable().optional(),
   icon: z.string().max(50).nullable().optional(),
 });
@@ -61,6 +64,7 @@ export const POST = createContextHandler(async (req: NextRequest, { repos }) => 
   const group = await repos.groups.create({
     name: validatedData.name,
     description: validatedData.description || null,
+    instructions: validatedData.instructions || null,
     color: validatedData.color || null,
     icon: validatedData.icon || null,
     state: {},

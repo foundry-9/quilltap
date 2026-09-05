@@ -108,14 +108,21 @@ export function TaskFilters({
         Stop Queue
       </button>
 
-      <label className="flex items-center gap-2 qt-text-small cursor-pointer">
+      {/*
+        The queue keeps itself current over the realtime socket; this switch
+        governs the fallback poll, which only runs when that socket is down.
+      */}
+      <label
+        className="flex items-center gap-2 qt-text-small cursor-pointer"
+        title="Should the ledger be re-read every five seconds whenever the live wire is down?"
+      >
         <input
           type="checkbox"
           checked={autoRefresh}
           onChange={(e) => onAutoRefreshChange(e.target.checked)}
           className="rounded qt-border-default text-primary focus:ring-ring"
         />
-        Auto-refresh (5s)
+        Fallback polling (5s)
       </label>
 
       {/* Processor Status Indicator */}
@@ -130,7 +137,7 @@ export function TaskFilters({
           <span
             className={`w-2 h-2 rounded-full ${
               data.processorStatus?.running
-                ? 'bg-success animate-pulse'
+                ? 'qt-bg-success animate-pulse'
                 : 'qt-bg-muted-foreground'
             }`}
           />

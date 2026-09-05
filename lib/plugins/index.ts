@@ -126,6 +126,7 @@ export {
   validateProviderConfig,
   requiresBaseUrl,
   requiresApiKey,
+  acceptsApiKey,
   getDefaultBaseUrl,
   testProviderConnection,
   getEmbeddingProviders,

@@ -12,6 +12,7 @@ import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { createHash } from 'node:crypto'
 import { getRepositories } from '@/lib/repositories/factory'
+import { buildHelpDocChunks } from '@/lib/help/help-doc-chunking'
 import { logger } from '@/lib/logger'
 
 const HELP_DIR = join(process.cwd(), 'help')
@@ -32,6 +33,8 @@ export interface HelpDocSyncResult {
   deleted: number
   /** Docs that failed to sync */
   failed: number
+  /** Section chunk rows written across every created/updated doc */
+  chunksWritten: number
   /** IDs of docs that were created or updated (need embedding) */
   changedIds: string[]
 }
@@ -138,6 +141,7 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
     unchanged: 0,
     deleted: 0,
     failed: 0,
+    chunksWritten: 0,
     changedIds: [],
   }
 
@@ -199,6 +203,14 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
         contentHash,
       })
 
+      // Re-slice the doc into section chunks. Boundaries move whenever the
+      // prose above them changes, so the old rows are discarded wholesale
+      // rather than diffed; their embeddings are filled by the HELP_DOC
+      // embedding job that the caller enqueues for this doc.
+      const chunks = buildHelpDocChunks(body)
+      await repos.helpDocChunks.replaceForDoc(doc.id, chunks)
+      result.chunksWritten += chunks.length
+
       // Content changed — clear the old embedding so it gets re-generated
       if (existing) {
         await repos.helpDocs.clearAllEmbeddingsForDoc(doc.id)
@@ -248,6 +260,7 @@ export async function syncHelpDocs(): Promise<HelpDocSyncResult> {
       }
 
       try {
+        await repos.helpDocChunks.deleteByDocId(doc.id)
         await repos.helpDocs.delete(doc.id)
         await repos.embeddingStatus.deleteByEntity('HELP_DOC', doc.id)
         result.deleted++
@@ -293,6 +306,10 @@ export async function ensureHelpDocsSynced(): Promise<void> {
   const existing = await repos.helpDocs.findAll()
 
   if (existing.length > 0 && !helpDocsDivergeFromDisk(existing)) {
+    // Docs are current, but their section chunks may not exist at all — an
+    // instance that upgraded into `help_doc_chunks` has every content hash
+    // matching, so nothing above would ever slice them.
+    await backfillHelpDocChunks(existing)
     return
   }
 
@@ -305,6 +322,69 @@ export async function ensureHelpDocsSynced(): Promise<void> {
 
   await syncPromise
   await enqueueMissingHelpDocEmbeddings()
+}
+
+/**
+ * Slice any already-synced document that has no section chunks, and enqueue an
+ * embedding job for it.
+ *
+ * The path that matters is the upgrade: an existing instance has a full,
+ * unchanged `help_docs` table, so the content-hash check skips every file and
+ * the chunks would stay empty forever — section search would silently never
+ * engage. Docs whose chunks already exist are left alone, so this costs one
+ * count query per boot once it has run.
+ *
+ * The embedding job is enqueued even though the *document's* own embedding is
+ * present, because the job is what fills the chunk vectors.
+ */
+async function backfillHelpDocChunks(
+  existing: Array<{ id: string; content: string }>
+): Promise<void> {
+  try {
+    const repos = getRepositories()
+
+    // One count, not a scan: chunk rows carry embedding BLOBs, and reading
+    // them all on every boot to answer "has this run yet?" would be absurd.
+    // A non-empty table means the backfill has already happened; docs added
+    // afterwards are sliced by syncHelpDocs on their content hash, and a
+    // half-finished backfill is healed by the next full reindex.
+    if (await repos.helpDocChunks.count() > 0) {
+      return
+    }
+
+    const missing = existing
+    if (missing.length === 0) {
+      return
+    }
+
+    logger.info('[HelpDocSync] Backfilling help doc sections', {
+      context: 'backfillHelpDocChunks',
+      docsMissingChunks: missing.length,
+    })
+
+    let written = 0
+    for (const doc of missing) {
+      const chunks = buildHelpDocChunks(doc.content)
+      if (chunks.length === 0) {
+        continue
+      }
+      await repos.helpDocChunks.replaceForDoc(doc.id, chunks)
+      written += chunks.length
+    }
+
+    logger.info('[HelpDocSync] Help doc sections backfilled', {
+      context: 'backfillHelpDocChunks',
+      chunksWritten: written,
+    })
+
+    await enqueueHelpDocEmbeddings(missing.map(doc => doc.id))
+  } catch (error) {
+    // Never block help from loading over this; whole-document search still works.
+    logger.warn('[HelpDocSync] Help doc section backfill failed', {
+      context: 'backfillHelpDocChunks',
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
 }
 
 /**
@@ -350,8 +430,28 @@ async function enqueueMissingHelpDocEmbeddings(): Promise<void> {
   try {
     const repos = getRepositories()
     const needEmbedding = await repos.helpDocs.findAllNeedingEmbedding()
+    await enqueueHelpDocEmbeddings(needEmbedding.map(doc => doc.id))
+  } catch (error) {
+    // Best-effort, as below: the docs are already in the database and
+    // listable in the Guide, which is what the caller actually depends on.
+    logger.error('[HelpDocSync] Failed to look up help docs needing embedding', {
+      context: 'enqueueMissingHelpDocEmbeddings',
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
 
-    if (needEmbedding.length === 0) {
+/**
+ * Enqueue a HELP_DOC embedding job for each of `docIds`, resolving the default
+ * embedding profile and the single user. Silent when either is unavailable —
+ * an instance with no embedding profile configured simply has no semantic help
+ * search yet, which is not an error worth shouting about on every boot.
+ */
+async function enqueueHelpDocEmbeddings(docIds: string[]): Promise<void> {
+  try {
+    const repos = getRepositories()
+
+    if (docIds.length === 0) {
       return
     }
 
@@ -359,8 +459,8 @@ async function enqueueMissingHelpDocEmbeddings(): Promise<void> {
     const defaultProfile = profiles.find(p => p.isDefault) || profiles[0]
     if (!defaultProfile) {
       logger.debug('[HelpDocSync] Help docs need embedding but no embedding profile is configured', {
-        context: 'enqueueMissingHelpDocEmbeddings',
-        needEmbedding: needEmbedding.length,
+        context: 'enqueueHelpDocEmbeddings',
+        needEmbedding: docIds.length,
       })
       return
     }
@@ -374,25 +474,25 @@ async function enqueueMissingHelpDocEmbeddings(): Promise<void> {
     const { enqueueEmbeddingGenerate } = await import('@/lib/background-jobs/queue-service')
 
     let enqueued = 0
-    for (const doc of needEmbedding) {
+    for (const docId of docIds) {
       const { isNew } = await enqueueEmbeddingGenerate(userId, {
         entityType: 'HELP_DOC',
-        entityId: doc.id,
+        entityId: docId,
         profileId: defaultProfile.id,
       })
       if (isNew) enqueued++
     }
 
     logger.info('[HelpDocSync] Enqueued help doc embeddings', {
-      context: 'enqueueMissingHelpDocEmbeddings',
+      context: 'enqueueHelpDocEmbeddings',
       enqueued,
-      needEmbedding: needEmbedding.length,
+      needEmbedding: docIds.length,
     })
   } catch (error) {
     // Embedding top-up is best-effort: the docs are already in the database
     // and listable in the Guide, which is the caller's actual dependency.
     logger.error('[HelpDocSync] Failed to enqueue help doc embeddings', {
-      context: 'enqueueMissingHelpDocEmbeddings',
+      context: 'enqueueHelpDocEmbeddings',
       error: error instanceof Error ? error.message : String(error),
     })
   }

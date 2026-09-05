@@ -8,6 +8,8 @@ export interface Group {
   id: string
   name: string
   description?: string | null
+  /** Standing instructions ("the group prompt") added to every member character's system prompt. */
+  instructions?: string | null
   color?: string | null
   icon?: string | null
   officialMountPointId?: string | null

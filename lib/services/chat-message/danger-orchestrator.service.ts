@@ -16,7 +16,7 @@ import { encodeStatusEvent, safeEnqueue } from './streaming.service'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
 import { classifyContent as classifyDangerousContent } from '@/lib/services/dangerous-content/gatekeeper.service'
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import type { DangerResolutionResult } from './types'
 
 const logger = createServiceLogger('ChatDangerOrchestrator')
@@ -62,7 +62,7 @@ export async function resolveMessageDangerState({
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings, chat)
   const dangerSettings = dangerousContentResolved.settings
 
-  if (isChatActiveDangerous(chat) && dangerSettings.mode !== 'OFF' && !isContinueMode && content) {
+  if (shouldUseUncensoredRoute(chat) && dangerSettings.mode !== 'OFF' && !isContinueMode && content) {
 
     const categories = chat.dangerCategories && chat.dangerCategories.length > 0
       ? chat.dangerCategories

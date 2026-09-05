@@ -8,9 +8,7 @@ import remarkBreaks from 'remark-breaks'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import remarkSmartypants from 'remark-smartypants'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { REMARK_MATH_OPTIONS, normalizeMathDelimiters } from '@/lib/markdown/math'
 import { SMARTYPANTS_OPTIONS, shouldCurlQuotes } from '@/lib/markdown/typography'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
@@ -349,15 +347,9 @@ export default function MessageContent({
   // preference that should apply to all of them consistently. TanStack Query
   // dedupes the fetch across every mounted message and re-renders them all when
   // the toggle flips.
-  const { data: smartTypographySettings } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) =>
-      apiFetch<{ smartTypographySettings?: { displayQuotes?: boolean } }>(
-        '/api/v1/settings/chat',
-        { signal },
-      ),
-    select: (data) => data.smartTypographySettings,
-  })
+  const { data: smartTypographySettings } = useChatSettingsQuery(
+    (data) => data.smartTypographySettings,
+  )
   const curlQuotes = shouldCurlQuotes({
     displayQuotes: smartTypographySettings?.displayQuotes,
     renderingPatterns: patterns,

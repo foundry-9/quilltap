@@ -24,7 +24,7 @@ An API key is a unique credential that authorizes Quilltap to access your accoun
 
 The API Keys list shows:
 
-- **Provider** — Which service the key is for (OpenAI, Anthropic, Google, Ollama, etc.)
+- **Provider** — Which service the key is for (OpenAI, Anthropic, Google, OpenAI-Compatible, etc.)
 - **Label** — A name you gave the key to identify it (e.g., "My OpenAI Account", "Work Account")
 - **Status** — Whether the key is currently active
 - **Key Preview** — The first and last few characters of the key (for verification)
@@ -38,7 +38,7 @@ The API Keys list shows:
 1. Click the **Add API Key** button
 2. A form appears with the following fields:
 
-   - **Provider** — Select the AI service (OpenAI, Anthropic, Claude, Google, Grok, Ollama, DeepSeek, etc.)
+   - **Provider** — Select the AI service (OpenAI, Anthropic, Google, Grok, DeepSeek, Z.AI, NanoGPT, OpenRouter, OpenAI-Compatible, etc.). Only providers that can actually carry a key are offered; Ollama, which asks for none, is not among them
    - **Label** — Give this key a memorable name (e.g., "Production Account", "Testing Key")
    - **API Key** — Paste your actual API key from the provider's website
 
@@ -146,11 +146,25 @@ Quilltap supports API keys from:
 - **Google** — Gemini models
 - **Grok** — Xai's Grok model
 - **DeepSeek** — DeepSeek models
-- **Ollama** — Local models
+- **Z.AI** — GLM models
+- **NanoGPT** — one pay-as-you-go key admitting you to hundreds of chat, image, and embedding models
 - **OpenRouter** — Multi-model routing service
-- **Groq** — Fast LLM inference
-- **Perplexity** — AI search with citations
+- **OpenAI-Compatible** — any service speaking the OpenAI dialect: Together, Fireworks, Groq, DeepInfra, a hosted vLLM, a corporate gateway
 - **Other providers** — Custom or provider-specific keys
+
+Two provider kinds are absent from that list on purpose. **Ollama** wants no key
+whatever — it is your own machine, and it does not ask you for credentials to
+speak to yourself — so it is not offered here and its connection profiles show
+no key field at all.
+
+**OpenAI-Compatible** is the peculiar case, and as of 4.9 it is handled
+properly. The same provider serves the unbolted `llama-server` on your desk and
+a hosted endpoint that will not exchange a syllable without a bearer token, so
+a key is neither demanded nor forbidden: create one here if your endpoint wants
+one, and the *API Key* field on the profile — unstarred, since it is optional —
+will offer it. Before 4.9 the provider was missing from this list entirely and
+the field never appeared, which made a hosted OpenAI-compatible service simply
+unusable, 401 after 401, with nothing on the page to explain the omission.
 
 You can also set custom base URLs for self-hosted LLM providers.
 

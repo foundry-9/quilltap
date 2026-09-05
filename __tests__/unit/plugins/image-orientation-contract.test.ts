@@ -62,6 +62,7 @@ describe('image-provider plugins advertise orientation support', () => {
   it.each([
     'qtap-plugin-grok',
     'qtap-plugin-z-ai',
+    'qtap-plugin-nanogpt',
   ])('%s: provider-level constraints declare portrait + landscape', (name) => {
     const plugin = loadPlugin(name)
     expect(typeof plugin.getImageProviderConstraints).toBe('function')

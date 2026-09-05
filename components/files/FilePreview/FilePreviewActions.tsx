@@ -105,7 +105,7 @@ export default function FilePreviewActions({
         <button
           onClick={onDelete}
           disabled={isDeleting}
-          className="qt-button qt-button-secondary p-2 qt-text-destructive hover:bg-destructive hover:qt-text-destructive-foreground disabled:opacity-50"
+          className="qt-button qt-button-secondary p-2 qt-text-destructive hover:qt-bg-destructive hover:qt-text-on-destructive disabled:opacity-50"
           title="Delete"
         >
           {isDeleting ? '\u23F3' : '\u{1F5D1}\uFE0F'} {/* hourglass or trash */}

@@ -107,7 +107,7 @@ export function ExportKeysDialog({
               className="qt-input"
             />
             {passphraseError && (
-              <p className="qt-text-xs mt-1 qt-text-error">{passphraseError}</p>
+              <p className="qt-text-xs mt-1 qt-text-destructive">{passphraseError}</p>
             )}
           </div>
         </div>

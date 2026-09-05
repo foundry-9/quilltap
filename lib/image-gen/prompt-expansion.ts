@@ -265,38 +265,6 @@ export function getAllDescriptionTiers(
 }
 
 /**
- * Calculate available space for descriptions in a prompt
- *
- * @param basePrompt - The original prompt with placeholders
- * @param placeholderCount - Number of placeholders to substitute
- * @param provider - Image generation provider
- * @returns Available characters per placeholder (approximate)
- */
-export function calculateAvailableSpace(
-  basePrompt: string,
-  placeholderCount: number,
-  provider: ImageProvider
-): number {
-  const limit = PROVIDER_LIMITS[provider];
-
-  // Remove placeholders from the base prompt to get actual text length
-  const promptWithoutPlaceholders = basePrompt.replace(/\{\{[^}]+\}\}/g, '');
-  const baseLength = promptWithoutPlaceholders.length;
-
-  // Reserve some space for LLM-added connectors/formatting (20% buffer)
-  const reservedSpace = Math.ceil(limit * 0.2);
-
-  // Calculate space available for all descriptions
-  const availableForDescriptions = limit - baseLength - reservedSpace;
-
-  // Divide equally among placeholders
-  const perPlaceholder = Math.floor(availableForDescriptions / placeholderCount);
-
-  // Ensure minimum of 50 characters per placeholder
-  return Math.max(50, perPlaceholder);
-}
-
-/**
  * Build context for cheap LLM prompt crafting
  *
  * @param originalPrompt - Original prompt with placeholders

@@ -37,8 +37,10 @@
  * thinner dataset.
  */
 
-import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { finalizeCharIndexEntries, writeCharIndex } from './lib/char-index-output';
 
 // A dev-time read of a pinned dependency's source table. Never bundled: this
 // script's only output is the committed JSON asset.
@@ -326,21 +328,10 @@ for (const row of nameRows) {
   });
 }
 
-// Emit in presentation order so the picker's grid and the empty-query result are
-// correct even before the index applies its own comparator.
-entries.sort((a, b) => {
-  const groupDelta = groups.indexOf(a.g) - groups.indexOf(b.g);
-  return groupDelta !== 0 ? groupDelta : a.o - b.o;
+finalizeCharIndexEntries(entries, groups, {
+  empty: 'Refusing to write an empty Unicode index — check the vendored name table.',
+  duplicates: (count) => `Unicode index has ${count} duplicate characters.`,
 });
-
-if (entries.length === 0) {
-  throw new Error('Refusing to write an empty Unicode index — check the vendored name table.');
-}
-
-const duplicateChars = entries.length - new Set(entries.map((entry) => entry.c)).size;
-if (duplicateChars !== 0) {
-  throw new Error(`Unicode index has ${duplicateChars} duplicate characters.`);
-}
 
 const aliasedEntries = entries.filter((entry) => entry.s.length > 0).length;
 const totalAliases = entries.reduce((sum, entry) => sum + entry.s.length, 0);
@@ -364,8 +355,7 @@ const payload = {
   entries,
 };
 
-mkdirSync(dirname(OUT_PATH), { recursive: true });
-writeFileSync(OUT_PATH, JSON.stringify(payload), 'utf8');
+writeCharIndex(OUT_PATH, payload);
 
 const bytes = Buffer.byteLength(JSON.stringify(payload));
 console.log(`Wrote ${OUT_PATH}`);

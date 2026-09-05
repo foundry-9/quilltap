@@ -15,11 +15,19 @@
 
 import { Provider, Character, ChatParticipantBase, ChatMetadataBase, TimestampConfig } from '@/lib/schemas/types'
 import { estimateTokens, countMessagesTokens, truncateToTokenLimit } from '@/lib/tokens/token-counter'
-import { getModelContextLimit, getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
-import { searchMemoriesSemantic, type SemanticSearchResult } from '@/lib/memory/memory-service'
-import type { RecallContext, ContextTag, TemporalTag } from '@/lib/memory/recall-tags'
+import { getRecommendedContextAllocation, shouldSummarizeConversation, calculateMaxAvailable, resolveContextWindow, type ContextWindowSource, CONTEXT_HISTORY_BUDGET_RATIO, MEMORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import {
-  recentlyWhisperedIdSet,
+  searchMemoriesSemantic,
+  type SemanticSearchResult,
+  type SearchQueryEmbedding,
+} from '@/lib/memory/memory-service'
+import {
+  buildRetrospectiveProbes,
+  buildTurnRecallContext,
+  type ContextTag,
+  type TemporalTag,
+} from '@/lib/memory/recall-tags'
+import {
   appendRecallTurn,
   appendRetroSignature,
   parseRetroSignatures,
@@ -28,30 +36,89 @@ import {
   searchVaultConversationSummaries,
   renderRelevantConversationsBlock,
   READ_CONVERSATION_CALL_NOTE,
+  RELEVANT_CONVERSATIONS_MIN,
+  RELEVANT_CONVERSATIONS_MAX,
+  RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
+  RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
 } from '@/lib/memory/conversation-summary-search'
 
 /** Cap on entries in the retrospective mini-recap conversation list. */
 const RETRO_MINI_RECAP_MAX_ENTRIES = 5
 
+/** Matches the conversation UUIDs a rendered conversation list prints in backticks. */
+const CONVERSATION_UUID_PATTERN = /`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`/gi
+
+/**
+ * Conversation UUIDs already listed in the standing fold-posted
+ * `relevant-conversations` whisper for one target. That whisper persists across
+ * turns and is exempt from the LLM-context strip, so anything it already names
+ * is in front of the character; both turn-scoped conversation lists (the
+ * per-turn list and the retrospective mini-recap) filter against it rather than
+ * printing the same UUID twice.
+ *
+ * Walks the transcript backwards and stops at the first match: the fold refresh
+ * sweeps a target's prior whispers of this kind as soon as it posts a fresh one
+ * (`sweepPriorRelevantConversationWhispers`), so at most one is standing, and
+ * the newest is the only one worth reading anyway.
+ *
+ * Best-effort: an unreadable transcript yields an empty set — a duplicate
+ * listing is harmless, a thrown turn is not.
+ */
+async function collectFoldWhisperConversationIds(
+  chatId: string,
+  targetParticipantId: string | null,
+): Promise<Set<string>> {
+  const ids = new Set<string>()
+  try {
+    const messages = await getRepositories().chats.getMessages(chatId)
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.type !== 'message') continue
+      const msg = m as MessageEvent
+      if (msg.systemSender !== 'commonplaceBook' || msg.systemKind !== 'relevant-conversations') continue
+      const targets = msg.targetParticipantIds
+      const matchesTarget =
+        targetParticipantId === null
+          ? targets === null || targets === undefined
+          : Array.isArray(targets) && targets.includes(targetParticipantId)
+      if (!matchesTarget) continue
+      for (const uuid of (msg.content ?? '').matchAll(CONVERSATION_UUID_PATTERN)) {
+        ids.add(uuid[1])
+      }
+      break
+    }
+  } catch {
+    // Dedup is best-effort; a duplicate UUID listing is harmless.
+  }
+  return ids
+}
+
 /**
  * Wall-clock ceiling on the whole memory-recap phase.
  *
- * Set above `CHEAP_LLM_TASK_TIMEOUT_MS` on purpose: the recap makes an
- * embedding call and a cheap-LLM call in sequence, each already deadlined, and
- * a recap that is merely slow in both places is still doing useful work. This
- * is the backstop that keeps a visible turn from sitting on "Recalling…" no
- * matter which leg misbehaves. The recap is optional context — losing it costs
- * the character some remembered flavour, not the turn.
+ * Set above `CHEAP_LLM_TASK_TIMEOUT_INTERACTIVE_MS` on purpose: the recap makes
+ * an embedding call and a cheap-LLM call in sequence, each already deadlined,
+ * and a recap that is merely slow in both places is still doing useful work.
+ * This is the backstop that keeps a visible turn from sitting on "Recalling…"
+ * no matter which leg misbehaves. The recap is optional context — losing it
+ * costs the character some remembered flavour, not the turn.
+ *
+ * The comparison is against the *interactive* budget deliberately: the recap
+ * declares itself interactive precisely so this phase ceiling stays above its
+ * legs rather than underneath them. Raising the background budget (bug 107)
+ * would otherwise have inverted the two and made this the binding constraint.
  */
 const MEMORY_RECAP_PHASE_TIMEOUT_MS = 60_000
 import { getMemoryRecallSettings, getTabooSettings } from '@/lib/instance-settings'
-import { generateMemoryRecap, type MemoryRecapResult } from '@/lib/memory/memory-recap'
+import { resolveStandingInstructionsSection } from '@/lib/chat/context/standing-instructions'
+import { generateMemoryRecap, rampLimit, type MemoryRecapResult } from '@/lib/memory/memory-recap'
 import { withTimeout } from '@/lib/promise-timeout'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import { compressMemories } from '@/lib/memory/cheap-llm-tasks'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
 import { getRepositories } from '@/lib/repositories/factory'
+import { buildMemorySubjectContext } from '@/lib/memory/memory-subject'
 import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { extractVisibleConversation, stripToolArtifacts, extractMemorySearchKeywords, type MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
@@ -79,10 +146,8 @@ import {
   type SceneStateEmissionEntry,
 } from './context/memory-injector'
 import { SceneStateSchema, type SceneState } from '@/lib/schemas/chat.types'
-import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description'
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash'
-import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped'
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers'
+import { describeEquippedOutfitTitleOnly } from '@/lib/wardrobe/resolve-equipped'
 import {
   resolveTieredMountPool,
   type TieredMountPool,
@@ -195,6 +260,13 @@ export interface ContextMessage {
     messageId?: string
     tokenCount?: number
     isInjected?: boolean
+    /**
+     * Set on the message carrying *this* turn's user input. Image attachments
+     * anchor here rather than at the tail of the array, because staff whispers
+     * (Host timestamps, Prospero context, connection-profile bubbles) format as
+     * `role: user` and routinely land after it — bug 95.
+     */
+    isUserTurn?: boolean
   }
   /** Google Gemini thought signature for thinking models (e.g., gemini-3-pro) */
   thoughtSignature?: string | null
@@ -231,6 +303,20 @@ export interface ContextBudget {
   recentMessagesBudget: number
   /** Tokens reserved for response */
   responseReserve: number
+  /**
+   * Tokens held back beyond the response reserve to absorb estimator error
+   * (10% of the window). Part of `safeInputLimit`; broken out for logging.
+   */
+  safetyMargin: number
+  /**
+   * The ceiling the outgoing payload must fit under:
+   * `totalLimit − responseReserve − safetyMargin`.
+   *
+   * This is what the builder packs to *and* what the pre-send validation
+   * checks against — one number, so a full context can no longer be reported
+   * as an overage it was told to produce.
+   */
+  safeInputLimit: number
 }
 
 /**
@@ -269,6 +355,12 @@ export interface BuiltContext {
   debugKnowledge?: Array<{ filePath: string; score: number; inline: boolean; tokenCount: number }>
   /** Debug info: the memory recap content injected on chat start / character join */
   debugMemoryRecap?: string
+  /**
+   * Debug info: the per-turn relevant-past-conversations list, present only
+   * when the instance-wide `memoryRecall.perTurnConversationSummaries` setting
+   * is on and the search found something new to list.
+   */
+  debugRelevantConversations?: string
   /** Debug info: the conversation summary that was included */
   debugSummary?: string
   /** Debug info: the system prompt that was built (may be compressed) */
@@ -400,6 +492,13 @@ export interface BuildContextOptions {
   /** Pre-searched memories from proactive recall (skips internal memory search when provided) */
   preSearchedMemories?: SemanticSearchResult[]
   /**
+   * Query text + vector the proactive recall already embedded for
+   * `preSearchedMemories`. When the pre-searched path is the one this turn
+   * uses, the per-turn conversation-summary search reuses this vector rather
+   * than embedding the same sentence a second time.
+   */
+  preSearchedQueryEmbedding?: SearchQueryEmbedding
+  /**
    * Turn-level recall signals from the proactive keyword distillation
    * (retrospective / timeRange / entities / paraphrase). Drives the
    * retrospective cadence: enlarged dynamic head + scoped mini-recap. When
@@ -446,6 +545,22 @@ export interface BuildContextOptions {
    */
   autonomousContextCap?: number
 
+  /**
+   * Tokens the caller will add to this turn's payload *after* the context is
+   * built, and which therefore cannot be discovered by measuring what the
+   * builder produced: the tool/function schemas (never in the message array at
+   * all), plus any system message the orchestrator splices in downstream —
+   * agent-mode instructions, the tool-change notice.
+   *
+   * Held back from the message budget so the builder doesn't pack history into
+   * space that is already spoken for. Undefined → unchanged behavior.
+   *
+   * See `collectTurnExtras` (`lib/services/chat-message/turn-extras.ts`), which
+   * builds those additions and measures them in one place so the reservation
+   * and the text it pays for can't drift apart.
+   */
+  reservedOutgoingTokens?: number
+
   // ============================================================================
   // "Nothing to add" turn-skipping
   // ============================================================================
@@ -480,23 +595,36 @@ this single line and nothing else:
 The floor will then pass to someone else and the scene continues without you
 this turn. Do not use it to be coy or mysterious — a brief in-character
 remark is always better than an empty pass. If you have anything worth
-saying, write your reply as normal and ignore this note entirely.`
+saying, write your reply as normal and ignore this note entirely.
+
+If your reply would mostly restate, endorse, or re-phrase what has already
+been said — even in your own voice — that is not substantive. Pass.`
 
   if (!recentlyAddressed) return base
 
   return `${base}
 
-One caution: ${characterName} appears to have been addressed or mentioned since you last spoke. If someone has spoken to you and you have not yet answered them, you should answer rather than pass.`
+One caution: ${characterName} appears to have been directly addressed since they last spoke. If someone has spoken to you and you have not yet answered them, you should answer rather than pass.`
 }
 
 /**
- * Calculate context budget based on model limits
+ * Calculate context budget based on model limits.
+ *
+ * `profile` is not optional in spirit — pass it whenever one is in hand. Without
+ * it the window comes from a model-name table lookup that knows nothing about
+ * the user's Max Context setting, so a profile pointed at an unrecognised model
+ * (any `hf.co/...` Ollama tag, any OpenAI-compatible endpoint) budgets against
+ * the 8192-token provider default while `calculateMaxAvailable` — which *does*
+ * read the profile — works from the real window. The two then disagree, and the
+ * smaller one wins where it hurts: history gets trimmed to fit a window the
+ * model never had.
  */
 export function calculateContextBudget(
   provider: Provider,
-  modelName: string
+  modelName: string,
+  profile?: ContextWindowSource | null
 ): ContextBudget {
-  const allocation = getRecommendedContextAllocation(provider, modelName)
+  const allocation = getRecommendedContextAllocation(provider, modelName, profile)
 
   return {
     totalLimit: allocation.totalLimit,
@@ -506,6 +634,8 @@ export function calculateContextBudget(
     summaryBudget: allocation.conversationSummary,
     recentMessagesBudget: allocation.recentMessages,
     responseReserve: allocation.responseReserve,
+    safetyMargin: allocation.safetyMargin,
+    safeInputLimit: allocation.safeInputLimit,
   }
 }
 
@@ -579,7 +709,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   } = options
 
   const warnings: string[] = []
-  const budget = calculateContextBudget(provider, modelName)
+  const budget = calculateContextBudget(provider, modelName, options.connectionProfile)
 
   // Determine if this is a multi-character chat
   const isMultiCharacter = !!(
@@ -797,6 +927,17 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     })
   }
 
+  // Standing instructions: the chat's project `instructions` plus the
+  // `instructions` of every group the responding character belongs to.
+  // Resolved here (async), rendered once, and handed to the synchronous
+  // builder — same shape as the Taboo read above. The resolver fails soft
+  // internally (never throws), so the turn cannot die for a section that is
+  // guidance, not payload.
+  const standingInstructions = await resolveStandingInstructionsSection({
+    projectId: chat.projectId ?? null,
+    characterId: character.id,
+  })
+
   const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
@@ -809,6 +950,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     scenarioText: options.chat.scenarioText ?? undefined,
     precompiledIdentityStack,
     tabooPhrases,
+    standingInstructions,
   })
   const systemPromptTokens = estimateTokens(systemPrompt, provider)
 
@@ -984,6 +1126,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
               chatId: chat.id,
               characterName: character.name,
               userName,
+              // The operator is waiting on this one: no cached result was
+              // ready, so the turn is blocked behind the call. Tight budget
+              // (bug 107).
+              latency: 'interactive',
             }
           )
 
@@ -1142,6 +1288,11 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   }
 
   // 2. Retrieve and format relevant memories
+  //
+  // Instance-wide recall settings, read once for the turn: the dynamic head's
+  // scope/expand policy below, and the per-turn conversation-summary cadence
+  // after the whisper's memory sections are assembled.
+  const recallSettings = await getMemoryRecallSettings()
   let memoryContent = ''
   let memoryTokens = 0
   let memoriesIncluded = 0
@@ -1159,6 +1310,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // Memory IDs whispered in the dynamic head this turn — persisted to the recall
   // history ring buffer (anti-repetition, item F4) after the build completes.
   let whisperedMemoryIds: string[] = []
+  // The query text + vector this turn's memory search embedded, captured so the
+  // per-turn conversation-summary search can reuse it (one embedding, two
+  // searches). Null when memories were skipped or the embedding failed — in
+  // which case the conversation-summary cadence simply sits this turn out
+  // rather than paying for a call of its own.
+  let turnQueryEmbedding: SearchQueryEmbedding | null = null
   // Turn-level recall signals (retrospective / timeRange / entities) — set by
   // the proactive path via options or by the fallback distillation; consumed
   // by the retrospective head sizing above and the mini-recap below.
@@ -1190,6 +1347,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         dynamicHeadResults = options.preSearchedMemories.filter(
           r => !archiveIds.has(r.memory.id),
         )
+        // The proactive path did the embedding; take its vector as this turn's.
+        turnQueryEmbedding = options.preSearchedQueryEmbedding ?? null
       } else if (memorySearchQuery) {
         memoryPath = 'two-pool'
 
@@ -1229,6 +1388,15 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
                 nowIso: new Date().toISOString(),
                 timelineMode: chat.timelineMode ?? 'realtime',
               },
+              // The operator is waiting on this one: it is the fallback branch,
+              // so no proactive pass pre-computed it and the turn is blocked
+              // behind the call. Tight budget, and no retry — the distillation
+              // is an optimisation over `memorySearchQuery`, which is already
+              // in hand, so a lost pass costs recall quality, not the turn.
+              // A background budget here is 90s plus a free retry, i.e. up to
+              // three minutes of empty composer per responding character on a
+              // stalled cheap route (bug 115).
+              'interactive',
             )
             if (distill.success && distill.result) {
               // Prefer the natural-language paraphrase as the embedding query —
@@ -1264,44 +1432,30 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           ),
         )
 
-        // Read the instance-wide recall settings and assemble the full per-turn
-        // recall context so the dynamic head reads the targeting tags back
-        // (see lib/memory/recall-tags.ts). chat.projectId is the rename-proof
-        // comparand for scope: narrow gating.
-        const recallSettings = await getMemoryRecallSettings()
+        // Assemble the full per-turn recall context — the same assembly the
+        // proactive path uses (see lib/memory/recall-tags.ts) — so the dynamic
+        // head reads the targeting tags back identically.
         const fallbackRetro = turnRecallSignals?.retrospective === true
-        const recallContext: RecallContext = {
-          currentProjectId: chat.projectId ?? null,
-          scopePolicy: recallSettings.scopePolicy,
+        const recallContext = buildTurnRecallContext({
+          chat,
+          recallSettings,
           turnContext,
           turnTemporal,
           turnRetrospective: fallbackRetro,
           presentAboutCharacterIds,
-          expandRelated: recallSettings.expandRelated,
-          recentlyWhisperedIds: recentlyWhisperedIdSet(chat.commonplaceRecallHistory),
-          // Fresh-event boost (mirrors the proactive path): recent events keep
-          // their footing against evergreen memories whatever the retrospective
-          // classifier decided; the chat id is the echo guard.
-          currentChatId: chat.id,
           nowMs: Date.now(),
-        }
+        })
         // Retrospective multi-probe (mirrors the proactive path).
-        const extraProbes: string[] = []
-        if (fallbackRetro && turnRecallSignals) {
-          const entityProbe = (turnRecallSignals.entities ?? []).join(' ').trim()
-          if (entityProbe) extraProbes.push(entityProbe)
-          if (turnRecallSignals.paraphrase && turnRecallSignals.timeRange) {
-            extraProbes.push(
-              `${turnRecallSignals.paraphrase} (around ${turnRecallSignals.timeRange.from.slice(0, 10)} to ${turnRecallSignals.timeRange.to.slice(0, 10)})`,
-            )
-          }
-        }
+        const extraProbes = buildRetrospectiveProbes(turnRecallSignals, fallbackRetro)
         const memoryResults = await searchMemoriesSemantic(
           character.id,
           distilledQuery,
           {
             userId,
             embeddingProfileId,
+            captureQueryEmbedding: captured => {
+              turnQueryEmbedding = captured
+            },
             // Pull a few more than the head size so the archive-overlap filter
             // still leaves enough candidates to fill the head. Retrospective
             // turns run the enlarged head, so pull proportionally more.
@@ -1315,7 +1469,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             // boost) makes it starvation-safe. The flag still gates the
             // temporal flip, anti-repetition suspension, and the probes above.
             occurredWithin: turnRecallSignals?.timeRange ?? null,
-            extraProbes: extraProbes.length > 0 ? extraProbes : undefined,
+            extraProbes,
           },
         )
         dynamicHeadResults = memoryResults.filter(r => !archiveIds.has(r.memory.id))
@@ -1331,10 +1485,27 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
         budget.memoryBudget,
       )
       const archiveBudget = Math.max(0, budget.memoryBudget - dynamicHeadBudget)
-      const archiveFormatted = formatFrozenMemoryArchive(frozenArchive, archiveBudget, provider)
+
+      // Both pools below are keyed on `characterId` alone, so each carries this
+      // character's memories ABOUT other people alongside their own — and both
+      // are delivered under "You remember the following entries…". Resolve the
+      // subjects so those lines can say whose life they describe (bug 122).
+      // Names are looked up rather than taken from `participantCharacters`
+      // because a memory's subject is frequently someone not in the room.
+      const memorySubject = await buildMemorySubjectContext(
+        character.id,
+        [...frozenArchive, ...dynamicHeadResults.map(r => r.memory)],
+      )
+
+      const archiveFormatted = formatFrozenMemoryArchive(
+        frozenArchive,
+        archiveBudget,
+        provider,
+        memorySubject,
+      )
       frozenArchiveCount = archiveFormatted.memoriesUsed
 
-      const headFormatted = formatDynamicMemoryHead(dynamicHeadResults, provider, {
+      const headFormatted = formatDynamicMemoryHead(dynamicHeadResults, provider, memorySubject, {
         maxTokens: dynamicHeadBudget,
         maxEntries: isRetrospectiveTurn ? RETRO_HEAD_SIZE : DYNAMIC_HEAD_DEFAULT_SIZE,
       })
@@ -1448,18 +1619,12 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
           const { projectMountPointIds } = await getTurnMountPool()
           // Group stores follow each character's own memberships, so they can't
           // come from the turn pool (which is keyed on the responding character).
-          const resolved = await resolveEquippedOutfitForCharacter(
+          const description = await describeEquippedOutfitTitleOnly(
             repos,
             c.characterId,
             equippedSlots!,
-            await sharedWardrobeTiersForCharacter(c.characterId, projectMountPointIds),
+            projectMountPointIds,
           )
-          const description = describeOutfit({
-            top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
-            bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
-            footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
-            accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true }),
-          })
           if (description) liveClothingByCharacterId.set(c.characterId, description)
         } catch (error) {
           logger.warn('Failed to read live wardrobe for scene-state clothing override', {
@@ -1578,6 +1743,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
   if (isMultiCharacter) {
+    logger.debug('[ContextManager] Inter-character memory retrieval complete', {
+      chatId: chat.id,
+      characterId: character.id,
+      durationMs: Math.round(performance.now() - tInterStart),
+      loadedCount: interCharacterLoadedCount,
+      includedCount: interCharacterMemoriesIncluded,
+    })
   }
 
   // 2c. Retrieve relevant knowledge from all three tiers available to the
@@ -1675,7 +1847,10 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             cheapLLMSelection,
             userId,
             uncensoredFallback,
-            chat.id
+            chat.id,
+            // Inline on a visible turn, like the recap above — the tighter
+            // budget, and no retry (bug 107).
+            'interactive',
           )
 
           if (memCompResult.success && memCompResult.result) {
@@ -1705,7 +1880,8 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             cheapLLMSelection,
             userId,
             uncensoredFallback,
-            chat.id
+            chat.id,
+            'interactive',
           )
 
           if (interCompResult.success && interCompResult.result) {
@@ -1738,9 +1914,19 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   const summaryTokens = 0
 
   // 4. Calculate remaining budget for messages
-  // Use effective (possibly compressed) system prompt tokens
+  // Use effective (possibly compressed) system prompt tokens.
+  //
+  // The ceiling is `safeInputLimit` — window less response reserve less the
+  // estimator safety margin — which is the same number the pre-send validation
+  // checks against. Packing to `totalLimit − responseReserve` instead (as this
+  // did) meant deliberately filling 10% past the line that then warned about it.
+  //
+  // `reservedOutgoingTokens` is the caller's declaration of what it will add
+  // afterwards (tool schemas, agent-mode instructions, tool-change notice);
+  // history must not be packed into space those will occupy.
   const usedTokens = effectiveSystemPromptTokens + memoryRecapTokens + memoryTokens + interCharacterMemoryTokens + summaryTokens
-  const remainingBudget = budget.totalLimit - usedTokens - budget.responseReserve
+  const reservedOutgoingTokens = options.reservedOutgoingTokens ?? 0
+  const remainingBudget = budget.safeInputLimit - usedTokens - reservedOutgoingTokens
 
   // 5. Prepare messages based on single vs multi-character mode
   let messagesToProcess: SelectableMessage[]
@@ -1796,10 +1982,31 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     messagesToProcess = messagesToProcess.filter(m => !m.id || !anchorSet.has(m.id))
   }
 
+  // The fixed parts of the payload (system prompt, memories, and whatever the
+  // caller reserved) can add up to more than the window allows, leaving nothing
+  // for the conversation itself. That state is worth saying out loud: the
+  // symptom is a character with no apparent memory of the exchange, and the
+  // trimming that produces it is otherwise indistinguishable from routine
+  // housekeeping.
+  if (remainingBudget <= 0) {
+    warnings.push(
+      `No room left for conversation history: the system prompt, memories and reserved payload (${usedTokens + reservedOutgoingTokens} tokens) fill the ${budget.safeInputLimit}-token input budget. Raise Max Context on the connection profile, or trim the character.`
+    )
+    logger.warn('[ContextManager] Message budget exhausted before any history', {
+      safeInputLimit: budget.safeInputLimit,
+      systemPromptTokens: effectiveSystemPromptTokens,
+      memoryTokens,
+      memoryRecapTokens,
+      interCharacterMemoryTokens,
+      reservedOutgoingTokens,
+      remainingBudget,
+    })
+  }
+
   // 6. Select recent messages to fit budget
   const { messages: selectedMessages, tokenCount: messagesTokens, truncated } = selectRecentMessages(
     messagesToProcess,
-    Math.min(remainingBudget, budget.recentMessagesBudget),
+    Math.max(0, Math.min(remainingBudget, budget.recentMessagesBudget)),
     provider
   )
 
@@ -1872,6 +2079,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       thoughtSignature: msg.thoughtSignature,
       name: msg.name,
       cacheControl: isSummaryHead ? { type: 'ephemeral' } : undefined,
+      // Carried so the attachment anchor can tell the user's own historical
+      // turn from a staff whisper wearing role=user (bug 95).
+      metadata: msg.id ? { messageId: msg.id } : undefined,
     })
     if (isSummaryHead) summaryBreakpointPlaced = true
   }
@@ -2002,6 +2212,95 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     }
   }
 
+  // The scope every Commonplace Book whisper for this turn is addressed to:
+  // the responding participant in a multi-character chat, untargeted (public)
+  // otherwise. Shared by the conversation-list dedup below and the whisper
+  // posting further down, so a list can never be filtered against one scope
+  // and then whispered to another.
+  const commonplaceTargetParticipantId =
+    isMultiCharacter ? respondingParticipant?.id ?? null : null
+
+  // The standing fold whisper's UUIDs, read at most once per turn and only when
+  // a conversation list is actually being built.
+  let foldWhisperIdsCache: Set<string> | null = null
+  const foldWhisperConversationIds = async (): Promise<Set<string>> => {
+    if (!foldWhisperIdsCache) {
+      foldWhisperIdsCache = await collectFoldWhisperConversationIds(
+        chat.id,
+        commonplaceTargetParticipantId,
+      )
+    }
+    return foldWhisperIdsCache
+  }
+
+  // Per-turn conversation summaries (instance-wide setting
+  // `memoryRecall.perTurnConversationSummaries`, off by default): re-run the
+  // relevant-past-conversations search over the character's vault
+  // `Conversation Summaries/` folder EVERY turn and fold the list into the
+  // consolidated whisper, instead of letting it refresh only at chat start /
+  // character join (the recap), on each summary fold (the standing
+  // `relevant-conversations` whisper), and on retrospective turns.
+  //
+  // The search rides the vector this turn's memory search already embedded —
+  // one embedding, two searches — so the extra cost is the vault chunk scan and
+  // a few frontmatter reads, not another provider call. No vector (memories
+  // skipped, no embedding profile, a failed embedding, or the text-search
+  // fallback) means no list this turn rather than an embedding of our own.
+  // Best-effort throughout: it never blocks or fails a turn.
+  //
+  // Skipped on the turn the recap itself runs: `generateMemoryRecap` already
+  // searched the same shelf and its list is riding in `recap`, so a second one
+  // would say the same thing twice in a single whisper.
+  let perTurnConversationsContent = ''
+  const perTurnConversationIds = new Set<string>()
+  if (
+    recallSettings.perTurnConversationSummaries &&
+    character.id &&
+    turnQueryEmbedding &&
+    !memoryRecapContent
+  ) {
+    const captured: SearchQueryEmbedding = turnQueryEmbedding
+    try {
+      const matches = await searchVaultConversationSummaries({
+        characterId: character.id,
+        query: captured.query,
+        userId,
+        embeddingProfileId,
+        precomputedEmbedding: captured.embedding,
+        limit: rampLimit(
+          budgetInfo?.maxContext ?? null,
+          RELEVANT_CONVERSATIONS_MIN,
+          RELEVANT_CONVERSATIONS_MAX,
+          RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
+          RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
+        ),
+        excludeConversationId: chat.id,
+        // A resolved window is worth honouring whichever way the retrospective
+        // classifier went — the search's window staging falls back to the full
+        // pool when too few conversations overlap, so it cannot starve the list.
+        timeRange: turnRecallSignals?.timeRange ?? null,
+      })
+      const foldIds = await foldWhisperConversationIds()
+      const filtered = matches.filter(m => !foldIds.has(m.conversationId))
+      if (filtered.length > 0) {
+        for (const match of filtered) perTurnConversationIds.add(match.conversationId)
+        perTurnConversationsContent = `${renderRelevantConversationsBlock(filtered)}\n\n${READ_CONVERSATION_CALL_NOTE}`
+        logger.debug('[CommonplaceWhisper] Per-turn conversation summaries listed', {
+          chatId: chat.id,
+          characterId: character.id,
+          matched: matches.length,
+          listed: filtered.length,
+        })
+      }
+    } catch (conversationError) {
+      logger.warn('[CommonplaceWhisper] Per-turn conversation-summary search failed (non-fatal)', {
+        chatId: chat.id,
+        characterId: character.id,
+        error: getErrorMessage(conversationError),
+      })
+    }
+  }
+
   // Recall-on-reference (fourth cadence, part 2): on a retrospective turn,
   // build the scoped mini-recap — a dated, drillable Relevant Past
   // Conversations list from the vault summaries, scoped by the turn's
@@ -2036,29 +2335,13 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
             excludeConversationId: chat.id,
             timeRange: signals.timeRange ?? null,
           })
-          // Dedup against the standing on-fold relevant-conversations whisper
-          // for the same target — no point listing the same UUID twice.
-          const foldWhisperIds = new Set<string>()
-          try {
-            const messages = await getRepositories().chats.getMessages(chat.id)
-            const targetId = isMultiCharacter ? respondingParticipant?.id ?? null : null
-            for (const m of messages) {
-              if (m.type !== 'message') continue
-              const msg = m as MessageEvent
-              if (msg.systemSender !== 'commonplaceBook' || msg.systemKind !== 'relevant-conversations') continue
-              const ids = msg.targetParticipantIds
-              const matchesTarget =
-                targetId === null ? ids === null || ids === undefined : Array.isArray(ids) && ids.includes(targetId)
-              if (!matchesTarget) continue
-              for (const uuid of (msg.content ?? '').matchAll(/`([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})`/gi)) {
-                foldWhisperIds.add(uuid[1])
-              }
-            }
-          } catch {
-            // Dedup is best-effort; a duplicate UUID listing is harmless.
-          }
+          // Dedup against every conversation list already going to this target
+          // this turn — the standing on-fold whisper and, when the per-turn
+          // cadence is on, the list just built above. No point listing the same
+          // UUID twice.
+          const foldWhisperIds = await foldWhisperConversationIds()
           const filtered = matches
-            .filter(m => !foldWhisperIds.has(m.conversationId))
+            .filter(m => !foldWhisperIds.has(m.conversationId) && !perTurnConversationIds.has(m.conversationId))
             .slice(0, RETRO_MINI_RECAP_MAX_ENTRIES)
           if (filtered.length > 0) {
             retrospectiveRecallContent = `${renderRelevantConversationsBlock(filtered)}\n\n${READ_CONVERSATION_CALL_NOTE}`
@@ -2093,6 +2376,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     relevant: memoryContent || undefined,
     interChar: interCharacterMemoryContent || undefined,
     knowledge: knowledgeContent || undefined,
+    // Empty unless the per-turn conversation-summary cadence is switched on;
+    // the fold-posted whisper carries this section otherwise.
+    relevantConversations: perTurnConversationsContent || undefined,
   }
   const personaWhisper = buildCommonplacePersonaWhisper(cmpbParts)
   const llmRecallText = buildCommonplaceLLMContext({
@@ -2104,7 +2390,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     // Persist the persona-voiced whisper. Targeted to the responding character
     // in multi-character chats; untargeted in single-character (only one
     // character anyway, so no privacy concern).
-    const targetParticipantId = isMultiCharacter ? respondingParticipant?.id ?? null : null
+    const targetParticipantId = commonplaceTargetParticipantId
     const posted = await postCommonplaceWhisper({
       chatId: chat.id,
       targetParticipantId,
@@ -2213,10 +2499,9 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
   // unlike `relevant-conversations`, which the sweep exempts).
   if (retrospectiveRecallContent) {
     try {
-      const targetParticipantId = isMultiCharacter ? respondingParticipant?.id ?? null : null
       await postCommonplaceWhisper({
         chatId: chat.id,
-        targetParticipantId,
+        targetParticipantId: commonplaceTargetParticipantId,
         content: buildCommonplacePersonaWhisper({ retrospectiveRecall: retrospectiveRecallContent }),
         kind: 'retrospective-recall',
       })
@@ -2305,6 +2590,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
       role: 'user',
       content: composedUserContent,
       name: newUserMsgName,
+      metadata: { isUserTurn: true },
     })
   } else if (turnSkipInstruction) {
     // Chained / continue turns carry no new user message, so the note can't
@@ -2344,6 +2630,7 @@ export async function buildContext(options: BuildContextOptions): Promise<BuiltC
     debugInterCharacterMemories: debugInterCharacterMemories.length > 0 ? debugInterCharacterMemories : undefined,
     debugKnowledge: debugKnowledge.length > 0 ? debugKnowledge : undefined,
     debugMemoryRecap: memoryRecapContent || undefined,
+    debugRelevantConversations: perTurnConversationsContent || undefined,
     debugSummary: chat.contextSummary || undefined,
     debugSystemPrompt: compressedHistoryBlock
       ? `${finalSystemPrompt}\n\n${compressedHistoryBlock}`
@@ -2365,9 +2652,10 @@ export function willExceedContextLimit(
   newMessage: string,
   provider: Provider,
   modelName: string,
-  systemPromptEstimate: number = 2000
+  systemPromptEstimate: number = 2000,
+  profile?: ContextWindowSource | null
 ): { willExceed: boolean; estimatedUsage: number; limit: number; percentUsed: number } {
-  const limit = getModelContextLimit(provider, modelName)
+  const limit = resolveContextWindow(provider, modelName, profile)
   const responseReserve = 4096
 
   const messagesTokens = countMessagesTokens(
@@ -2387,43 +2675,3 @@ export function willExceedContextLimit(
   }
 }
 
-/**
- * Get context usage status for UI display
- */
-export function getContextStatus(
-  usedTokens: number,
-  totalLimit: number
-): {
-  level: 'ok' | 'warning' | 'critical'
-  percentUsed: number
-  remainingTokens: number
-  message: string
-} {
-  const percentUsed = Math.round((usedTokens / totalLimit) * 100)
-  const remainingTokens = totalLimit - usedTokens
-
-  if (percentUsed >= 95) {
-    return {
-      level: 'critical',
-      percentUsed,
-      remainingTokens,
-      message: 'Context nearly full. Consider starting a new conversation or generating a summary.',
-    }
-  }
-
-  if (percentUsed >= 80) {
-    return {
-      level: 'warning',
-      percentUsed,
-      remainingTokens,
-      message: 'Context filling up. Older messages may be dropped soon.',
-    }
-  }
-
-  return {
-    level: 'ok',
-    percentUsed,
-    remainingTokens,
-    message: `Using ${percentUsed}% of context window.`,
-  }
-}

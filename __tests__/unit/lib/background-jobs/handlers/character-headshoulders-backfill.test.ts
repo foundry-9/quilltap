@@ -13,6 +13,7 @@ jest.mock('@/lib/repositories/factory', () => ({ getRepositories: jest.fn() }))
 
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
+  buildCheapLLMConfig: jest.fn(() => ({ strategy: 'PROVIDER_CHEAPEST', fallbackToLocal: true })),
   DEFAULT_CHEAP_LLM_CONFIG: { strategy: 'PROVIDER_CHEAPEST', fallbackToLocal: true },
 }))
 

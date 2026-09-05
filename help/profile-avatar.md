@@ -49,6 +49,7 @@ If you don't see any images in the avatar selector, you'll need to upload some f
 4. **Browse available images** - A modal window opens showing images from your library
    - Scroll through available images
    - Click on the image you want to use
+   - Hovering over an image reveals a **download** button (to save a copy of the picture — with a native save dialog in the desktop app) and a **delete** button
 
 5. **Image is applied** - Your new avatar is immediately set and the modal closes automatically
 

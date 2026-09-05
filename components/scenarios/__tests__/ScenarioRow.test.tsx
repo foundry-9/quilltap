@@ -23,6 +23,7 @@ function makeScenario(overrides: Partial<Scenario> = {}): Scenario {
     description: 'A cozy inn at the crossroads.',
     isDefault: false,
     rawIsDefault: false,
+    archived: false,
     body: 'Once upon a time…',
     lastModified: '2026-01-01T00:00:00.000Z',
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -37,6 +38,7 @@ function makeHandlers() {
     onEdit: jest.fn(),
     onRename: jest.fn(),
     onDelete: jest.fn(),
+    onToggleArchived: jest.fn(),
   }
 }
 
@@ -52,6 +54,7 @@ function renderRow(scenario: Scenario, handlers: Handlers) {
         onEdit={handlers.onEdit}
         onRename={handlers.onRename}
         onDelete={handlers.onDelete}
+        onToggleArchived={handlers.onToggleArchived}
       />
     </ul>,
   )
@@ -90,10 +93,21 @@ describe('ScenarioRow', () => {
             onEdit={handlers.onEdit}
             onRename={handlers.onRename}
             onDelete={handlers.onDelete}
+            onToggleArchived={handlers.onToggleArchived}
           />
         </ul>,
       )
       expect(screen.getByText('Default')).toBeInTheDocument()
+    })
+
+    it('shows the Archived badge only when the scenario is archived', () => {
+      renderRow(makeScenario({ archived: false }), handlers)
+      expect(screen.queryByText('Archived')).not.toBeInTheDocument()
+    })
+
+    it('badges an archived scenario', () => {
+      renderRow(makeScenario({ archived: true }), handlers)
+      expect(screen.getByText('Archived')).toBeInTheDocument()
     })
   })
 
@@ -103,6 +117,11 @@ describe('ScenarioRow', () => {
       fireEvent.click(screen.getByRole('radio'))
       expect(handlers.onSetDefault).toHaveBeenCalledTimes(1)
       expect(handlers.onSetDefault).toHaveBeenCalledWith(expect.objectContaining({ path: 'Scenarios/tavern.md' }))
+    })
+
+    it('is disabled for an archived scenario — it can never win default resolution', () => {
+      renderRow(makeScenario({ archived: true }), handlers)
+      expect(screen.getByRole('radio')).toBeDisabled()
     })
   })
 
@@ -115,6 +134,18 @@ describe('ScenarioRow', () => {
       expect(handlers.onEdit).toHaveBeenCalledTimes(1)
       expect(handlers.onRename).toHaveBeenCalledTimes(1)
       expect(handlers.onDelete).toHaveBeenCalledTimes(1)
+    })
+
+    it('offers Archive for an active scenario and Restore for an archived one', () => {
+      const { unmount } = renderRow(makeScenario({ archived: false }), handlers)
+      fireEvent.click(screen.getByRole('button', { name: 'Archive' }))
+      expect(handlers.onToggleArchived).toHaveBeenCalledTimes(1)
+      unmount()
+
+      renderRow(makeScenario({ archived: true }), handlers)
+      expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole('button', { name: 'Restore' }))
+      expect(handlers.onToggleArchived).toHaveBeenCalledTimes(2)
     })
   })
 
@@ -136,6 +167,7 @@ describe('ScenarioRow', () => {
     it.each([
       ['Edit', 'onEdit'],
       ['Rename', 'onRename'],
+      ['Archive', 'onToggleArchived'],
       ['Delete', 'onDelete'],
     ] as const)('fires %s once and closes the menu', (label, handlerKey) => {
       renderRow(makeScenario(), handlers)

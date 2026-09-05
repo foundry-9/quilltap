@@ -37,6 +37,7 @@ into the wicker chair by the window…
 - **`name`** — The display title shown in the new-chat drop-down. If absent, the filename (stripped of its `.md`) stands in.
 - **`description`** — A one-line subtitle shown beneath the name. Optional but charming.
 - **`isDefault`** — Marks this scenario as the project's standing selection. Exactly one file should claim this honour; if more than one does, the alphabetically-earliest one wins and a soft warning is offered.
+- **`archived`** — Set `true` to retire the scenario from the pickers without destroying it. Omit the key entirely to keep it in circulation; there is no need to write `archived: false`.
 
 The body of the file (everything after the closing `---`) is the scenario content proper — the text spliced into the system prompt at chat creation. The familiar substitutions, `{{char}}` and `{{user}}`, are honoured at chat time exactly as they are in character scenarios.
 
@@ -49,8 +50,17 @@ The **Scenarios** card on each project's page is your atelier. Every project aut
 - **Rename** the underlying file via **Rename** — useful when the scenario has matured beyond its original working title. The file moves; the body stays exactly as it was.
 - **Delete** a scenario with the **Delete** button, after a moment's confirmation. The file is removed from the document store; chats that already used it are unaffected, since the scenario text is woven into the chat at the moment of its creation.
 - **Set the default** by clicking the radio button at the start of a row. The newly elected default has its frontmatter rewritten to `isDefault: true`, and any sibling that previously claimed the title is gently demoted.
+- **Archive** a scenario with the **Archive** button, which retires it from the drop-downs without destroying it. See below.
 
-When the card is pinched for room — as it so often is in the three-abreast project grid — the trio of **Edit**, **Rename**, and **Delete** withdraw behind a single **⋮** menu at the end of each row; a click unfurls them. Where the card has elbow room to spare, the three present themselves inline, as plainly as ever. The radio button minding the default keeps its post on the left regardless.
+When the card is pinched for room — as it so often is in the three-abreast project grid — the quartet of **Edit**, **Rename**, **Archive**, and **Delete** withdraw behind a single **⋮** menu at the end of each row; a click unfurls them. Where the card has elbow room to spare, the four present themselves inline, as plainly as ever. The radio button minding the default keeps its post on the left regardless.
+
+### Archiving: the Dust Sheet, Not the Bonfire
+
+A scenario may fall out of season without falling out of favour. **Archive** draws a dust sheet over it: the scenario leaves every drop-down and every list — this card, the Salon's in-chat picker, the new-chat form — while the file remains exactly where it was, gaining only an `archived: true` line in its frontmatter.
+
+Tick **Show archived**, which keeps company with the **+ New scenario** button, and the retired scenarios reappear wearing a small **Archived** badge, each offering a **Restore** button. The same tickbox appears beside the scenario drop-down elsewhere, so you may deliberately select an archived scenario when the occasion calls for it — archiving hides a thing, it does not lock it away.
+
+Chats that already began with an archived scenario continue untroubled, the text having been woven in at their creation. An archived scenario may never hold the project default, however: archive the reigning one and the project simply has no default until you elect another.
 
 Should a scenario file have multiple defaults claimed (perhaps after editing the files directly through the Scriptorium), the card surfaces a soft warning naming the conflicting files so you may resolve the dispute at your leisure.
 
@@ -69,6 +79,10 @@ The free-text desk beneath the drop-down stays open even once a scenario is chos
 ## Keeping the Folder Healthy
 
 Should you, in some moment of housekeeping zeal, delete the `Scenarios/` folder or even the entire `Project Files:` document store, fear not — both are reconstructed at the next server start (and at the next visit to the project page, whichever comes first). The structure reappears empty, ready for fresh scenarios; previously-deleted files do not return.
+
+## Changing a Chat's Scenario Later
+
+A scenario chosen at the outset is not binding for the evening. In an open chat, the **Chat Sidebar**'s **Chat** drawer holds a **Scenario** control offering these same tiers; picking a new one rewrites the chat's scene, recompiles every character's standing instructions, and has the Host announce the revision to the room. The particulars are set out in [Chats Overview](chats.md). Note that the frontmatter key the default is read from is `isDefault` — a file marked `default: true` instead is simply a scenario with no claim to the title, and the drop-down will open on **Custom...** with no pre-selection at all.
 
 ## In-Chat Navigation
 

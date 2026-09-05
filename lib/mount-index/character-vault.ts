@@ -30,6 +30,19 @@ import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 export const CHARACTER_WARDROBE_FOLDER = 'Wardrobe';
 
+/**
+ * Optional per-tier dressing-instructions file living at the root of a
+ * `Wardrobe/` folder. Never a garment: every enumeration of Wardrobe items
+ * must skip it, and the wardrobe projection sweep must preserve it.
+ */
+export const WARDROBE_INSTRUCTIONS_FILENAME = 'instructions.md';
+export const WARDROBE_INSTRUCTIONS_PATH = `${CHARACTER_WARDROBE_FOLDER}/${WARDROBE_INSTRUCTIONS_FILENAME}`;
+
+/** Case-insensitive match for the dressing-instructions file name. */
+export function isWardrobeInstructionsFileName(fileName: string): boolean {
+  return fileName.toLowerCase() === WARDROBE_INSTRUCTIONS_FILENAME;
+}
+
 const logger = createServiceLogger('MountIndex:CharacterVault');
 
 export interface EnsureCharacterVaultResult {
@@ -90,6 +103,31 @@ async function linkCharacterToVault(characterId: string, mountPointId: string): 
         `The character row write did not stick (database mid-materialization?).`,
     );
   }
+}
+
+/**
+ * The vault mount-point ids belonging to **archived** characters.
+ *
+ * An archived character is a tombstone: its row survives, its vault is pruned
+ * but still enabled and still enumerable by `docMountPoints.findEnabled()`.
+ * Operator surfaces that walk every store (the global search bar's Documents
+ * chip) subtract this set, so a tombstone's leftovers never become a click
+ * target that leads back to an edit path the archive guards exist to prevent.
+ *
+ * Reads the raw character rows deliberately: the overlay read path mounts each
+ * character's vault, which is precisely what a pruned vault can't serve, and
+ * all we need is the `archivedAt` / `characterDocumentMountPointId` columns.
+ */
+export async function getArchivedCharacterVaultMountPointIds(): Promise<string[]> {
+  const characters = await getRepositories().characters.findAllRaw();
+  const ids = characters
+    .filter((c) => c.archivedAt && c.characterDocumentMountPointId)
+    .map((c) => c.characterDocumentMountPointId as string);
+  logger.debug('Collected archived character vault mount points', {
+    archivedWithVault: ids.length,
+    charactersScanned: characters.length,
+  });
+  return ids;
 }
 
 /**
@@ -204,8 +242,26 @@ export function buildSystemPromptFile(p: CharacterSystemPrompt): string {
   return `${frontmatter}${p.content}`;
 }
 
+/**
+ * Serialize one character scenario back to its `Scenarios/*.md` file.
+ *
+ * The heading carries the title, as it always has. A frontmatter block is
+ * emitted only when there is something to put in it — `archived: true` and/or
+ * a `description` — so files that use neither don't churn on every projection.
+ * (Before this, `description` was parsed but never written back, so the next
+ * projection silently dropped it.) The scenario's `id` is a stable UUID hashed
+ * from the file path, so archiving must never rename the file.
+ */
 export function buildScenarioFile(s: CharacterScenario): string {
-  return `# ${s.title}\n\n${s.content}`;
+  const frontmatter: string[] = [];
+  if (s.description && s.description.trim().length > 0) {
+    frontmatter.push(`description: ${escapeYaml(s.description.trim())}`);
+  }
+  if (s.archived) {
+    frontmatter.push('archived: true');
+  }
+  const fmBlock = frontmatter.length > 0 ? `---\n${frontmatter.join('\n')}\n---\n\n` : '';
+  return `${fmBlock}# ${s.title}\n\n${s.content}`;
 }
 
 export function sanitizeFileName(name: string): string {
@@ -240,20 +296,31 @@ export function slugifyWardrobeTitle(title: string): string {
 }
 
 /**
- * Build a `{ itemId → slug }` map from a list of wardrobe items, taking the
- * first item that slugifies to each slug (skipping later collisions). Mirrors
- * the read-time slug map and lets `buildWardrobeItemFile` translate
- * `componentItemIds` UUIDs to slugs without a separate pass.
+ * Build a `{ itemId → slug }` map from a list of wardrobe items, and let
+ * `buildWardrobeItemFile` translate `componentItemIds` UUIDs to slugs without
+ * a separate pass.
+ *
+ * A slug borne by MORE THAN ONE item in the list is assigned to nobody — every
+ * reference to any of the colliders is written as a UUID instead. A slug is
+ * only an alias for "the one item with this title"; when two items share the
+ * title, writer array order and the reader's filename-sorted order can crown
+ * different winners, silently rewiring a composite's components on the next
+ * read (a moved outfit pointing at a same-titled stranger instead of the piece
+ * that travelled with it). The UUID fallback is exact in both directions.
  */
 export function buildSlugByItemIdMap(
   items: readonly WardrobeItem[],
 ): Map<string, string> {
-  const slugByItemId = new Map<string, string>();
-  const claimedSlugs = new Set<string>();
+  const slugCounts = new Map<string, number>();
   for (const item of items) {
     const slug = slugifyWardrobeTitle(item.title);
-    if (slug.length === 0 || claimedSlugs.has(slug)) continue;
-    claimedSlugs.add(slug);
+    if (slug.length === 0) continue;
+    slugCounts.set(slug, (slugCounts.get(slug) ?? 0) + 1);
+  }
+  const slugByItemId = new Map<string, string>();
+  for (const item of items) {
+    const slug = slugifyWardrobeTitle(item.title);
+    if (slug.length === 0 || slugCounts.get(slug) !== 1) continue;
     slugByItemId.set(item.id, slug);
   }
   return slugByItemId;

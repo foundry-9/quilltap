@@ -58,6 +58,7 @@ describe('HelpSearch', () => {
   let helpSearch: HelpSearch
   let mockFindAll: jest.Mock
   let mockFindAllWithEmbeddings: jest.Mock
+  let mockChunksWithEmbeddings: jest.Mock
 
   beforeEach(() => {
     helpSearch = new HelpSearch()
@@ -65,12 +66,16 @@ describe('HelpSearch', () => {
     // Create fresh mock functions for each test
     mockFindAll = jest.fn().mockResolvedValue(mockHelpDocs)
     mockFindAllWithEmbeddings = jest.fn().mockResolvedValue(mockEmbeddedDocs)
+    mockChunksWithEmbeddings = jest.fn().mockResolvedValue([])
 
     // Configure getRepositories to return our fresh mocks
     mockedGetRepositories.mockReturnValue({
       helpDocs: {
         findAll: mockFindAll,
         findAllWithEmbeddings: mockFindAllWithEmbeddings,
+      },
+      helpDocChunks: {
+        findAllWithEmbeddings: mockChunksWithEmbeddings,
       },
     })
 
@@ -168,6 +173,93 @@ describe('HelpSearch', () => {
       const results = await helpSearch.search([0, 0, 1, 0])
       expect(results.length).toBe(1)
       expect(results[0].document.id).toBe('doc-2')
+    })
+
+    describe('section-level scoring', () => {
+      it('lifts a doc whose section matches, even when the whole-doc vector is a poor match', async () => {
+        // doc-1's whole-document vector is orthogonal to the query (score 0),
+        // but one of its sections points straight at it. That is the case this
+        // exists for: a long page whose single vector smears across topics.
+        // The query points along the fourth axis, which no document's own
+        // vector touches — every whole-doc score is 0. Only doc-1's section
+        // knows the answer.
+        mockChunksWithEmbeddings.mockResolvedValue([
+          {
+            id: 'chunk-a', docId: 'doc-1', chunkIndex: 3,
+            heading: 'Image Description Settings',
+            content: 'Describing images for models that cannot see.',
+            embedding: [0, 0, 0, 1],
+          },
+        ])
+
+        const results = await helpSearch.search([0, 0, 0, 1])
+
+        expect(results[0].document.id).toBe('doc-1')
+        expect(results[0].score).toBe(1)
+        expect(results[0].matchedSection).toEqual({
+          heading: 'Image Description Settings',
+          content: 'Describing images for models that cannot see.',
+          chunkIndex: 3,
+        })
+      })
+
+      it('keeps the best of several sections in one doc', async () => {
+        mockChunksWithEmbeddings.mockResolvedValue([
+          { id: 'c1', docId: 'doc-1', chunkIndex: 0, heading: 'Weak', content: 'weak', embedding: [0.2, 0, 0, 0] },
+          { id: 'c2', docId: 'doc-1', chunkIndex: 1, heading: 'Strong', content: 'strong', embedding: [0.9, 0, 0, 0] },
+        ])
+
+        const results = await helpSearch.search([1, 0, 0, 0])
+        const doc1 = results.find(r => r.document.id === 'doc-1')
+
+        expect(doc1?.score).toBeCloseTo(0.9, 5)
+        expect(doc1?.matchedSection?.heading).toBe('Strong')
+      })
+
+      it('keeps the whole-document score when it beats every section', async () => {
+        mockChunksWithEmbeddings.mockResolvedValue([
+          { id: 'c1', docId: 'doc-0', chunkIndex: 0, heading: null, content: 'weak', embedding: [0.1, 0, 0, 0] },
+        ])
+
+        const results = await helpSearch.search([1, 0, 0, 0])
+        const doc0 = results.find(r => r.document.id === 'doc-0')
+
+        // doc-0's own vector is a perfect match; the feeble section must not drag it down.
+        expect(doc0?.score).toBe(1)
+        expect(doc0?.matchedSection).toBeUndefined()
+      })
+
+      it('still ranks docs that have no sections embedded yet', async () => {
+        mockChunksWithEmbeddings.mockResolvedValue([])
+
+        const results = await helpSearch.search([1, 0, 0, 0])
+
+        expect(results.length).toBe(3)
+        expect(results[0].document.id).toBe('doc-0')
+        expect(results[0].matchedSection).toBeUndefined()
+      })
+
+      it('skips sections whose embedding dimension does not match the query', async () => {
+        mockChunksWithEmbeddings.mockResolvedValue([
+          { id: 'c1', docId: 'doc-1', chunkIndex: 0, heading: 'Stale', content: 'old profile', embedding: [1, 0] },
+        ])
+
+        const results = await helpSearch.search([1, 0, 0, 0])
+        const doc1 = results.find(r => r.document.id === 'doc-1')
+
+        expect(doc1?.matchedSection).toBeUndefined()
+        expect(doc1?.score).toBe(0)
+      })
+
+      it('falls back to whole-document scores when the chunk lookup fails', async () => {
+        mockChunksWithEmbeddings.mockRejectedValue(new Error('table missing'))
+
+        const results = await helpSearch.search([1, 0, 0, 0])
+
+        expect(results.length).toBe(3)
+        expect(results[0].document.id).toBe('doc-0')
+        expect(mockedLogger.warn).toHaveBeenCalled()
+      })
     })
 
     describe('literal-phrase boost', () => {

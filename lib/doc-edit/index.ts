@@ -13,7 +13,16 @@ export {
   findAllMatches,
   findUniqueMatch,
   type DiacriticsMatchOptions,
+  type MatchTier,
+  type UniqueMatchResult,
 } from './diacritics';
+
+export {
+  TYPOGRAPHIC_FOLDINGS,
+  foldTypographicChar,
+  foldTypography,
+  hasTypographicVariants,
+} from './typographic-folding';
 
 export {
   resolveDocEditPath,

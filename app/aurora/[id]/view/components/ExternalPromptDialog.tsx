@@ -223,7 +223,7 @@ export function ExternalPromptDialog({
                 step={500}
                 value={maxTokens}
                 onChange={(e) => setMaxTokens(Number(e.target.value))}
-                className="w-full accent-primary"
+                className="qt-range w-full"
               />
               <div className="mt-1 flex justify-between text-xs qt-text-secondary">
                 <span>{maxTokens.toLocaleString()} tokens</span>

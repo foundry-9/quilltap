@@ -10,16 +10,14 @@ import { BackgroundJob, MessageEvent, isParticipantPresent } from '@/lib/schemas
 import { SceneStateSchema } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, CheapLLMConfig, type CheapLLMSelection, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
-import { updateSceneState, extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks';
+import { updateSceneState, extractVisibleConversation, throwIfLostToTimeout } from '@/lib/memory/cheap-llm-tasks';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import type { SceneStateTrackingPayload } from '../queue-service';
-import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
-import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
+import { describeEquippedOutfitTitleOnly } from '@/lib/wardrobe/resolve-equipped';
 import { hashEquippedSlots, hasEquippedItems } from '@/lib/wardrobe/outfit-hash';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
@@ -69,7 +67,7 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
     fallbackToLocal: chatSettings?.cheapLLMSettings?.fallbackToLocal ?? true,
   };
 
-  const isDangerousChat = isChatActiveDangerous(chat);
+  const isDangerousChat = shouldUseUncensoredRoute(chat);
   let cheapLLMSelection = getCheapLLMProvider(connectionProfile, cheapLLMConfig, availableProfiles, false);
 
   // For dangerous chats, use uncensored provider to avoid content refusals.
@@ -192,18 +190,12 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(payload.chatId, char!.id);
       equippedSlotsByCharacterId.set(char!.id, equippedSlots ?? null);
       if (equippedSlots) {
-        const resolved = await resolveEquippedOutfitForCharacter(
+        clothingDescription = await describeEquippedOutfitTitleOnly(
           repos,
           char!.id,
           equippedSlots,
-          await sharedWardrobeTiersForCharacter(char!.id, projectMountPointIds),
+          projectMountPointIds,
         );
-        clothingDescription = describeOutfit({
-          top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
-          bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
-          footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
-          accessories: decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true }),
-        });
       }
     } catch (error) {
       logger.warn('[SceneStateTracking] Failed to load equipped wardrobe for character', {
@@ -293,8 +285,15 @@ export async function handleSceneStateTracking(job: BackgroundJob): Promise<void
 
   if (!result.success || !result.result) {
     logger.warn('[SceneStateTracking] Failed to derive scene state', {
-      jobId: job.id, chatId: payload.chatId, error: result.error,
+      jobId: job.id, chatId: payload.chatId, error: result.error, timedOut: result.timedOut === true,
     });
+    // A pass lost to a timeout is not a finished pass. Returning here would
+    // mark the job COMPLETED over a scene state that was never derived, which
+    // is how 99 SCENE_STATE_TRACKING jobs came back clean over 12 losses
+    // (bug 107). Throwing hands it to `markFailed`: backed-off retry, then
+    // DEAD with the reason attached. The job writes nothing until it succeeds,
+    // so the re-run starts from the same place this one did.
+    throwIfLostToTimeout(result, 'scene-state-tracking');
     return;
   }
 

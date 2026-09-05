@@ -7,7 +7,7 @@
  */
 
 import { randomUUID } from 'crypto'
-import { UuidRemapper, createUuidRemapper } from '@/lib/backup/uuid-remapper'
+import { UuidRemapper } from '@/lib/backup/uuid-remapper'
 import { remapBackupData } from '@/lib/backup/restore/uuid-remap'
 import type { BackupData } from '@/lib/backup/types'
 import type { Project } from '@/lib/schemas/types'
@@ -444,29 +444,6 @@ describe('UuidRemapper', () => {
     })
   })
 
-  describe('createUuidRemapper()', () => {
-    it('creates a new remapper instance via helper', () => {
-      const instance = createUuidRemapper()
-      expect(instance).toBeInstanceOf(UuidRemapper)
-    })
-
-    it('creates independent instances', () => {
-      randomUUIDMock
-        .mockReturnValueOnce('uuid-1')
-        .mockReturnValueOnce('uuid-2')
-
-      const remapper1 = createUuidRemapper()
-      const remapper2 = createUuidRemapper()
-
-      remapper1.remap('id')
-      remapper2.remap('id')
-
-      expect(remapper1.getMapping()).toEqual({ id: 'uuid-1' })
-      expect(remapper2.getMapping()).toEqual({ id: 'uuid-2' })
-      expect(remapper1.getSize()).toBe(1)
-      expect(remapper2.getSize()).toBe(1)
-    })
-  })
 })
 
 describe('remapBackupData() - project FK remapping', () => {
@@ -541,6 +518,59 @@ describe('remapBackupData() - project FK remapping', () => {
     const result = remapBackupData(data, 'target-user', remapper)
 
     expect(result.projects[0].defaultImageProfileId).toBeNull()
+  })
+
+  it('remaps connectionProfile.fallbackProfileId to the same new id as its understudy', () => {
+    // The understudy is a row in the *same* table, so remapping `id` without
+    // remapping `fallbackProfileId` would leave every restored chain pointing
+    // at a uuid the new account does not have.
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      connectionProfiles: [
+        { id: 'prof-a', fallbackProfileId: 'prof-b' },
+        { id: 'prof-b', fallbackProfileId: null },
+      ] as unknown as BackupData['connectionProfiles'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    const newB = remapper.getMapping()['prof-b']
+    expect(newB).toBeDefined()
+    expect(result.connectionProfiles[1].id).toBe(newB)
+    expect(result.connectionProfiles[0].fallbackProfileId).toBe(newB)
+    expect(result.connectionProfiles[0].fallbackProfileId).not.toBe('prof-b')
+  })
+
+  it('remaps a forward reference — the understudy appearing later in the array', () => {
+    // The remapper is lazy and consistent, so the order profiles appear in the
+    // archive must not matter.
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      connectionProfiles: [
+        { id: 'prof-a', fallbackProfileId: 'prof-z' },
+        { id: 'prof-z', fallbackProfileId: null },
+      ] as unknown as BackupData['connectionProfiles'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    expect(result.connectionProfiles[0].fallbackProfileId).toBe(result.connectionProfiles[1].id)
+  })
+
+  it('leaves a null fallbackProfileId untouched', () => {
+    const remapper = new UuidRemapper()
+    const data: BackupData = {
+      ...emptyBackup(),
+      connectionProfiles: [
+        { id: 'prof-a', fallbackProfileId: null },
+      ] as unknown as BackupData['connectionProfiles'],
+    }
+
+    const result = remapBackupData(data, 'target-user', remapper)
+
+    expect(result.connectionProfiles[0].fallbackProfileId).toBeNull()
   })
 })
 

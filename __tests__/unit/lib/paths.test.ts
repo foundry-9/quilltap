@@ -14,7 +14,6 @@ describe('lib/paths', () => {
     jest.resetModules();
     process.env = { ...originalEnv };
     delete process.env.DOCKER_CONTAINER;
-    delete process.env.LIMA_CONTAINER;
     delete process.env.QUILLTAP_DATA_DIR;
   });
 
@@ -210,50 +209,6 @@ describe('lib/paths', () => {
     });
   });
 
-  describe('isLimaEnvironment', () => {
-    it('should return true when LIMA_CONTAINER is set', async () => {
-      process.env.LIMA_CONTAINER = 'true';
-
-      const { isLimaEnvironment } = await import('@/lib/paths');
-      expect(isLimaEnvironment()).toBe(true);
-    });
-
-    it('should return false when LIMA_CONTAINER is not set', async () => {
-      delete process.env.LIMA_CONTAINER;
-
-      const { isLimaEnvironment } = await import('@/lib/paths');
-      expect(isLimaEnvironment()).toBe(false);
-    });
-  });
-
-  describe('getPlatform - Lima priority', () => {
-    it('should return linux when LIMA_CONTAINER is set, even if DOCKER_CONTAINER is also set', async () => {
-      process.env.LIMA_CONTAINER = 'true';
-      process.env.DOCKER_CONTAINER = 'true';
-
-      const { getPlatform } = await import('@/lib/paths');
-      expect(getPlatform()).toBe('linux');
-    });
-
-    it('should return linux when LIMA_CONTAINER is set', async () => {
-      process.env.LIMA_CONTAINER = 'true';
-
-      const { getPlatform } = await import('@/lib/paths');
-      expect(getPlatform()).toBe('linux');
-    });
-
-    it('should respect QUILLTAP_DATA_DIR in Lima environment', async () => {
-      process.env.LIMA_CONTAINER = 'true';
-      process.env.QUILLTAP_DATA_DIR = '/data/quilltap';
-
-      const { getBaseDataDirWithSource } = await import('@/lib/paths');
-      const result = getBaseDataDirWithSource();
-
-      expect(result.path).toBe('/data/quilltap');
-      expect(result.source).toBe('environment');
-    });
-  });
-
   describe('isDockerEnvironment', () => {
     it('should return true when DOCKER_CONTAINER is set', async () => {
       process.env.DOCKER_CONTAINER = 'true';
@@ -336,26 +291,4 @@ describe('lib/paths', () => {
     });
   });
 
-  describe('hasShellCapability', () => {
-    it('should return true for a present capability', async () => {
-      process.env.QUILLTAP_SHELL_CAPABILITIES = 'OPENS_FS_PATH,DOWNLOADS_FILE';
-
-      const { hasShellCapability } = await import('@/lib/paths');
-      expect(hasShellCapability('OPENS_FS_PATH')).toBe(true);
-    });
-
-    it('should return false for a missing capability', async () => {
-      process.env.QUILLTAP_SHELL_CAPABILITIES = 'OPENS_FS_PATH';
-
-      const { hasShellCapability } = await import('@/lib/paths');
-      expect(hasShellCapability('DOWNLOADS_FILE')).toBe(false);
-    });
-
-    it('should return false when env var is not set', async () => {
-      delete process.env.QUILLTAP_SHELL_CAPABILITIES;
-
-      const { hasShellCapability } = await import('@/lib/paths');
-      expect(hasShellCapability('OPENS_FS_PATH')).toBe(false);
-    });
-  });
 });

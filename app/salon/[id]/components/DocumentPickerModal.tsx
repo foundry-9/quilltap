@@ -442,7 +442,7 @@ export default function DocumentPickerModal({
     <button
       key={store.mountPointId}
       onClick={() => handleSelectScope('document_store', { id: store.mountPointId, name: store.name, type: store.mountType })}
-      className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
+      className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
     >
       <Icon name="file" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
       <div className="flex-1 min-w-0">
@@ -470,7 +470,7 @@ export default function DocumentPickerModal({
             {/* New blank document */}
             <button
               onClick={handleNewBlank}
-              className="w-full flex items-center gap-3 p-4 rounded-lg border border-dashed qt-border hover:qt-bg-hover transition-colors text-left"
+              className="w-full flex items-center gap-3 p-4 rounded-lg border border-dashed qt-border hover:qt-bg-surface-hover transition-colors text-left"
             >
               <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center qt-bg-muted">
                 <Icon name="plus" className="w-5 h-5 qt-text-secondary" />
@@ -489,7 +489,7 @@ export default function DocumentPickerModal({
                 onClick={() => projectLibrary
                   ? handleSelectScope('document_store', { id: projectLibrary.mountPointId, name: projectLibrary.name, type: projectLibrary.mountType })
                   : handleSelectScope('project')}
-                className="w-full flex items-center gap-3 p-4 rounded-lg border qt-border hover:qt-bg-hover transition-colors text-left"
+                className="w-full flex items-center gap-3 p-4 rounded-lg border qt-border hover:qt-bg-surface-hover transition-colors text-left"
               >
                 <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center qt-bg-muted">
                   <Icon name="folder" className="w-5 h-5 qt-text-secondary" />
@@ -504,7 +504,7 @@ export default function DocumentPickerModal({
             {/* General library */}
             <button
               onClick={() => handleSelectScope('general')}
-              className="w-full flex items-center gap-3 p-4 rounded-lg border qt-border hover:qt-bg-hover transition-colors text-left"
+              className="w-full flex items-center gap-3 p-4 rounded-lg border qt-border hover:qt-bg-surface-hover transition-colors text-left"
             >
               <div className="flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center qt-bg-muted">
                 <Icon name="scriptorium" className="w-5 h-5 qt-text-secondary" />
@@ -538,7 +538,7 @@ export default function DocumentPickerModal({
                     <button
                       key={doc.id}
                       onClick={() => handleReopenDocument(doc)}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border qt-border hover:qt-bg-hover transition-colors text-left"
+                      className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border qt-border hover:qt-bg-surface-hover transition-colors text-left"
                     >
                       {doc.isActive
                         ? <Icon name="file" className="w-5 h-5 flex-shrink-0 qt-text-secondary" />
@@ -691,7 +691,7 @@ export default function DocumentPickerModal({
                     {currentFolder && (
                       <button
                         onClick={handleNavigateUp}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
                       >
                         <Icon name="arrow-left" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                         <span className="text-sm qt-text-secondary">..</span>
@@ -704,7 +704,7 @@ export default function DocumentPickerModal({
                         and rename later. */}
                     <button
                       onClick={handleNewBlankInFolder}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
                     >
                       <Icon name="file-plus" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                       <span className="text-sm qt-text-secondary">New document here</span>
@@ -712,7 +712,7 @@ export default function DocumentPickerModal({
 
                     {/* New folder control */}
                     {showNewFolderInput ? (
-                      <div className="flex flex-col gap-1 px-3 py-2 rounded-md qt-bg-hover">
+                      <div className="flex flex-col gap-1 px-3 py-2 rounded-md qt-bg-surface-hover">
                         <div className="flex items-center gap-2">
                           <Icon name="folder-plus" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                           <input
@@ -755,7 +755,7 @@ export default function DocumentPickerModal({
                     ) : (
                       <button
                         onClick={handleStartNewFolder}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
                       >
                         <Icon name="folder-plus" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                         <span className="text-sm qt-text-secondary">New folder</span>
@@ -767,7 +767,7 @@ export default function DocumentPickerModal({
                       <button
                         key={`folder-${folder}`}
                         onClick={() => handleNavigateFolder(folder)}
-                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
+                        className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
                       >
                         <Icon name="folder" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                         <div className="flex-1 min-w-0">
@@ -784,7 +784,7 @@ export default function DocumentPickerModal({
                         <button
                           key={file.id}
                           onClick={() => handleMountPointFileSelect(file)}
-                          className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-hover transition-colors text-left"
+                          className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:qt-bg-surface-hover transition-colors text-left"
                         >
                           <Icon name="file" className="w-4 h-4 flex-shrink-0 qt-text-secondary" />
                           <div className="flex-1 min-w-0">

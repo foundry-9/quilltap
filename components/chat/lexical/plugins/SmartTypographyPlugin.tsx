@@ -56,9 +56,7 @@
  */
 
 import { useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import {
   $getSelection,
@@ -83,13 +81,6 @@ const UPDATE_TAG = 'smart-typography'
 /** The only two characters that can start a substitution. Cheapest bail. */
 const TRIGGER_CHARS = new Set(['-', '.'])
 
-interface ChatSettingsResponse {
-  smartTypographySettings?: {
-    dashes?: boolean
-    ellipsis?: boolean
-  }
-}
-
 /**
  * The last substitution, kept only until the very next thing that happens.
  * Backspace at exactly `endOffset` in `nodeKey` puts `literal` back.
@@ -106,10 +97,7 @@ interface RevertMemo {
 
 export function SmartTypographyPlugin(): null {
   const [editor] = useLexicalComposerContext()
-  const { data: chatSettings } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
-  })
+  const { data: chatSettings } = useChatSettingsQuery()
 
   // Keep the latest settings in a ref so the registered command handler doesn't
   // need re-registering every time they change.

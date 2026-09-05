@@ -301,6 +301,9 @@ describe('Context Compression', () => {
         options.selection,
         'test-user-id',
         undefined,
+        undefined,
+        // Latency class: unset here, so compression falls back to the
+        // background budget. The inline caller passes 'interactive' (bug 107).
         undefined
       )
 

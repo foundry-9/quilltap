@@ -26,9 +26,11 @@ export function useDocumentStores(): UseDocumentStoresReturn {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchStores = useCallback(async () => {
+  const fetchStores = useCallback(async (opts?: { silent?: boolean }) => {
     try {
-      setLoading(true)
+      // A silent refresh (workspace tab re-activation) keeps the current list
+      // on screen instead of flipping the whole view back to its loading state.
+      if (!opts?.silent) setLoading(true)
       setError(null)
 
       const res = await fetch('/api/v1/mount-points')

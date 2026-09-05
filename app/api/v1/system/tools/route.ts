@@ -48,12 +48,8 @@ import { previewImport, executeImport, type QuilltapExport, type ConflictStrateg
 import { peekFormat, readNdjsonLines, collectLegacyJson } from '@/lib/import/ndjson-reader';
 import { assembleExportFromStream } from '@/lib/import/quilltap-import-stream';
 import { generateAndSaveAlmanack } from '@/lib/tools/almanack';
-import { sseStreamResponse } from '@/lib/services/chat-message/request-helpers';
-import { safeEnqueue, safeClose } from '@/lib/services/chat-message/streaming.service';
-import {
-  subscribeOperationProgress,
-  type CoreProgressEvent,
-} from '@/lib/progress/operation-progress';
+import type { CoreProgressEvent } from '@/lib/progress/operation-progress';
+import { operationProgressSseResponse } from '@/lib/progress/operation-progress-sse';
 import { deduplicateAllMemories } from '@/lib/tools/memory-dedup';
 import { runAIImportStreaming } from '@/lib/services/ai-import.service';
 import type { AIImportRequest, AIImportProgressEvent } from '@/lib/services/ai-import.service';
@@ -87,9 +83,6 @@ const TOOLS_POST_ACTIONS = [
   'ai-import-stream',
 ] as const;
 type ToolsPostAction = typeof TOOLS_POST_ACTIONS[number];
-
-/** ~15s idle ping on the progress stream, matching the message stream's cadence. */
-const PROGRESS_KEEP_ALIVE_MS = 15_000;
 
 // ============================================================================
 // Helper Functions
@@ -914,57 +907,7 @@ async function handleCapabilitiesReportProgress(req: NextRequest, _context: any)
     return badRequest('Missing progress id');
   }
 
-  const encoder = new TextEncoder();
-  let unsubscribe: (() => void) | null = null;
-  let keepAlive: ReturnType<typeof setInterval> | null = null;
-
-  const cleanup = () => {
-    if (unsubscribe) {
-      unsubscribe();
-      unsubscribe = null;
-    }
-    if (keepAlive) {
-      clearInterval(keepAlive);
-      keepAlive = null;
-    }
-  };
-
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      const send = (event: CoreProgressEvent) => {
-        safeEnqueue(controller, encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
-        if (event.kind === 'done' || event.kind === 'error') {
-          cleanup();
-          safeClose(controller);
-        }
-      };
-
-      const { replay, unsubscribe: unsub } = subscribeOperationProgress<CoreProgressEvent>(id, send);
-      unsubscribe = unsub;
-
-      // Replay the backlog first. If it already carries a terminal event the
-      // stream closes here and the keep-alive is never armed.
-      for (const event of replay) {
-        send(event);
-        if (event.kind === 'done' || event.kind === 'error') return;
-      }
-
-      keepAlive = setInterval(() => {
-        safeEnqueue(controller, encoder.encode(`: keep-alive\n\n`));
-      }, PROGRESS_KEEP_ALIVE_MS);
-      keepAlive.unref?.();
-
-      req.signal.addEventListener('abort', () => {
-        cleanup();
-        safeClose(controller);
-      });
-    },
-    cancel() {
-      cleanup();
-    },
-  });
-
-  return sseStreamResponse(stream);
+  return operationProgressSseResponse<CoreProgressEvent>(id, req);
 }
 
 async function handleCapabilitiesReportGenerate(req: NextRequest, context: any) {

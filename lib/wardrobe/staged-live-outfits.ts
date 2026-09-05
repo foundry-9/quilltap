@@ -16,14 +16,13 @@
  * @module lib/wardrobe/staged-live-outfits
  */
 
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
+import { WARDROBE_SLOT_TYPES, cloneEquippedSlots } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
-import { cloneSlots } from '@/lib/wardrobe/bundle-mutations'
 
 /** A staging gesture: pure, and safe to replay against a different base. */
 export type SlotsMutator = (prev: EquippedSlots) => EquippedSlots
 
-/** Deep array equality on the four EquippedSlots arrays, in order. */
+/** Deep array equality on every EquippedSlots array, in canonical slot order. */
 export function equippedSlotsEqual(a: EquippedSlots, b: EquippedSlots): boolean {
   for (const slot of WARDROBE_SLOT_TYPES) {
     const av = a[slot]
@@ -49,7 +48,7 @@ export function rebaseStagedSlots(
   wornSlots: EquippedSlots,
   pending: readonly SlotsMutator[],
 ): EquippedSlots {
-  return pending.reduce<EquippedSlots>((slots, mutate) => mutate(slots), cloneSlots(wornSlots))
+  return pending.reduce<EquippedSlots>((slots, mutate) => mutate(slots), cloneEquippedSlots(wornSlots))
 }
 
 /** What the Done flush should do with each character's staged slots. */

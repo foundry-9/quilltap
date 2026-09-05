@@ -106,8 +106,6 @@ describe('Instance Lock Manager', () => {
     // Reset env
     process.env = { ...originalEnv };
     delete process.env.ELECTRON_DEV;
-    delete process.env.LIMA_CONTAINER;
-    delete process.env.WSL_DISTRO_NAME;
     delete process.env.DOCKER_CONTAINER;
 
     // Reset globals
@@ -148,16 +146,6 @@ describe('Instance Lock Manager', () => {
       expect(instanceLock.detectEnvironmentType()).toBe('electron');
     });
 
-    it('should return lima when LIMA_CONTAINER=true', () => {
-      process.env.LIMA_CONTAINER = 'true';
-      expect(instanceLock.detectEnvironmentType()).toBe('lima');
-    });
-
-    it('should return wsl2 when WSL_DISTRO_NAME is set', () => {
-      process.env.WSL_DISTRO_NAME = 'Ubuntu';
-      expect(instanceLock.detectEnvironmentType()).toBe('wsl2');
-    });
-
     it('should return docker when DOCKER_CONTAINER=true', () => {
       process.env.DOCKER_CONTAINER = 'true';
       expect(instanceLock.detectEnvironmentType()).toBe('docker');
@@ -173,10 +161,10 @@ describe('Instance Lock Manager', () => {
       expect(instanceLock.detectEnvironmentType()).toBe('local');
     });
 
-    it('should prioritize lima over docker', () => {
-      process.env.LIMA_CONTAINER = 'true';
+    it('should prioritize electron over docker', () => {
+      process.env.ELECTRON_DEV = 'true';
       process.env.DOCKER_CONTAINER = 'true';
-      expect(instanceLock.detectEnvironmentType()).toBe('lima');
+      expect(instanceLock.detectEnvironmentType()).toBe('electron');
     });
   });
 

@@ -22,7 +22,7 @@ import { getRepositories } from '@/lib/repositories/factory'
 import { createImageProvider } from '@/lib/llm/plugin-factory'
 import { convertToWebP } from '@/lib/files/webp-conversion'
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { getCheapLLMProvider } from '@/lib/llm/cheap-llm'
 import {
   craftStoryBackgroundPrompt,
@@ -45,11 +45,12 @@ jest.mock('@/lib/services/dangerous-content/resolver.service', () => ({
   resolveDangerousContentSettings: jest.fn(),
 }))
 jest.mock('@/lib/services/dangerous-content/chat-override', () => ({
-  isChatActiveDangerous: jest.fn(),
+  shouldUseUncensoredRoute: jest.fn(),
 }))
 jest.mock('@/lib/llm/cheap-llm', () => ({
   getCheapLLMProvider: jest.fn(),
   resolveUncensoredCheapLLMSelection: jest.fn(),
+  buildCheapLLMConfig: jest.fn(() => ({})),
   DEFAULT_CHEAP_LLM_CONFIG: {},
 }))
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
@@ -60,6 +61,7 @@ jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
 jest.mock('@/lib/image-gen/appearance-resolution', () => ({
   resolveCharacterAppearances: jest.fn(),
   sanitizeAppearancesIfNeeded: jest.fn(),
+  equippedWardrobeItemsForAppearance: jest.fn().mockResolvedValue(undefined),
 }))
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
   resolveEquippedOutfitForCharacter: jest.fn(),
@@ -80,7 +82,7 @@ const mockGetRepositories = jest.mocked(getRepositories)
 const mockCreateImageProvider = jest.mocked(createImageProvider)
 const mockConvertToWebP = jest.mocked(convertToWebP)
 const mockResolveDanger = jest.mocked(resolveDangerousContentSettings)
-const mockIsDangerous = jest.mocked(isChatActiveDangerous)
+const mockShouldUseUncensoredRoute = jest.mocked(shouldUseUncensoredRoute)
 const mockGetCheapLLM = jest.mocked(getCheapLLMProvider)
 const mockCraftPrompt = jest.mocked(craftStoryBackgroundPrompt)
 const mockExtractConversation = jest.mocked(extractVisibleConversation)
@@ -149,7 +151,7 @@ beforeEach(() => {
   } as any)
 
   mockResolveDanger.mockReturnValue({ settings: { mode: 'OFF', scanImagePrompts: false } } as any)
-  mockIsDangerous.mockReturnValue(false)
+  mockShouldUseUncensoredRoute.mockReturnValue(false)
   mockGetCheapLLM.mockReturnValue({
     provider: 'openai', modelName: 'm', connectionProfileId: 'p1', isLocal: false,
   } as any)

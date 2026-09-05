@@ -15,6 +15,7 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { NewChatModal } from '@/components/new-chat/NewChatModal'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 
 export interface NewChatModalOptions {
   characterId?: string
@@ -25,6 +26,8 @@ export interface NewChatModalOptions {
   initialUserCharacterId?: string | null
   initialImageProfileId?: string | null
   initialAvatarGenerationEnabled?: boolean
+  /** Concierge state to pre-fill (continuation mode). */
+  initialConciergeState?: ConciergeState | null
   /** Open in autonomous-room creation mode. */
   autonomous?: boolean
 }
@@ -58,6 +61,7 @@ export function NewChatProvider({ children }: { children: ReactNode }) {
           initialUserCharacterId={opts.initialUserCharacterId}
           initialImageProfileId={opts.initialImageProfileId}
           initialAvatarGenerationEnabled={opts.initialAvatarGenerationEnabled}
+          initialConciergeState={opts.initialConciergeState}
           autonomous={opts.autonomous}
         />
       )}

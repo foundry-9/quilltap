@@ -150,6 +150,9 @@ export interface CharacterData {
     url?: string
   } | null
   talkativeness?: number
+  /** Set when the character is archived — the seat is a tombstone until
+   *  rehydration, and the sidebar badges it. */
+  archivedAt?: string | null
   systemPrompts?: Array<{
     id: string
     name: string
@@ -246,6 +249,8 @@ export interface Chat {
   agentModeSource?: string
   /** Project ID this chat belongs to (if any) */
   projectId?: string | null
+  /** The scene this chat runs on — `{{scenario}}` in every identity stack. */
+  scenarioText?: string | null
   /** Project name for display purposes */
   projectName?: string | null
   /** List of tool IDs that are disabled for this chat */
@@ -276,8 +281,8 @@ export interface Chat {
   isDangerousChat?: boolean | null
   /** Categories of dangerous content detected (e.g. 'nsfw', 'violence') */
   dangerCategories?: string[]
-  /** Per-chat Concierge tri-state override: NULL = follow global, 'OFF' = off-duty */
-  conciergeOverride?: 'OFF' | null
+  /** Per-chat Concierge override: NULL = follow global, 'OFF' = vouched safe, 'UNCENSORED' = operator-asserted uncensored. */
+  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
   /** Off-scene character cards referenced by ad-hoc announcement bubbles (customAnnouncer.kind === 'character'). Populated server-side from message rows. */
   offSceneCharacters?: Array<{
     id: string
@@ -367,27 +372,6 @@ export interface PendingToolResult {
   success: boolean
   /** Timestamp when result was generated */
   createdAt: string
-}
-
-export interface ChatParticipantData {
-  id: string
-  type: 'CHARACTER'
-  controlledBy?: 'llm' | 'user'
-  displayOrder: number
-  isActive: boolean
-  /** Four-state participation status */
-  status?: 'active' | 'silent' | 'absent' | 'removed'
-  character: {
-    id: string
-    name: string
-    title?: string | null
-    avatarUrl?: string
-    defaultImage?: {
-      url?: string
-      filepath?: string
-    } | null
-  } | null
-  connectionProfile?: ConnectionProfileData | null
 }
 
 export type Character = CharacterData

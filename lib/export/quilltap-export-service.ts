@@ -12,6 +12,7 @@ import { getUserRepositories, getRepositories } from '@/lib/repositories/factory
 import type { ExportOptions, ExportPreview } from './types';
 import type { Memory } from '@/lib/schemas/types';
 import { listPortableInstanceSettings } from '@/lib/instance-settings';
+import { isFileExcludedFromExport } from './excluded-files';
 
 const logger = baseLogger.child({ module: 'export:quilltap-export-service' });
 
@@ -303,9 +304,7 @@ export async function previewExport(
 
       case 'files': {
         const allFiles = options.scope === 'all'
-          ? (await repos.files.findAll()).filter(
-              (f) => f.category !== 'BACKUP' && f.folderPath !== '/backups'
-            )
+          ? (await repos.files.findAll()).filter((f) => !isFileExcludedFromExport(f))
           : [];
         const ids = options.scope === 'all'
           ? allFiles.map(f => f.id)

@@ -6,11 +6,12 @@
  * Displays all user projects with counts and actions.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useProjects } from './hooks/useProjects'
 import { ProjectsGrid, CreateProjectDialog, DeleteProjectDialog } from './components'
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider'
-import { useWorkspaceTabId } from '@/components/workspace/workspace-tab-context'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
+import { useInTabDrilldown } from '@/components/workspace/useInTabDrilldown'
 import dynamic from 'next/dynamic'
 
 // Lazy so the list bundle doesn't pull in the detail (and its Lexical editors)
@@ -30,22 +31,21 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [deleteProjectId, setDeleteProjectId] = useState<string | null>(null)
   // In a workspace tab, drilling into a project renders in place (keep-alive).
-  const inTab = useWorkspaceTabId() != null
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(initialProjectId ?? null)
-  const bgStyle = useSubsystemBackgroundStyle('prospero')
+  const {
+    inTab,
+    selectedId: selectedProjectId,
+    setSelectedId: setSelectedProjectId,
+  } = useInTabDrilldown(initialProjectId)
 
   useEffect(() => {
     fetchProjects()
   }, [fetchProjects])
 
-  // A deep-link re-open refreshes the tab payload; follow it into the project.
-  // Adjusting state during render is React's sanctioned derive-from-prop-change
-  // pattern (re-renders immediately, nothing committed in between).
-  const [prevInitialProjectId, setPrevInitialProjectId] = useState(initialProjectId)
-  if (initialProjectId !== prevInitialProjectId) {
-    setPrevInitialProjectId(initialProjectId)
-    if (initialProjectId) setSelectedProjectId(initialProjectId)
-  }
+  // Navigating back to this tab refreshes the list in place (silent — no
+  // loading flip, which would unmount an in-place project detail).
+  useOnTabActivated(() => {
+    void fetchProjects({ silent: true })
+  })
 
   const handleCreate = async (name: string, description: string | null) => {
     const result = await createProject(name, description)
@@ -90,7 +90,7 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
   }
 
   return (
-    <div className="qt-page-container text-foreground" style={bgStyle}>
+    <ProsperoListShell>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b qt-border-default/60 pb-6">
         <h1 className="qt-heading-1 leading-tight">Projects</h1>
         <button
@@ -119,6 +119,27 @@ export function ProsperoView({ initialProjectId }: ProsperoViewProps = {}) {
         onClose={() => setDeleteProjectId(null)}
         onConfirm={handleDelete}
       />
+    </ProsperoListShell>
+  )
+}
+
+/**
+ * The list view's page shell, carrying the Prospero subsystem background.
+ *
+ * This lives in its own component so the subsystem background — which reports
+ * itself to the workspace backdrop — is *unmounted* while a project detail is
+ * shown in place. The registry keys on the tab id, and the list and the detail
+ * it drills into share one tab, so a reporter left mounted in ProsperoView
+ * would leave the subsystem image parked under that key: exactly how the
+ * project background stopped following `backgroundDisplayMode` (bug 80).
+ * Keeping one reporter alive at a time makes the winner unambiguous instead of
+ * a race between two effects.
+ */
+function ProsperoListShell({ children }: { children: ReactNode }) {
+  const bgStyle = useSubsystemBackgroundStyle('prospero')
+  return (
+    <div className="qt-page-container text-foreground" style={bgStyle}>
+      {children}
     </div>
   )
 }

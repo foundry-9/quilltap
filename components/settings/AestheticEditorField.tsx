@@ -134,7 +134,7 @@ export function AestheticEditorField({
               {saving ? 'Saving…' : 'Save'}
             </button>
             {saved && !dirty && <span className="qt-text-small qt-text-success">Saved</span>}
-            {error && <span className="qt-text-small qt-text-error">{error}</span>}
+            {error && <span className="qt-text-small qt-text-destructive">{error}</span>}
           </div>
         </>
       )}

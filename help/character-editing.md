@@ -44,6 +44,18 @@ The edit interface has multiple tabs for different aspects of character:
 
 The Details tab contains all basic character information.
 
+### Who Is Being Spoken To
+
+Before putting pen to any field, pause for one question of etiquette: *who will be reading this?* Every field is delivered to somebody, and the graceful thing is to address that somebody directly.
+
+- **Fields only the character themselves ever reads** — the Manifesto, the Personality, the System Prompts — are written *to* the character, as one might leave instructions for a trusted colleague. Written as: *You do not lie to Charlie, not even kindly.* / *You keep your worry behind your teeth. You have never once asked for help first.* / *You are Ariadne. You answer plainly and you never flatter.*
+- **Fields only *other* characters ever read** — the Identity and the Description — are written *about* the character, from the outside, as an observer would put it. Written as: *Ariadne is a research librarian at the Athenaeum, known for finding what others gave up on.* / *She finishes other people's sentences, then apologises for it.*
+- **Physical Descriptions** are addressed to no one at all — bare descriptive phrases, because the very same text is handed to the image generators, which want nouns, not sentences about "you". Written as: *auburn hair cut short; grey eyes; a scar across the left knuckle*.
+- **Scenarios** are scene text, addressed to nobody — a stage set, not a letter. Written as: *The reading room is empty at this hour, rain against the high windows.*
+- **Example Dialogues** need no such fuss — the `{{char}}:` / `{{user}}:` format carries the shape on its own.
+
+The assembled system prompt addresses the character directly throughout, and each field's wrapper makes its vantage point plain — so text written for the right reader lands exactly where it should. The editor shows a "Written as:" worked example beneath each field as a reminder.
+
 ### Field-by-Field Editing
 
 **Name**
@@ -77,14 +89,16 @@ The Details tab contains all basic character information.
 - The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field (identity, description, personality, physical, dialogues) should remain consistent with
 - Not a vantage point — nobody "sees" the Manifesto; it is the load-bearing truth the character is built on. Foundational, declarative, contradiction-resistant
 - Click to edit. A Markdown property synced to the character vault as `manifesto.md` (vault path lookups are case-insensitive, so a hand-named `Manifesto.md` is matched too)
-- Example: "She is fundamentally incapable of betrayal. She believes the strong protect the weak. She has never broken a promise."
+- Only the character themselves ever reads it, so address them directly
+- Example: "You are fundamentally incapable of betrayal. You believe the strong protect the weak. You have never broken a promise."
 
 **Personality**
 
-- What the character knows about themselves — the internal driver of their speech and behaviour. Other characters don't see it unless she shares it
+- What the character knows about themselves — the internal driver of their speech and behaviour. Other characters don't see it unless they share it
 - Distinct from Description (outward) and Identity (public surface). This is the inner life
 - Edit to refine the engine room behind the curtain
-- Example: "Believes she's never deserved any of what's happened to her, and operates on a slow, simmering resentment she'd never admit to"
+- Only the character themselves ever reads it, so address them directly
+- Example: "You believe you've never deserved any of what's happened to you, and you operate on a slow, simmering resentment you'd never admit to"
 
 **Scenarios**
 
@@ -93,6 +107,7 @@ The Details tab contains all basic character information.
 - Add a new scenario when you begin a fresh campaign or a character finds themselves in significantly altered circumstances
 - Edit existing scenarios to adjust their descriptive content; rename them as the situation demands
 - Example additions: "The Road to Venice, 1924" when transitioning a tavern owner into a traveling merchant
+- **Archive** a scenario that has served its turn rather than deleting it: the **Archive** button beside each scenario's title draws a dust sheet over it. The scene stays here in the editor, wearing a small **Archived** badge and offering **Restore**, but it withdraws from the Starting Scenario drop-down wherever chats are begun — the new-chat form and the Salon's own picker alike — until somebody there ticks **Show archived**. Conversations already playing out in that scene are untouched, since the text was woven in at their creation. Marseille need not be forgotten; it need merely be put away.
 
 **First Message**
 
@@ -129,9 +144,8 @@ Each character carries a private vault in the Scriptorium — a small database-b
 | `physical-description.md` | The **Full Description** of the character's first (default) physical description |
 | `physical-prompts.json` | The **head-and-shoulders / short / medium / long / complete** prompts of the first (default) physical description (JSON with `headAndShoulders`, `short`, `medium`, `long`, `complete` keys) |
 | `Prompts/*.md` | The character's **System Prompts** — one file per named variant, with YAML frontmatter carrying `name` (required) and an optional `isDefault: true` |
-| `Scenarios/*.md` | The character's **Scenarios** — one file per scene, with the first `# heading` as the title and the body beneath as the context |
-| `Wardrobe/*.md` | The character's **Wardrobe Items** — one Markdown file per garment, with frontmatter carrying `title`, `types`, `appropriateness`, the `default` flag, and timestamps; the body beneath is the freeform description |
-| `Outfits/*.md` | The character's **Outfit Presets** — one Markdown file per ensemble, with frontmatter carrying `name` and the four-slot `slots` map (referenced by item slug, with raw UUIDs accepted as a fallback); the body beneath is whatever notes you care to keep |
+| `Scenarios/*.md` | The character's **Scenarios** — one file per scene, with the first `# heading` as the title and the body beneath as the context. An optional YAML frontmatter block above the heading may carry `description` and `archived: true`; both are omitted for an ordinary, in-circulation scene |
+| `Wardrobe/*.md` | The character's **Wardrobe Items** — one Markdown file per garment, with frontmatter carrying `title`, `types`, an optional `imagePrompt`, an optional `componentItems` list (for a composite ensemble), `appropriateness`, the `default` and `replace` flags, and timestamps; the body beneath is the freeform description |
 
 By default, every one of these is read from the character's database row — the ordinary state of affairs, in which the editor is the single source of truth. Flip the switch marked **Read this character's core fields from the Scriptorium vault** at the top of the Aurora edit page, however, and henceforth Quilltap will consult the vault for all of the above every time any part of the application reads your character — the roster on the home page, the system prompt for a chat, the image-generation pipeline's appearance prompts, the scene state tracker, the turn manager's talkativeness roll, all of it.
 
@@ -176,7 +190,13 @@ A few points of etiquette worth knowing:
 
 **A note on example dialogues.** An *empty* `example-dialogues.md` is a perfectly valid state — it means "no examples," and Quilltap treats it accordingly rather than falling back to the database. If you genuinely want the database value to show through, delete the file entirely; presence of the file (even at zero bytes) is what tells the overlay to take over.
 
-**A note on the wardrobe.** The character's wardrobe lives across two folders. `Wardrobe/` holds one Markdown file per item — frontmatter carries the `title`, the `types` list (one or more of `top`, `bottom`, `footwear`, `accessories`), an optional `appropriateness` tag, the `default` flag, and the timestamps; the body of the file is the freeform description, written however you please. `Outfits/` holds one Markdown file per saved preset — frontmatter carries the `name` and a four-slot `slots` map naming which item belongs in each slot, where each value is an item *slug* (the kebab-cased title, e.g. `top: blue-tweed-jacket`) and a raw UUID is accepted as a fallback for items the slug map can't find. Adding a new item, then, is as easy as dropping a fresh `.md` file into `Wardrobe/` with `title:` and `types:` in the frontmatter; the system fills in the `id` and timestamps on its next sync. Items marked with `archived: true` (or carrying a non-null `archivedAt`) are filtered out of the normal list the same way they are in the database. When the overlay is on, the Salon sidebar, the wardrobe tools the LLM reaches for, and every other consumer read their lists from these folders. The first time Quilltap boots after the folder format ships, a one-time sweep projects every existing character's wardrobe from the database into the new layout and tidies away the legacy `wardrobe.json` — so stale snapshots from earlier vault provisioning don't mislead anyone the moment the switch is flipped on.
+**A note on the wardrobe.** The whole of the character's wardrobe now keeps to a single folder, `Wardrobe/`, which holds one Markdown file per item — garments and grand ensembles alike. The frontmatter carries the `title`, the `types` list (one or more of `top`, `bottom`, `footwear`, `accessories`, `hair`), an optional `imagePrompt` (the Portrait Cue: a short, literal phrase whispered to the portraitist and the Lantern *in place of* the title, since the prose description below is written for human eyes and never reaches the easel), an optional `appropriateness` tag, the `default` flag, and the timestamps; the body of the file is the freeform description, written however you please. A `hair` item is a *hairdo* — a braid, an updo, a wig — and not the hair itself, whose colour and length belong to the physical description.
+
+A **composite** — an ensemble bundling other items, such as a "Rain Outfit" of raincoat, jeans, and boots — is an ordinary wardrobe file with one addition: a `componentItems` list naming its pieces, where each entry is an item *slug* (the kebab-cased title, e.g. `blue-tweed-jacket`) and a raw UUID is accepted as a fallback for pieces the slug map can't place. A composite may also carry `replace: true`, meaning that donning it first empties the slots it designates rather than layering atop what is already worn. Should you contrive a circular bundle — an ensemble that, by some route, contains itself — Quilltap declines to chase its own tail: the offending item's component list is emptied and a note goes to the log, though the item itself survives unharmed, your hand-edits being too precious to discard wholesale. A component naming something that isn't in the vault is likewise dropped from that one list, with a warning, and the rest of the bundle proceeds undisturbed.
+
+The old `Outfits/` folder of saved presets is **retired**. Composites do that work now, and Quilltap no longer reads that folder at all — any stale `Outfits/*.md` files still lying about are simply ignored, their former ensembles having been folded into composite items on your behalf.
+
+Adding a new item, then, is as easy as dropping a fresh `.md` file into `Wardrobe/` with `title:` and `types:` in the frontmatter; the system fills in the `id` and timestamps on its next sync. Items marked with `archived: true` (or carrying a non-null `archivedAt`) are filtered out of the normal list the same way they are in the database. When the overlay is on, the Salon sidebar, the wardrobe tools the LLM reaches for, and every other consumer read their lists from this folder. The first time Quilltap boots after the folder format ships, a one-time sweep projects every existing character's wardrobe from the database into the new layout and tidies away the legacy `wardrobe.json` — so stale snapshots from earlier vault provisioning don't mislead anyone the moment the switch is flipped on.
 
 **When to use it.** Reach for this switch when you would rather author your character's prose fields as plain Markdown — version-controlled in your own tooling, perhaps, or edited alongside the character's narrative notes — and have the rest of Quilltap treat those files as the current truth. Leave the switch off for the conventional editor-as-source-of-truth workflow, which remains the default and entirely sensible choice.
 
@@ -297,6 +317,7 @@ Physical descriptions help:
 
 - The prompt the avatar generator reaches for first, since an avatar is a head-and-shoulders crop
 - Describe only what such a crop reveals: face, hair, expression, neckline, and any visible upper attire — never the chest, waist, hips, legs, or other anatomy below the shoulders
+- **Hair, but not hairdressing.** Its colour, length, and texture belong here; a deliberate *style* — a braid, an updo, a wig — belongs in the wardrobe's [Hair slot](wardrobe.md) instead, so the character may put it up and take it down without you rewriting their person
 - Keeping it above the collar also keeps image-provider moderation from balking at a portrait it would otherwise refuse
 - Example: "Young woman, glossy jet-black wavy hair from a center part, deep brown almond eyes, warm wheatish skin, high cheekbones, a warm closed-lipped smile, pearl stud earrings, open collar of a deep-wine field shirt"
 
@@ -310,15 +331,16 @@ Physical descriptions help:
 
 - Balanced detail
 - Good for quick lookups
-- Example: "Tall woman with long dark red hair usually braided,
-sharp green eyes, pale skin. Wears practical leather clothing."
+- Example: "Tall woman with long dark red hair, sharp green eyes,
+pale skin. Wears practical leather clothing." (The braid she usually
+wears it in is a wardrobe Hair item, not part of her person.)
 
 **Long Description** (1 paragraph)
 
 - Detailed information
 - Good for image generation
-- Example: "Tall woman (5'9") with waist-length dark red hair
-usually worn in a complicated braid. Sharp green eyes, pale skin.
+- Example: "Tall woman (5'9") with waist-length dark red hair.
+Sharp green eyes, pale skin.
 Thin face with high cheekbones. Usually wears practical leather
 armor from her military days..."
 

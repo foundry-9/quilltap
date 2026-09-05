@@ -24,6 +24,9 @@ const { plugin: openaiPlugin } = require('../../../plugins/dist/qtap-plugin-open
 const { plugin: openrouterPlugin } = require('../../../plugins/dist/qtap-plugin-openrouter/index.js')
 const { plugin: deepseekPlugin } = require('../../../plugins/dist/qtap-plugin-deepseek/index.js')
 const { plugin: zaiPlugin } = require('../../../plugins/dist/qtap-plugin-z-ai/index.js')
+const { plugin: ollamaPlugin } = require('../../../plugins/dist/qtap-plugin-ollama/index.js')
+const { plugin: nanogptPlugin } = require('../../../plugins/dist/qtap-plugin-nanogpt/index.js')
+const { plugin: openaiCompatiblePlugin } = require('../../../plugins/dist/qtap-plugin-openai-compatible/index.js')
 
 describe('Provider options schemas', () => {
   it('Anthropic exposes an options schema', () => {
@@ -44,5 +47,19 @@ describe('Provider options schemas', () => {
 
   it('Z.AI exposes an options schema', () => {
     expect(zaiPlugin.getProviderOptionsSchema?.()).toMatchSnapshot()
+  })
+
+  it('Ollama exposes an options schema', () => {
+    expect(ollamaPlugin.getProviderOptionsSchema?.()).toMatchSnapshot()
+  })
+
+  it('NanoGPT exposes an options schema', () => {
+    expect(nanogptPlugin.getProviderOptionsSchema?.()).toMatchSnapshot()
+  })
+
+  // Added with the Bug 71 fix: this plugin had no schema at all, so every
+  // endpoint setting a local runtime accepts was unreachable from the editor.
+  it('OpenAI-compatible exposes an options schema', () => {
+    expect(openaiCompatiblePlugin.getProviderOptionsSchema?.()).toMatchSnapshot()
   })
 })

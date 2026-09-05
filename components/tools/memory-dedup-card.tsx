@@ -139,7 +139,7 @@ export function MemoryDedupCard() {
             step="0.01"
             value={threshold}
             onChange={(e) => setThreshold(parseFloat(e.target.value))}
-            className="w-full accent-primary"
+            className="qt-range w-full"
           />
           <div className="flex justify-between qt-text-xs mt-1">
             <span>0.70 (more aggressive)</span>

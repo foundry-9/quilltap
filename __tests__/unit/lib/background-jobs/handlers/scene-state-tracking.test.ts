@@ -9,10 +9,12 @@ import { hashEquippedSlots } from '@/lib/wardrobe/outfit-hash'
 
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
   resolveEquippedOutfitForCharacter: jest.fn().mockResolvedValue({
-    outfitValues: { top: [], bottom: [], footwear: [], accessories: [] },
-    leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [] },
+    outfitValues: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
+    leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
     itemsById: new Map(),
   }),
+  // What the real pipeline renders for the empty outfit mocked above.
+  describeEquippedOutfitTitleOnly: jest.fn().mockResolvedValue('- completely naked and unadorned\n'),
 }))
 
 jest.mock('@/lib/logging/create-logger', () => ({
@@ -29,6 +31,9 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
 jest.mock('@/lib/memory/cheap-llm-tasks', () => ({
   updateSceneState: jest.fn(),
   extractVisibleConversation: jest.fn().mockReturnValue([]),
+  // The real predicate: the handler must only fail the job for a *timeout*,
+  // and these suites' failures are ordinary ones (bug 107).
+  throwIfLostToTimeout: jest.requireActual('@/lib/memory/cheap-llm-tasks/core-execution').throwIfLostToTimeout,
 }))
 
 jest.mock('@/lib/services/system-events.service', () => ({
@@ -232,7 +237,7 @@ describe('handleSceneStateTracking', () => {
   // ─── 3b: Clothing hash-cache reuse / re-summarize ───────────────────────────
 
   it('reuses the cached clothing summary when the equipped-outfit hash is unchanged', async () => {
-    const slots = { top: ['t1'], bottom: [], footwear: [], accessories: [] }
+    const slots = { top: ['t1'], bottom: [], footwear: [], accessories: [], hair: [] }
     const matchingHash = hashEquippedSlots(slots)
 
     // Previous scene state holds a cached clothing line + the hash it came from.
@@ -270,8 +275,8 @@ describe('handleSceneStateTracking', () => {
   })
 
   it('takes the LLM clothing line and records a new hash when the wardrobe changed', async () => {
-    const cachedSlots = { top: ['t1'], bottom: [], footwear: [], accessories: [] }
-    const liveSlots = { top: ['t1', 't2'], bottom: [], footwear: [], accessories: [] }
+    const cachedSlots = { top: ['t1'], bottom: [], footwear: [], accessories: [], hair: [] }
+    const liveSlots = { top: ['t1', 't2'], bottom: [], footwear: [], accessories: [], hair: [] }
     const cachedHash = hashEquippedSlots(cachedSlots)
     const liveHash = hashEquippedSlots(liveSlots)
 
@@ -364,6 +369,20 @@ describe('handleSceneStateTracking', () => {
 
     await handleSceneStateTracking(job as any)
 
+    expect(repos.chats.update).not.toHaveBeenCalled()
+  })
+
+  it('fails the job when the pass was lost to a timeout rather than refused', async () => {
+    // Bug 107: returning here marked the job COMPLETED over a scene state that
+    // was never derived. Throwing hands it to `markFailed` — backed-off retry,
+    // then DEAD with the reason — which is the only way the loss is visible.
+    mockUpdateSceneState.mockResolvedValue({
+      success: false,
+      error: 'Request timed out.',
+      timedOut: true,
+    } as any)
+
+    await expect(handleSceneStateTracking(buildJob() as any)).rejects.toThrow(/scene-state-tracking/)
     expect(repos.chats.update).not.toHaveBeenCalled()
   })
 

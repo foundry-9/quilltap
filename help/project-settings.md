@@ -35,6 +35,8 @@ The most important setting — custom instructions that apply to all project cha
 
 **Maximum length:** 10,000 characters
 
+**A word on address.** The instructions are slipped into each character's own system prompt — the character is the one reading them — so write as though speaking to the character directly. Written as: *You are helping Charlie draft sermon material; cite chapter and verse.* A third-person memorandum ("The characters should help Charlie…") reads, to its recipient, like lore about somebody else.
+
 ### Effective Instructions
 
 **Be Specific:**
@@ -69,6 +71,13 @@ Character Guidelines:
 - All characters receive the instructions
 - Instructions persist across sessions
 - Updates apply to new messages immediately
+- One-off Carina consultations (`@Name:` / `@Name?`) in project chats carry them too
+- Help chats and the Brahma Console do not
+
+Instructions live in the stable part of each character's system prompt, so they
+are always in view — and providers can keep that portion of the prompt cached
+between turns. Groups have the very same arrangement for their members; see
+[Groups](groups.md).
 
 ## Tool Settings
 

@@ -8,23 +8,9 @@
 
 import { createContextParamsHandler, exists } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { z } from 'zod';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
-import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
-
-const updateWardrobeItemSchema = z.object({
-  title: z.string().min(1).optional(),
-  description: z.string().nullable().optional(),
-  /** Plain-text image-generation cue; preferred over title in image prompts. */
-  imagePrompt: z.string().nullable().optional(),
-  types: z.array(WardrobeItemTypeEnum).min(1).optional(),
-  appropriateness: z.string().nullable().optional(),
-  isDefault: z.boolean().optional(),
-  /** Replace this item's composite components (use `[]` to demote to a leaf). */
-  componentItemIds: z.array(z.string()).optional(),
-  /** Composite-only: clear the designated slots on equip instead of layering. */
-  replace: z.boolean().optional(),
-});
+import { updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
+import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
 
 // GET /api/v1/characters/[id]/wardrobe/[itemId]
 export const GET = createContextParamsHandler<{ id: string; itemId: string }>(
@@ -65,9 +51,17 @@ export const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
     }
 
     const body = await req.json();
-    const validatedData = updateWardrobeItemSchema.parse(body);
+    const { archived, ...fields } = updateWardrobeSchema.parse(body);
 
-    const item = await repos.wardrobe.update(itemId, validatedData, id);
+    // `archived` is a request-shaped boolean; the item stores a timestamp.
+    // Archiving is idempotent, so an already-archived item keeps its stamp.
+    const archivePatch = applyArchiveFlag(existing.archivedAt, archived);
+
+    const item = await repos.wardrobe.update(
+      itemId,
+      { ...fields, ...(archivePatch ?? {}) },
+      id,
+    );
 
     if (!item) {
       return notFound('Wardrobe item');
@@ -76,6 +70,7 @@ export const PUT = createContextParamsHandler<{ id: string; itemId: string }>(
     logger.info('[Wardrobe v1] Wardrobe item updated', {
       characterId: id,
       itemId,
+      ...(archivePatch !== null && { archivedAt: archivePatch.archivedAt }),
     });
 
     return successResponse({ wardrobeItem: item });
@@ -97,18 +92,7 @@ export const DELETE = createContextParamsHandler<{ id: string; itemId: string }>
         return notFound('Wardrobe item');
       }
 
-      // Clean up equipped references before deleting. Composite items that
-      // reference this item via `componentItemIds` are intentionally left as-is;
-      // expand-time resolution drops unknown ids without surfacing an error.
-      try {
-        await repos.chats.removeEquippedItemFromAllChats(itemId);
-      } catch (cleanupError) {
-        logger.warn('[Wardrobe v1] Cleanup of equipped references had issues, proceeding with delete', {
-          characterId: id,
-          itemId,
-          cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-        });
-      }
+      await cleanupEquippedRefs(repos.chats, itemId, '[Wardrobe v1]', { characterId: id, itemId });
 
       const success = await repos.wardrobe.delete(itemId, id);
 

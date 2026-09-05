@@ -7,7 +7,7 @@
  * Shows existing folders and allows creating new ones.
  */
 
-import { useState, useCallback } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
@@ -27,6 +27,11 @@ interface DbFolder {
   path: string
   name: string
 }
+
+/** Stable empty arrays, so the memo below isn't invalidated on every render. */
+const NO_FILES: Array<{ folderPath?: string }> = []
+const NO_FOLDERS: DbFolder[] = []
+const NO_PATHS: string[] = []
 
 interface FolderPickerProps {
   /** Current selected folder path */
@@ -50,7 +55,13 @@ export default function FolderPicker({
 }: Readonly<FolderPickerProps>) {
   const [newFolderInput, setNewFolderInput] = useState('')
   const [showNewFolderInput, setShowNewFolderInput] = useState(false)
-  const [folders, setFolders] = useState<FolderInfo[]>([])
+  // Folders created while the API was unreachable. Scoped to the project they
+  // were created under, so switching destinations drops them rather than
+  // offering a folder that belongs to somewhere else.
+  const [localFolders, setLocalFolders] = useState<{ projectId: string | null; paths: string[] }>({
+    projectId,
+    paths: [],
+  })
 
   // Fetch files and folders via TanStack Query. URLs are built inside the
   // queryFn from `projectId` so the key (which encodes projectId) stays the
@@ -73,33 +84,37 @@ export default function FolderPicker({
   })
 
   const loading = filesLoading || foldersLoading
-  const files = filesData?.files ?? []
-  const dbFolders = foldersData?.folders ?? []
+  const files = filesData?.files ?? NO_FILES
+  const dbFolders = foldersData?.folders ?? NO_FOLDERS
 
-  // Build folder list from fetched data (and keep folders state in sync)
-  // We must use useMemo to avoid re-creating this on every render
-  const builtFolders = (() => {
+  const localPaths = localFolders.projectId === projectId ? localFolders.paths : NO_PATHS
+
+  // Build the folder list from fetched data. This must be derived on every
+  // data change -- an earlier version cached it into state behind a
+  // "only if empty" guard, which latched the list to the bare Root entry
+  // produced by the first (still-loading) render and never let the real
+  // folders in.
+  const folders = useMemo<FolderInfo[]>(() => {
     const folderMap = new Map<string, FolderInfo>()
+    const countFiles = (path: string) => files.filter((f) => (f.folderPath || '/') === path).length
 
     // Always include root
     folderMap.set('/', {
       path: '/',
       name: 'Root',
       depth: 0,
-      fileCount: files.filter((f) => (f.folderPath || '/') === '/').length,
+      fileCount: countFiles('/'),
       isDbFolder: false,
     })
 
     // Add DB folders
     for (const dbFolder of dbFolders) {
-      const parts = dbFolder.path.split('/').filter(Boolean)
-      const depth = parts.length
-      const fileCount = files.filter((f) => (f.folderPath || '/') === dbFolder.path).length
+      const depth = dbFolder.path.split('/').filter(Boolean).length
       folderMap.set(dbFolder.path, {
         path: dbFolder.path,
         name: dbFolder.name,
         depth,
-        fileCount,
+        fileCount: countFiles(dbFolder.path),
         id: dbFolder.id,
         isDbFolder: true,
       })
@@ -111,9 +126,7 @@ export default function FolderPicker({
       if (!folderMap.has(path)) {
         const parts = path.split('/').filter(Boolean)
         const name = parts.length === 0 ? 'Root' : parts[parts.length - 1]
-        const depth = parts.length
-        const fileCount = files.filter((f) => (f.folderPath || '/') === path).length
-        folderMap.set(path, { path, name, depth, fileCount, isDbFolder: false })
+        folderMap.set(path, { path, name, depth: parts.length, fileCount: countFiles(path), isDbFolder: false })
       }
       // Also add parent paths
       const parts = path.split('/').filter(Boolean)
@@ -122,27 +135,27 @@ export default function FolderPicker({
         current = current === '/' ? `/${part}/` : `${current}${part}/`
         if (!folderMap.has(current)) {
           const depth = current.split('/').filter(Boolean).length
-          const fileCount = files.filter((f) => (f.folderPath || '/') === current).length
-          folderMap.set(current, { path: current, name: part, depth, fileCount, isDbFolder: false })
+          folderMap.set(current, { path: current, name: part, depth, fileCount: countFiles(current), isDbFolder: false })
         }
       }
     }
 
-    // Convert to sorted array
-    const result = Array.from(folderMap.values())
-      .sort((a, b) => a.path.localeCompare(b.path))
-
-    // Update state if not already updated
-    if (result.length > 0 && folders.length === 0) {
-      setFolders(result)
+    // Folders created locally after the create call failed
+    for (const path of localPaths) {
+      if (!folderMap.has(path)) {
+        const parts = path.split('/').filter(Boolean)
+        folderMap.set(path, {
+          path,
+          name: parts[parts.length - 1] ?? 'Folder',
+          depth: parts.length,
+          fileCount: 0,
+          isDbFolder: false,
+        })
+      }
     }
-    return result
-  })()
 
-  // Update folders state when data changes
-  const fetchFolders = useCallback(async () => {
-    await refetchFolders()
-  }, [refetchFolders])
+    return Array.from(folderMap.values()).sort((a, b) => a.path.localeCompare(b.path))
+  }, [files, dbFolders, localPaths])
 
   const handleCreateFolder = async () => {
     if (!newFolderInput.trim()) return
@@ -172,7 +185,7 @@ export default function FolderPicker({
       const folderPath = data.folder?.path || newPath
 
       // Refresh folder list to include the new folder
-      setFolders(builtFolders)
+      await refetchFolders()
 
       onChange(folderPath)
       setNewFolderInput('')
@@ -183,12 +196,12 @@ export default function FolderPicker({
         error: error instanceof Error ? error.message : String(error),
       })
       // Still add to local list as fallback
-      if (!folders.some(f => f.path === newPath)) {
-        const parts = newPath.split('/').filter(Boolean)
-        const name = parts[parts.length - 1]
-        const depth = parts.length
-        setFolders([...folders, { path: newPath, name, depth, fileCount: 0 }].sort((a, b) => a.path.localeCompare(b.path)))
-      }
+      setLocalFolders((prev) => {
+        const paths = prev.projectId === projectId ? prev.paths : []
+        return paths.includes(newPath)
+          ? { projectId, paths }
+          : { projectId, paths: [...paths, newPath] }
+      })
       onChange(newPath)
       setNewFolderInput('')
       setShowNewFolderInput(false)
@@ -209,7 +222,9 @@ export default function FolderPicker({
           ) : (
             folders.map((folder) => (
               <option key={folder.path} value={folder.path}>
-                {'  '.repeat(folder.depth)}
+                {/* Non-breaking spaces: an <option> collapses ordinary whitespace, so plain
+                    spaces left every depth looking identical. */}
+                {'\u00a0\u00a0'.repeat(Math.max(0, folder.depth - 1))}
                 {folder.depth > 0 ? '└ ' : ''}
                 {folder.name === 'Root' ? '/ (Root)' : folder.name}
                 {folder.fileCount > 0 && ` (${folder.fileCount} files)`}

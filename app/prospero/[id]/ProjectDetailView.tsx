@@ -10,8 +10,11 @@
  */
 
 import { useEffect, useState } from 'react'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useProjectDetail, useProjectChats, useProjectFiles, useProjectCardState, useProjectDocumentStores } from './hooks'
 import { useStoryBackground } from '@/hooks/useStoryBackground'
+import { useSubsystemInfo } from '@/components/providers/theme-provider'
+import { useReportWorkspaceBackdrop } from '@/components/workspace/workspace-backdrop'
 import {
   ProjectDetailHeader,
   FilesCard,
@@ -87,6 +90,14 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
     project?.backgroundDisplayMode !== 'theme' // Enable passive polling when backgrounds are enabled
   )
 
+  // Inside the workspace the per-view ::before layer is suppressed in favour of
+  // the one arbitrated backdrop, so the story background below only reaches the
+  // screen if this view reports it. The Prospero subsystem image is the
+  // fallback, matching what the list view behind us paints when the project
+  // asks for no background of its own ('theme' mode).
+  const { backgroundImage: prosperoBackgroundImage } = useSubsystemInfo('prospero')
+  useReportWorkspaceBackdrop(storyBackgroundUrl || prosperoBackgroundImage || null, false)
+
   useEffect(() => {
     fetchProject()
     fetchChats()
@@ -99,6 +110,19 @@ export function ProjectDetailView({ projectId, onBack }: ProjectDetailViewProps)
       .then(data => setImageProfiles(data?.profiles || []))
       .catch(() => {/* non-critical, selector will just be empty */})
   }, [projectId, fetchProject, fetchChats, fetchFiles, fetchLinkedStores, fetchAllStores])
+
+  // Navigating back to the containing workspace tab refreshes everything this
+  // page shows (fetchProject only flips `loading` on the very first load, so
+  // the page stays on screen during the refresh). While the header edit form
+  // is open, skip the project refetch — fetchProject resets editForm and would
+  // clobber in-progress typing.
+  useOnTabActivated(() => {
+    if (!isEditing) void fetchProject()
+    void fetchChats()
+    void fetchFiles()
+    void fetchLinkedStores()
+    void fetchAllStores()
+  })
 
   if (loading) {
     return (

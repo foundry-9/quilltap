@@ -17,6 +17,11 @@ import {
 } from './types';
 import { formatBytes } from '@/lib/utils/format-bytes';
 import type { QuilltapExport } from '@/lib/export/types';
+import {
+  PROMPT_FIELD_HINTS,
+  type PromptFieldHint,
+  type PromptFieldHintKey,
+} from '@/components/prompt-fields/field-hints';
 
 // ============================================================================
 // Step Indicator
@@ -235,7 +240,7 @@ function ConfigurationStep({
             className="qt-checkbox"
           />
           <div>
-            <span className="qt-text-default font-medium">Generate Memories</span>
+            <span className="qt-text font-medium">Generate Memories</span>
             <p className="qt-text-small qt-text-muted">
               Extract key facts and experiences as Commonplace Book memories
             </p>
@@ -250,7 +255,7 @@ function ConfigurationStep({
             className="qt-checkbox"
           />
           <div>
-            <span className="qt-text-default font-medium">Generate Example Chat</span>
+            <span className="qt-text font-medium">Generate Example Chat</span>
             <p className="qt-text-small qt-text-muted">
               Create a sample conversation demonstrating the character&apos;s voice
             </p>
@@ -329,7 +334,7 @@ function GenerationProgressStep({
                 {getStatusIcon(step.status)}
               </span>
               <div className="flex-1 min-w-0">
-                <span className={`qt-text-default ${step.status === 'pending' ? 'qt-text-muted' : ''}`}>
+                <span className={step.status === 'pending' ? 'qt-text-muted' : 'qt-text'}>
                   {STEP_DISPLAY_NAMES[stepName]}
                 </span>
                 {step.snippet && (
@@ -356,6 +361,33 @@ function GenerationProgressStep({
 // ============================================================================
 // Step 4: Review & Import
 // ============================================================================
+
+/**
+ * One generated prose passage, collapsed by default, with the shared voice
+ * hint (PROMPT_FIELD_HINTS) shown beside it so the reviewer can compare the
+ * generated text's form of address against the expected shape.
+ */
+function ReviewedFieldText({
+  label,
+  hint,
+  text,
+}: {
+  label: string;
+  hint?: PromptFieldHint;
+  text: string;
+}) {
+  return (
+    <details className="qt-bg-muted rounded-lg px-3 py-2">
+      <summary className="cursor-pointer qt-text-small font-medium">{label}</summary>
+      {hint?.example && (
+        <p className="text-xs qt-text-muted mt-1">
+          Written as: <em>{hint.example}</em>
+        </p>
+      )}
+      <p className="qt-text-small mt-2 whitespace-pre-wrap">{text}</p>
+    </details>
+  );
+}
 
 function ReviewStep({
   result,
@@ -385,14 +417,20 @@ function ReviewStep({
   const basics = stepResults.character_basics as {
     name?: string;
     title?: string;
+    identity?: string;
     description?: string;
+    manifesto?: string;
+    personality?: string;
+    scenario?: string;
   } | undefined;
 
   const memories = stepResults.memories as unknown[] | undefined;
   const chats = stepResults.chats as { title?: string; messages?: unknown[] } | undefined;
   const physDesc = stepResults.physical_descriptions as { shortPrompt?: string } | undefined;
   const pronouns = stepResults.pronouns as { subject?: string; object?: string; possessive?: string } | undefined;
-  const systemPrompts = stepResults.system_prompts as { name?: string }[] | undefined;
+  const aliases = stepResults.aliases as string[] | undefined;
+  const systemPrompts = stepResults.system_prompts as { name?: string; content?: string }[] | undefined;
+  const wardrobeItems = stepResults.wardrobe_items as { title?: string; components?: string[] }[] | undefined;
 
   const completedFields: string[] = [];
   const failedFields: string[] = [];
@@ -402,7 +440,8 @@ function ReviewStep({
     first_message: 'Dialogue',
     system_prompts: 'System Prompts',
     physical_descriptions: 'Appearance',
-    pronouns: 'Pronouns',
+    wardrobe_items: 'Wardrobe',
+    pronouns: 'Pronouns & Aliases',
     memories: 'Memories',
     chats: 'Example Chat',
   };
@@ -415,12 +454,28 @@ function ReviewStep({
     }
   }
 
+  // Prose passages worth a voice check before importing, each paired with its
+  // shared hint so a wrong form of address is easy to spot.
+  const proseCandidates: { hintKey: PromptFieldHintKey; text?: string }[] = [
+    { hintKey: 'identity', text: basics?.identity },
+    { hintKey: 'description', text: basics?.description },
+    { hintKey: 'manifesto', text: basics?.manifesto },
+    { hintKey: 'personality', text: basics?.personality },
+    { hintKey: 'scenario', text: basics?.scenario },
+  ];
+  const reviewedProse = proseCandidates.filter(
+    (f): f is { hintKey: PromptFieldHintKey; text: string } => !!f.text
+  );
+  const reviewedSystemPrompts = (systemPrompts ?? []).filter(
+    (p): p is { name?: string; content: string } => !!p.content
+  );
+
   if (importResult?.success) {
     return (
       <div className="space-y-4">
         <div className="qt-bg-success/10 border qt-border-success/30 rounded-lg p-4">
           <h3 className="qt-heading-3 qt-text-success mb-2">Import Successful!</h3>
-          <p className="qt-text-default">
+          <p className="qt-text">
             <strong>{basics?.name}</strong> has been imported successfully.
             {importResult.importedCount > 1 && ` (${importResult.importedCount} entities imported)`}
           </p>
@@ -455,17 +510,22 @@ function ReviewStep({
       <div>
         <h3 className="qt-heading-3 mb-2">Character Summary</h3>
         <div className="qt-bg-muted rounded-lg p-4 space-y-2">
-          <p className="qt-text-default">
+          <p className="qt-text">
             <strong>Name:</strong> {basics?.name || 'Unknown'}
           </p>
           {basics?.title && (
-            <p className="qt-text-default">
+            <p className="qt-text">
               <strong>Title:</strong> {basics.title}
             </p>
           )}
           {pronouns && (
-            <p className="qt-text-default">
+            <p className="qt-text">
               <strong>Pronouns:</strong> {pronouns.subject}/{pronouns.object}/{pronouns.possessive}
+            </p>
+          )}
+          {aliases && aliases.length > 0 && (
+            <p className="qt-text">
+              <strong>Aliases:</strong> {aliases.join(', ')}
             </p>
           )}
           {basics?.description && (
@@ -477,6 +537,35 @@ function ReviewStep({
           )}
         </div>
       </div>
+
+      {/* Generated wording, with voice hints for review */}
+      {(reviewedProse.length > 0 || reviewedSystemPrompts.length > 0) && (
+        <div>
+          <h3 className="qt-heading-3 mb-2">Generated Wording</h3>
+          <p className="qt-text-small qt-text-muted mb-2">
+            Cast an eye over each passage before importing — the line beneath each
+            title shows the form of address the field expects.
+          </p>
+          <div className="space-y-2">
+            {reviewedProse.map(({ hintKey, text }) => (
+              <ReviewedFieldText
+                key={hintKey}
+                label={PROMPT_FIELD_HINTS[hintKey].label}
+                hint={PROMPT_FIELD_HINTS[hintKey]}
+                text={text}
+              />
+            ))}
+            {reviewedSystemPrompts.map((p, idx) => (
+              <ReviewedFieldText
+                key={`system-prompt-${idx}`}
+                label={p.name ? `System Prompt: ${p.name}` : 'System Prompt'}
+                hint={PROMPT_FIELD_HINTS.systemPrompt}
+                text={p.content}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Completion Matrix */}
       <div>
@@ -499,6 +588,15 @@ function ReviewStep({
       <div className="flex gap-4 qt-text-small">
         {physDesc && <span className="qt-text-muted">Physical descriptions: 5 variants</span>}
         {systemPrompts && <span className="qt-text-muted">System prompts: {systemPrompts.length}</span>}
+        {wardrobeItems && wardrobeItems.length > 0 && (
+          <span className="qt-text-muted">
+            Wardrobe: {wardrobeItems.length} item(s)
+            {(() => {
+              const outfits = wardrobeItems.filter((i) => i.components && i.components.length > 0).length;
+              return outfits > 0 ? `, ${outfits} outfit(s)` : '';
+            })()}
+          </span>
+        )}
         {memories && <span className="qt-text-muted">Memories: {memories.length}</span>}
         {chats?.messages && <span className="qt-text-muted">Chat messages: {chats.messages.length}</span>}
       </div>

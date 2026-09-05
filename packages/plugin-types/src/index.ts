@@ -29,6 +29,7 @@ export type {
   ImageProvider,
   ImageOrientation,
   ImageGenParams,
+  ImageLoraSpec,
   GeneratedImage,
   ImageGenResponse,
 
@@ -102,9 +103,11 @@ export type {
   ProviderCapabilities,
   AttachmentSupport,
   ModelInfo,
+  ThinkingTurnRule,
   EmbeddingModelInfo,
   ImageGenerationModelInfo,
   ImageStyleInfo,
+  ImageLoraSupport,
   ImageProviderConstraints,
   OrientationStrategy,
   OrientationMapping,
@@ -250,4 +253,4 @@ export { createConsoleLogger, createNoopLogger } from './common/logger';
  * Version of the plugin-types package.
  * Can be used at runtime to check compatibility.
  */
-export const PLUGIN_TYPES_VERSION = '2.5.6';
+export const PLUGIN_TYPES_VERSION = '2.6.0';

@@ -565,7 +565,7 @@ function GalleryPanel({
     return <p className="qt-text-secondary py-8 text-center">Loading your gallery…</p>
   }
   if (error) {
-    return <p className="qt-text-error py-8 text-center">Couldn&rsquo;t load gallery: {String(error)}</p>
+    return <p className="qt-text-destructive py-8 text-center">Couldn&rsquo;t load gallery: {String(error)}</p>
   }
   if (entries.length === 0) {
     return (

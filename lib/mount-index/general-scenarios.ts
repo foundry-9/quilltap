@@ -63,14 +63,17 @@ export async function ensureGeneralScenariosFolder(): Promise<{
 
 /**
  * List all general `Scenarios/*.md`. Returns an empty result when the mount
- * is not yet provisioned (no error).
+ * is not yet provisioned (no error). Archived scenarios are omitted unless
+ * `options.includeArchived` is true.
  */
-export async function listGeneralScenarios(): Promise<ListGeneralScenariosResult> {
+export async function listGeneralScenarios(
+  options: { includeArchived?: boolean } = {},
+): Promise<ListGeneralScenariosResult> {
   const mountPointId = await getGeneralMountPointId();
   if (!mountPointId) {
     return { mountPointId: null, scenarios: [], warnings: [] };
   }
-  const result = await listScenariosInFolder(mountPointId, GENERAL_SCENARIOS_FOLDER);
+  const result = await listScenariosInFolder(mountPointId, GENERAL_SCENARIOS_FOLDER, options);
   return { mountPointId, ...result };
 }
 

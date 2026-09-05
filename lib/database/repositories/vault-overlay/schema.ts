@@ -17,7 +17,12 @@ import {
   WardrobeItemSchema,
   type WardrobeItem,
 } from '@/lib/schemas/wardrobe.types';
-import { CHARACTER_WARDROBE_FOLDER } from '@/lib/mount-index/character-vault';
+import {
+  CHARACTER_WARDROBE_FOLDER,
+  WARDROBE_INSTRUCTIONS_FILENAME,
+  WARDROBE_INSTRUCTIONS_PATH,
+  isWardrobeInstructionsFileName,
+} from '@/lib/mount-index/character-vault';
 
 // Mirrors the nullability of the underlying Character schema so that a vault
 // whose properties.json carries null `title` / `firstMessage` (the normal
@@ -107,7 +112,12 @@ export const CHARACTER_WARDROBE_JSON_PATH = 'wardrobe.json';
 
 export const CHARACTER_PROMPTS_FOLDER = 'Prompts';
 export const CHARACTER_SCENARIOS_FOLDER = 'Scenarios';
-export { CHARACTER_WARDROBE_FOLDER };
+export {
+  CHARACTER_WARDROBE_FOLDER,
+  WARDROBE_INSTRUCTIONS_FILENAME,
+  WARDROBE_INSTRUCTIONS_PATH,
+  isWardrobeInstructionsFileName,
+};
 
 export const SINGLE_FILE_OVERLAY_PATHS = [
   CHARACTER_PROPERTIES_JSON_PATH,

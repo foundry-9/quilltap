@@ -84,7 +84,7 @@ export function AboutView() {
             />
           </a>
           <a
-            href="https://discord.gg/6enCeQxY"
+            href="https://discord.gg/fnTPEZDE4"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -118,9 +118,10 @@ export function AboutView() {
           Brahma (the Console, a character-less generic-LLM surface), and The Foundry (architecture) &mdash; all extensible through a plugin system.
         </p>
         <p className="qt-text-primary">
-          <BrandName /> runs as a native desktop application on macOS and Windows, powered by a lightweight
-          Linux VM behind the scenes. You can also run it via Docker or directly from source, should you
-          prefer to take the scenic route. No subscriptions, no data harvested, no landlords.
+          <BrandName /> runs as a native desktop application on macOS, Windows, and Linux. For those who
+          would rather their assistant conducted its business behind a locked door, there is Docker &mdash;
+          or you may run it directly from source, should you prefer to take the scenic route.
+          No subscriptions, no data harvested, no landlords.
         </p>
       </div>
 
@@ -130,11 +131,11 @@ export function AboutView() {
         <ul className="space-y-2 qt-text-primary">
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Native desktop app</strong> &ndash; macOS (Lima/VZ) and Windows (WSL2) installers with branded splash screen, data directory management, and automatic VM lifecycle</span>
+            <span><strong>Native desktop app</strong> &ndash; macOS, Windows, and Linux installers with branded splash screen, data directory management, and managed updates, fronting the back end of your choosing: Direct (the server inside Electron), Docker, or Remote (any Quilltap URL that will have you)</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Docker runtime</strong> &ndash; toggle between VM and Docker from the splash screen, or run standalone via Docker Hub, with filesystem document stores bound through to the container</span>
+            <span><strong>Docker runtime</strong> &ndash; the sandboxed option: chosen from the splash screen or run standalone via Docker Hub, with filesystem document stores bound through to the container</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -158,11 +159,11 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Lantern &ndash; Story Backgrounds</strong> &ndash; AI-generated atmospheric background images derived from chat context</span>
+            <span><strong>The Lantern &ndash; Story Backgrounds</strong> &ndash; AI-generated atmospheric background images derived from chat context, with LoRA adapters and per-model options taken from the provider&apos;s own advertised capabilities</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>The Concierge &ndash; Alternative Content Provision and Routing</strong> &ndash; content classification with detection, auto-routing to uncensored providers, and quick-hide integration</span>
+            <span><strong>The Concierge &ndash; Alternative Content Provision and Routing</strong> &ndash; content classification with detection, auto-routing to uncensored providers, quick-hide integration, and a four-state per-chat control (Monitored, Flagged, Vouched Safe, Uncensored) settable at creation as well as mid-conversation</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -214,11 +215,15 @@ export function AboutView() {
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
-            <span><strong>Multi-provider support</strong> &ndash; Anthropic, OpenAI, Google Gemini, Grok, Ollama, OpenRouter, and OpenAI-compatible APIs</span>
+            <span><strong>Multi-provider support</strong> &ndash; Anthropic, OpenAI, Google Gemini, Grok, DeepSeek, Z.AI, NanoGPT, Ollama, OpenRouter, and OpenAI-compatible APIs, each profile able to name an understudy to take the call when its provider falls over</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
             <span><strong>LLM tools</strong> &ndash; web search, image generation, file management, agent mode, MCP connector, custom tool plugins</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-primary mt-1">&#8226;</span>
+            <span><strong>Live interface</strong> &ndash; a single multiplexed socket tells every open tab the moment something changes &mdash; queued errands, autonomous rooms, generated backdrops &mdash; so screens refresh themselves rather than asking again every few seconds, and every &ldquo;4m ago&rdquo; in the house turns over on the same tick</span>
           </li>
           <li className="flex items-start gap-2">
             <span className="text-primary mt-1">&#8226;</span>
@@ -267,12 +272,6 @@ export function AboutView() {
           </div>
           <div>
             <span className="font-medium">Validation:</span> Zod
-          </div>
-          <div>
-            <span className="font-medium">macOS VM:</span> Lima / VZ
-          </div>
-          <div>
-            <span className="font-medium">Windows VM:</span> WSL2
           </div>
           <div>
             <span className="font-medium">Containers:</span> Docker
@@ -378,7 +377,7 @@ export function AboutView() {
           <p><span className="font-medium">Markdown &amp; Documents:</span> unified, remark-parse, remark-gfm, remark-math, remark-rehype, rehype-stringify, rehype-highlight, rehype-katex, KaTeX, react-markdown, react-syntax-highlighter, mammoth, pdf-parse, PDF.js, yaml, MessagePack</p>
           <p><span className="font-medium">UI &amp; Interaction:</span> Tailwind CSS, dnd-kit, @tanstack/react-virtual, @svar-ui/react-filemanager, sharp, Lucide Icons</p>
           <p><span className="font-medium">Filesystem &amp; Archives:</span> chokidar, tar, yauzl, semver</p>
-          <p><span className="font-medium">Desktop &amp; Infrastructure:</span> Electron, Lima, Docker</p>
+          <p><span className="font-medium">Desktop &amp; Infrastructure:</span> Electron, Docker</p>
           <p><span className="font-medium">Testing:</span> Jest, Playwright, Storybook, Testing Library</p>
         </div>
         <p className="qt-text-muted text-sm mt-4">

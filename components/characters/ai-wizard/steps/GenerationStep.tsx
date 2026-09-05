@@ -13,6 +13,8 @@ import { QtapLink } from '@/components/qtap/QtapLink'
 import { isQtapUri } from '@/lib/doc-edit/qtap-uri'
 import type { GeneratableField, GenerationProgress, GeneratedCharacterData } from '../types'
 import { FIELD_LABELS, normalizeGeneratedScenarios } from '../types'
+import { FIELD_HINT_KEYS, PROMPT_FIELD_HINTS, type PromptFieldHint } from '@/components/prompt-fields/field-hints'
+import { PromptFieldExample } from '@/components/prompt-fields/PromptFieldLabel'
 
 interface GenerationStepProps {
   generating: boolean
@@ -57,7 +59,36 @@ export function GenerationStep({
       return null
     }
 
-    const value = generatedData[field as keyof Omit<GeneratedCharacterData, 'scenarios' | 'physicalDescription'>]
+    if (field === 'wardrobeItems') {
+      const items = generatedData.wardrobeItems
+      if (items && items.length > 0) {
+        return items
+          .map((item) => {
+            const outfit = item.components && item.components.length > 0 ? ' (outfit)' : ''
+            const isDefault = item.isDefault ? ' [default]' : ''
+            return `${item.title}${outfit}${isDefault} — ${item.types.join(', ')}`
+          })
+          .join('\n')
+      }
+      return null
+    }
+
+    if (field === 'properties') {
+      const props = generatedData.properties
+      if (props) {
+        const parts: string[] = []
+        if (props.pronouns) {
+          parts.push(`Pronouns: ${props.pronouns.subject}/${props.pronouns.object}/${props.pronouns.possessive}`)
+        }
+        if (props.aliases.length > 0) {
+          parts.push(`Aliases: ${props.aliases.join(', ')}`)
+        }
+        return parts.length > 0 ? parts.join('\n') : 'No pronouns or aliases derivable'
+      }
+      return null
+    }
+
+    const value = generatedData[field as keyof Omit<GeneratedCharacterData, 'scenarios' | 'physicalDescription' | 'wardrobeItems' | 'properties'>]
     return typeof value === 'string' ? value || null : null
   }
 
@@ -302,6 +333,11 @@ export function GenerationStep({
           const content = getFieldContent(field)
           const hasError = !!progress.errors[field]
           const isExpanded = expandedField === field
+          // Shared voice hint (see PROMPT_FIELD_HINTS) so the reviewer can
+          // compare the generated text's form of address against the expected shape.
+          const hintKey = FIELD_HINT_KEYS[field]
+          const hint: PromptFieldHint | undefined = hintKey ? PROMPT_FIELD_HINTS[hintKey] : undefined
+          const voiceExample = hint?.example
 
           return (
             <div
@@ -339,7 +375,10 @@ export function GenerationStep({
                   {hasError ? (
                     <p className="text-sm qt-text-destructive">{progress.errors[field]}</p>
                   ) : content ? (
-                    renderFieldPreview(field)
+                    <>
+                      {voiceExample && <PromptFieldExample example={voiceExample} />}
+                      {renderFieldPreview(field)}
+                    </>
                   ) : (
                     <p className="text-sm qt-text-secondary">No content generated</p>
                   )}

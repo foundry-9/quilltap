@@ -27,6 +27,14 @@ const note: React.CSSProperties = {
 export const Surfaces: React.FC = () => {
   return (
     <div style={{ padding: '1.5rem' }}>
+      {/* Story-local: the app pairs the hover foregrounds with Tailwind's
+          hover:bg-* fills, which don't exist here. Demo fills only — these are
+          not qt-* utilities and must not be copied into an app or a theme. */}
+      <style>{`
+        .surfaces-demo-fill-primary:hover { background-color: var(--color-primary); }
+        .surfaces-demo-fill-success:hover { background-color: var(--color-success); }
+        .surfaces-demo-fill-destructive:hover { background-color: var(--color-destructive); }
+      `}</style>
       <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>Surfaces</h2>
       <p style={{ ...note, maxWidth: '44rem' }}>
         How accent-coloured surfaces stay legible no matter how bold a theme makes
@@ -54,6 +62,50 @@ export const Surfaces: React.FC = () => {
           <kbd className="qt-bg-accent qt-text-on-accent" style={{ padding: '0.125rem 0.375rem', borderRadius: '0.25rem', fontSize: '0.75rem' }}>
             ↵
           </kbd>
+        </div>
+      </section>
+
+      {/* Foregrounds on filled surfaces */}
+      <section style={{ marginBottom: '2rem' }}>
+        <h3 style={sectionHeading}>Foregrounds on filled surfaces — the <code>qt-text-on-*</code> family</h3>
+        <p style={note}>
+          The same contract, extended to every filled surface the app paints:{' '}
+          <code>qt-text-on-accent</code>, <code>qt-text-on-primary</code>,{' '}
+          <code>qt-text-on-success</code>, and <code>qt-text-on-destructive</code>, each
+          mapping to the theme&apos;s matching <code>*Foreground</code> token. Note the
+          naming — <code>-on-<em>fill</em></code>, never <code>-<em>fill</em>-foreground</code>,
+          which is the Tailwind spelling and is not a <code>qt-</code> class at all.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+          <span className="qt-bg-accent qt-text-on-accent" style={{ padding: '0.25rem 0.625rem', borderRadius: '0.375rem', fontSize: '0.8125rem', fontWeight: 600 }}>
+            on accent
+          </span>
+          <span className="qt-bg-primary qt-text-on-primary" style={{ padding: '0.25rem 0.625rem', borderRadius: '0.375rem', fontSize: '0.8125rem', fontWeight: 600 }}>
+            on primary
+          </span>
+          <span className="qt-bg-success qt-text-on-success" style={{ padding: '0.25rem 0.625rem', borderRadius: '0.375rem', fontSize: '0.8125rem', fontWeight: 600 }}>
+            on success
+          </span>
+          <span className="qt-bg-destructive qt-text-on-destructive" style={{ padding: '0.25rem 0.625rem', borderRadius: '0.375rem', fontSize: '0.8125rem', fontWeight: 600 }}>
+            on destructive
+          </span>
+        </div>
+        <p style={{ ...note, marginTop: '1rem' }}>
+          Each has a hover partner for controls that stay quiet at rest and take the fill
+          on hover. Tailwind generates no variants for these classes, so the hover forms
+          are written out by hand — reach for one that was never written and it is simply
+          inert. Hover the buttons below.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center' }}>
+          <button className="qt-bg-card qt-text-secondary surfaces-demo-fill-primary hover:qt-text-on-primary" style={{ padding: '0.25rem 0.625rem', borderRadius: '0.375rem', fontSize: '0.8125rem', fontWeight: 600, border: '1px solid var(--color-border)', cursor: 'pointer' }}>
+            hover:qt-text-on-primary
+          </button>
+          <button className="qt-bg-card qt-text-secondary surfaces-demo-fill-success hover:qt-text-on-success" style={{ padding: '0.25rem 0.625rem', borderRadius: '0.375rem', fontSize: '0.8125rem', fontWeight: 600, border: '1px solid var(--color-border)', cursor: 'pointer' }}>
+            hover:qt-text-on-success
+          </button>
+          <button className="qt-bg-card qt-text-secondary surfaces-demo-fill-destructive hover:qt-text-on-destructive" style={{ padding: '0.25rem 0.625rem', borderRadius: '0.375rem', fontSize: '0.8125rem', fontWeight: 600, border: '1px solid var(--color-border)', cursor: 'pointer' }}>
+            hover:qt-text-on-destructive
+          </button>
         </div>
       </section>
 

@@ -13,7 +13,16 @@
  * @module components/workspace/workspace-tab-context
  */
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 
 // ---------------------------------------------------------------------------
 // Which tab am I?
@@ -33,6 +42,65 @@ export function WorkspaceTabProvider({ tabId, children }: { tabId: string; child
 /** The current tab's id, or `null` when rendered outside the workspace (legacy route). */
 export function useWorkspaceTabId(): string | null {
   return useContext(WorkspaceTabContext)?.tabId ?? null
+}
+
+// ---------------------------------------------------------------------------
+// Tab visibility + re-activation
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the containing tab is its pane's active (visible) tab. `null` means
+ * "not inside the workspace" (legacy full-page routes), where a view is always
+ * effectively visible.
+ */
+const WorkspaceTabVisibilityContext = createContext<boolean | null>(null)
+
+export function WorkspaceTabVisibilityProvider({
+  visible,
+  children,
+}: {
+  visible: boolean
+  children: ReactNode
+}) {
+  return (
+    <WorkspaceTabVisibilityContext.Provider value={visible}>
+      {children}
+    </WorkspaceTabVisibilityContext.Provider>
+  )
+}
+
+/**
+ * Whether the containing workspace tab is currently the visible tab of its
+ * pane. `true` outside the workspace (a full-page route is always visible).
+ */
+export function useWorkspaceTabVisible(): boolean {
+  return useContext(WorkspaceTabVisibilityContext) ?? true
+}
+
+/**
+ * Runs `callback` each time the containing workspace tab is **re-activated** —
+ * a hidden→visible transition, i.e. the user navigated away and came back.
+ *
+ * Views use this to refresh their data sources so a kept-alive (never
+ * unmounted) tab doesn't show the world as it stood when the user left.
+ * Deliberately does NOT fire on the initial mount (the view's own on-mount
+ * fetch covers that) and never fires outside the workspace.
+ *
+ * The latest `callback` is always the one invoked — callers don't need to
+ * memoize it.
+ */
+export function useOnTabActivated(callback: () => void): void {
+  const visible = useContext(WorkspaceTabVisibilityContext)
+  const callbackRef = useRef(callback)
+  useEffect(() => {
+    callbackRef.current = callback
+  })
+  const prevVisibleRef = useRef(visible)
+  useEffect(() => {
+    const prev = prevVisibleRef.current
+    prevVisibleRef.current = visible
+    if (visible === true && prev === false) callbackRef.current()
+  }, [visible])
 }
 
 // ---------------------------------------------------------------------------

@@ -3,27 +3,60 @@
 /**
  * Queue Status Badges
  *
- * Displays a compact badge group in the page toolbar showing active job counts
- * for each background queue: memory, embedding, summarization, danger
- * classification, and story background generation.
+ * The compact chip group in the page toolbar — "Mem", "Emb", "Sum", "Dgr",
+ * "Img" — reporting how much work of each kind is in flight right now.
  *
- * Polling is event-driven:
- * - Starts on route change (page navigation)
- * - Starts when notifyQueueChange() is called (job enqueued)
- * - Stops automatically when all counts reach zero
+ * What a chip counts is defined once, server-side and client-side alike, in
+ * `lib/background-jobs/activity-kinds`: active `background_jobs` rows mapped to
+ * their kind, plus non-job work registered with the activity registry (the
+ * inline image tool, the Concierge classifier, live embedding calls). A chip is
+ * lit for the entire span of the work it names, from the first token of prompt
+ * crafting through to the result landing.
+ *
+ * How the counts arrive:
+ * - **Push, normally.** The server publishes a `jobs` hint from every queue
+ *   chokepoint — enqueue, claim, complete, fail, cancel, and both edges of an
+ *   activity span — and the realtime provider invalidates this query. The bus
+ *   coalesces, so a thousand-job reindex is a stream of hints the chips can
+ *   actually keep up with.
+ * - **Polling, as the fallback.** While the socket is down the original
+ *   adaptive heartbeat comes back: a fast tick while something is in flight, a
+ *   slow one while everything is idle. A dropped connection costs latency, not
+ *   correctness.
+ * - `notifyQueueChange()` remains as an instant same-tab kick after a
+ *   known-enqueuing action, but nothing depends on it any more.
+ *
+ * Work that starts and finishes between two reads would otherwise be invisible,
+ * so the API also returns a monotonic `startedByKind` counter; a chip that has
+ * advanced since the previous read pulses even if its live count is back to
+ * zero. That stays exactly as it was — it is the missed-event insurance this
+ * design wants, push or no push.
  *
  * @module components/layout/queue-status-badges
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { usePathname } from 'next/navigation'
+import { useEffect, useRef, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useRealtimeConnected } from '@/hooks/useRealtime'
+import {
+  ACTIVITY_CHIPS,
+  ACTIVITY_KINDS,
+  emptyActivityCounts,
+  type ActivityKind,
+} from '@/lib/background-jobs/activity-kinds'
 
 /** Custom event name for queue change notifications */
 const QUEUE_CHANGE_EVENT = 'quilltap:queue-change'
 
 /**
- * Notify the queue status badges that jobs have been enqueued.
- * Call this from any client-side code after an action that creates background jobs.
+ * Nudge the toolbar chips to re-read immediately.
+ *
+ * Optional — the chips are pushed to by the server and fall back to their own
+ * heartbeat, and will notice the work regardless. Call this after an action you
+ * know enqueues something, purely so the chip lights within this tab's next
+ * frame instead of within a round trip.
  */
 export function notifyQueueChange() {
   if (typeof window !== 'undefined') {
@@ -31,176 +64,163 @@ export function notifyQueueChange() {
   }
 }
 
-/**
- * Queue types we display and their corresponding job type keys
- */
-const QUEUE_TYPES = [
-  {
-    key: 'memory',
-    label: 'Mem',
-    title: 'Memory extraction queue',
-    jobTypes: ['MEMORY_EXTRACTION', 'INTER_CHARACTER_MEMORY', 'MEMORY_REGENERATE_CHAT', 'MEMORY_REGENERATE_ALL'],
-    badgeClass: 'qt-queue-badge-memory',
-  },
-  {
-    key: 'embedding',
-    label: 'Emb',
-    title: 'Embedding queue',
-    jobTypes: ['EMBEDDING_GENERATE', 'EMBEDDING_REFIT', 'EMBEDDING_REINDEX_ALL'],
-    badgeClass: 'qt-queue-badge-embedding',
-  },
-  {
-    key: 'summary',
-    label: 'Sum',
-    title: 'Post-turn processing queue (summaries, titles, scene state, rendering)',
-    jobTypes: ['CONTEXT_SUMMARY', 'TITLE_UPDATE', 'SCENE_STATE_TRACKING', 'CONVERSATION_RENDER', 'REGENERATE_CONVERSATION_SUMMARIES'],
-    badgeClass: 'qt-queue-badge-summary',
-  },
-  {
-    key: 'danger',
-    label: 'Dgr',
-    title: 'Danger classification queue',
-    jobTypes: ['CHAT_DANGER_CLASSIFICATION'],
-    badgeClass: 'qt-queue-badge-danger',
-  },
-  {
-    key: 'story',
-    label: 'Img',
-    title: 'Image generation queue (story backgrounds, character avatars)',
-    jobTypes: ['STORY_BACKGROUND_GENERATION', 'CHARACTER_AVATAR_GENERATION'],
-    badgeClass: 'qt-queue-badge-story',
-  },
-] as const
+/** Fallback poll cadence while something is in flight. */
+const ACTIVE_POLL_INTERVAL = 1_500
+/** Fallback poll cadence while everything is idle. */
+const IDLE_POLL_INTERVAL = 8_000
+/** How long a chip keeps pulsing after between-read work is detected. */
+const PULSE_DURATION = 1_200
 
-/** Polling interval in milliseconds */
-const POLL_INTERVAL = 5000
+type Counts = Record<ActivityKind, number>
 
-/**
- * Check if any queue has active jobs
- */
-function hasActiveJobs(activeByType: Record<string, number>): boolean {
-  return Object.values(activeByType).some((count) => count > 0)
+interface ActivityResponse {
+  activeByKind?: unknown
+  startedByKind?: unknown
+}
+
+function coerceCounts(raw: unknown): Counts {
+  const out = emptyActivityCounts()
+  if (!raw || typeof raw !== 'object') return out
+  for (const kind of ACTIVITY_KINDS) {
+    const value = (raw as Record<string, unknown>)[kind]
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      out[kind] = value
+    }
+  }
+  return out
+}
+
+function hasActivity(counts: Counts): boolean {
+  return ACTIVITY_KINDS.some((kind) => counts[kind] > 0)
 }
 
 /**
- * Hook to poll queue status from the API, driven by route changes and custom events.
- * Starts polling on trigger, stops when all counts reach zero.
+ * Read the activity snapshot — pushed while the socket is up, polled on the
+ * old adaptive cadence while it is down — and report both live counts and the
+ * kinds that blipped between reads.
  */
-function useQueueStatus() {
-  const [activeByType, setActiveByType] = useState<Record<string, number>>({})
-  const mountedRef = useRef(true)
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const pathname = usePathname()
-  const pathnameRef = useRef(pathname)
+function useActivitySnapshot(): { counts: Counts; pulsing: Set<ActivityKind> } {
+  const queryClient = useQueryClient()
+  const [pulsing, setPulsing] = useState<Set<ActivityKind>>(() => new Set())
+  const previousStartedRef = useRef<Counts | null>(null)
+  const pulseTimersRef = useRef(new Map<ActivityKind, ReturnType<typeof setTimeout>>())
 
-  const stopPolling = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-  }, [])
+  const connected = useRealtimeConnected()
 
-  const fetchStatus = useCallback(async (): Promise<Record<string, number>> => {
-    try {
-      const res = await fetch('/api/v1/system/jobs', {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
-      })
+  const { data } = useQuery({
+    queryKey: queryKeys.system.jobs,
+    queryFn: ({ signal }) =>
+      apiFetch<ActivityResponse>('/api/v1/system/jobs', { signal, cache: 'no-store' }),
+    // Counts are a live readout; a cached one is worse than none.
+    staleTime: 0,
+    // The old adaptive heartbeat, kept whole but gated. Reading the cadence off
+    // the query's own last response is what lets it stay adaptive without a
+    // second timer racing the first.
+    refetchInterval: connected
+      ? false
+      : (query) =>
+          hasActivity(coerceCounts(query.state.data?.activeByKind))
+            ? ACTIVE_POLL_INTERVAL
+            : IDLE_POLL_INTERVAL,
+    // Keep the last good snapshot on a transient error rather than blanking
+    // every chip, matching the old fetch-returns-null behaviour.
+    retry: false,
+  })
 
-      if (!res.ok) {
-        return {}
-      }
+  const counts = coerceCounts(data?.activeByKind)
+  const started = coerceCounts(data?.startedByKind)
 
-      const data = await res.json()
-      const counts = data.activeByType || {}
-      if (mountedRef.current) {
-        setActiveByType(counts)
-      }
-      return counts
-    } catch {
-      return {}
-    }
-  }, [])
-
-  const startPolling = useCallback(() => {
-    // Don't start if already polling
-    if (intervalRef.current) return
-
-    intervalRef.current = setInterval(async () => {
-      const counts = await fetchStatus()
-      if (!hasActiveJobs(counts)) {
-        stopPolling()
-      }
-    }, POLL_INTERVAL)
-  }, [fetchStatus, stopPolling])
-
-  const checkAndPoll = useCallback(async () => {
-    const counts = await fetchStatus()
-    if (hasActiveJobs(counts)) {
-      startPolling()
-    }
-  }, [fetchStatus, startPolling])
-
-  // On route change: stop current polling and trigger a fresh check via event
+  // A kind whose monotonic completed-span counter advanced did work since the
+  // last read — pulse it even though the work has already finished. The counter
+  // resets when the server restarts, so a decrease is a fresh baseline rather
+  // than a blip.
   useEffect(() => {
-    if (pathnameRef.current !== pathname) {
-      pathnameRef.current = pathname
-      stopPolling()
-      notifyQueueChange()
-    }
-  }, [pathname, stopPolling])
+    if (!data) return
+    const previous = previousStartedRef.current
+    previousStartedRef.current = started
+    if (!previous) return
 
-  // Subscribe to queue-change events for all triggers (route change, job enqueue, initial mount)
+    const blipped = ACTIVITY_KINDS.filter((kind) => started[kind] > previous[kind])
+    if (blipped.length === 0) return
+
+    setPulsing((prev) => {
+      const next = new Set(prev)
+      for (const kind of blipped) next.add(kind)
+      return next
+    })
+
+    const timers = pulseTimersRef.current
+    for (const kind of blipped) {
+      const existing = timers.get(kind)
+      if (existing) clearTimeout(existing)
+      timers.set(
+        kind,
+        setTimeout(() => {
+          timers.delete(kind)
+          setPulsing((prev) => {
+            if (!prev.has(kind)) return prev
+            const next = new Set(prev)
+            next.delete(kind)
+            return next
+          })
+        }, PULSE_DURATION)
+      )
+    }
+    // `started` is derived fresh each render; `data` identity is the real signal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data])
+
+  // Clear any pulse timers still running when the toolbar unmounts.
   useEffect(() => {
-    mountedRef.current = true
-
-    const handleQueueChange = () => {
-      checkAndPoll()
-    }
-
-    window.addEventListener(QUEUE_CHANGE_EVENT, handleQueueChange)
-    // Trigger initial check on mount via event
-    notifyQueueChange()
-
+    const timers = pulseTimersRef.current
     return () => {
-      mountedRef.current = false
-      stopPolling()
-      window.removeEventListener(QUEUE_CHANGE_EVENT, handleQueueChange)
+      for (const timer of timers.values()) clearTimeout(timer)
+      timers.clear()
     }
-  }, [checkAndPoll, stopPolling])
+  }, [])
 
-  return activeByType
-}
+  // Same-tab zero-latency kick, unchanged in spirit: an action that just
+  // enqueued something invalidates instead of driving a bespoke re-poll.
+  useEffect(() => {
+    const handleQueueChange = () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.system.jobs })
+    }
+    window.addEventListener(QUEUE_CHANGE_EVENT, handleQueueChange)
+    return () => window.removeEventListener(QUEUE_CHANGE_EVENT, handleQueueChange)
+  }, [queryClient])
 
-/**
- * Get the total count for a queue from the activeByType record
- */
-function getQueueCount(activeByType: Record<string, number>, jobTypes: readonly string[]): number {
-  return jobTypes.reduce((sum, type) => sum + (activeByType[type] || 0), 0)
+  return { counts, pulsing }
 }
 
 /**
  * Queue Status Badges component
  *
- * Renders a compact badge group showing active job counts for each queue type.
- * Badges dim when their count is 0.
+ * Renders the chip group. Chips dim when idle and pulse when work passed
+ * through between two reads.
  */
 export function QueueStatusBadges() {
-  const activeByType = useQueueStatus()
+  const { counts, pulsing } = useActivitySnapshot()
 
   return (
-    <div className="qt-queue-badge-group" title="Background job queues">
-      {QUEUE_TYPES.map((queue) => {
-        const count = getQueueCount(activeByType, queue.jobTypes)
+    <div className="qt-queue-badge-group" title="Background activity">
+      {ACTIVITY_CHIPS.map((chip) => {
+        const count = counts[chip.kind]
         const isIdle = count === 0
+        const isPulsing = pulsing.has(chip.kind)
 
         return (
           <span
-            key={queue.key}
-            className={`${queue.badgeClass}${isIdle ? ' qt-queue-badge-idle' : ''}`}
-            title={`${queue.title}: ${count} active`}
+            key={chip.kind}
+            className={[
+              chip.badgeClass,
+              isIdle ? 'qt-queue-badge-idle' : '',
+              isPulsing ? 'qt-queue-badge-pulse' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+            title={`${chip.title}: ${count} active`}
           >
-            <span>{queue.label}</span>
+            <span>{chip.label}</span>
             <span>{count}</span>
           </span>
         )

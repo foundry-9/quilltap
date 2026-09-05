@@ -279,6 +279,14 @@ export const ProviderConfigSchema = z.object({
   /** Whether the provider requires an API key */
   requiresApiKey: z.boolean().default(true),
 
+  /**
+   * Whether the provider *may* hold an API key at all. Omitted means "same
+   * answer as `requiresApiKey`", which is correct for every provider that is
+   * wholly hosted or wholly local; OpenAI-Compatible is the one that spans both
+   * and declares `false` / `true`. See lib/llm/api-key-support.ts (Bug 81).
+   */
+  acceptsApiKey: z.boolean().optional(),
+
   /** Whether the provider requires a custom base URL */
   requiresBaseUrl: z.boolean().default(false),
 

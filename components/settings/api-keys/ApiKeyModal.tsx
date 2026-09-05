@@ -9,6 +9,7 @@ import { FormActions } from '@/components/ui/FormActions'
 import ErrorAlert from '@/components/ui/ErrorAlert'
 import { showSuccessToast } from '@/lib/toast'
 import type { ProfileAssociation } from './types'
+import { providerAcceptsApiKey, type ApiKeyConfigRequirements } from '@/lib/llm/api-key-support'
 
 interface ApiKeyResponse {
   id: string
@@ -49,7 +50,7 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
     apiKey: '',
   })
 
-  // Fetch providers that require API keys
+  // Fetch providers that can hold an API key
   useEffect(() => {
     const fetchProviders = async () => {
       try {
@@ -59,13 +60,15 @@ export function ApiKeyModal({ isOpen, onClose, onSuccess }: ApiKeyModalProps) {
         interface ProviderData {
           name: string
           displayName: string
-          configRequirements?: {
-            requiresApiKey?: boolean
-          }
+          configRequirements?: ApiKeyConfigRequirements
         }
 
+        // Offered on "may this provider hold a key?", not "must it?" — the two
+        // answers differ for OpenAI-Compatible, whose hosted endpoints need a
+        // bearer token its local ones have no use for, and asking the stricter
+        // question left no way to create such a key at all (Bug 81).
         const apiKeyProviders = (data.providers as ProviderData[])
-          .filter((p) => p.configRequirements?.requiresApiKey)
+          .filter((p) => providerAcceptsApiKey(p.configRequirements))
           .map((p) => ({
             value: p.name,
             label: p.displayName,

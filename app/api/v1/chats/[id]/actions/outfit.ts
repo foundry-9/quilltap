@@ -25,7 +25,7 @@ import {
 import { expandComposites } from '@/lib/wardrobe/expand-composites';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES, EquippedSlotsSchema } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, EquippedSlotsSchema, WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 import { enqueueWardrobeOutfitAnnouncement } from '@/lib/background-jobs/queue-service';
 import {
   resolveGroupMountPointIdsForCharacter,
@@ -39,7 +39,7 @@ const equipBodySchema = z
     // `wear` honors the item's `replace` flag; `replace` force-swaps the slots
     // it covers. `equip` is a deprecated alias for `wear`.
     mode: z.enum(['wear', 'replace', 'equip', 'add_to_slot', 'remove_from_slot', 'clear_slot', 'set_all']),
-    slot: z.enum(['top', 'bottom', 'footwear', 'accessories']).optional(),
+    slot: WardrobeItemTypeEnum.optional(),
     itemId: z.string().nullable().optional(),
     /** Required when mode === 'set_all'. Replaces every slot atomically. */
     slots: EquippedSlotsSchema.optional(),
@@ -166,12 +166,9 @@ export async function handleGetOutfitSummary(
     const summary: Record<string, Record<string, SummaryEntry[]>> = {};
 
     for (const [characterId, slots] of Object.entries(equippedOutfit)) {
-      const slotMap: Record<string, SummaryEntry[]> = {
-        top: [],
-        bottom: [],
-        footwear: [],
-        accessories: [],
-      };
+      const slotMap: Record<string, SummaryEntry[]> = Object.fromEntries(
+        WARDROBE_SLOT_TYPES.map((slot) => [slot, [] as SummaryEntry[]]),
+      );
 
       if (slots) {
         for (const slotKey of WARDROBE_SLOT_TYPES) {

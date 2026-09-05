@@ -5,9 +5,17 @@
  *
  * Both flagship models share a 1M-token context window and a 384K
  * max output. `deepseek-v4-flash` is the faster, cheaper tier;
- * `deepseek-v4-pro` is the higher-quality tier and supports DeepSeek's
- * thinking mode (forward `thinking` / `reasoning_effort` via profile
- * parameters to enable it).
+ * `deepseek-v4-pro` is the higher-quality tier.
+ *
+ * Both are marked as reasoning **without being asked**. That was *observed*
+ * on `deepseek-v4-flash`, whose profile carried `parameters: {}` and still
+ * came back with `reasoning_content` (bug 85); `deepseek-v4-pro` is assumed to
+ * match, which is the safe direction to be wrong in. `thinksByDefault` telling
+ * the host so is what keeps the multi-character `[Name]` prefill off a profile
+ * that would otherwise take a 400 reading *"The `reasoning_content` in the
+ * thinking mode must be passed back to the API"*; being wrong the other way
+ * costs only the weaker prose anchor on a model strong enough not to need it.
+ * Setting `thinking` to `disabled` on the profile restores the prefill.
  */
 
 import type { ModelInfo } from './types';
@@ -20,6 +28,8 @@ export const STATIC_MODELS: ModelInfo[] = [
     maxOutputTokens: 393216,
     supportsImages: false,
     supportsTools: true,
+    supportsThinking: true,
+    thinksByDefault: true,
   },
   {
     id: 'deepseek-v4-pro',
@@ -28,6 +38,8 @@ export const STATIC_MODELS: ModelInfo[] = [
     maxOutputTokens: 393216,
     supportsImages: false,
     supportsTools: true,
+    supportsThinking: true,
+    thinksByDefault: true,
   },
 ];
 

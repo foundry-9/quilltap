@@ -1,3 +1,2 @@
 *.sh text eol=lf
 *.yaml text eol=lf
-lima/* text eol=lf

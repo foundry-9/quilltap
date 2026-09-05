@@ -17,18 +17,20 @@ import {
   safeEnqueue,
 } from './streaming.service'
 
+/**
+ * Guards on a multi-character chain: how many turns it may run and for how
+ * long. Nothing here is about retrying a *failed* turn — that is the fallback
+ * chain's job (`lib/llm/fallback/`), and it is per-call rather than per-chain.
+ * (`maxRetries` / `retryDelayMs` used to sit here, declared and never read.)
+ */
 export interface ChainConfig {
   maxChainDepth: number      // default 20
   maxChainTimeMs: number     // default 300000 (5 minutes)
-  maxRetries: number         // default 2
-  retryDelayMs: number[]     // [1000, 3000]
 }
 
 export const DEFAULT_CHAIN_CONFIG: ChainConfig = {
   maxChainDepth: 20,
   maxChainTimeMs: 300000,
-  maxRetries: 2,
-  retryDelayMs: [1000, 3000],
 }
 
 export interface ChainDecision {

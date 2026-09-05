@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { AvatarSelector } from '@/components/images/avatar-selector'
 import { ImageUploadDialog } from '@/components/images/image-upload-dialog'
 import { EntityTabs, Tab } from '@/components/tabs'
 import { Icon } from '@/components/ui/icon'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+import { CanChooseOutfitToggle } from '@/components/wardrobe/CanChooseOutfitToggle'
 import { RenameReplaceTab } from '@/components/characters/RenameReplaceTab'
 import { SystemPromptsEditor } from '@/components/characters/SystemPromptsEditor'
 import { AIWizardModal, type GeneratedCharacterData, normalizeGeneratedScenarios } from '@/components/characters/ai-wizard'
@@ -14,9 +15,11 @@ import { DescriptionsTab } from '../view/components/DescriptionsTab'
 import { useCharacterEdit } from './hooks'
 import { CharacterBasicInfo } from './components'
 import { AestheticEditorField } from '@/components/settings/AestheticEditorField'
-import type { CharacterScenario } from './types'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showSuccessToast } from '@/lib/toast'
 import { buildWizardCurrentData, getGeneratedCharacterTextEntries } from '../../shared/wizard-text-fields'
+import { saveGeneratedWardrobeItems } from '../../shared/save-generated-wardrobe'
+import { saveGeneratedPhysicalDescription } from '../../shared/save-generated-physical-description'
+import { saveGeneratedScenarios } from '../../shared/save-generated-scenarios'
 
 /**
  * Tab configuration for character edit page
@@ -73,6 +76,8 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
     handleSystemTransparencyChange,
     handleCanBeCarinaChange,
     handleCoreWhisperEnabledChange,
+    handleSaveCanChooseOutfit,
+    savingCanChooseOutfit,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,
@@ -85,30 +90,7 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
   } = useCharacterEdit(id)
 
   const [showWizard, setShowWizard] = useState(false)
-  const [savingCanChooseOutfit, setSavingCanChooseOutfit] = useState(false)
   const wardrobeDialog = useWardrobeDialogOptional()
-
-  // Persist the "let this character choose their opening outfit" flag (vault
-  // properties.json). Immediate save, mirroring the other per-character wardrobe
-  // toggles; on failure we re-fetch to snap the checkbox back to server truth.
-  const handleSaveCanChooseOutfit = async (enabled: boolean) => {
-    setSavingCanChooseOutfit(true)
-    try {
-      const res = await fetch(`/api/v1/characters/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ canChooseOutfit: enabled }),
-      })
-      if (!res.ok) throw new Error('Failed to update outfit-choice setting')
-    } catch (err) {
-      console.error('Failed to save outfit-choice setting', {
-        error: err instanceof Error ? err.message : String(err),
-      })
-    } finally {
-      await fetchCharacter()
-      setSavingCanChooseOutfit(false)
-    }
-  }
 
   // Handle applying wizard-generated data
   const handleWizardApply = async (data: GeneratedCharacterData) => {
@@ -130,98 +112,42 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
     // multi-record array to a single record; PATCH the character row directly
     // and the repository's write overlay routes it into the vault.
     if (data.physicalDescription) {
-      try {
-        const response = await fetch(`/api/v1/characters/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            physicalDescription: {
-              name: data.physicalDescription.name,
-              headAndShouldersPrompt: data.physicalDescription.headAndShouldersPrompt,
-              shortPrompt: data.physicalDescription.shortPrompt,
-              mediumPrompt: data.physicalDescription.mediumPrompt,
-              longPrompt: data.physicalDescription.longPrompt,
-              completePrompt: data.physicalDescription.completePrompt,
-              fullDescription: data.physicalDescription.fullDescription,
-            },
-          }),
-        })
+      await saveGeneratedPhysicalDescription(id, data.physicalDescription, {
+        failureMessage: 'Failed to save physical description',
+      })
+    }
 
-        if (response.ok) {
-          showSuccessToast('Physical description saved')
-        } else {
-          const errorData = await response.json().catch(() => ({}))
-          showErrorToast(errorData.error || 'Failed to save physical description')
+    // Handle wizard-generated properties (pronouns + aliases): stage them in
+    // form state like the text fields, so the user reviews and saves them.
+    if (data.properties) {
+      if (data.properties.pronouns && !formData.pronouns) {
+        handlePronounsChange(data.properties.pronouns)
+      }
+      if (data.properties.aliases.length > 0) {
+        const existing = formData.aliases || []
+        const existingLower = new Set(existing.map((a) => a.toLowerCase()))
+        const additions = data.properties.aliases.filter((a) => !existingLower.has(a.toLowerCase()))
+        if (additions.length > 0) {
+          handleAliasesChange([...existing, ...additions])
         }
-      } catch (err) {
-        console.error('Failed to save physical description', {
-          error: err instanceof Error ? err.message : String(err),
-        })
-        showErrorToast('Failed to save physical description')
       }
     }
 
-    // Handle wizard-generated wardrobe items
+    // Handle wizard-generated wardrobe items — leaf garments first, then
+    // composites with their component titles resolved to ids.
     if (data.wardrobeItems && data.wardrobeItems.length > 0) {
-      let wardrobeItemsSaved = 0
-      for (const item of data.wardrobeItems) {
-        try {
-          const res = await fetch(`/api/v1/characters/${id}/wardrobe`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: item.title,
-              description: item.description || null,
-              types: item.types,
-              appropriateness: item.appropriateness || null,
-            }),
-          })
-          if (res.ok) {
-            wardrobeItemsSaved++
-          }
-        } catch (err) {
-          console.error('Failed to create wardrobe item', {
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
-      if (wardrobeItemsSaved > 0) {
-        showSuccessToast(`${wardrobeItemsSaved} wardrobe item${wardrobeItemsSaved > 1 ? 's' : ''} created`)
+      const { saved, outfits } = await saveGeneratedWardrobeItems(id, data.wardrobeItems)
+      if (saved > 0) {
+        const outfitText = outfits > 0 ? ` (including ${outfits} outfit${outfits > 1 ? 's' : ''})` : ''
+        showSuccessToast(`${saved} wardrobe item${saved > 1 ? 's' : ''} created${outfitText}`)
       }
     }
 
     // Handle wizard-generated scenarios
     const normalizedScenarios = normalizeGeneratedScenarios(data.scenarios)
     if (normalizedScenarios.length > 0) {
-      let scenariosSaved = 0
-      const savedScenarios: CharacterScenario[] = []
-      for (const scenario of normalizedScenarios) {
-        try {
-          const res = await fetch(`/api/v1/characters/${id}/scenarios`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: scenario.title, content: scenario.content }),
-          })
-          if (res.ok) {
-            const resData = await res.json()
-            scenariosSaved++
-            // Collect saved scenario with its server-assigned ID
-            if (resData.scenario) {
-              savedScenarios.push({
-                id: resData.scenario.id,
-                title: resData.scenario.title,
-                content: resData.scenario.content,
-                createdAt: resData.scenario.createdAt,
-                updatedAt: resData.scenario.updatedAt,
-              })
-            }
-          }
-        } catch (err) {
-          console.error('Failed to create scenario', {
-            error: err instanceof Error ? err.message : String(err),
-          })
-        }
-      }
+      const { saved: scenariosSaved, scenarios: savedScenarios } =
+        await saveGeneratedScenarios(id, normalizedScenarios)
       if (scenariosSaved > 0) {
         showSuccessToast(`${scenariosSaved} scenario${scenariosSaved > 1 ? 's' : ''} created`)
         // Update scenarios in form state directly instead of re-fetching
@@ -342,29 +268,12 @@ export function CharacterEditView({ characterId, initialTab }: { characterId: st
                       chat — and edit, layer, or save outfits without leaving
                       the page you&apos;re on.
                     </p>
-                    <div className="rounded-lg border qt-border-default qt-bg-card p-4">
-                      <label className="flex items-start gap-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={character?.canChooseOutfit ?? false}
-                          onChange={(e) => handleSaveCanChooseOutfit(e.target.checked)}
-                          disabled={savingCanChooseOutfit || !character}
-                          className="mt-1 accent-[var(--primary)]"
-                        />
-                        <span className="flex-1 min-w-0">
-                          <span className="qt-text-label block">Let this character choose their opening outfit</span>
-                          <span className="qt-text-small qt-text-secondary block mt-0.5">
-                            When enabled, a new chat with this character defaults
-                            its Starting Outfit to “Let character choose” instead
-                            of their default wardrobe. You can still overrule it
-                            per chat.
-                          </span>
-                        </span>
-                        {savingCanChooseOutfit && (
-                          <span className="h-4 w-4 mt-1 animate-spin rounded-full qt-spinner shrink-0" />
-                        )}
-                      </label>
-                    </div>
+                    <CanChooseOutfitToggle
+                      checked={character?.canChooseOutfit ?? false}
+                      saving={savingCanChooseOutfit}
+                      disabled={!character}
+                      onChange={handleSaveCanChooseOutfit}
+                    />
                     <button
                       type="button"
                       onClick={() => wardrobeDialog?.open({ characterId: id })}

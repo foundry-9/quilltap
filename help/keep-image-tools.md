@@ -2,11 +2,13 @@
 url: /settings?tab=chat
 ---
 
-# The Photo Album — Keeping, Listing, and Re-Attaching Images
+# The Photo Album — Looking At, Keeping, Listing, and Re-Attaching Images
 
 When a character generates an image in the Salon, that image is, by default, a passing thing. The chat is cleaned up after thirty days, the original file slips quietly into the void, and all that remains is a fond recollection. This is, as a rule, fine. But occasionally a character will produce a portrait, a backdrop, or an artefact of such evident merit that they should rather like to keep it about — to glance at it again later, to bring it up in conversation a fortnight hence, to file it tidily away under "covenant" or "the night we built the sunroom."
 
-For these occasions Quilltap furnishes three brass-handled instruments: **`keep_image`**, **`list_images`**, and **`attach_image`**.
+For these occasions Quilltap furnishes four brass-handled instruments: **`describe_image`**, **`keep_image`**, **`list_images`**, and **`attach_image`**.
+
+A word on which is which, because the distinction has tripped up better minds than ours. Exactly one of them — **`describe_image`** — tells a character what a picture *contains*. The other three move it about: into the album, out of the album, or across the desk to be shown to the room. A character who wants to know what they are looking at should ask `describe_image` and nothing else.
 
 ## What's actually happening
 
@@ -15,6 +17,22 @@ A character's photo album is not a separate filing system. It is a directory cal
 Because it's a hard link rather than a copy, the original image binary persists for as long as any link to it exists — including the link in the character's album. The thirty-day chat cleanup does not touch a kept image.
 
 ## The Tools
+
+### `describe_image(uuid)`
+
+Ask what is actually *in* a photograph — the only instrument on this shelf that answers that question.
+
+The other three are custodial: `keep_image` files a picture away, `attach_image` takes it back out and holds it up, and `list_images` reads the catalogue. None of them shows the character anything. `describe_image` does, and it is the one to reach for whenever a character finds themselves squinting at a UUID and wondering what it depicts.
+
+Pass any handle the character happens to be holding — the uuid from a Librarian upload announcement, the id `generate_image` returned, the catalogue handle from an Aurora or Lantern announcement, or an album link uuid from `list_images`. The image need **not** be in the character's own album; looking at a thing is not the same as owning it, and the tool declines to pretend otherwise.
+
+The answer is usually instantaneous and costs nothing at all, because the description has generally been written already:
+
+1. **A description filed at upload.** Every image the user uploads into a chat is described on arrival by the configured vision profile, and that account is kept on the file itself.
+2. **The prompt that made it.** For an image Quilltap generated, the commissioning prompt is the most faithful description available, and it is free for the asking.
+3. **A fresh look.** Only when neither exists does the tool send the picture to the vision profile — and the result is filed, so the next character to ask is served from step 1.
+
+A character whose own eyes read pictures (a vision-capable model, handed the image directly with the message) does not strictly need this — but may still call it, and often should, when they want the particulars set down in words rather than merely glimpsed.
 
 ### `keep_image(uuid, caption?, tags?)`
 
@@ -39,13 +57,15 @@ If Shared Vaults is enabled for the chat and the participating characters have `
 
 ### `attach_image(uuid)`
 
-Re-attach a previously kept image to the current message — render it inline in the conversation again. Pass the UUID returned by `list_images` (the album link uuid) or the original image-v2 uuid. The system resurfaces the image with its caption and tag set, attaching the descriptor to the outgoing reply.
+Take a photograph the character has already kept and hold it up to the room again — render it inline in the conversation, attached to their reply. Pass the UUID returned by `list_images` (the album link uuid) or the original image-v2 uuid. The system resurfaces the image with its caption and tag set, attaching the descriptor to the outgoing reply.
+
+**This does not let the character see the picture.** It is a gesture outward, toward everyone else in the room. A character who wants to know what the photograph shows wants `describe_image`.
 
 A character can only attach images from their own album. If they wish to share a photograph another character has kept, they must keep their own copy first.
 
 ## How the character knows the UUID
 
-Whenever a fresh image is announced in chat — a new portrait commissioned by Aurora, a backdrop projected by the Lantern, an ad-hoc picture from `generate_image`, or an image the user has uploaded as an attachment — the announcement message in the transcript names the file's UUID inline (catalogued thus: "...uuid `abc-123-...`..."). The character can simply read it off the page and feed it to `keep_image`. Library shelves are well-labelled, and so are these.
+Whenever a fresh image is announced in chat — a new portrait commissioned by Aurora, a backdrop projected by the Lantern, an ad-hoc picture from `generate_image`, or an image the user has uploaded as an attachment — the announcement message in the transcript names the file's UUID inline (catalogued thus: "...uuid `abc-123-...`..."). The character can simply read it off the page and feed it to `describe_image` (to find out what it shows) or `keep_image` (to file it). Library shelves are well-labelled, and so are these.
 
 ## Where the bytes live
 
@@ -56,7 +76,7 @@ Whenever a fresh image is announced in chat — a new portrait commissioned by A
 
 ## Enabling and Disabling
 
-The three photo album tools live in the same group as the document editing tools — gated by the **Document Editing** toggle in the chat tool settings. Disabling that group disables the photo album tools as well.
+The four photo album tools live in the same group as the document editing tools — gated by the **Document Editing** toggle in the chat tool settings. Disabling that group disables the photo album tools as well.
 
 ## In-Chat Navigation
 

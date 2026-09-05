@@ -11,13 +11,27 @@ import { getUserRepositories, getRepositories } from '@/lib/repositories/factory
 import type { Character } from '@/lib/schemas/types';
 import type { QuilltapExport, ExportedCharacter } from '@/lib/export/types';
 import { getExportData, type ImportPreview, type ImportPreviewEntity } from './types';
+import { withStrictRepositoryFailures } from '@/lib/database/repositories/strict-failures';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
 /**
- * Previews what will be imported without actually importing
+ * Previews what will be imported without actually importing.
+ *
+ * Runs under {@link withStrictRepositoryFailures}: the whole preview is a
+ * report on what the destination already holds, so a read that fails must
+ * surface as a failure rather than as "no conflict" — a preview that
+ * under-reports collisions is what talks the user into the strategy that
+ * duplicates their data (Bug 79).
  */
 export async function previewImport(
+  userId: string,
+  exportData: QuilltapExport
+): Promise<ImportPreview> {
+  return withStrictRepositoryFailures(() => previewImportStrict(userId, exportData));
+}
+
+async function previewImportStrict(
   userId: string,
   exportData: QuilltapExport
 ): Promise<ImportPreview> {

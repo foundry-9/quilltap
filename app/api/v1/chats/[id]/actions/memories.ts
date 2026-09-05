@@ -22,7 +22,7 @@ import {
   resolveUserCharacterParticipant,
 } from '@/lib/services/chat-message/turn-transcript';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
 import type { RequestContext } from '@/lib/api/middleware';
 import type {
@@ -237,7 +237,7 @@ export async function handleExtractMemoriesDryRun(
   // off-duty flagged chat would still reroute memory extraction to the
   // uncensored provider, ignoring the operator's opt-out.
   const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
-  const isDangerousChat = isChatActiveDangerous(chat);
+  const isDangerousChat = shouldUseUncensoredRoute(chat);
   const memoryExtractionLimits = await getMemoryExtractionLimits();
 
   logger.info('[Chats v1] Streaming dry-run memory extraction', {

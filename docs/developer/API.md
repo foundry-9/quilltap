@@ -20,6 +20,16 @@ API reference for Quilltap v4.3 and later.
 > - **New `systemSender` values** — `carina` (inline-query answers) and `suparna` (Post Office mail-delivery announcements).
 > - **Scriptorium per-document policy flags** — mounted markdown may carry `embed` / `character_read` / `character_write` frontmatter flags (stored on `doc_mount_file_links`), governing characters only.
 
+> **Freshness note (v4.9-dev):** Additions since v4.7:
+>
+> - **Realtime invalidation socket** — `GET /api/v1/system/realtime/stream` (WebSocket). Frames say *what* changed, never *what it changed to*; the client invalidates and re-reads through this API. See [System Realtime Stream](#system-realtime-stream).
+> - **Connection-profile fallback chains** — `fallbackProfileId` (the understudy) and `allowTierFallback` on connection profiles. Chains are capped at three attempts and never recurse. See [Connection Profiles](#connection-profiles).
+> - **Image-profile LoRA adapters and model options** — the reserved `loras` parameter key (validated by `ImageLoraSpecSchema`), the per-model `loraSupport` block on the models response, and `POST /api/v1/image-profiles?action=lora-metadata` for reading a LoRA source's public HuggingFace card.
+> - **Four-state Concierge** — `conciergeState` (`'monitored' | 'flagged' | 'vouched' | 'uncensored'`) on `POST /api/v1/chats` and `PUT /api/v1/chats/[id]`, applied through the one transition chokepoint `applyConciergeFlip`.
+> - **Chat-action set (current)** — `accessible-stores`, `agent-mode`, `announcement`, `announcement-preview`, `avatars`, `bulk`, `cost`, `danger-classification`, `documents`, `export`, `export-markdown`, `group-stores`, `mailbox`, `memories`, `merge`, `outfit`, `outfit-summary`, `participants`, `photo-albums`, `recall-replay`, `regenerate-avatar`, `render-conversation`, `rng`, `run-tool`, `scenario`, `send-mail`, `state`, `story-background`, `tags`, `title`, `toggle-avatar-generation`, `tools`, `turn`. This supersedes the v4.3 list above.
+> - **Scenario changed mid-chat** — `POST /api/v1/chats/[id]?action=scenario`; the Host announces the change as a revision.
+> - **Archivable scenarios and wardrobe items** — archived rows drop out of every listing unless `includeArchived` is passed.
+
 ## Table of Contents
 
 - [API Versioning](#api-versioning)
@@ -47,7 +57,7 @@ API reference for Quilltap v4.3 and later.
   - [NPCs](#npcs)
   - [Wardrobe (Archetypes)](#wardrobe-archetypes)
   - [Character Wardrobe](#character-wardrobe)
-  - [Outfit Presets](#outfit-presets)
+  - [Outfit Presets (removed)](#outfit-presets-removed)
   - [Character Photos](#character-photos)
   - [Chats](#chats)
   - [Brahma Console](#brahma-console)
@@ -93,6 +103,7 @@ API reference for Quilltap v4.3 and later.
   - [System Conversation Summaries](#system-conversation-summaries)
   - [System Image Aesthetics](#system-image-aesthetics)
   - [System Startup Status](#system-startup-status)
+  - [System Realtime Stream](#system-realtime-stream)
   - [System Plugin Initialization](#system-plugin-initialization)
   - [System Plugin Upgrades](#system-plugin-upgrades)
   - [System Pepper Vault (Deprecated)](#system-pepper-vault-deprecated)
@@ -156,7 +167,7 @@ Returns the current user session.
 For consistency, include credentials in requests:
 
 ```javascript
-fetch('/api/characters', {
+fetch('/api/v1/characters', {
   credentials: 'include',
   headers: {
     'Content-Type': 'application/json',
@@ -265,7 +276,9 @@ List all available providers, including both LLM providers and search providers.
       "configRequirements": {
         "requiresApiKey": true,
         "requiresBaseUrl": false
-      }
+      },
+      "optionsSchema": null,
+      "thinkingTurnRule": null
     },
     {
       "id": "SERPER",
@@ -290,12 +303,30 @@ List all available providers, including both LLM providers and search providers.
 }
 ```
 
+LLM entries also carry `optionsSchema` — the plugin's
+`getProviderOptionsSchema()` output, or `null` when it declares none — and
+`thinkingTurnRule`, which names the `parameters` key that switches reasoning on
+or off (`{ optionKey, enabledValues, disabledValues }`) or `null` when the
+provider has no such option. The rule is declarative rather than a server-side
+predicate precisely so it can cross the wire: the connection-profile editor runs
+in the browser and needs the same answer the server gets, to seed
+`multiCharacterPrefill` (bug 85). Search-provider entries carry neither.
+
 **Provider Types:**
 
 | Type | Description |
 |------|-------------|
 | `llm` | LLM providers for chat, embeddings, and image generation. Include `capabilities` describing supported features. |
 | `search` | Search providers that power the `search_web` tool. Include `configRequirements` with `requiresApiKey`, `requiresBaseUrl`, and `apiKeyLabel`. |
+
+An `llm` provider's `configRequirements` may also carry **`acceptsApiKey`**,
+which answers a different question from `requiresApiKey`: *may* this provider
+hold a key, rather than *must* it. **When the field is absent, the answer is the
+same as `requiresApiKey`**, so a consumer must read the pair rather than the
+flag it happens to find (`providerAcceptsApiKey` in `lib/llm/api-key-support.ts`
+does exactly that). Only `OPENAI_COMPATIBLE` sets them apart today — `false` and
+`true` — because it serves both an unauthenticated local runtime and a hosted
+endpoint behind a bearer token.
 
 ---
 
@@ -358,9 +389,22 @@ Update current user's profile.
 
 Returns updated profile (same format as GET).
 
-#### `PATCH /api/v1/user/profile/avatar`
+#### `GET /api/v1/user/profile?action=theme-preference`
 
-Set or clear user's profile avatar.
+Read the user's theme preference. Chat settings are created with defaults on first read if absent.
+
+**Response**: `200 OK` — `{ activeThemeId, colorMode, showNavThemeSelector }`.
+
+#### `PUT /api/v1/user/profile?action=theme-preference`
+
+Update the theme preference, merging the fields you send over the stored ones. `colorMode` must be
+one of `light`, `dark`, `system`; `activeThemeId` must be a theme the registry knows (or `null` for
+the default). Either violation is a `400`.
+
+#### `PATCH /api/v1/user/profile?action=set-avatar`
+
+Set or clear the user's profile avatar. `set-avatar` is the only action this verb accepts; any other value
+is a `400`.
 
 **Request Body**:
 
@@ -466,6 +510,34 @@ Update the retention window. Merges with the current value and validates (intege
 ```json
 {
   "staleChatDays": 90
+}
+```
+
+#### `GET /api/v1/settings/brahma-console`
+
+Read the instance-wide Brahma Console settings (`instance_settings['brahmaConsole']`, not a `chat_settings`
+column — same class as the data-retention knob). Holds the agent-turn budget the streaming orchestrator and
+the one-shot `@Brahma` Carina path both read through `resolveBrahmaMaxAgentTurns`. Defaults to 50; the
+duplicate/stale-query guard still stops a self-repeating loop regardless of this number.
+
+**Response:**
+
+```json
+{
+  "maxAgentTurns": 50
+}
+```
+
+#### `PUT /api/v1/settings/brahma-console`
+
+Update the Console settings. The body is merged over the current value before validation (integer, 5-200
+turns), so a partial body is a partial update rather than a wipe.
+
+**Request Body:**
+
+```json
+{
+  "maxAgentTurns": 80
 }
 ```
 
@@ -693,13 +765,75 @@ Create a connection profile.
   "isDefault": false,
   "isCheap": false,
   "allowWebSearch": false,
-  "useNativeWebSearch": false
+  "useNativeWebSearch": false,
+  "multiCharacterPrefill": false,
+  "fallbackProfileId": null,
+  "allowTierFallback": false
 }
 ```
 
+**`multiCharacterPrefill`** — how a multi-character chat anchors a reply to the
+character whose turn it is. `true` appends an assistant message containing
+`[Character Name]` so the model structurally continues only that line; `false`
+appends a prose instruction to the system prompt instead, leaving the request
+ending on a user message. **Omit it and the server resolves a default: `false`
+for Anthropic (4.6+ rejects an assistant tail), `false` for any profile that
+will run a thinking turn, `true` otherwise.** A stored `null` — a row older
+than `add-profile-multi-character-prefill-field-v1`, or a profile imported from
+a pre-4.9 bundle — resolves to that same default at use time. A stored boolean
+always outranks it.
+
+**`fallbackProfileId`** — the understudy: another connection profile to try when
+a call through this one fails outright (auth, rate limit, network, missing
+model, 5xx, empty response, moderation refusal). `null` means none named.
+
+Validated on write against exactly two structural rules — the target must exist
+and belong to the caller, and it must not be `transport: 'courier'` (a request
+carried by hand cannot stand in automatically) — plus, on `PUT`, it may not be
+the profile's own id. A **cycle is legal config**: chains never recurse, so when
+A falls back to B, B's own `fallbackProfileId` is not followed and an A→B, B→A
+pair simply stops after two attempts. Deleting a profile nulls this column on
+every profile that named it.
+
+**`allowTierFallback`** — whether, once the profile and its named understudy have
+both failed, the server may make ONE further attempt with an automatically
+chosen profile of the same or better `modelClass` quality, preferring a
+different provider than the one that just failed. Defaults to `false`. In a
+dangerous-routed context an auto-picked candidate must also be
+`isDangerousCompatible`.
+
+Together these cap any single call at three attempts. Failure is surfaced on the
+chat SSE stream as `stage: 'failing-over'` per attempt, and the final error
+names each profile that was asked and how it declined.
+
+"Will run a thinking turn" is answered per profile, not per provider, by
+`evaluateThinkingTurn` (`lib/llm/thinking-turn.ts`): the provider plugin's
+`thinkingTurnRule` says which key in `parameters` switches reasoning on or off,
+and when the profile has made no choice the selected model's `thinksByDefault`
+flag decides. A thinking turn and a prefilled assistant turn go badly together —
+DeepSeek rejects the request outright with *"The `reasoning_content` in the
+thinking mode must be passed back to the API"* (bug 85), and Ollama opens the
+reasoning block from the chat template at the start of the assistant turn, so a
+prefill suppresses reasoning entirely (bug 68). A thinking-*off* profile on
+either provider keeps the prefill, which is the stronger anchor.
+
+`PUT` accepts the same field and rejects a non-boolean with `400`.
+
 #### `GET /api/v1/connection-profiles/[id]`
 
-Get a specific profile.
+Get a specific profile. Rejects an unrecognised `?action=` with `400` rather
+than serving the profile body — a lenient GET is what let a caller ask for an
+unimplemented action and receive a `200` of the wrong shape (bug 74).
+
+Tags on this response use the `{ tagId, tag }` envelope `enrichWithTags`
+produces, **not** flat tags. For flat tags, ask for the action below.
+
+#### `GET /api/v1/connection-profiles/[id]?action=get-tags`
+
+The profile's tags as `{ tags: [{ id, name, visualStyle }] }` — the flat shape
+`components/tags/tag-editor.tsx` consumes, in the profile's own tag order.
+Resolved through `resolveEditorTags` (`@/lib/api/middleware`), which every
+entity's `get-tags` action shares so the shape cannot drift between them.
 
 #### `PUT /api/v1/connection-profiles/[id]`
 
@@ -790,9 +924,25 @@ Update an embedding profile. When the update changes what the default profile pr
 
 Delete an embedding profile.
 
-#### `GET /api/v1/embedding-profiles/models`
+#### `GET /api/v1/embedding-profiles?action=list-providers`
 
-Get available embedding models for a provider.
+List the providers that support embeddings.
+
+**Response**: `{ "providers": ["OPENAI", "OLLAMA", "OPENROUTER", "NANOGPT", "BUILTIN"] }`
+
+#### `GET /api/v1/embedding-profiles?action=list-models`
+
+Get the statically catalogued embedding models. With `&provider=OPENAI`, returns `{ provider, models }`
+for that provider alone; without it, returns every provider's models grouped by provider name. Either way
+the result is cached into `provider_models` so the profile editor can render offline.
+
+#### `GET /api/v1/embedding-profiles?action=fetch-models&provider=OLLAMA&baseUrl=…`
+
+Ask the provider itself what it has installed, rather than reading the static catalogue. `provider` is
+required and must be one of the embedding providers; `baseUrl` is optional and forwarded to the provider
+instance. Local providers (and any provider whose plugin implements no `getAvailableModels`) answer with
+an empty list rather than an error. Where a fetched model id also appears in the static catalogue, its
+name, dimensions, and description are merged in; every returned model carries `installed: true`.
 
 ---
 
@@ -821,6 +971,33 @@ Create an image profile.
   "isDefault": false
 }
 ```
+
+`parameters` is an open bag. Host-owned keys (`size`, `aspectRatio`, `quality`,
+`style`, `n`, `seed`, `guidanceScale`, `steps`, `negativePrompt`) map onto named
+`ImageGenParams` fields; everything else is forwarded to the plugin verbatim as
+`ImageGenParams.profileParameters`, and the plugin decides what reaches the wire.
+
+One key is reserved: **`loras`**, a list of LoRA adapters in the canonical
+provider-neutral shape. It is validated on POST and PUT (`ImageLoraSpecSchema`,
+`lib/schemas/profile.types.ts`) — a malformed list is a `400` with nothing
+written. `source` must be non-empty; `scale` must be a finite number in `0..10`
+(per-model bounds are the editor's and the plugin's business, not storage's).
+
+```json
+{
+  "parameters": {
+    "size": "1024x1024",
+    "loras": [
+      { "source": "owner/style-name", "scale": 0.8, "triggerPhrase": "ohwx", "label": "House style" },
+      { "source": "https://example.com/weights.safetensors", "scale": 1.2 }
+    ]
+  }
+}
+```
+
+A list longer than the selected model's cap is stored as given and flagged in the
+editor rather than truncated — the cap is applied at request time by
+`lib/image-gen/params-builder.ts`, which names every adapter it drops.
 
 #### `GET /api/v1/image-profiles?action=list-providers`
 
@@ -853,18 +1030,91 @@ List available image generation providers from the plugin registry.
 Get available image generation models for a provider.
 
 **Query Parameters**:
-- `provider` (required) - Provider name (e.g., "OPENAI", "ETERNAL_AI")
+- `provider` (required) - Provider name (e.g., "OPENAI", "Z_AI")
 - `apiKeyId` - API key ID to fetch models dynamically (optional)
+
+With an `apiKeyId`, the provider's own API is queried and filtered to models
+that genuinely produce images. `source` reports where the list came from:
+`"provider"` for a live fetch, `"builtin"` for the plugin's curated list (no
+key given, or the live fetch failed — in which case `fetchError` carries the
+reason). Only live-fetched lists are cached in `provider_models`.
 
 **Response**:
 
 ```json
 {
-  "provider": "OPENAI",
-  "models": ["gpt-image-1", "dall-e-3", "dall-e-2"],
-  "supportedModels": ["gpt-image-1", "dall-e-3", "dall-e-2"]
+  "provider": "NANOGPT",
+  "models": ["flux-lora", "hidream", "z-image-turbo-lora"],
+  "supportedModels": ["hidream", "flux-2-flash", "flux-lora"],
+  "source": "provider",
+  "loraSupport": {
+    "flux-lora": {
+      "maxLoras": 1,
+      "scale": { "min": 0.1, "max": 4, "default": 1, "step": 0.1 },
+      "sourceKinds": ["url", "hf-repo"]
+    },
+    "z-image-turbo-lora": {
+      "maxLoras": 3,
+      "scale": { "min": 0, "max": 4, "default": 1, "step": 0.1 },
+      "sourceKinds": ["url", "hf-repo"]
+    }
+  }
 }
 ```
+
+`loraSupport` is keyed by model id and carries only the models that resolve
+support (exact id -> longest-prefix family -> provider constraint). A model
+absent from the map takes no adapters, which is the editor's signal to offer no
+LoRA rows. Resolution happens server-side so the browser never re-implements it.
+
+#### `GET /api/v1/image-profiles?action=options-schema`
+
+The fields the image-profile editor should render for a provider, and optionally
+for a specific model. Answered by the provider plugin's
+`getImageProviderOptionsSchema` hook — the image sibling of
+`getProviderOptionsSchema`, sharing the same `ProviderOptionsSchema` type and the
+same `ProviderOptionsPanel` renderer.
+
+Unlike the LLM hook, `model` is authoritative here: a gateway routing to hundreds
+of image models legitimately answers with different legal sizes and a different
+`n` ceiling per model, so the editor refetches whenever the selected model
+changes. A provider without the hook answers `optionsSchema: null` and the editor
+falls back to its legacy hand-written panel; a hook that throws is caught and
+logged, never surfaced as a broken form.
+
+**Query Parameters**:
+- `provider` (required) - Provider name
+- `model` (optional) - Selected model id
+
+**Response**:
+
+```json
+{
+  "provider": "NANOGPT",
+  "model": "flux-lora",
+  "optionsSchema": {
+    "groups": [
+      {
+        "title": "NanoGPT Image Options",
+        "fields": [
+          { "key": "size", "label": "Default Size", "type": "enum", "enumValues": [] },
+          { "key": "guidance_scale", "label": "Guidance Scale", "type": "number", "appliesToModels": ["flux-lora"] }
+        ]
+      }
+    ]
+  },
+  "loraSupport": {
+    "maxLoras": 1,
+    "scale": { "min": 0.1, "max": 4, "default": 1, "step": 0.1 },
+    "sourceKinds": ["url", "hf-repo"]
+  }
+}
+```
+
+`ProviderOptionField.appliesToModels` gates a field to the listed models — an
+exact id, a `*` glob, or a family prefix. The renderer honours it on both the
+image and the LLM side; a field without it renders unconditionally, as does any
+field when the host does not know the selected model.
 
 #### `POST /api/v1/image-profiles?action=validate-key`
 
@@ -888,6 +1138,76 @@ Validate an API key for image generation.
   "modelCount": 3
 }
 ```
+
+#### `POST /api/v1/image-profiles?action=lora-metadata`
+
+Ask HuggingFace what it declares about a LoRA source, so the image-profile
+editor can show the user the adapter's papers before they trust it to a paid
+generation. Backed by `lib/image-gen/huggingface-lookup`.
+
+**This action renders no compatibility verdict, by design.** Deciding whether an
+adapter suits a provider model would mean matching NanoGPT's model ids against
+HuggingFace's `base_model` strings — two independent naming conventions, neither
+of which owes us stability — and a false "this will not work" on an adapter that
+works is worse than silence. The response carries facts only; the reader draws
+the conclusion.
+
+POST rather than GET for one reason: the optional `hfToken` is a credential, and
+a credential does not belong in a query string.
+
+**Body**:
+- `source` (required) — a bare `owner/name`, or any `huggingface.co` URL
+  (including the `/resolve/main/weights.safetensors` form, from which the
+  repository id is recovered). A weights URL on any other host has no repository
+  behind it and answers `not-a-repo-id` without touching the network.
+- `hfToken` (optional) — the profile's `hf_api_token`, widening the lookup to
+  private and gated repositories. Never logged, never echoed back.
+
+**Response** — always `200`; a lookup that fails is a result to display, not a
+broken request:
+
+```json
+{
+  "ok": true,
+  "facts": {
+    "repoId": "XLabs-AI/flux-RealismLora",
+    "url": "https://huggingface.co/XLabs-AI/flux-RealismLora",
+    "baseModels": ["black-forest-labs/FLUX.1-dev"],
+    "isAdapter": true,
+    "isLora": true,
+    "pipelineTag": "text-to-image",
+    "gated": false,
+    "weightFiles": ["lora.safetensors"],
+    "triggerPhrase": null,
+    "downloads": 15707,
+    "likes": 1232,
+    "lastModified": "2024-08-22T10:19:23.000Z"
+  }
+}
+```
+
+```json
+{
+  "ok": false,
+  "reason": "missing-or-private",
+  "repoId": "nobody/nothing-at-all",
+  "url": "https://huggingface.co/nobody/nothing-at-all",
+  "detail": "HTTP 401"
+}
+```
+
+`baseModels` merges `cardData.base_model` with any `base_model:adapter:…` tags,
+card first, deduplicated. `triggerPhrase` is `cardData.instance_prompt` — the
+adapter's magic word, and the reason the lookup earns a button at all.
+
+`reason` values: `not-a-repo-id`, `missing-or-private`, `not-found`,
+`rate-limited`, `timeout`, `network`, `http`.
+
+**`missing-or-private` is never reported as `not-found`.** Unauthenticated,
+HuggingFace answers "no such repository" and "private, and not yours"
+identically — both `401`, both `Invalid username or password.` — and does so
+deliberately. A `404` (and therefore `not-found`) only appears once a token has
+established who is asking.
 
 #### `GET /api/v1/image-profiles/[id]`
 
@@ -969,12 +1289,20 @@ Fetch models directly from a provider (live query, not cached).
       "deprecated": false,
       "experimental": false,
       "maxOutputTokens": 4096,
-      "contextWindow": 128000
+      "contextWindow": 128000,
+      "supportsThinking": true,
+      "thinksByDefault": false
     }
   ],
   "count": 3
 }
 ```
+
+`supportsThinking` and `thinksByDefault` come from the plugin's static
+`getModelInfo()` catalogue and are absent for a model it does not list. They are
+separate facts: the first is a capability, the second says the model reasons
+even when the profile never asked. The connection-profile editor reads the
+second to seed `multiCharacterPrefill` the way the server would.
 
 ---
 
@@ -1374,9 +1702,11 @@ Delete a system prompt.
 
 Scenarios are named narrative contexts that can be selected when starting a chat with a character.
 
-#### `GET /api/v1/characters/[id]/scenarios`
+#### `GET /api/v1/characters/[id]/scenarios[?includeArchived=true]`
 
-Get all scenarios for a character.
+Get all scenarios for a character. Scenarios carrying `archived: true` are omitted unless `?includeArchived=true` is passed.
+
+> **This is a response filter only.** `character.scenarios` itself always carries the archived entries: the vault write overlay projects that array back over the `Scenarios/` folder and deletes every file the array doesn't contain, so a pre-filtered array would delete the archived files. Filter at the API boundary, never at the vault read.
 
 **Response**: `200 OK`
 
@@ -1386,11 +1716,14 @@ Get all scenarios for a character.
     {
       "id": "scenario-uuid",
       "title": "Coffee Shop Meeting",
-      "content": "You meet in a quiet coffee shop..."
+      "content": "You meet in a quiet coffee shop...",
+      "archived": false
     }
   ]
 }
 ```
+
+`archived` is accepted on the `POST` and `PUT` bodies. It is stored as `archived: true` in the vault file's frontmatter and omitted entirely when the scenario is active.
 
 #### `POST /api/v1/characters/[id]/scenarios`
 
@@ -1470,9 +1803,11 @@ Create an NPC character.
 
 Global archetype wardrobe items that can be shared across characters.
 
-#### `GET /api/v1/wardrobe`
+#### `GET /api/v1/wardrobe[?includeArchived=true]`
 
-List all archetype wardrobe items.
+List all archetype wardrobe items. Items with a non-null `archivedAt` are omitted unless `?includeArchived=true` is passed — the same opt-in honoured by the character (`/api/v1/characters/[id]/wardrobe`, including `?scope=group`), project (`/api/v1/projects/[id]/wardrobe`) and group (`/api/v1/groups/[id]/wardrobe`) collection endpoints. Clients should build these URLs through `wardrobeCollectionUrl()` / `withWardrobeArchivedParam()` in `lib/wardrobe/wardrobe-container.ts` so the parameter can't drift.
+
+The **outfit-selection LLM never receives archived items**, at any tier, with no parameter and no override: its candidate pool is built by `mergeWearablePool`, which drops them after the tier merge.
 
 **Response**: `200 OK`
 
@@ -1519,6 +1854,8 @@ Get a specific archetype wardrobe item.
 
 Update an archetype wardrobe item. All fields optional.
 
+Accepts **`archived: boolean`** alongside the content fields — the same field the character, project and group item `PUT`s take. It is translated into `archivedAt` by `archivedPatch()` (`lib/wardrobe/archived-patch.ts`): archiving is **idempotent** (re-archiving keeps the original `archivedAt` rather than resetting the clock), restoring sets it to `null`, and omitting the field leaves the current state alone. Archiving does **not** unequip a garment a character is presently wearing.
+
 #### `DELETE /api/v1/wardrobe/[itemId]`
 
 Delete an archetype wardrobe item. Cleans up all character references first.
@@ -1561,7 +1898,9 @@ Return the destination options for moving or copying a wardrobe item between tie
 
 #### `POST /api/v1/wardrobe/transfers`
 
-Move or copy one wardrobe item between wardrobe tiers. The source item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General. Destinations are named explicitly by `{scope, id}`.
+Move or copy one wardrobe item between wardrobe tiers. The source is given one of two ways: `sourceCharacterId` (character-view probing — the item is located by scanning, in order: the source character's own vault, the source project's store, the group stores the source character reaches by membership, then Quilltap General), or an explicit `source: { scope: 'character'|'project'|'group'|'general', id? }` naming the container directly (used when the wardrobe dialog is browsing a shared container). Destinations are named explicitly by `{scope, id}`.
+
+For a composite (outfit), the optional `components: 'move'|'copy'|'none'` field brings the transitive closure of its **same-container** components along — all or nothing (components living in other tiers stay put). `move` keeps component ids; `copy` mints fresh ids and rewrites `componentItemIds` on the transferred outfit (and on any nested composites that travelled) to the new ids, so references stay resolvable at the destination. `action: 'copy'` with `components: 'move'` is refused (it would strand the original outfit). Every planned id is checked against the destination before anything is written; a post-write verification confirms the stored outfit's travelled component references resolve, reporting `componentsTransferred` (and `unresolvedComponentIds` if verification ever fails).
 
 ---
 
@@ -1625,92 +1964,20 @@ Delete a character wardrobe item.
 
 ---
 
-### Outfit Presets
+### Outfit Presets (removed)
 
-Named outfit combinations for characters. Each preset maps wardrobe items to equipment slots.
+**Outfit presets no longer exist as a separate concept — composite wardrobe items replaced them.** Every `/api/v1/characters/[id]/wardrobe/presets*` route (list, create, read, update, delete, and `?action=apply`) is gone; there is no `presets` route under `app/api/v1/characters/[id]/wardrobe/`. Calls to those paths 404.
 
-#### `GET /api/v1/characters/[id]/wardrobe/presets`
+A composite is an ordinary wardrobe item that bundles others via `componentItemIds`, so the preset endpoints' work is done by the ordinary wardrobe routes above:
 
-List outfit presets for a character.
+| Old preset call | Current equivalent |
+|---|---|
+| `GET .../wardrobe/presets` | `GET /api/v1/characters/[id]/wardrobe` — composites come back in the same list, carrying `componentItemIds` |
+| `POST .../wardrobe/presets` | `POST /api/v1/characters/[id]/wardrobe` with `componentItemIds` (and `replace` if the ensemble should clear its slots rather than layer) |
+| `PUT`/`DELETE .../wardrobe/presets/[presetId]` | `PUT`/`DELETE /api/v1/characters/[id]/wardrobe/[itemId]` |
+| `POST .../wardrobe/presets/[presetId]?action=apply` | `POST /api/v1/chats/[id]?action=equip` with `mode: "wear"` (or `"replace"`) and the composite's `itemId` |
 
-**Response**: `200 OK`
-
-```json
-{
-  "presets": [
-    {
-      "id": "preset-uuid",
-      "characterId": "char-uuid",
-      "name": "Casual Friday",
-      "description": "Relaxed office attire",
-      "slots": {
-        "top": "item-uuid-1",
-        "bottom": "item-uuid-2",
-        "footwear": "item-uuid-3",
-        "accessories": null
-      }
-    }
-  ]
-}
-```
-
-#### `POST /api/v1/characters/[id]/wardrobe/presets`
-
-Create a new outfit preset.
-
-**Request Body**:
-
-```json
-{
-  "name": "Casual Friday",
-  "description": "Relaxed office attire",
-  "slots": {
-    "top": "item-uuid-1",
-    "bottom": "item-uuid-2",
-    "footwear": "item-uuid-3",
-    "accessories": null
-  }
-}
-```
-
-**Response**: `201 Created`
-
-#### `GET /api/v1/characters/[id]/wardrobe/presets/[presetId]`
-
-Get a specific outfit preset.
-
-#### `PUT /api/v1/characters/[id]/wardrobe/presets/[presetId]`
-
-Update an outfit preset. All fields optional.
-
-#### `DELETE /api/v1/characters/[id]/wardrobe/presets/[presetId]`
-
-Delete an outfit preset.
-
-#### `POST /api/v1/characters/[id]/wardrobe/presets/[presetId]?action=apply`
-
-Apply a preset outfit to a chat.
-
-**Request Body**:
-
-```json
-{
-  "chatId": "chat-uuid"
-}
-```
-
-**Response**: `200 OK`
-
-```json
-{
-  "equipped": {
-    "top": "item-uuid-1",
-    "bottom": "item-uuid-2",
-    "footwear": "item-uuid-3",
-    "accessories": null
-  }
-}
-```
+Pre-rework data is not lost: `.qtap` imports and backup restores fold a legacy `outfitPresets` array into composite wardrobe items (`lib/import/quilltap-import/legacy-presets.ts`, `lib/backup/restore/legacy-migrations.ts`), and the retired `Outfits/` vault folder is deliberately not read — see `lib/database/repositories/vault-overlay/vault-readers.ts`.
 
 ---
 
@@ -1792,6 +2059,8 @@ Create a new chat.
 
 **Note**: `roleplayTemplateId` is optional and tri-state. Omit the key to fall back to the default chain (project default > user/global default > none). Send a template UUID to force that template, or send an explicit `null` for "no template" — both beat the defaults. A UUID that doesn't resolve returns `400 Roleplay template not found`.
 
+**Note**: `conciergeState` is optional — `'monitored' | 'flagged' | 'vouched' | 'uncensored'`, the same wire enum as the sidebar's `PUT /api/v1/chats/[id]`. Omitted or `'monitored'` leaves the chat Monitored exactly as before (no write, no announcement). Any other value is applied through the one transition chokepoint, `applyConciergeFlip`, *after* the system-prompt message and *before* any staff announcement or greeting — so the Concierge's bubble sits where the history says the state was set, and the opening greeting is generated under the chosen state (an Uncensored chat's greeting goes to the uncensored desk first; a Vouched Safe chat's is never rerouted). A value outside the four is a `400` validation error.
+
 **Note**: `progressId` is optional — a client-generated UUID. When present, the handler publishes creation progress (setup milestones and per-character LLM wardrobe choices) to an in-memory bus keyed by that id, which the "Green Room" status dialog subscribes to via `GET /api/v1/chats/creation-progress?id=…` (below). Omit it and creation behaves exactly as before, returning the same JSON.
 
 To create an autonomous room, include `chatType: "autonomous"` and autonomous-room fields:
@@ -1846,7 +2115,7 @@ Each SSE frame is `data: <json>\n\n` where the payload is one of:
 { "kind": "log", "message": "…", "level": "info|warn|error", "ts": 0 }
 { "kind": "wardrobe-start", "characterId": "…", "characterName": "…", "ts": 0 }
 { "kind": "wardrobe-result", "characterId": "…", "characterName": "…",
-  "slots": { "top": [{ "id": "…", "title": "…", "isComposite": false }], "bottom": [], "footwear": [], "accessories": [] }, "ts": 0 }
+  "slots": { "top": [{ "id": "…", "title": "…", "isComposite": false }], "bottom": [], "footwear": [], "accessories": [], "hair": [] }, "ts": 0 }
 { "kind": "done", "ts": 0 }
 { "kind": "error", "message": "…", "ts": 0 }
 ```
@@ -2006,6 +2275,34 @@ Fold another conversation's characters and summary into **this** chat (the inver
 - `outfitSelections` is optional and mirrors `add-participant`'s `outfitSelection` modes per character; omitted characters default to `previous_chat` (carry their worn outfit forward from the source chat).
 - Posts a Host recap (`systemKind: "merge-from"`) at the tail of the target carrying the source's summary and a link back, plus a back-link (`systemKind: "merge-to"`) in the source chat. Existing turns are **not** replayed and the target's turn state is untouched.
 - Returns `400` when `sourceChatId` equals `[id]` or when every source character is already present (no side effects in the latter case).
+
+#### `POST /api/v1/chats/[id]?action=scenario`
+
+Change (or clear) the chat's scenario mid-conversation. Fields mirror the create payload one-for-one and resolve through the same precedence chain (`lib/chat/scenario-selection.ts`): character `scenarioId` > `projectScenarioPath` > `groupScenarioPath` > `generalScenarioPath`, with free-text `scenario` layered beneath whatever resolves.
+
+**Request Body** (every field optional; an empty body clears the scenario):
+
+```json
+{
+  "scenario": "free-text notes",
+  "scenarioId": "character-scenario-uuid",
+  "projectScenarioPath": "Scenarios/bridge.md",
+  "groupScenarioPath": "Scenarios/parlour.md",
+  "groupScenarioGroupId": "group-uuid",
+  "generalScenarioPath": "Scenarios/Good Morning.md"
+}
+```
+
+**Response**: `{ "scenarioText": string | null, "changed": boolean, "message": string }`
+
+**Notes**:
+
+- `projectScenarioPath` resolves against the chat's own `projectId` (not a client-supplied one). A `scenarioId` is resolved against whichever active participant character owns it; a character whose vault is unavailable is skipped rather than failing the request.
+- Every tier fails soft — an unresolvable pointer logs a warning and falls through to the next tier.
+- On an actual change: rewrites `chat.scenarioText`, calls `compileAllIdentityStacks` (the scene is baked into `{{scenario}}` in each precompiled stack), and posts a Host announcement with `systemKind: "scenario-change"`, worded as a revision. A blank result retires the scene with a matching notice. A stack-recompile failure is logged and non-fatal — the read-through fallback covers it.
+- Resolving to the text already stored is a no-op: no write, no recompile, no announcement, and `changed: false`.
+- The chat-start `systemKind: "scenario"` message is **not** removed or rewritten.
+- `updateChatSchema` (`PUT /api/v1/chats/[id]`) deliberately does **not** expose `scenarioText`; a bare field update would skip the recompile and the announcement.
 
 #### `POST /api/v1/chats/[id]?action=bulk-reattribute`
 
@@ -2300,16 +2597,36 @@ Reset general state to `{}`. Returns `{ "success": true, "previousState": { ... 
 
 Get full equipped outfit state for all characters in this chat.
 
+Every slot is an **array** of wardrobe item ids (empty when nothing is worn there) — slots layer, so a t-shirt under a sweater is two ids in `top`. `EquippedSlotsSchema` in `lib/schemas/wardrobe.types.ts` is the source of truth. A composite is stored as its own id and expanded to its components only at read time. `hair` holds a hairdo rather than clothing: it sits out of the nudity/undress semantics, and an empty `hair` is not reported anywhere (see `WARDROBE_SLOT_META`).
+
 **Response**: `200 OK`
 
 ```json
 {
   "equippedOutfit": {
-    "char-uuid-1": { "top": "item-uuid", "bottom": null, "footwear": null, "accessories": null },
-    "char-uuid-2": { "top": null, "bottom": null, "footwear": null, "accessories": null }
+    "char-uuid-1": {
+      "top": ["item-uuid-1", "item-uuid-2"],
+      "bottom": ["item-uuid-3"],
+      "footwear": ["item-uuid-4"],
+      "accessories": [],
+      "hair": ["braid-uuid"]
+    },
+    "char-uuid-2": { "top": [], "bottom": [], "footwear": [], "accessories": [], "hair": [] }
   }
 }
 ```
+
+#### `GET /api/v1/chats/[id]?action=outfit-summary`
+
+The same equipped state as `?action=outfit`, with each item id resolved to its title so a caller
+can render the outfit without a second round trip. Composites are expanded to their components at
+read time, exactly as `?action=outfit` does.
+
+#### `GET /api/v1/chats/[id]?action=group-stores`
+
+List the document stores belonging to the groups that this chat's **user-persona** characters
+(`type: 'CHARACTER'`, `controlledBy: 'user'`) are members of. Backs the "Group Files" section the
+library file picker shows above the Projects section. Returns `404` when the chat does not exist.
 
 #### `POST /api/v1/chats/[id]?action=equip`
 
@@ -2954,6 +3271,23 @@ List files for a chat, including both uploaded attachments and generated images.
 
 Upload a file for a chat. Uses `multipart/form-data`.
 
+Two `?action=` values divert this route before the upload flow: `?action=link` links an existing
+file to the chat, and `?action=attach-mount-file` attaches a file that already lives in a document
+store (below). Without an action the body is read as form data.
+
+#### `POST /api/v1/chats/[id]/files?action=attach-mount-file`
+
+Attach a Scriptorium file to the chat without re-uploading it.
+
+**Request Body**: `{ "mountPointId": "mount-uuid", "relativePath": "notes/chapter-3.md" }` — both
+required, both `400` when missing.
+
+Blob-backed files attach from their blob row. Native-text files (`.md` / `.txt` / `.json`) PUT into
+a database store become documents with no blob row; those are served to the Librarian as documents
+instead, so the picker's own listings all attach (bug 38). A path with neither a blob nor a
+document row is refused. `404` when the mount-point file does not exist.
+
+
 **Request**: `multipart/form-data`
 - `file` (required) - The file to upload
 - `resolution` (optional) - Conflict resolution: `"replace"`, `"rename"`, `"skip"`
@@ -3316,6 +3650,88 @@ Generate embeddings for memories missing them.
 
 **Query Parameters**:
 - `characterId` (required) - Character to generate embeddings for
+
+#### `GET /api/v1/memories?action=embeddings`
+
+Embedding coverage for one character.
+
+**Query Parameters**:
+- `characterId` (required)
+
+**Response**: `200 OK` — `{ total, withEmbeddings, withoutEmbeddings, percentComplete, embeddingProfileConfigured, embeddingProfileName }`.
+
+#### `PUT /api/v1/memories?action=embeddings`
+
+Rebuild the vector index for one character. `PUT` without `?action=embeddings` is a `400`.
+
+**Request Body**: `{ "characterId": "char-uuid" }`
+
+#### `POST /api/v1/memories?action=housekeep-sweep`
+
+Enqueue a manual instance-wide housekeeping sweep (`MEMORY_HOUSEKEEPING`, `reason: 'manual'`)
+rather than running it inline. Takes no body.
+
+**Response**: `200 OK` — `{ "success": true, "jobId": "job-uuid" }`
+
+#### `GET` / `POST /api/v1/memories?action=housekeeping-config`
+
+Read and write the per-user automatic-housekeeping settings stored on chat settings. `POST` merges
+the fields you send over the stored ones; both return `{ success, settings }`.
+
+**Settings**: `enabled`, `perCharacterCap` (default 2000), `perCharacterCapOverrides`,
+`autoMergeSimilarThreshold` (default 0.90), `mergeSimilar`.
+
+#### `GET` / `POST /api/v1/memories?action=extraction-limits-config`
+
+Read and write the **instance-wide** memory-extraction rate limits. `POST` merges over the stored
+values; both return `{ success, settings }`.
+
+**Settings**: `enabled`, `maxPerHour`, `softStartFraction`, `softFloor`.
+
+#### `GET` / `POST /api/v1/memories?action=extraction-concurrency`
+
+Read and write the **instance-wide** memory-extraction concurrency. A write also pushes the value
+into the job processor's runtime cache, so it takes effect on the next claim tick rather than at
+the next cache refresh.
+
+**Request Body** (POST): `{ "concurrency": 3 }` · **Response**: `{ success, concurrency }`.
+
+#### `GET` / `POST /api/v1/memories?action=recall-config`
+
+Read and write the **instance-wide** recall settings. `POST` merges over the stored values; both
+return `{ success, settings }`.
+
+**Settings**: `scopePolicy`, `expandRelated`, `perTurnConversationSummaries` (the Settings →
+Memory → Recall Relevance switch that re-runs the past-conversation search every turn, reusing the
+vector the turn's memory search already embedded).
+
+#### `GET /api/v1/memories?action=backfill-embeddings`
+
+Progress for the embedding backfill: `{ success, progress: { remaining, inFlight } }`, where
+`remaining` counts memories with no embedding and `inFlight` counts this user's PENDING/PROCESSING
+`EMBEDDING_GENERATE` jobs whose payload `entityType` is `MEMORY`.
+
+#### `POST /api/v1/memories?action=backfill-embeddings`
+
+Start the backfill. Optional body `{ characterId?, batchSize? }` narrows it to one character and
+sets the batch size.
+
+#### `GET /api/v1/memories?action=character-memory-counts`
+
+Every character owned by this user with its memory count, sorted count-descending so the busiest
+surface first. Returns `{ success, characters: [{ id, name, memoryCount }] }`.
+
+#### `POST /api/v1/memories?action=regenerate-all`
+
+Wipe and re-extract every memory. Pressing it again is an explicit "kill the previous sweep and
+start over": all PENDING/PROCESSING `MEMORY_REGENERATE_ALL`, `MEMORY_REGENERATE_CHAT`,
+`MEMORY_EXTRACTION` and `INTER_CHARACTER_MEMORY` jobs are deleted before the fresh fan-out is
+enqueued. The standard and dangerous-compatible cheap profiles are resolved up front and travel in
+the job payload, so the fan-out is self-contained.
+
+#### `GET /api/v1/memories?action=regenerate-all`
+
+Status of the sweep: `{ success, inFlightFanOut, inFlightWipes, inFlightExtractions, inFlight }`.
 
 ---
 
@@ -3915,6 +4331,30 @@ List all mount points, enriched with `embeddedChunkCount`.
 }
 ```
 
+#### `POST /api/v1/mount-points?action=semantic-search`
+
+Semantic search across document-store chunks. Backs the search bar's **Documents** chip. The query
+is embedded with the user's default embedding profile at `interactive` priority; an embedding
+failure returns `400` with `code: "EMBEDDING_FAILED"`.
+
+**Request Body**:
+
+```json
+{
+  "query": "a crimson entrance",
+  "mountPointIds": ["mount-uuid"],
+  "projectId": "project-uuid",
+  "pathPrefix": "chapters/",
+  "top": 20,
+  "threshold": 0.5
+}
+```
+
+Only `query` is required. `top` defaults to 20 (max 500) and `threshold` to 0.5. This is the
+operator's search: it sets `includeBlocked`, so documents flagged `character_read: false` are
+returned. The per-character retrieval paths (knowledge injector, `search` tool) keep the default
+filtering.
+
 #### `POST /api/v1/mount-points`
 
 Create a mount point. The body is validated: `basePath` is required for `filesystem` and `obsidian` types but ignored for `database`.
@@ -4260,7 +4700,20 @@ Modern backup and restore API (v1).
 
 #### `POST /api/v1/system/backup`
 
-Create a new backup for download. Returns a temporary backup ID.
+Create a backup and stage it for download. Returns a temporary backup ID.
+
+**Body (optional):**
+
+```json
+{ "compact": true }
+```
+
+`compact` defaults to `false`. When true the archive omits every embedding-derived payload — memory
+embeddings are nulled and `conversation-chunks.json`, `vector-entries.json`,
+`vector-index-metas.json`, `tfidf-vocabularies.json`, `embedding-status.json` and
+`doc-mount-chunks.json` are not written at all — and the manifest records `compact: true`. Restore
+keys off that flag to enqueue a full `EMBEDDING_REINDEX_ALL`. A malformed body is treated as absent
+rather than rejected.
 
 **Response**: `201 Created`
 
@@ -4863,11 +5316,55 @@ Uninstall a bundle theme.
 
 #### `GET /api/v1/ui/search?q=query`
 
-Global search across characters and chats.
+Global search (substring, case-insensitive) across every searchable entity. This
+is the endpoint behind the ⌘K search bar; the response shape is
+`SearchResponse` in [`components/search/types.ts`](/components/search/types.ts),
+returned **unwrapped** (no `{ data }` envelope).
 
 **Query Parameters**:
-- `q` - Search query (required)
-- `type` - Filter by type: `characters`, `chats`
+- `q` — search query (required, minimum 2 characters; shorter → `400`)
+- `types` — comma-separated list of types to search. Valid values:
+  `chats`, `characters`, `messages`, `documents`, `tags`, `memories`.
+  Unrecognised names are ignored; an empty or absent list searches all types.
+- `limit` — results per page (default `20`, capped at `50`)
+- `offset` — results to skip (default `0`)
+
+**Response**: `200 OK`
+
+```json
+{
+  "results": [ { "id": "...", "type": "documents", "name": "manifesto.md", "url": "...", "...": "..." } ],
+  "totalCount": 42,
+  "query": "manifesto",
+  "types": ["documents", "chats"],
+  "hasMore": true,
+  "countsByType": { "documents": 40, "chats": 2 }
+}
+```
+
+Every result carries `id`, `type`, `name`, `matchedField`, `matchedValue`,
+`snippet`, `url`, `matchPriority` (`0` exact, `1` substring, `2` weaker),
+`createdAt` and `updatedAt`, plus per-type extras. Results are sorted by
+`matchPriority` then by `updatedAt` descending, across all types together;
+`countsByType` counts the whole match set, before pagination.
+
+**Type notes**:
+- `messages` searches message content and links back to `/salon/<chatId>?msg=<id>`.
+- `memories` searches memory summaries per character.
+- `documents` searches file names, relative paths, and extracted document text
+  across every **enabled** document store — character vaults included, the
+  vaults of *archived* characters excluded. Documents flagged
+  `character_read: false` are included (that flag gates characters, not the
+  operator), and only file types Document Mode can open are searched
+  (`markdown`, `txt`, `json`, `jsonl`). Extras on the result:
+  `mountPointId`, `mountPointName`, `mountPointRef` (store name, or its UUID
+  when the name is ambiguous or reserved), `storeType` (`documents` |
+  `character`), and `relativePath`. The `url` is the **standalone** Document
+  Mode deep link
+  (`/workspace?open=document-standalone&scope=document_store&mountPoint=…&filePath=…`),
+  which attaches the document to no conversation; the search UI upgrades a
+  plain left click to an in-chat open when a Salon is focused. Implementation:
+  [`lib/mount-index/document-text-search.ts`](/lib/mount-index/document-text-search.ts).
 
 ---
 
@@ -4919,6 +5416,26 @@ Returns preview counts of matches found.
 
 Get queue status and jobs.
 
+**Query params:**
+
+| Param | Effect |
+|---|---|
+| `includeJobs=true` | include the 50 most recent job rows (implies `includeByType`) |
+| `includeByType=true` | include the per-job-type active breakdown |
+| `chatId=<id>` | include pending jobs for that chat |
+
+`activeByKind` is always present and is what the toolbar chips poll. It groups
+work by *activity kind* (`memory`, `embedding`, `summary`, `danger`, `image` —
+see `lib/background-jobs/activity-kinds.ts`) and merges two sources: active
+`background_jobs` rows, and non-job work registered with the in-process activity
+registry (`lib/background-jobs/activity-registry.ts`), which is how inline work
+like the `generate_image` tool or a live Concierge classification gets counted.
+`startedByKind` is a monotonic per-kind count of completed spans, so a client can
+tell that work passed through between two polls.
+
+`activeByType` costs a full read of every active row, so it is opt-in via
+`includeByType`.
+
 **Response**: `200 OK`
 
 ```json
@@ -4929,6 +5446,20 @@ Get queue status and jobs.
     "completed": 100,
     "failed": 2,
     "activeTotal": 6
+  },
+  "activeByKind": {
+    "memory": 2,
+    "embedding": 0,
+    "summary": 1,
+    "danger": 0,
+    "image": 1
+  },
+  "startedByKind": {
+    "memory": 41,
+    "embedding": 903,
+    "summary": 88,
+    "danger": 152,
+    "image": 12
   },
   "jobs": [
     {
@@ -5025,19 +5556,6 @@ Scoping notes, because they are not uniform:
 - `instance-settings` is keyed by **setting key**, not a UUID — the table has no id column — and omits the keys that only make sense inside the exporting instance (the three mount-point pointers, `lastMaintenanceSweepAt`, `highest_app_version`).
 
 An unknown `type` returns 400.
-
-#### `POST /api/v1/system/backup`
-
-Create a backup and stage it for download.
-
-**Body (optional):**
-```json
-{ "compact": true }
-```
-
-`compact` defaults to `false`. When true the archive omits every embedding-derived payload — memory embeddings are nulled and `conversation-chunks.json`, `vector-entries.json`, `vector-index-metas.json`, `tfidf-vocabularies.json`, `embedding-status.json`, and `doc-mount-chunks.json` are not written at all — and the manifest records `compact: true`. Restore keys off that flag to enqueue a full `EMBEDDING_REINDEX_ALL`. A malformed body is treated as absent rather than rejected.
-
-**Response:** `201` with `{ "success": true, "backupId": "…", "manifest": { … } }`.
 
 ---
 
@@ -5436,7 +5954,7 @@ Unlink a mount point from the project. Body: `{ mountPointId }`.
 
 #### `GET /api/v1/projects/[id]/wardrobe`
 
-List the project's wardrobe items (the project tier of the tri-tier wardrobe model: character vault + project stores + Quilltap General), read from the project's `Wardrobe/` folder.
+List the project's wardrobe items (the project tier of the four-tier wardrobe model: character vault > group stores > project stores > Quilltap General), read from the project's `Wardrobe/` folder.
 
 #### `POST /api/v1/projects/[id]/wardrobe`
 
@@ -5516,18 +6034,45 @@ Link a mount point to the group. Body: `{ mountPointId }`.
 
 Unlink a mount point from the group. Body: `{ mountPointId }`.
 
+#### `GET /api/v1/groups/[id]/wardrobe`
+
+List the group's wardrobe items (the group tier of the four-tier wardrobe model: character vault > group stores > project stores > Quilltap General), read from the group's official store `Wardrobe/` folder. Ensures the store and folder first.
+
+#### `POST /api/v1/groups/[id]/wardrobe`
+
+Create a group wardrobe item. Body: `{ title, description?, imagePrompt?, types, appropriateness?, isDefault?, componentItemIds?, replace? }` (same schema as project wardrobe).
+
+#### `GET /api/v1/groups/[id]/wardrobe/[itemId]`
+
+Fetch one group wardrobe item.
+
+#### `PUT /api/v1/groups/[id]/wardrobe/[itemId]`
+
+Update one group wardrobe item.
+
+#### `DELETE /api/v1/groups/[id]/wardrobe/[itemId]`
+
+Delete one group wardrobe item. Cleans up equipped references across chats first.
+
 ---
 
 ### Scenarios
 
-Scenarios are Markdown files (with frontmatter: `name`, `description`, `isDefault`, body) kept in a `Scenarios/` folder. They exist at three tiers — **general** (instance-wide "Quilltap General" store), **project**, and **group** — that share an identical endpoint shape. Each collection endpoint ensures the backing store and its `Scenarios/` folder exist first, so callers don't wait for the next startup heal pass. Frontmatter is parsed and default-conflict resolution is applied on read.
+Scenarios are Markdown files (with frontmatter: `name`, `description`, `isDefault`, `archived`, body) kept in a `Scenarios/` folder. They exist at three tiers — **general** (instance-wide "Quilltap General" store), **project**, and **group** — that share an identical endpoint shape. Each collection endpoint ensures the backing store and its `Scenarios/` folder exist first, so callers don't wait for the next startup heal pass. Frontmatter is parsed and default-conflict resolution is applied on read.
+
+**Archived scenarios.** A file carrying `archived: true` is excluded from every list response unless the request passes **`?includeArchived=true`**; absence of the key means active, and the serializer never writes `archived: false`. The parameter is honoured by all three tiers' collection GETs, by the participant-aggregate route below, and by the item-level `PUT`/`POST ?action=rename`/`DELETE` on the freshly-listed scenarios they return (so a manager with "Show archived" ticked gets back a list that still contains the row it just changed). Two rules hold regardless of the parameter:
+
+- An archived scenario **never wins default-conflict resolution** — its `isDefault` comes back `false` even when it is being listed, and `rawIsDefault` still reflects what the file claims.
+- `resolveScenarioBody()` ignores the flag entirely, so a chat that already resolved an archived scenario keeps working.
+
+`archived` is also accepted on the create and update bodies. On `PUT` it is **optional and preserving**: the endpoint rewrites the whole file from the request body, so omitting `archived` keeps the file's current state rather than silently un-archiving it.
 
 For the single-scenario endpoints, `[scenarioPath]` is the URL-encoded filename relative to `Scenarios/`; the bare filename (with or without `.md`) is accepted and the `Scenarios/` prefix is applied server-side. `..` segments are rejected.
 
 **General tier**
 
 - `GET /api/v1/scenarios` — list general scenarios. Tolerates the pre-migration race (returns an empty list with `mountPointId: null`).
-- `POST /api/v1/scenarios` — create a general scenario. Body: `{ filename, name?, description?, isDefault?, body }`. Rejects writes during the pre-migration window.
+- `POST /api/v1/scenarios` — create a general scenario. Body: `{ filename, name?, description?, isDefault?, archived?, body }`. Rejects writes during the pre-migration window.
 - `GET /api/v1/scenarios/[scenarioPath]` — read one.
 - `PUT /api/v1/scenarios/[scenarioPath]` — update content + frontmatter.
 - `POST /api/v1/scenarios/[scenarioPath]?action=rename` — rename the file.
@@ -5543,7 +6088,7 @@ For the single-scenario endpoints, `[scenarioPath]` is the URL-encoded filename 
 - `GET /api/v1/groups/[id]/scenarios` · `POST /api/v1/groups/[id]/scenarios`
 - `GET`/`PUT`/`DELETE /api/v1/groups/[id]/scenarios/[scenarioPath]` · `POST …?action=rename`
 
-#### `GET /api/v1/groups/scenarios?characterIds=<id,id,...>`
+#### `GET /api/v1/groups/scenarios?characterIds=<id,id,...>[&includeArchived=true]`
 
 The New Chat dialog's participant-union aggregation: for every group that **any** of the supplied prospective participants belongs to, returns that group's `Scenarios/` entries grouped under the group's name. This is the one sanctioned exception to a group's otherwise strict per-responding-character isolation — scenarios are a chat-creation-time menu, not a per-turn access grant, so this route must never feed the per-turn tier resolver.
 
@@ -5837,6 +6382,47 @@ Write that file — or, when the body is empty, delete it.
 Return the live state of server startup — coarse phase plus the event stream, current label, and sub-progress — to drive the loading-screen UI.
 
 **Authentication**: Not required. The loading screen runs before any session exists; the only data exposed is generic "what the server is doing right now," so no user data leaks.
+
+---
+
+### System Realtime Stream
+
+#### `GET /api/v1/system/realtime/stream` (WebSocket)
+
+A single multiplexed WebSocket carrying **invalidation hints** — never data — from the server to every
+connected tab. The client maps each hint onto a TanStack Query invalidation, so this REST API remains
+the single source of truth for what the data *is*; the socket only says *when to look again*.
+
+Not a Next.js route handler: the upgrade is dispatched from `server.ts`'s `upgrade` listener to
+`lib/realtime/ws.ts`, the same way the terminal stream is.
+
+**Authentication**: `lib/realtime/upgrade-auth.ts` — a live session, the instance not in locked mode,
+and an `Origin` (when present) whose host matches `Host`. Browsers do not apply CORS to WebSocket
+upgrades, so that origin check is what stops another site opening a socket against a localhost
+instance; a request with no `Origin` at all is treated as a non-browser client and allowed. A refusal
+closes with `1008`.
+
+**Server → client**:
+
+```json
+{ "v": 1, "topic": "chats", "id": "chat-uuid", "at": 1787763506398 }
+```
+
+- `topic` — a `lib/query/keys.ts` namespace name. Canonical values live in `REALTIME_TOPICS`
+  (`lib/schemas/realtime.types.ts`): `jobs`, `autonomousRooms`, `chats`, `projects`, `characters`,
+  `mountPoints`. Clients **must ignore topics they don't recognise** — an older tab meeting a newer
+  server is the normal case after an upgrade.
+- `id` — present only when the change is row-scoped; absent means the whole namespace.
+- `at` — server ms, for log correlation only. Clients must not order, dedupe, or expire on it.
+
+**Client → server**: `{"type":"ping"}` only, answered `{"type":"pong"}`. There is no subscribe verb —
+every event goes to every connected client (a single-user instance has a handful of tabs and an event
+is ~40 bytes), and invalidating a query key nothing is watching is already a no-op.
+
+**Coalescing**: the bus debounces per `topic:id` on a 250 ms trailing edge, so a job storm becomes one
+event. Clients must therefore tolerate both duplicates (invalidation is idempotent) and gaps — on
+(re)connect a client invalidates every prefix it knows about, which is what makes a missed event a
+latency problem rather than a correctness one.
 
 ---
 

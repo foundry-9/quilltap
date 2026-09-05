@@ -105,7 +105,10 @@ async function ensureParentFoldersExist(
     const grandparentId = await ensureParentFoldersExist(repos, userId, parentPath, projectId);
 
     const parentName = getFolderName(parentPath) || 'Folder';
-    parentFolder = await repos.folders.create({
+    // Find-or-create at the chokepoint: the read above and this write are not
+    // atomic, and a concurrent creator would otherwise leave a duplicate row
+    // for the same path (bug 114).
+    parentFolder = await repos.folders.ensureByPath({
       userId,
       path: parentPath,
       name: parentName,
@@ -233,7 +236,7 @@ async function handleCreateFolder(request: NextRequest, user: any, repos: any): 
 
   // Create the folder entity
   const folderName = getFolderName(normalizedPath) || 'Folder';
-  const folder = await repos.folders.create({
+  const folder = await repos.folders.ensureByPath({
     userId: user.id,
     path: normalizedPath,
     name: folderName,

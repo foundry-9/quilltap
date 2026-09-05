@@ -21,7 +21,9 @@ import { Memory } from '@/lib/schemas/types'
 import { getRepositories } from '@/lib/repositories/factory'
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store'
 import { generateEmbeddingForUser, EmbeddingError } from '@/lib/embedding/embedding-service'
+import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { rawQuery } from '@/lib/database/manager'
+import { chunkArray, SQLITE_VARIABLE_CHUNK_SIZE } from '@/lib/utils/chunk'
 import { logger } from '@/lib/logger'
 import { buildMemoryEmbeddingText, type EpisodicAnchorView } from './episodic'
 
@@ -130,6 +132,32 @@ export function calculateReinforcedImportance(baseImportance: number, reinforcem
  * 7. If embedding fails after one retry → SKIP_EMBEDDING_FAILED (no write).
  */
 export async function runMemoryGate(
+  characterId: string,
+  candidateContent: string,
+  candidateSummary: string,
+  _candidateKeywords: string[],
+  userId: string,
+  embeddingProfileId?: string,
+  candidateAnchors?: EpisodicAnchorView
+): Promise<GateResult> {
+  // Memories formed from a tool call rather than the extraction job have no
+  // job row to count them, so the gate registers itself. Re-entrant by kind,
+  // so the extraction job's own row is not double-counted; the embedding it
+  // mints inside still counts separately under "Emb".
+  return trackActivity('memory', () =>
+    runMemoryGateInner(
+      characterId,
+      candidateContent,
+      candidateSummary,
+      _candidateKeywords,
+      userId,
+      embeddingProfileId,
+      candidateAnchors
+    )
+  )
+}
+
+async function runMemoryGateInner(
   characterId: string,
   candidateContent: string,
   candidateSummary: string,
@@ -564,16 +592,20 @@ export async function deleteMemoriesWithUnlinkBatch(memoryIds: string[]): Promis
 
   // Group by character so each deletion call carries its proper scope. The
   // by-character split also means we never touch unrelated rows — the
-  // repository's bulkDelete is `characterId`-scoped.
+  // repository's bulkDelete is `characterId`-scoped. Chunked because each ID
+  // is one bind variable, and a full-wipe cascade can pass more IDs than
+  // SQLITE_MAX_VARIABLE_NUMBER allows in a single statement.
   const idsByCharacter = new Map<string, string[]>()
-  const toResolve = await rawQuery<Array<{ id: string; characterId: string }>>(
-    `SELECT id, characterId FROM memories WHERE id IN (${memoryIds.map(() => '?').join(',')})`,
-    memoryIds
-  )
-  for (const row of toResolve) {
-    const list = idsByCharacter.get(row.characterId) ?? []
-    list.push(row.id)
-    idsByCharacter.set(row.characterId, list)
+  for (const chunk of chunkArray(memoryIds, SQLITE_VARIABLE_CHUNK_SIZE)) {
+    const toResolve = await rawQuery<Array<{ id: string; characterId: string }>>(
+      `SELECT id, characterId FROM memories WHERE id IN (${chunk.map(() => '?').join(',')})`,
+      chunk
+    )
+    for (const row of toResolve) {
+      const list = idsByCharacter.get(row.characterId) ?? []
+      list.push(row.id)
+      idsByCharacter.set(row.characterId, list)
+    }
   }
 
   let deleted = 0

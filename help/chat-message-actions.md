@@ -27,6 +27,12 @@ Most message actions appear when you hover over a message:
 3. Click the desired action
 4. Or click the **more options** menu (three dots) for additional actions
 
+### Naming the Icons
+
+The row of small icons beneath a message keeps its own counsel until asked. Rest the pointer on any one of them and a label appears above it after a moment's pause, naming the deed it proposes to do — *Copy message*, *Regenerate response*, *View source*, and the rest. The label is drawn by Quilltap itself rather than borrowed from the operating system, so it behaves the same in a browser tab as it does in the desktop shell: it waits patiently, it does not scurry off at the smallest twitch of the hand, and it never truncates a long remark mid-sentence.
+
+Tab to an icon instead of pointing at it and the same label appears; press **Esc** and it withdraws.
+
 ### Context Menu
 
 Right-click a message for a context menu with all available actions.

@@ -25,6 +25,7 @@ import {
 // ── Mocks ─────────────────────────────────────────────────────────────────
 jest.mock('@/lib/plugins/provider-validation', () => ({
   requiresApiKey: jest.fn().mockReturnValue(false),
+  acceptsApiKey: jest.fn().mockReturnValue(false),
 }))
 
 jest.mock('@/lib/services/chat-message/streaming.service', () => ({

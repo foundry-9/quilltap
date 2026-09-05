@@ -15,9 +15,9 @@ import {
   type ContextTag,
 } from '@/lib/memory/recall-tags'
 import { resolveDayReference, type DayReferenceResolution } from '@/lib/memory/day-references'
-import { executeCheapLLMTask } from './core-execution'
+import { executeCheapLLMTask, type CheapLLMLatencyClass } from './core-execution'
 import { logger } from '@/lib/logger'
-import { stripCodeFences } from '@/lib/services/ai-import.service'
+import { stripCodeFences } from '@/lib/llm/llm-json'
 import type {
   ChatMessage,
   CheapLLMTaskResult,
@@ -1280,6 +1280,10 @@ function mergeDayReference(
  * @param selection - The cheap LLM provider selection
  * @param userId - The user ID for API key retrieval
  * @param chatId - Optional chat ID for logging
+ * @param latency - Who is waiting. The proactive pre-compute pass runs after
+ *   delivery and takes the `background` default; the dynamic-head fallback in
+ *   `context-manager` is awaited inline while the composer is empty and must
+ *   pass `interactive` (bug 115).
  * @returns Keywords for memory search plus an optional turn-level temporal/context guess
  */
 export async function extractMemorySearchKeywords(
@@ -1289,7 +1293,8 @@ export async function extractMemorySearchKeywords(
   userId: string,
   chatId?: string,
   characterId?: string,
-  clock?: ExtractionClock
+  clock?: ExtractionClock,
+  latency: CheapLLMLatencyClass = 'background'
 ): Promise<CheapLLMTaskResult<MemorySearchExtraction>> {
   // Truncate messages to keep cheap LLM call fast
   const cappedMessages = recentMessages.slice(-20)
@@ -1427,7 +1432,8 @@ export async function extractMemorySearchKeywords(
     undefined,
     undefined,
     undefined,
-    characterId
+    characterId,
+    { latency }
   )
 }
 
@@ -1498,6 +1504,11 @@ export async function summarizeMemoryRecap(
     undefined,
     uncensoredFallback,
     undefined,
-    characterId
+    characterId,
+    // The recap is assembled inline while a visible turn waits on
+    // "Recalling…", and it is optional context — losing it costs the character
+    // some remembered flavour, not the turn. So it takes the tighter of the
+    // two budgets and forgoes the retry a background pass would get (bug 107).
+    { latency: 'interactive' },
   )
 }

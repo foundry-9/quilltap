@@ -16,7 +16,7 @@ import type {
   ExportedDocumentStoreBlob,
   ExportedProjectDocMountLink,
 } from '@/lib/export/types';
-import type { ImportOptions, IdMappingState, DocumentStoreImportCounts } from './types';
+import { type ImportOptions, type IdMappingState, type DocumentStoreImportCounts, getPreserveIdsCreateOptions } from './types';
 import { nextUniqueMountPointName } from '@/lib/mount-index/unique-mount-point-name';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
@@ -105,49 +105,31 @@ export async function importDocumentStores(
       // re-import is recognised as an overwrite of this store rather than
       // stranger-cloned every time. Only when the id is free — a 'duplicate'
       // import onto an id clash must mint a fresh id instead.
-      const preserveArchiveId = !existing;
-      const createOptions = options.preserveIds ? { id: mp.id } : undefined;
-      const created = options.preserveIds
-        ? await globalRepos.docMountPoints.create(
-            {
-              name,
-              basePath: mp.mountType === 'database' ? '' : mp.basePath,
-              mountType: mp.mountType,
-              storeType: mp.storeType ?? 'documents',
-              includePatterns: mp.includePatterns,
-              excludePatterns: mp.excludePatterns,
-              enabled: mp.enabled,
-              lastScannedAt: null,
-              scanStatus: 'idle',
-              lastScanError: null,
-              conversionStatus: 'idle',
-              conversionError: null,
-              fileCount: 0,
-              chunkCount: 0,
-              totalSizeBytes: 0,
-            },
-            createOptions
-          )
-        : await globalRepos.docMountPoints.create(
-            {
-              name,
-              basePath: mp.mountType === 'database' ? '' : mp.basePath,
-              mountType: mp.mountType,
-              storeType: mp.storeType ?? 'documents',
-              includePatterns: mp.includePatterns,
-              excludePatterns: mp.excludePatterns,
-              enabled: mp.enabled,
-              lastScannedAt: null,
-              scanStatus: 'idle',
-              lastScanError: null,
-              conversionStatus: 'idle',
-              conversionError: null,
-              fileCount: 0,
-              chunkCount: 0,
-              totalSizeBytes: 0,
-            },
-            preserveArchiveId ? { id: mp.id } : undefined
-          );
+      const createOptions = options.preserveIds
+        ? getPreserveIdsCreateOptions(mp.id, options)
+        : !existing
+          ? { id: mp.id }
+          : undefined;
+      const created = await globalRepos.docMountPoints.create(
+        {
+          name,
+          basePath: mp.mountType === 'database' ? '' : mp.basePath,
+          mountType: mp.mountType,
+          storeType: mp.storeType ?? 'documents',
+          includePatterns: mp.includePatterns,
+          excludePatterns: mp.excludePatterns,
+          enabled: mp.enabled,
+          lastScannedAt: null,
+          scanStatus: 'idle',
+          lastScanError: null,
+          conversionStatus: 'idle',
+          conversionError: null,
+          fileCount: 0,
+          chunkCount: 0,
+          totalSizeBytes: 0,
+        },
+        createOptions
+      );
       idMap.set(mp.id, created.id);
       counts.mountPoints++;
     } catch (error) {

@@ -18,7 +18,6 @@
 
 import {
   resolveGroupMountPointIdsForCharacter,
-  resolveProjectMountPointIds,
   resolveProjectMountPointIdsForChat,
 } from '@/lib/mount-index/tiered-mount-pool';
 
@@ -47,11 +46,6 @@ export interface ResolvedSharedWardrobeTiers extends SharedWardrobeTiers {
   projectMountPointIds: string[];
 }
 
-const EMPTY: ResolvedSharedWardrobeTiers = {
-  groupMountPointIds: [],
-  projectMountPointIds: [],
-};
-
 /**
  * Resolve both shared tiers for a character in a chat. Each tier fails soft to
  * `[]` on its own (the underlying resolvers swallow and log), so a missing chat
@@ -64,21 +58,6 @@ export async function resolveSharedWardrobeTiersForChat(
   const [groupMountPointIds, projectMountPointIds] = await Promise.all([
     resolveGroupMountPointIdsForCharacter(characterId),
     resolveProjectMountPointIdsForChat(chatId),
-  ]);
-  return { groupMountPointIds, projectMountPointIds };
-}
-
-/**
- * Resolve both shared tiers when the caller already holds the project id
- * (chat creation, the outfit composer) rather than a chat id.
- */
-export async function resolveSharedWardrobeTiersForProject(
-  projectId: string | null | undefined,
-  characterId: string | null | undefined,
-): Promise<ResolvedSharedWardrobeTiers> {
-  const [groupMountPointIds, projectMountPointIds] = await Promise.all([
-    resolveGroupMountPointIdsForCharacter(characterId),
-    resolveProjectMountPointIds(projectId),
   ]);
   return { groupMountPointIds, projectMountPointIds };
 }
@@ -98,9 +77,4 @@ export async function sharedWardrobeTiersForCharacter(
     groupMountPointIds: await resolveGroupMountPointIdsForCharacter(characterId),
     projectMountPointIds: projectMountPointIds ?? [],
   };
-}
-
-/** The no-context tiers: Quilltap General alone. */
-export function noSharedWardrobeTiers(): ResolvedSharedWardrobeTiers {
-  return { ...EMPTY };
 }

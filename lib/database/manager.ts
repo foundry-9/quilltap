@@ -119,6 +119,7 @@ export async function initializeDatabase(): Promise<DatabaseBackend> {
         backend.registerBlobColumns('vector_entries', ['embedding']);
         backend.registerBlobColumns('conversation_chunks', ['embedding']);
         backend.registerBlobColumns('help_docs', ['embedding']);
+        backend.registerBlobColumns('help_doc_chunks', ['embedding']);
       }
 
       setDatabaseBackend(backend);

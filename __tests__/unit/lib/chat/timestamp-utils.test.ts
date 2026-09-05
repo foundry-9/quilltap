@@ -7,7 +7,6 @@ import {
   calculateCurrentTimestamp,
   calculateTimestampAt,
   shouldInjectTimestamp,
-  formatTimestampForSystemPrompt,
   ensureFictionalBaseRealTime,
   parseTimestampInTimezone,
   resolveTimezone,
@@ -226,32 +225,6 @@ describe('timestamp-utils', () => {
         expect(shouldInjectTimestamp(buildConfig(60), false, 30)).toBe(false)
         expect(shouldInjectTimestamp(buildConfig(60), false, 75)).toBe(true)
       })
-    })
-  })
-
-  describe('formatTimestampForSystemPrompt', () => {
-    it('should format with "Current time:" prefix when autoPrepend is true', () => {
-      const timestamp = {
-        formatted: 'March 15, 2024 at 2:30 PM',
-        isoValue: '2024-03-15T14:30:00.000Z',
-        isFictional: false,
-      }
-
-      const result = formatTimestampForSystemPrompt(timestamp, true)
-
-      expect(result).toBe('Current time: March 15, 2024 at 2:30 PM')
-    })
-
-    it('should return just the formatted timestamp when autoPrepend is false', () => {
-      const timestamp = {
-        formatted: 'March 15, 2024 at 2:30 PM',
-        isoValue: '2024-03-15T14:30:00.000Z',
-        isFictional: false,
-      }
-
-      const result = formatTimestampForSystemPrompt(timestamp, false)
-
-      expect(result).toBe('March 15, 2024 at 2:30 PM')
     })
   })
 

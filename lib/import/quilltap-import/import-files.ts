@@ -20,8 +20,7 @@
 
 import { logger } from '@/lib/logger';
 import { getUserRepositories, getRepositories } from '@/lib/repositories/factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
-import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
+import { writeLibraryFileBytes } from '@/lib/file-storage/library-file-writer';
 import type { ExportedFolder, ExportedFileWithBytes } from '@/lib/export/types';
 import type { ImportOptions, IdMappingState } from './types';
 
@@ -72,7 +71,10 @@ async function importFolders(
         ? idByOldId.get(folder.parentFolderId) ?? null
         : null;
 
-      const created = await globalRepos.folders.create({
+      // Find-or-create at the chokepoint. The `findByPath` above is the
+      // reuse-reporting branch, not the uniqueness guarantee — that lives in
+      // `ensureByPath` and the unique index behind it (bug 114).
+      const created = await globalRepos.folders.ensureByPath({
         userId,
         path: folder.path,
         name: folder.name,
@@ -227,31 +229,19 @@ export async function importFiles(
       // Same two bridges the backup restore uses: project-bound files land in
       // their project's own store, everything else in the Quilltap Uploads
       // mount under `imported/`.
-      let storageKey: string;
-      let storedMimeType: string;
-      let sizeBytes: number;
-      if (projectId) {
-        const uploaded = await fileStorageManager.uploadFile({
-          filename: file.originalFilename,
-          content: bytes,
-          contentType: file.mimeType,
-          projectId,
-          folderPath: file.folderPath || '/',
-        });
-        storageKey = uploaded.storageKey;
-        storedMimeType = uploaded.storedMimeType;
-        sizeBytes = uploaded.sizeBytes;
-      } else {
-        const written = await writeUserUploadToMountStore({
-          filename: file.originalFilename,
-          content: bytes,
-          contentType: file.mimeType,
-          subfolder: 'imported',
-        });
-        storageKey = written.storageKey;
-        storedMimeType = written.storedMimeType;
-        sizeBytes = written.sizeBytes;
-      }
+      const {
+        storageKey,
+        storedMimeType,
+        sizeBytes,
+        sha256: storedSha256,
+      } = await writeLibraryFileBytes({
+        filename: file.originalFilename,
+        content: bytes,
+        contentType: file.mimeType,
+        projectId,
+        folderPath: file.folderPath,
+        subfolder: 'imported',
+      });
 
       const { kept, dropped } = await remapLinkedTo(
         file.linkedTo ?? [],
@@ -279,8 +269,12 @@ export async function importFiles(
         linkedTo: kept,
         tags,
         // Post-bridge truth, not what the archive claimed (see module header).
+        // sha256 joined that rule in 4.9.0: the bridge transcodes bitmaps to
+        // WebP, and a row carrying the archive's pre-transcode hash cannot be
+        // joined to the mount blob it points at (bug 117).
         mimeType: storedMimeType,
         size: sizeBytes,
+        sha256: storedSha256,
         storageKey,
       });
       imported++;

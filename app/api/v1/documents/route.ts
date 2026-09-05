@@ -3,9 +3,10 @@
  *
  * The left rail's Document Mode: open, read, write, rename, and delete
  * documents with no chat attached. Drives the same shared core as the
- * chat-scoped document actions (`lib/documents/operator-doc-actions`) but
- * creates no chat_documents rows and posts no Librarian announcements —
- * there is no conversation to notify.
+ * chat-scoped document actions (`lib/documents/operator-doc-actions`) through
+ * the same HTTP mapping (`lib/documents/operator-doc-http`), but creates no
+ * chat_documents rows for a chat and posts no Librarian announcements — there
+ * is no conversation to notify.
  *
  * GET  /api/v1/documents?action=accessible-stores - every enabled store (always "look everywhere")
  * POST /api/v1/documents?action=recent-documents  - recently-opened documents across all chats
@@ -21,24 +22,29 @@ import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { withCollectionActionDispatch } from '@/lib/api/middleware/actions';
-import { successResponse, badRequest, conflict, notFound, serverError, errorResponse } from '@/lib/api/responses';
-import { readFileWithMtime, type DocEditScope } from '@/lib/doc-edit';
-import { DatabaseStoreError } from '@/lib/mount-index/database-store';
+import { successResponse, serverError, errorResponse } from '@/lib/api/responses';
+import type { DocEditScope } from '@/lib/doc-edit';
 import {
   STANDALONE_ACCESS_CONTEXT,
-  resolveOperatorDocPath,
   openDocumentFile,
-  writeDocumentFile,
-  computeRenameTarget,
-  renameDocumentFile,
-  deleteDocumentFile,
   listAllEnabledStores,
-  DocumentConflictError,
   DocumentMissingError,
 } from '@/lib/documents/operator-doc-actions';
+import {
+  documentTargetFields,
+  openDocumentFields,
+  writeDocumentFields,
+  readDocumentResponse,
+  writeDocumentResponse,
+  resolveRenameTarget,
+  renameDocumentResponse,
+  sweepRenamedDocumentTracking,
+  deleteDocumentResponse,
+  dedupeRecentDocuments,
+  type DocumentHttpLog,
+} from '@/lib/documents/operator-doc-http';
 import { getErrorMessage } from '@/lib/error-utils';
 import { MAX_RECENT_DOCUMENTS, STANDALONE_CHAT_ID } from '@/lib/chat-documents/constants';
-import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 
 // ============================================================================
 // Schemas
@@ -47,43 +53,23 @@ import type { ChatDocument } from '@/lib/schemas/chat-document.types';
 // No chat means no project context, so the legacy on-disk `project` scope is
 // unresolvable here. Project files remain reachable through their project's
 // official document store (`document_store` scope by mount name).
-const standaloneScopeSchema = z.enum(['document_store', 'general']);
+const standaloneScopeSchema = z.enum(['document_store', 'general']).default('general');
 
-const openDocumentSchema = z.object({
-  filePath: z.string().optional(),
-  title: z.string().optional(),
-  scope: standaloneScopeSchema.default('general'),
-  mountPoint: z.string().optional(),
-  /** Folder (relative to scope root) for a new blank document; ignored when `filePath` is set. */
-  targetFolder: z.string().optional(),
-});
+const openDocumentSchema = z.object(openDocumentFields(standaloneScopeSchema));
 
-const readDocumentSchema = z.object({
-  filePath: z.string(),
-  scope: standaloneScopeSchema.default('general'),
-  mountPoint: z.string().optional(),
-});
+const readDocumentSchema = z.object(documentTargetFields(standaloneScopeSchema));
 
-const writeDocumentSchema = z.object({
-  filePath: z.string(),
-  scope: standaloneScopeSchema.default('general'),
-  mountPoint: z.string().optional(),
-  content: z.string(),
-  mtime: z.number().optional(),
-});
+const writeDocumentSchema = z.object(writeDocumentFields(standaloneScopeSchema));
 
 const renameDocumentSchema = z.object({
-  filePath: z.string(),
-  scope: standaloneScopeSchema.default('general'),
-  mountPoint: z.string().optional(),
+  ...documentTargetFields(standaloneScopeSchema),
   newTitle: z.string().min(1),
 });
 
-const deleteDocumentSchema = z.object({
-  filePath: z.string(),
-  scope: standaloneScopeSchema.default('general'),
-  mountPoint: z.string().optional(),
-});
+const deleteDocumentSchema = z.object(documentTargetFields(standaloneScopeSchema));
+
+/** How this route's log lines name the file. No chat to attribute them to. */
+const STANDALONE_LOG: DocumentHttpLog = { subject: 'standalone document' };
 
 // ============================================================================
 // Handlers
@@ -123,16 +109,11 @@ async function handleRecentDocuments(
     const fetchLimit = Math.max(MAX_RECENT_DOCUMENTS * 5, 50);
     const globalRecent = await repos.chatDocuments.findRecentAcrossChats(fetchLimit);
 
-    const seen = new Set<string>();
-    const ordered: ChatDocument[] = [];
-    for (const doc of globalRecent) { // already newest-first
-      if (doc.scope === 'project') continue;
-      const key = `${doc.scope} ${doc.mountPoint ?? ''} ${doc.filePath}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      ordered.push(doc);
-      if (ordered.length >= MAX_RECENT_DOCUMENTS) break;
-    }
+    // already newest-first
+    const ordered = dedupeRecentDocuments(
+      globalRecent.filter(doc => doc.scope !== 'project'),
+      MAX_RECENT_DOCUMENTS,
+    );
 
     return successResponse({
       documents: ordered.map(doc => ({
@@ -232,43 +213,11 @@ async function handleReadDocument(
   const body = await req.json();
   const data = readDocumentSchema.parse(body);
 
-  let resolved;
-  try {
-    resolved = await resolveOperatorDocPath(STANDALONE_ACCESS_CONTEXT, {
-      scope: data.scope as DocEditScope,
-      filePath: data.filePath,
-      mountPoint: data.mountPoint,
-    });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    logger.warn('Failed to resolve standalone document path for read', {
-      filePath: data.filePath,
-      scope: data.scope,
-      mountPoint: data.mountPoint,
-      error: message,
-    });
-    return badRequest(`Could not resolve ${data.filePath}: ${message}`);
-  }
-
-  try {
-    const fileData = await readFileWithMtime(resolved);
-    return successResponse({
-      content: fileData.content,
-      mtime: fileData.mtime,
-    });
-  } catch (error) {
-    const code = error instanceof Error && 'code' in error ? (error as NodeJS.ErrnoException).code : undefined;
-    if (code === 'ENOENT') {
-      return errorResponse(`File not found: ${data.filePath}`, 404);
-    }
-    logger.error('Failed to read standalone document', {
-      filePath: data.filePath,
-      scope: data.scope,
-      code,
-      error: getErrorMessage(error),
-    });
-    return serverError(`Failed to read document: ${getErrorMessage(error)}`);
-  }
+  return readDocumentResponse(
+    STANDALONE_ACCESS_CONTEXT,
+    { scope: data.scope as DocEditScope, filePath: data.filePath, mountPoint: data.mountPoint },
+    STANDALONE_LOG,
+  );
 }
 
 /** Write file content from the standalone editor (mtime-checked, no Librarian). */
@@ -279,32 +228,23 @@ async function handleWriteDocument(
   const body = await req.json();
   const data = writeDocumentSchema.parse(body);
 
-  try {
-    const { mtime } = await writeDocumentFile(STANDALONE_ACCESS_CONTEXT, repos, {
+  const written = await writeDocumentResponse(
+    STANDALONE_ACCESS_CONTEXT,
+    repos,
+    {
       filePath: data.filePath,
       scope: data.scope as DocEditScope,
       mountPoint: data.mountPoint,
       content: data.content,
       mtime: data.mtime,
-    });
-
-    return successResponse({ success: true, mtime });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    if (message.includes('mtime mismatch') || message.includes('modified by another process')) {
-      logger.warn('Standalone document save conflict detected', {
-        filePath: data.filePath,
-        error: message,
-      });
-      return conflict('Document changed elsewhere. Reload it and try again.');
-    }
-    logger.error('Failed to write standalone document', {
-      filePath: data.filePath,
-      scope: data.scope,
-      error: message,
-    });
-    return serverError(`Failed to write document: ${message}`);
+    },
+    STANDALONE_LOG,
+  );
+  if (!written.ok) {
+    return written.response;
   }
+
+  return successResponse({ success: true, mtime: written.mtime });
 }
 
 /**
@@ -319,13 +259,13 @@ async function handleRenameDocument(
   const body = await req.json();
   const data = renameDocumentSchema.parse(body);
 
-  const target = computeRenameTarget(data.filePath, data.newTitle);
+  const target = resolveRenameTarget(data.filePath, data.newTitle);
   if (!target.ok) {
-    return badRequest(target.reason);
+    return target.response;
   }
   const { newFilePath, newDisplayTitle } = target;
 
-  if (newFilePath === data.filePath) {
+  if (target.unchanged) {
     return successResponse({
       document: {
         filePath: data.filePath,
@@ -336,50 +276,33 @@ async function handleRenameDocument(
     });
   }
 
-  try {
-    await renameDocumentFile(STANDALONE_ACCESS_CONTEXT, repos, {
+  const renamed = await renameDocumentResponse(
+    STANDALONE_ACCESS_CONTEXT,
+    repos,
+    {
       scope: data.scope as DocEditScope,
       mountPoint: data.mountPoint,
       oldFilePath: data.filePath,
       newFilePath,
-    });
-  } catch (error) {
-    const message = getErrorMessage(error);
-    if (error instanceof DocumentConflictError) {
-      return conflict('A file already exists at that name.');
-    }
-    if (error instanceof DatabaseStoreError && error.code === 'UNSUPPORTED') {
-      return badRequest(message);
-    }
-    logger.error('Failed to rename standalone document', {
-      from: data.filePath,
-      to: newFilePath,
-      scope: data.scope,
-      error: message,
-    });
-    return serverError(`Failed to rename document: ${message}`);
+    },
+    STANDALONE_LOG,
+  );
+  if (!renamed.ok) {
+    return renamed.response;
   }
 
-  // Keep the recent-documents history pointing at the new name. Best-effort:
-  // the rename already succeeded on disk, so a tracking hiccup must not fail
-  // the request. Mirrors syncChatDocumentsAfterFileMove for doc_move_file.
-  try {
-    await repos.chatDocuments.renameFilePathInStore(
-      data.scope,
-      data.mountPoint ?? null,
-      data.filePath,
-      newFilePath,
-      newDisplayTitle,
-    );
-  } catch (trackError) {
-    logger.warn('Failed to update recent-document tracking after standalone rename', {
-      from: data.filePath,
-      to: newFilePath,
+  // Keep the recent-documents history pointing at the new name.
+  await sweepRenamedDocumentTracking(
+    repos,
+    {
       scope: data.scope,
       mountPoint: data.mountPoint,
-      error: getErrorMessage(trackError),
-    });
-  }
+      oldFilePath: data.filePath,
+      newFilePath,
+      newDisplayTitle,
+    },
+    STANDALONE_LOG,
+  );
 
   return successResponse({
     document: {
@@ -399,26 +322,13 @@ async function handleDeleteDocument(
   const body = await req.json();
   const data = deleteDocumentSchema.parse(body);
 
-  try {
-    const outcome = await deleteDocumentFile(STANDALONE_ACCESS_CONTEXT, {
-      scope: data.scope as DocEditScope,
-      mountPoint: data.mountPoint,
-      filePath: data.filePath,
-    });
-    if (outcome === 'not-found') {
-      return notFound('File');
-    }
-    if (outcome === 'not-a-file') {
-      return badRequest(`Path is not a file: ${data.filePath}`);
-    }
-  } catch (error) {
-    const message = getErrorMessage(error);
-    logger.error('Failed to delete standalone document', {
-      filePath: data.filePath,
-      scope: data.scope,
-      error: message,
-    });
-    return serverError(`Failed to delete document: ${message}`);
+  const deleted = await deleteDocumentResponse(
+    STANDALONE_ACCESS_CONTEXT,
+    { scope: data.scope as DocEditScope, mountPoint: data.mountPoint, filePath: data.filePath },
+    STANDALONE_LOG,
+  );
+  if (!deleted.ok) {
+    return deleted.response;
   }
 
   return successResponse({ success: true });

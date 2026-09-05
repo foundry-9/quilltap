@@ -54,3 +54,4 @@ export { handleGetPhotoAlbums } from './photo-albums';
 export type { PhotoAlbumOption, PhotoAlbumKind } from './photo-albums';
 export { handleGetGroupStores } from './group-stores';
 export { handleExportMarkdown } from './export-markdown';
+export { handleSetScenario } from './scenario';

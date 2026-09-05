@@ -11,6 +11,12 @@ import { BackgroundJob, BackgroundJobSchema, BackgroundJobType, BackgroundJobSta
 import { UserOwnedBaseRepository, CreateOptions } from './base.repository';
 import { TypedQueryFilter } from '../interfaces';
 import { logger } from '@/lib/logger';
+import {
+  ACTIVITY_KINDS,
+  JOB_TYPE_ACTIVITY,
+  emptyActivityCounts,
+  type ActivityKind,
+} from '@/lib/background-jobs/activity-kinds';
 
 /**
  * Statistics about the job queue
@@ -431,14 +437,24 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
 
   /**
    * Get queue statistics
+   *
+   * One indexed `COUNT(*)` per status. This used to read and Zod-validate
+   * *every* row in the table — completed jobs inside the retention window
+   * included — which made the toolbar's poll expensive enough that it had to
+   * be rationed. It is now cheap enough to poll on a heartbeat.
    */
   async getStats(userId?: string): Promise<QueueStats> {
     return this.safeQuery(
       async () => {
-        // Since the abstraction layer may not support full aggregation pipelines,
-        // we fetch all items and aggregate in JavaScript
-        const filter = userId ? ({ userId } as TypedQueryFilter<BackgroundJob>) : {};
-        const jobs = await this.findByFilter(filter);
+        const collection = await this.getCollection();
+        const statuses: { key: keyof QueueStats; status: BackgroundJobStatus }[] = [
+          { key: 'pending', status: 'PENDING' },
+          { key: 'processing', status: 'PROCESSING' },
+          { key: 'completed', status: 'COMPLETED' },
+          { key: 'failed', status: 'FAILED' },
+          { key: 'dead', status: 'DEAD' },
+          { key: 'paused', status: 'PAUSED' },
+        ];
 
         const stats: QueueStats = {
           pending: 0,
@@ -449,33 +465,60 @@ export class BackgroundJobsRepository extends UserOwnedBaseRepository<Background
           paused: 0,
         };
 
-        for (const job of jobs) {
-          switch (job.status) {
-            case 'PENDING':
-              stats.pending++;
-              break;
-            case 'PROCESSING':
-              stats.processing++;
-              break;
-            case 'COMPLETED':
-              stats.completed++;
-              break;
-            case 'FAILED':
-              stats.failed++;
-              break;
-            case 'DEAD':
-              stats.dead++;
-              break;
-            case 'PAUSED':
-              stats.paused++;
-              break;
+        for (const { key, status } of statuses) {
+          const filter: TypedQueryFilter<BackgroundJob> = { status } as TypedQueryFilter<BackgroundJob>;
+          if (userId) {
+            (filter as any).userId = userId;
           }
+          stats[key] = await collection.countDocuments(filter);
         }
+
         return stats;
       },
       'Error getting queue statistics',
       { userId },
       { pending: 0, processing: 0, completed: 0, failed: 0, dead: 0, paused: 0 }
+    );
+  }
+
+  /**
+   * Get active (PENDING + PROCESSING) job counts grouped by *activity kind* —
+   * the toolbar-chip grouping from `lib/background-jobs/activity-kinds`.
+   *
+   * This is the hot path: the toolbar polls it continuously. It runs one
+   * indexed `COUNT(*)` per kind rather than hauling every active row (payload
+   * JSON and all) out of SQLCipher the way {@link getActiveCountsByType} does,
+   * which matters when a mount-point scan has fanned out thousands of
+   * `EMBEDDING_GENERATE` jobs.
+   */
+  async getActiveCountsByKind(userId?: string): Promise<Record<ActivityKind, number>> {
+    return this.safeQuery(
+      async () => {
+        const collection = await this.getCollection();
+        const counts = emptyActivityCounts();
+
+        for (const kind of ACTIVITY_KINDS) {
+          const types = (Object.keys(JOB_TYPE_ACTIVITY) as BackgroundJobType[]).filter(
+            (type) => JOB_TYPE_ACTIVITY[type] === kind
+          );
+          if (types.length === 0) continue;
+
+          const filter: TypedQueryFilter<BackgroundJob> = {
+            status: { $in: ['PENDING', 'PROCESSING'] },
+            type: { $in: types },
+          } as TypedQueryFilter<BackgroundJob>;
+          if (userId) {
+            (filter as any).userId = userId;
+          }
+
+          counts[kind] = await collection.countDocuments(filter);
+        }
+
+        return counts;
+      },
+      'Error getting active counts by kind',
+      { userId },
+      emptyActivityCounts()
     );
   }
 

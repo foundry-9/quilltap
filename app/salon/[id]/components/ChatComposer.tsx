@@ -54,6 +54,8 @@ interface ChatComposerProps {
   setShowSource: (show: boolean) => void
   uploadingFile: boolean
   toolExecutionStatus: { tool: string; status: 'pending' | 'success' | 'error'; message: string } | null
+  /** Dismiss the tool-execution notice early; it also self-expires once settled. */
+  onDismissToolExecutionStatus: () => void
   /** Patterns for styling roleplay text in preview */
   renderingPatterns?: RenderingPattern[]
   /** Optional dialogue detection for paragraph-level styling in preview */
@@ -125,6 +127,7 @@ export function ChatComposer({
   setShowSource,
   uploadingFile,
   toolExecutionStatus,
+  onDismissToolExecutionStatus,
   renderingPatterns: _renderingPatterns,
   dialogueDetection: _dialogueDetection,
   roleplayTemplateId,
@@ -220,6 +223,8 @@ export function ChatComposer({
         {/* Tool execution status indicator */}
         {toolExecutionStatus && (
           <div
+            role="status"
+            aria-live="polite"
             className={`qt-alert flex items-center gap-2 ${
               toolExecutionStatus.status === 'pending'
                 ? 'qt-alert-info'
@@ -237,7 +242,16 @@ export function ChatComposer({
             ) : (
               <Icon name="alert-circle" className="w-5 h-5 flex-shrink-0" />
             )}
-            <span className="qt-label">{toolExecutionStatus.message}</span>
+            <span className="qt-label flex-1">{toolExecutionStatus.message}</span>
+            <button
+              type="button"
+              onClick={onDismissToolExecutionStatus}
+              className="qt-button-ghost flex-shrink-0 p-1"
+              title="Dismiss"
+              aria-label="Dismiss notice"
+            >
+              <Icon name="close" className="w-4 h-4" />
+            </button>
           </div>
         )}
 

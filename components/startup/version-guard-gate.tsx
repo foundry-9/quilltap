@@ -27,7 +27,7 @@ export function VersionGuardGate() {
           model to tinker with the works would be, to put it delicately, catastrophic.
         </p>
 
-        <div className="qt-surface-secondary rounded-lg p-4 text-left text-sm mb-6 space-y-1">
+        <div className="qt-bg-surface-alt rounded-lg p-4 text-left text-sm mb-6 space-y-1">
           <div>
             <span className="qt-text-secondary">Running version:</span>{' '}
             <code className="qt-code">{versionBlock.currentVersion}</code>

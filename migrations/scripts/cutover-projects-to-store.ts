@@ -54,6 +54,7 @@ import {
   parseLLMLogsBackupFilename,
   parseMountIndexBackupFilename,
 } from '../../lib/database/backends/sqlite/physical-backup';
+import { normalizeBackgroundDisplayMode } from '../../lib/schemas/project.types';
 import { getRepositories } from '../../lib/repositories/factory';
 import { getMountIndexSQLiteClient } from '../../lib/database/backends/sqlite/mount-index-client';
 import { loadMountIndexConfig } from '../../lib/database/config';
@@ -243,7 +244,10 @@ export function mapLegacyProjectRow(row: Record<string, unknown>): Project {
     storyBackgroundsEnabled: nullableBool(row.storyBackgroundsEnabled),
     staticBackgroundImageId: (row.staticBackgroundImageId as string | null) ?? null,
     storyBackgroundImageId: (row.storyBackgroundImageId as string | null) ?? null,
-    backgroundDisplayMode: ((row.backgroundDisplayMode as string | null) ?? 'theme') as Project['backgroundDisplayMode'],
+    // Retired modes ('project', 'static') normalize to 'theme' — see
+    // RETIRED_BACKGROUND_DISPLAY_MODES in lib/schemas/project.types.ts.
+    backgroundDisplayMode: (normalizeBackgroundDisplayMode(row.backgroundDisplayMode) ??
+      'theme') as Project['backgroundDisplayMode'],
   } as Project;
 }
 

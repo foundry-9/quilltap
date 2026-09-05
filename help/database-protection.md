@@ -38,6 +38,36 @@ You may also *remove* a passphrase entirely, should you decide that the convenie
 
 After changing your passphrase, the new passphrase will be required the next time Quilltap starts.
 
+### Rebuilding a Lost or Locked Key File
+
+Here we must be precise about what is lost, because the distinction is the whole of the matter. The `.dbkey` file does not *contain* your data's protection; it merely holds the key in a small locked box of its own. The key itself — that 44-character string Quilltap displayed exactly once at first-run setup, urging you in the strongest terms to write it down — is the thing the databases actually answer to.
+
+Which means: **if you kept the key, nothing is lost.** Not when the `.dbkey` file has gone missing. Not when the passphrase that guards it has slipped your mind entirely, leaving Quilltap waiting at the locked screen with the patience of a doorman who has never once been told the password. A new key file can be built from the key, and the establishment reopens.
+
+With the server stopped, from a terminal:
+
+```bash
+# Paste the key at the hidden prompt — or set ENCRYPTION_MASTER_PEPPER first
+npx quilltap instances restore-key Friday
+```
+
+You will be asked for the key (the typing does not show, as is only proper), and then for a passphrase to guard the rebuilt file — leave it blank for none. Before it writes so much as a byte, it tries your key against every encrypted database it finds and reports what it discovers:
+
+```
+  quilltap.db                  opens with this pepper ✓
+  quilltap-llm-logs.db         opens with this pepper ✓
+  quilltap-mount-index.db      opens with this pepper ✓
+```
+
+Should a database decline, the command declines with it. This is deliberate and not negotiable: a key file holding the *wrong* key is a considerably worse companion than no key file at all, since Quilltap would open it, believe it, and then announce that your perfectly intact database has been corrupted. Any previous key file is set aside as `quilltap.dbkey.bak-<timestamp>` rather than discarded.
+
+Two provisos, neither of which is fine print:
+
+- **The server must be down.** A running Quilltap holds the key in memory and will not notice a file rewritten beneath it; the command refuses while the instance lock is held, and says so.
+- **Archived characters are keyed to the passphrase, not to the key.** If you rebuild with a *different* passphrase than the one in force when a character was packed away, that bundle still wants the old one — and this offline route cannot rewrite it. Rotating a passphrase you still remember is therefore better done from **Settings > Data & System**, which re-encrypts every archive as it goes.
+
+Without the key, there is no such rescue, and no one — ourselves emphatically included — can furnish one. Write it down. Put it somewhere that is not the machine.
+
 ### Auto-Lock (Idle Timer)
 
 For those who prefer their security to be proactive rather than merely passive — the sort of arrangement whereby the valet not only guards the strongbox but also locks it again should the master wander off for a cup of tea — Quilltap offers an **auto-lock** feature.

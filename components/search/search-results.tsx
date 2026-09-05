@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useOpenDocumentFromSearch } from '@/lib/hooks/use-open-document-from-search'
 import type {
   SearchResult,
   SearchType,
@@ -9,6 +10,7 @@ import type {
   TagSearchResult,
   MemorySearchResult,
   MessageSearchResult,
+  DocumentSearchResultItem,
 } from './types'
 import { TYPE_ICONS, TYPE_LABELS, TYPE_LABELS_PLURAL } from './types'
 
@@ -281,6 +283,58 @@ function MessageResultCard({ result, query, onResultClick }: { result: MessageSe
   )
 }
 
+/**
+ * A document in one of the document stores.
+ *
+ * Deliberately a plain `<a>`, not a `<Link>`: the href is the *standalone*
+ * deep link, so a middle-click or a copied link opens the document with no
+ * chat attached and no Librarian announcement. A plain left click is
+ * intercepted by {@link useOpenDocumentFromSearch}, which upgrades to an
+ * in-chat open when a Salon is focused.
+ */
+function DocumentResultCard({ result, query, onResultClick }: { result: DocumentSearchResultItem; query: string; onResultClick?: () => void }) {
+  const openDocument = useOpenDocumentFromSearch()
+
+  return (
+    <a
+      href={result.url}
+      onClick={(e) => {
+        openDocument(result, e)
+        if (!e.defaultPrevented) return
+        onResultClick?.()
+      }}
+      className="block p-3 qt-hover-accent rounded-lg transition-colors"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-full qt-bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <span className="text-lg">{TYPE_ICONS.documents}</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="qt-text-primary truncate">
+              <HighlightedText text={result.name} query={query} />
+            </span>
+            <span className="text-xs px-1.5 py-0.5 rounded qt-badge-info">
+              {TYPE_LABELS.documents}
+            </span>
+            {result.storeType === 'character' && (
+              <span className="text-xs px-1.5 py-0.5 rounded qt-badge-character">
+                Vault
+              </span>
+            )}
+          </div>
+          <p className="qt-text-xs truncate">
+            {result.mountPointName} · {result.relativePath}
+          </p>
+          <p className="qt-text-small mt-1 line-clamp-2">
+            <HighlightedText text={result.snippet} query={query} />
+          </p>
+        </div>
+      </div>
+    </a>
+  )
+}
+
 // Highlight matching text
 function HighlightedText({ text, query }: { text: string; query: string }) {
   if (!query || !text) return <>{text}</>
@@ -319,7 +373,7 @@ export function SearchResults({ results, query, isLoading, onResultClick, counts
           No results found for &quot;{query}&quot;
         </p>
         <p className="qt-text-xs mt-1">
-          Try searching for characters, chats, messages, tags, or memories
+          Try searching for characters, chats, messages, documents, tags, or memories
         </p>
       </div>
     )
@@ -374,6 +428,8 @@ export function SearchResults({ results, query, isLoading, onResultClick, counts
                   return <MemoryResultCard key={key} result={result as MemorySearchResult} query={query} onResultClick={onResultClick} />
                 case 'messages':
                   return <MessageResultCard key={key} result={result as MessageSearchResult} query={query} onResultClick={onResultClick} />
+                case 'documents':
+                  return <DocumentResultCard key={key} result={result as DocumentSearchResultItem} query={query} onResultClick={onResultClick} />
                 default:
                   return null
               }

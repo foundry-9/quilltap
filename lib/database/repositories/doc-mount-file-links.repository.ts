@@ -25,16 +25,23 @@ import {
   DocMountFileLink,
   DocMountFileLinkSchema,
   DocMountFileLinkWithContent,
+  EDITABLE_TEXT_FILE_TYPES,
 } from '@/lib/schemas/mount-index.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { DatabaseCollection } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
-import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
-import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { getRawMountIndexDatabase } from '../backends/sqlite/mount-index-client';
+import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
+import { generateDDL, classifySchemaColumns } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
 import { ensureLinkNocaseUniqueIndex, ensureLinkGroupColumn } from './mount-index-case-repair';
 import { policyFromContent, DEFAULT_DOCUMENT_POLICY } from '@/lib/doc-edit/document-policy';
-import { reapOrphanedStoreChildren, type OrphanedStoreChildrenSwept } from '@/lib/mount-index/orphan-store-reaper';
+import { LIKE_ESCAPE_CHAR, likeContainsPattern } from './like-escape';
+import {
+  gcOrphanedFileRow,
+  reapOrphanedStoreChildren,
+  type OrphanedStoreChildrenSwept,
+} from '@/lib/mount-index/orphan-store-reaper';
 
 // Minimal subset of better-sqlite3's Database that the inline folder helper
 // uses. Avoids dragging the type into every link* method signature.
@@ -42,7 +49,7 @@ type SyncDb = {
   prepare(sql: string): {
     get(...params: unknown[]): unknown;
     all(...params: unknown[]): unknown[];
-    run(...params: unknown[]): unknown;
+    run(...params: unknown[]): { changes: number };
   };
 };
 
@@ -111,59 +118,6 @@ function fanOutGroupFileId(
   }
 
   return siblings;
-}
-
-/**
- * Drop a content row that no link references any more.
- *
- * Every write to a database-backed mount is content-addressed: it finds-or-
- * creates a `doc_mount_files` row for the NEW sha and repoints the link at it.
- * Without this the row the link just left behind lingers forever, holding its
- * `doc_mount_documents` / `doc_mount_blobs` payload — a slow leak that had
- * accumulated dozens of orphans in the wild. Content rows still referenced by
- * some other link (a real hard link, or an unrelated file that happens to have
- * identical bytes) are left alone.
- *
- * The payload rows are deleted explicitly rather than left to the FK cascade.
- * `ON DELETE CASCADE` is only present on databases whose tables came from the
- * add-doc-mount-file-links migration; tables created from the Zod schema by
- * generateDDL carry no foreign keys at all, so on those instances a cascade
- * would silently keep every payload forever. Deleting children first is a
- * no-op where the cascade does exist.
- *
- * The payload tables are created lazily by their repositories on first access
- * (`doc_mount_blobs` has no Zod schema, so `generateDDL` never mints it; a
- * document-only or restored-from-old-backup index may likewise never have held
- * a blob). Deleting from a table that has never been created throws
- * `no such table` — a hard failure on the second write to any path. So each
- * payload delete is guarded behind a table-existence check; a missing table has
- * nothing to collect anyway.
- *
- * Runs synchronously inside the caller's `db.transaction(...)`.
- *
- * @returns true when the row was collected
- */
-function tableExistsSync(db: SyncDb, name: string): boolean {
-  const row = db.prepare(
-    `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`
-  ).get(name) as { name: string } | undefined;
-  return Boolean(row);
-}
-
-function gcOrphanedFileRow(db: SyncDb, fileId: string | null): boolean {
-  if (!fileId) return false;
-  const still = db.prepare(
-    'SELECT COUNT(*) AS count FROM doc_mount_file_links WHERE fileId = ?'
-  ).get(fileId) as { count: number } | undefined;
-  if ((still?.count ?? 0) > 0) return false;
-  if (tableExistsSync(db, 'doc_mount_documents')) {
-    db.prepare('DELETE FROM doc_mount_documents WHERE fileId = ?').run(fileId);
-  }
-  if (tableExistsSync(db, 'doc_mount_blobs')) {
-    db.prepare('DELETE FROM doc_mount_blobs WHERE fileId = ?').run(fileId);
-  }
-  db.prepare('DELETE FROM doc_mount_files WHERE id = ?').run(fileId);
-  return true;
 }
 
 /**
@@ -353,6 +307,19 @@ interface LinkFilesystemFileInput {
 // beyond the JSON-decoded columns the SQLiteCollection helper handles for us.
 type JoinedRow = DocMountFileLink & Pick<DocMountFile, 'sha256' | 'fileSizeBytes' | 'fileType' | 'source'>;
 
+/**
+ * A link row matched by {@link DocMountFileLinksRepository.searchByNameOrPath}.
+ * Deliberately narrow — the global search only needs identity, location and a
+ * sort key, not the joined content columns.
+ */
+export interface DocMountLinkTextMatch {
+  id: string;
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  updatedAt: string;
+}
+
 export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMountFileLink> {
   private mountIndexCollectionInitialized = false;
 
@@ -361,14 +328,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
   }
 
   protected async getCollection(): Promise<DatabaseCollection<DocMountFileLink>> {
-    if (isMountIndexDegraded()) {
-      throw new Error('Mount index database is in degraded mode');
-    }
-
-    const db = getRawMountIndexDatabase();
-    if (!db) {
-      throw new Error('Mount index database not initialized');
-    }
+    const db = requireMountIndexDb();
 
     if (!this.mountIndexCollectionInitialized) {
       try {
@@ -406,16 +366,7 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
       }
     }
 
-    const metadata = extractSchemaMetadata(this.collectionName, this.schema);
-    const jsonColumns = metadata.fields
-      .filter(f => f.type === 'array' || f.type === 'object')
-      .map(f => f.name);
-    const arrayColumns = metadata.fields
-      .filter(f => f.type === 'array')
-      .map(f => f.name);
-    const booleanColumns = metadata.fields
-      .filter(f => f.type === 'boolean')
-      .map(f => f.name);
+    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
 
     return new SQLiteCollection<DocMountFileLink>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
   }
@@ -597,6 +548,60 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
     );
   }
 
+  /**
+   * Substring-search link rows by file name or relative path across a set of
+   * mount points. Powers the global search bar's Documents chip
+   * ({@link ../../mount-index/document-text-search}); the companion
+   * content search lives on the chunks repository.
+   *
+   * Scoped to {@link EDITABLE_TEXT_FILE_TYPES} — the search surface only
+   * offers documents Document Mode can actually open, so PDFs, DOCX and
+   * blobs are out. Matching is case-insensitive via `LOWER()` (SQLite's bare
+   * `LIKE` only folds ASCII), and `%`/`_` in the user's query are escaped so
+   * they match literally.
+   */
+  async searchByNameOrPath(
+    query: string,
+    mountPointIds: string[],
+    limit: number
+  ): Promise<DocMountLinkTextMatch[]> {
+    if (mountPointIds.length === 0 || query.length === 0) return [];
+    return this.safeQuery(
+      async () => {
+        const db = getRawMountIndexDatabase();
+        if (!db) return [];
+        await this.getCollection();
+
+        const placeholders = mountPointIds.map(() => '?').join(',');
+        const typePlaceholders = EDITABLE_TEXT_FILE_TYPES.map(() => '?').join(',');
+        const pattern = likeContainsPattern(query);
+
+        const rows = db.prepare(
+          `SELECT l.id, l.mountPointId, l.relativePath, l.fileName, l.updatedAt
+             FROM doc_mount_file_links l
+             JOIN doc_mount_files f ON f.id = l.fileId
+            WHERE l.mountPointId IN (${placeholders})
+              AND f.fileType IN (${typePlaceholders})
+              AND (LOWER(l.fileName) LIKE ? ESCAPE '${LIKE_ESCAPE_CHAR}'
+                OR LOWER(l.relativePath) LIKE ? ESCAPE '${LIKE_ESCAPE_CHAR}')
+            ORDER BY l.updatedAt DESC
+            LIMIT ?`
+        ).all(
+          ...mountPointIds,
+          ...EDITABLE_TEXT_FILE_TYPES,
+          pattern,
+          pattern,
+          limit
+        ) as DocMountLinkTextMatch[];
+
+        return rows;
+      },
+      'Error searching file links by name or path',
+      { mountPointIdCount: mountPointIds.length, queryLength: query.length },
+      []
+    );
+  }
+
   // ============================================================================
   // Deliberate hard-link groups
   // ============================================================================
@@ -711,8 +716,9 @@ export class DocMountFileLinksRepository extends AbstractBaseRepository<DocMount
           }
 
           // Last link gone — drop the file row and its payload. Shared with
-          // the write path so both collect content the same way.
-          return gcOrphanedFileRow(db, link.fileId);
+          // the write path and the store cascade so all collect content the
+          // same way.
+          return gcOrphanedFileRow(db, link.fileId) !== null;
         });
 
         const fileGC = tx();

@@ -26,6 +26,7 @@ export type {
 export type {
   ImageOrientation,
   ImageGenParams,
+  ImageLoraSpec,
   GeneratedImage,
   ImageGenResponse,
   ImageProvider,

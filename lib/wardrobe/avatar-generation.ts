@@ -8,6 +8,7 @@
 
 import { logger } from '@/lib/logger';
 import { enqueueCharacterAvatarGeneration } from '@/lib/background-jobs/queue-service';
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { getRepositories } from '@/lib/repositories/factory';
 
 interface AvatarGenerationParams {
@@ -28,12 +29,7 @@ interface AvatarGenerationParams {
    * dialog's "fitting room" — a transient outfit composition that has not
    * been committed to the chat's equipped state.
    */
-  equippedSlotsOverride?: {
-    top: string[];
-    bottom: string[];
-    footwear: string[];
-    accessories: string[];
-  } | null;
+  equippedSlotsOverride?: EquippedSlots | null;
 }
 
 export type AvatarGenerationResult =

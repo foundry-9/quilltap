@@ -188,6 +188,44 @@ is preserved, so the Salon's EventSource never closes.
 > CSS grid-column / visibility is driven by state, so no view ever changes its
 > React parent. This is the safest way to honor the keep-alive constraint.
 
+### Re-activation refresh (data freshness)
+
+Keep-alive's corollary: a view's queries and effects never remount, so without
+help a tab would forever show the world as it stood when the user left it.
+Navigating **back** to a tab (its pane's hidden→visible transition) therefore
+refreshes its data sources:
+
+- **The signal.** `TabView` wraps every view in
+  `WorkspaceTabVisibilityProvider` (`components/workspace/workspace-tab-context.tsx`),
+  fed the tab's pane-active flag from `WorkspaceHost`. Two hooks read it:
+  `useWorkspaceTabVisible()` and `useOnTabActivated(cb)` — the latter fires on
+  every hidden→visible transition, never on the initial mount and never outside
+  the workspace (a full-page route is always "visible").
+- **TanStack Query reads** are refreshed centrally: `TabView` mounts a
+  `TabActivationInvalidator` which, on activation, invalidates the query-key
+  prefixes mapped from the tab's kind in
+  [`lib/workspace/tab-refetch.ts`](/lib/workspace/tab-refetch.ts) — the single
+  source of truth for what a tab kind considers stale. Because hidden tabs stay
+  mounted (their queries remain active observers), a prefix invalidation also
+  freshens sibling tabs sharing it.
+- **Views that still fetch outside TanStack Query** (Prospero, the Scriptorium
+  and their in-place detail views, Photos, Files/FileBrowser, the character
+  detail, General Scenarios, the rail Wardrobe, Aurora's groups list) call
+  `useOnTabActivated` themselves and re-run their loads **silently** — their
+  fetchers accept `{ silent: true }` so a refresh never flips the `loading`
+  flag that would swap the page (or an in-place detail) for its loading state.
+- **Deliberately not refreshed:** `salon` / `terminal` / `document` (live
+  SSE/PTY surfaces; the streaming transport is out of bounds), `brahma`
+  (likewise a console), and editors holding unsaved state (`character-edit`,
+  `character-new`, `document-standalone`, `settings-wizard`). The full roster
+  and rationale live in `lib/workspace/tab-refetch.ts`'s module doc.
+
+Wiring a **new tab kind**: give its TanStack reads an entry in
+`tabActivationQueryKeys`, and if it fetches outside TanStack Query, re-run
+those loads in a `useOnTabActivated` callback (silently, per above). Migrating
+a view onto TanStack Query later? The map entry keeps working; drop the manual
+wiring.
+
 ### View components (extracted from routes)
 
 For each surface, extract the page body into a reusable view that takes its

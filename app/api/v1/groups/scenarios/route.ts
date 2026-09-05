@@ -1,7 +1,7 @@
 /**
  * Group Scenarios for the New Chat dialog — participant-union aggregation.
  *
- * GET /api/v1/groups/scenarios?characterIds=<id,id,...>
+ * GET /api/v1/groups/scenarios?characterIds=<id,id,...>&includeArchived=true
  *
  * Returns, for every group that ANY of the supplied (prospective) participants
  * is a member of, that group's `Scenarios/` entries — grouped under the group's
@@ -22,6 +22,7 @@ import { createContextHandler } from '@/lib/api/middleware';
 import type { RequestContext } from '@/lib/api/middleware/context';
 import { logger } from '@/lib/logger';
 import { successResponse } from '@/lib/api/responses';
+import { readIncludeArchived } from '@/lib/api/query-params';
 import { ensureGroupOfficialStore } from '@/lib/mount-index/ensure-group-store';
 import {
   ensureGroupScenariosFolder,
@@ -30,6 +31,7 @@ import {
 
 export const GET = createContextHandler(
   async (req: NextRequest, { repos }: RequestContext) => {
+    const includeArchived = readIncludeArchived(req);
     const raw = req.nextUrl.searchParams.get('characterIds') ?? '';
     const requestedIds = raw
       .split(',')
@@ -81,7 +83,9 @@ export const GET = createContextHandler(
         if (!ensured) continue;
         await ensureGroupScenariosFolder(ensured.mountPointId);
 
-        const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId);
+        const { scenarios, warnings } = await listGroupScenarios(ensured.mountPointId, {
+          includeArchived,
+        });
         if (scenarios.length === 0) continue;
 
         groupScenarios.push({

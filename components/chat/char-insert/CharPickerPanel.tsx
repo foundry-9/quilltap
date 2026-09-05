@@ -8,9 +8,9 @@
  * uses, a Recents row, and a grid grouped by the dataset's own categories
  * (emoji groups, or Unicode blocks).
  *
- * `EmojiPickerPopover` and `UnicodePickerPopover` are thin wrappers that supply
- * a profile and the popover surface. Everything below is profile-agnostic — a
- * third dataset would need no changes here.
+ * `CharPickerToolbarButton` (in `FormattingToolbar`) supplies a profile and
+ * the popover surface. Everything below is profile-agnostic — a third dataset
+ * would need no changes here.
  *
  * Dismissal behaviour follows `RngDropdown` (`useClickOutside`, which also
  * handles Escape); the surface classes follow `DeleteConfirmPopover`
@@ -62,7 +62,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 
 /**
- * Rendered ONLY while open — the caller gates it (`{open && <…PickerPopover …
+ * Rendered ONLY while open — the caller gates it (`{open && <CharPickerPanel …
  * />}`). That is what lets "what to show when the picker opens" be lazy state
  * initializers rather than an effect that sets state on an `isOpen` flip.
  */

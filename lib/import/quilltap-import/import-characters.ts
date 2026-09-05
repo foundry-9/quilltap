@@ -13,7 +13,7 @@ import type { Character } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import type { ExportedCharacter } from '@/lib/export/types';
 import { type LegacyOutfitPreset, legacyPresetToComposite } from './legacy-presets';
-import type { ImportOptions, IdMappingState, ImportCounts } from './types';
+import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -177,11 +177,9 @@ export async function importCharacters(
 
       const { id: _, userId: __, createdAt, updatedAt, ...charData } = character;
       const createData = options.preserveIds ? { ...charData, id: character.id } : charData;
-      const createOptions = options.preserveIds ? { id: character.id } : undefined;
+      const createOptions = getPreserveIdsCreateOptions(character.id, options);
       // create() provisions vault + projects managed fields atomically.
-      const newCharacter = options.preserveIds
-        ? await repos.characters.create(createData, createOptions)
-        : await repos.characters.create(createData);
+      const newCharacter = await repos.characters.create(createData, createOptions);
       idMaps.characters.set(character.id, newCharacter.id);
       rememberBundleVault(idMaps, character, newCharacter.id);
 
@@ -262,6 +260,7 @@ async function importCharacterWardrobeItems(
   const globalRepos = getRepositories();
   let importedCount = 0;
 
+  const importable: WardrobeItem[] = [];
   for (const item of combined) {
     // Skip archetype items (characterId = null) — they are shared, not per-character
     if (!item.characterId) {
@@ -271,14 +270,56 @@ async function importCharacterWardrobeItems(
       });
       continue;
     }
+    importable.push(item);
+  }
 
+  // Item ids are re-minted on import, so composite `componentItemIds` — which
+  // reference the export's original ids — must be remapped to the new ids.
+  // Pre-assign every new id, remap the references, and create leaf items
+  // before the composites that bundle them so no composite is ever written
+  // ahead of its components. References that don't resolve within this
+  // character's own items (e.g. archetype components) are dropped with a
+  // warning rather than left dangling.
+  const newIdByOldId = new Map<string, string>(importable.map((item) => [item.id, randomUUID()]));
+
+  const compositeDepth = (item: WardrobeItem, seen: Set<string>): number => {
+    const componentIds = item.componentItemIds ?? [];
+    if (componentIds.length === 0 || seen.has(item.id)) return 0;
+    seen.add(item.id);
+    let max = 0;
+    for (const componentId of componentIds) {
+      const component = importable.find((i) => i.id === componentId);
+      if (component) max = Math.max(max, compositeDepth(component, seen) + 1);
+    }
+    return max;
+  };
+  const ordered = [...importable].sort(
+    (a, b) => compositeDepth(a, new Set()) - compositeDepth(b, new Set())
+  );
+
+  for (const item of ordered) {
     try {
       const { id: _, characterId: __, createdAt, updatedAt, migratedFromClothingRecordId, ...itemData } = item;
-      await globalRepos.wardrobe.create({
-        ...itemData,
-        characterId: newCharacterId,
-        migratedFromClothingRecordId: null,
-      });
+
+      const originalComponentIds = item.componentItemIds ?? [];
+      const remappedComponentIds = originalComponentIds
+        .map((oldId) => newIdByOldId.get(oldId))
+        .filter((newId): newId is string => Boolean(newId));
+      if (remappedComponentIds.length !== originalComponentIds.length) {
+        warnings.push(
+          `Wardrobe item "${item.title}" referenced ${originalComponentIds.length - remappedComponentIds.length} component item(s) not present in the import; those references were dropped.`
+        );
+      }
+
+      await globalRepos.wardrobe.create(
+        {
+          ...itemData,
+          componentItemIds: remappedComponentIds,
+          characterId: newCharacterId,
+          migratedFromClothingRecordId: null,
+        },
+        { id: newIdByOldId.get(item.id) }
+      );
       importedCount++;
 
       moduleLogger.debug('Imported wardrobe item for character', {

@@ -105,7 +105,14 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
   }
 
   /**
-   * Delete a connection profile
+   * Delete a connection profile.
+   *
+   * Also releases the deleted profile from any *other* profile that had named
+   * it as its fallback understudy. `fallbackProfileId` is deliberately not a
+   * foreign key — `buildFallbackChain()` already drops a target it cannot
+   * find, so a stale reference is harmless at call time — but leaving it in
+   * the row is a lie the profile editor would then render as a dropdown
+   * pointing at nothing.
    */
   async delete(id: string): Promise<boolean> {
     return this.safeQuery(
@@ -113,7 +120,15 @@ export class ConnectionProfilesRepository extends TaggableBaseRepository<Connect
         const result = await this._delete(id);
 
         if (result) {
-          logger.info('Connection profile deleted successfully', { profileId: id });
+          const releasedCount = await this.updateMany(
+            { fallbackProfileId: id } as TypedQueryFilter<ConnectionProfile>,
+            { fallbackProfileId: null }
+          );
+
+          logger.info('Connection profile deleted successfully', {
+            profileId: id,
+            fallbackReferencesCleared: releasedCount,
+          });
         }
 
         return result;

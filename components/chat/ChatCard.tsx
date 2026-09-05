@@ -18,8 +18,12 @@ import { TagDisplay } from '@/components/tags/tag-display'
 import { useUserCharacterDisplayName } from '@/hooks/usePersonaDisplayName'
 import AvatarStack from '@/components/ui/AvatarStack'
 import { formatChatListDate } from '@/lib/format-time'
+import { DAY_GRANULARITY_MS, useNow } from '@/hooks/useNow'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { Icon } from '@/components/ui/icon'
+import { chatActivityAt } from '@/lib/chat/chat-activity'
+import { ConciergeMark } from '@/components/chat/ConciergeMark'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 
 // ============================================================================
 // Types
@@ -65,6 +69,7 @@ export interface ChatCardData {
   memoryCount?: number
   participants: ChatCardParticipant[]
   tags?: ChatCardTag[]
+  createdAt: string
   updatedAt: string
   lastMessageAt?: string
   project?: ChatCardProject | null
@@ -73,8 +78,10 @@ export interface ChatCardData {
   previewText?: string | null
   /** Story background image URL - displayed instead of avatars when present */
   storyBackgroundUrl?: string | null
-  /** Whether this chat has been classified as dangerous */
-  isDangerousChat?: boolean
+  /** The derived Concierge four-state — never the raw danger label */
+  conciergeState?: ConciergeState
+  /** The classifier's categories, shown on the mark's tooltip when Flagged */
+  dangerCategories?: string[]
   /** Scriptorium rendering status: none = not rendered, rendered = markdown only, embedded = fully indexed */
   scriptoriumStatus?: 'none' | 'rendered' | 'embedded'
   /** Whether this chat is an autonomous character-to-character room (4.6) */
@@ -147,8 +154,17 @@ export function ChatCard({
   const { formatCharacterName } = useUserCharacterDisplayName()
   const [copiedLink, setCopiedLink] = useState(false)
 
+  // A day-boundary tick — one timer, firing once at local midnight — is all
+  // this readout needs to roll "today" over to "Yesterday" on a list that
+  // has been open since last night.
+  const nowMs = useNow(DAY_GRANULARITY_MS)
+
   const participantNames = formatParticipantNames(chat.participants)
-  const dateStr = formatChatListDate(chat.lastMessageAt || chat.updatedAt, useRelativeDates)
+  const dateStr = formatChatListDate(
+    chatActivityAt(chat),
+    useRelativeDates,
+    nowMs,
+  )
   const displayTitle = chat.title || (characterName ? `Chat with ${characterName}` : 'Untitled Chat')
 
   const handleCopyLink = async (e: React.MouseEvent) => {
@@ -255,7 +271,7 @@ export function ChatCard({
                       ? 'qt-bg-success/10 qt-text-success hover:qt-bg-success/20'
                       : chat.scriptoriumStatus === 'rendered'
                       ? 'qt-bg-warning/10 qt-text-warning hover:qt-bg-warning/20'
-                      : 'bg-destructive/10 qt-text-destructive hover:bg-destructive/20'
+                      : 'qt-bg-destructive/10 qt-text-destructive hover:qt-bg-destructive/20'
                   }`}
                   title={
                     chat.scriptoriumStatus === 'embedded'
@@ -273,8 +289,12 @@ export function ChatCard({
                   <Icon name="file" className="w-3 h-3" />
                 </button>
               )}
-              {chat.isDangerousChat && (
-                <span className="qt-text-destructive text-sm flex-shrink-0" title="Flagged as dangerous" aria-label="Flagged as dangerous">*</span>
+              {chat.conciergeState && (
+                <ConciergeMark
+                  conciergeState={chat.conciergeState}
+                  dangerCategories={chat.dangerCategories}
+                  className="text-sm flex-shrink-0"
+                />
               )}
               {chat.isAutonomous && (
                 <span
@@ -349,7 +369,7 @@ export function ChatCard({
               onClick={handleAction}
               className={
                 actionType === 'delete'
-                  ? 'chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg bg-destructive qt-text-destructive-foreground shadow transition hover:qt-bg-destructive/90'
+                  ? 'chat-card__action inline-flex h-10 w-10 items-center justify-center rounded-lg qt-bg-destructive qt-text-on-destructive shadow transition hover:qt-bg-destructive/90'
                   : 'inline-flex h-10 w-10 items-center justify-center rounded-lg qt-bg-muted qt-text-secondary shadow transition hover:qt-text-destructive hover:qt-bg-destructive/10'
               }
               title={actionType === 'delete' ? 'Delete chat' : 'Remove from project'}

@@ -93,6 +93,41 @@ describe('ApiKeyModal dynamic provider loading', () => {
     expect(providerSelect).not.toBeDisabled()
   })
 
+  // Bug 81: the list is filtered on whether a provider *may* hold a key, not
+  // whether it demands one. OpenAI-Compatible requires none (a local llama.cpp
+  // has nowhere to put one) and accepts one (a hosted endpoint demands a bearer
+  // token); the stricter reading left no way to create such a key at all.
+  it('offers a provider that accepts an API key without requiring one', async () => {
+    mockFetch.mockResolvedValue({
+      json: () =>
+        Promise.resolve({
+          providers: [
+            {
+              name: 'OPENAI_COMPATIBLE',
+              displayName: 'OpenAI-Compatible',
+              configRequirements: { requiresApiKey: false, acceptsApiKey: true },
+            },
+            {
+              name: 'OLLAMA',
+              displayName: 'Ollama',
+              configRequirements: { requiresApiKey: false, acceptsApiKey: false },
+            },
+          ],
+        }),
+    })
+
+    render(
+      <ApiKeyModal isOpen={true} onClose={mockOnClose} onSuccess={mockOnSuccess} />
+    )
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading providers...')).not.toBeInTheDocument()
+    })
+
+    expect(screen.getByText('OpenAI-Compatible')).toBeInTheDocument()
+    expect(screen.queryByText('Ollama')).not.toBeInTheDocument()
+  })
+
   it('handles fetch error gracefully', async () => {
     mockFetch.mockRejectedValue(new Error('Network error'))
 

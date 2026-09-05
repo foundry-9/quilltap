@@ -24,10 +24,18 @@
  * the blob id encoded in the storage key, and UPDATEs `mimeType` / `size`
  * when they disagree with the blob's `storedMimeType` / `sizeBytes`.
  *
- * `sha256` is *not* touched. The legacy `files.sha256` value is the input
- * bytes' hash and is load-bearing for upload-time deduplication
- * (`findBySha256` runs before the transcode); rewriting it to the stored
- * (WebP) sha would silently break dedup of same-source re-uploads.
+ * `sha256` is *not* touched here. At the time this was written the legacy
+ * `files.sha256` was the input bytes' hash and load-bearing for upload-time
+ * deduplication (`findBySha256` runs before the transcode), so rewriting it to
+ * the stored sha would have broken dedup of same-source re-uploads.
+ *
+ * That carve-out turned out to be bug 117: it left `files` speaking input-hash
+ * while the mount index spoke stored-hash, and every join between them
+ * returned an empty result its caller read as "no such file". The forward fix
+ * removed the conflict rather than choosing between its halves — chat uploads
+ * now run the bridge's own transcode *before* hashing, so dedup and the join
+ * compare the same thing — and `realign-file-entry-sha256-v1` repairs the rows
+ * this migration left behind.
  *
  * Idempotent: rows already in agreement are skipped. Rows whose mount blob
  * has been removed (orphaned storage key) are logged and left alone — they

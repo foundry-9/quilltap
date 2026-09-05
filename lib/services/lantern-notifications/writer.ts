@@ -47,7 +47,10 @@ function buildContent(kind: LanternNotificationKind, prompt: string | null, file
   const aim = prompt?.trim();
   // Each branch surfaces the image UUID inline so any character reading the
   // announcement in chat history has the handle required to call
-  // keep_image / attach_image on it.
+  // describe_image (what is in it?), keep_image (file it) or attach_image
+  // (hold it up again) on it. Lantern images already ride into vision-capable
+  // turns as real attachments — describe_image is for the models that can't
+  // see them, and for when a character wants the particulars in words.
   switch (kind.kind) {
     case 'avatar':
       return aim

@@ -11,6 +11,13 @@
 import { useState } from 'react';
 import { Icon } from '@/components/ui/icon';
 import type { OptimizerSuggestion, SuggestionDecision } from '../types';
+import { FIELD_LABELS, FIELD_BADGE_CLASS } from '../field-meta';
+import {
+  FIELD_HINT_KEYS,
+  PROMPT_FIELD_HINTS,
+  type PromptFieldHint,
+} from '@/components/prompt-fields/field-hints';
+import { PromptFieldExample } from '@/components/prompt-fields/PromptFieldLabel';
 
 // Belt-and-braces guard: the optimizer service already coerces these fields,
 // but render paths shouldn't trust unknown JSON to be string-shaped.
@@ -35,36 +42,6 @@ interface SuggestionCardProps {
   index: number;
   total: number;
 }
-
-const FIELD_LABELS: Record<string, string> = {
-  identity: 'Identity',
-  description: 'Description',
-  manifesto: 'Manifesto',
-  personality: 'Personality',
-  scenarios: 'Scenario',
-  exampleDialogues: 'Example Dialogues',
-  firstMessage: 'First Message',
-  systemPrompt: 'System Prompt',
-  systemPrompts: 'System Prompt',
-  physicalDescription: 'Physical Description',
-  talkativeness: 'Talkativeness',
-  title: 'Title',
-};
-
-const FIELD_BADGE_CLASS: Record<string, string> = {
-  identity: 'qt-badge-primary',
-  description: 'qt-badge-secondary',
-  manifesto: 'qt-badge-primary',
-  personality: 'qt-badge-character',
-  scenarios: 'qt-badge-project',
-  exampleDialogues: 'qt-badge-chat',
-  firstMessage: 'qt-badge-message',
-  systemPrompt: 'qt-badge-memory',
-  systemPrompts: 'qt-badge-memory',
-  physicalDescription: 'qt-badge-user-character',
-  talkativeness: 'qt-badge-chat',
-  title: 'qt-badge-primary',
-};
 
 function SignificanceBar({ significance }: { significance: number }) {
   const level = significance >= 0.6 ? 'high' : significance >= 0.3 ? 'medium' : 'low';
@@ -136,6 +113,9 @@ export function SuggestionCard({
 
   const fieldLabel = FIELD_LABELS[suggestion.field] ?? suggestion.field;
   const fieldBadge = FIELD_BADGE_CLASS[suggestion.field] ?? 'qt-badge-secondary';
+  const hintKey = FIELD_HINT_KEYS[suggestion.field];
+  const voiceHint: PromptFieldHint | undefined = hintKey ? PROMPT_FIELD_HINTS[hintKey] : undefined;
+  const voiceExample = voiceHint?.example;
   // For a refined sub-item show its name; for a brand-new system prompt show
   // the proposed name so the author knows what they're commissioning.
   const newItemName = suggestion.name ?? suggestion.title;
@@ -176,6 +156,9 @@ export function SuggestionCard({
 
       {/* Significance bar */}
       <SignificanceBar significance={suggestion.significance} />
+
+      {/* Voice hint: the form of address this field expects */}
+      {!editing && voiceExample && <PromptFieldExample example={voiceExample} />}
 
       {/* Current vs proposed */}
       {!editing ? (

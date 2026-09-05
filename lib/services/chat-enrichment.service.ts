@@ -24,6 +24,9 @@ import {
   buildLegacyFileUrl,
 } from '@/lib/photos/resolve-character-avatar'
 import { logger } from '@/lib/logger'
+import { byChatActivityDesc } from '@/lib/chat/chat-activity'
+import { getConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
 
 type Repos = RepositoryContainer
 
@@ -104,6 +107,10 @@ export interface EnrichedCharacterSummary extends EnrichedCharacterBase {
  */
 export interface EnrichedCharacterDetail extends EnrichedCharacterBase {
   systemPrompts: EnrichedCharacterSystemPrompt[]
+  /** Archive tombstone timestamp — participant chips badge archived seats
+   *  (character-archive spec §5.2). Mirrors the enrichment in
+   *  `app/api/v1/chats/[id]/helpers.ts`. */
+  archivedAt: string | null
 }
 
 
@@ -210,8 +217,14 @@ export interface EnrichedChatSummary {
   tags: EnrichedTag[]
   project: EnrichedProject | null
   storyBackground: EnrichedStoryBackground | null
-  isDangerousChat: boolean
-  conciergeOverride: 'OFF' | null
+  /**
+   * The derived Concierge four-state. Lists carry this instead of the raw
+   * `isDangerousChat` / `conciergeOverride` pair so nothing downstream has to
+   * read the two stored fields together (and get it wrong).
+   */
+  conciergeState: ConciergeState
+  /** The classifier's categories, surfaced only for `'flagged'`. `[]` when none. */
+  dangerCategories: string[]
   chatType: 'salon' | 'help' | 'autonomous' | 'brahma'
   /** Scriptorium rendering status, derived from renderedMarkdown + chunk embeddings. */
   scriptoriumStatus: 'none' | 'rendered' | 'embedded'
@@ -318,6 +331,7 @@ export async function getCharacterDetail(
           defaultImage: overrideImage,
           talkativeness: character.talkativeness ?? 0.5,
           systemPrompts,
+          archivedAt: character.archivedAt ?? null,
         }
       }
     }
@@ -343,6 +357,9 @@ export async function getCharacterDetail(
     defaultImage,
     talkativeness: character.talkativeness ?? 0.5,
     systemPrompts,
+    // Bug 66: the chat GET renders the sidebar, so the archive badge needs
+    // this projection here too — not only in the participants/PUT enrichment.
+    archivedAt: character.archivedAt ?? null,
   }
 }
 
@@ -590,8 +607,8 @@ export async function enrichChatForList(
     tags,
     project,
     storyBackground,
-    isDangerousChat: chat.isDangerousChat === true,
-    conciergeOverride: chat.conciergeOverride ?? null,
+    conciergeState: getConciergeState(chat),
+    dangerCategories: chat.dangerCategories ?? [],
     chatType: (chat.chatType ?? 'salon') as 'salon' | 'help' | 'autonomous' | 'brahma',
     scriptoriumStatus,
     _count: { messages: messageCount, memories: memoryCount },
@@ -613,11 +630,9 @@ export async function enrichChatsForList(
   chats: ChatMetadata[],
   repos: Repos
 ): Promise<EnrichedChatSummary[]> {
-  const sortedChats = [...chats].sort((a, b) => {
-    const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.updatedAt).getTime()
-    const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.updatedAt).getTime()
-    return bTime - aTime
-  })
+  // Newest conversational activity first — when a character last posted, NOT
+  // when the row last changed. See `lib/chat/chat-activity.ts`.
+  const sortedChats = [...chats].sort(byChatActivityDesc)
 
   const characterIds = new Set<string>()
   const projectIds = new Set<string>()

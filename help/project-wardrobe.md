@@ -31,19 +31,22 @@ A default **composite** ("House Livery" bundling coat, waistcoat, and boots) res
 
 Each project wardrobe item lives as a Markdown file inside a folder called `Wardrobe/` within the project's official document store (the auto-created store named `Project Files: <your project name>`). The folder is conjured automatically the moment you visit the project page, so no incantation is required to bring it into being. The same `Wardrobe/` convention is used by character vaults and by Quilltap General, so an item may be moved between tiers simply by moving its file.
 
-A wardrobe item carries a small block of **YAML frontmatter** declaring its metadata — title, the slots it covers (top, bottom, footwear, accessories), an optional appropriateness note, and whether it is a default — with the descriptive prose below. Composite outfits (a "House Livery" bundling coat, waistcoat, and boots) are supported here exactly as in personal wardrobes; the system computes slot coverage automatically and refuses circular bundles.
+A wardrobe item carries a small block of **YAML frontmatter** declaring its metadata — title, the slots it covers (top, bottom, footwear, accessories, hair), an optional appropriateness note, and whether it is a default — with the descriptive prose below. Composite outfits (a "House Livery" bundling coat, waistcoat, and boots) are supported here exactly as in personal wardrobes; the system computes slot coverage automatically and refuses circular bundles.
 
 ## Tending the Collection
 
-The **Wardrobe** card on each project's page is your atelier. Every project automatically grows one of these cards, and from it you may:
+The **Wardrobe** card on each project's page is your atelier — and the [Wardrobe dialog](wardrobe.md) offers a second door to the same room: pick the project from its **Wardrobe** dropdown to edit, duplicate, star, move, copy, or delete the project's items in place. From the card itself you may:
 
 - **Create** a new item via the **+ New wardrobe item** button — supply a title, an optional description, an optional **Portrait Cue**, the slots it covers, an optional appropriateness note, and (for composites) the existing project items it bundles. The Portrait Cue is a short, literal phrase whispered to the portraitist and the Lantern *in place of* the title when the bare name fails to conjure the right picture (the prose description, being for human eyes, never reaches the easel).
 - **Edit** an existing item with its **Edit** button; the inline form returns pre-filled.
+- **Archive** an item with the **Archive** button — a dust sheet rather than a bonfire. The garment withdraws from the project's wardrobe lists and from the outfit composer, and is withheld outright from any character choosing their own attire, while the file itself stays put. Tick **Show archived**, which keeps company with **+ New wardrobe item**, to see what you have stored away; each retired garment wears a small **Archived** badge and offers a **Restore** button. A character presently *wearing* an archived garment goes on wearing it — archiving tidies the drawer, it does not undress anybody.
 - **Delete** an item with the **Delete** button, after a moment's confirmation. Equipped references across existing chats are cleaned up; composites that bundled the item tolerate its absence gracefully.
 
 ## Wearing Project Garments
 
 Project wardrobe items behave exactly like any other once a chat belongs to the project. Characters may wear them through the Wardrobe dialog, dress themselves into them via the wardrobe tools, and have them appear in scene-state, avatar, and image-generation prompts — all without the item being duplicated into each character's personal armoire.
+
+The project's `Wardrobe/` folder may also keep an optional page of **Dressing Instructions** (`instructions.md`) — a standing word, addressed to the character in the second person, consulted when a character in one of the project's chats dresses themselves and neither they nor their groups keep instructions of their own. Edit it from the collapsible **Dressing Instructions** panel in the [Wardrobe dialog](wardrobe.md#dressing-instructions-a-standing-word-with-the-valet) with the project selected.
 
 ## Keeping the Folder Healthy
 

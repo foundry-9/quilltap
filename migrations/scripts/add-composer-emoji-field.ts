@@ -14,9 +14,9 @@ import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import {
   isSQLiteBackend,
-  getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
 
 export const addComposerEmojiFieldMigration: Migration = {
@@ -34,10 +34,7 @@ export const addComposerEmojiFieldMigration: Migration = {
       return false;
     }
 
-    const columns = getSQLiteTableColumns('chat_settings');
-    const columnNames = columns.map((col) => col.name);
-
-    return !columnNames.includes('composerEmoji');
+    return !sqliteColumnExists('chat_settings', 'composerEmoji');
   },
 
   async run(): Promise<MigrationResult> {
@@ -45,13 +42,7 @@ export const addComposerEmojiFieldMigration: Migration = {
     let columnsAdded = 0;
 
     try {
-      const db = getSQLiteDatabase();
-
-      const columns = getSQLiteTableColumns('chat_settings');
-      const columnNames = columns.map((col) => col.name);
-
-      if (!columnNames.includes('composerEmoji')) {
-        db.exec(`ALTER TABLE "chat_settings" ADD COLUMN "composerEmoji" INTEGER DEFAULT 1`);
+      if (addColumnIfMissing('chat_settings', 'composerEmoji', 'INTEGER DEFAULT 1')) {
         columnsAdded++;
         logger.info('Added composerEmoji column to chat_settings table', {
           context: 'migration.add-composer-emoji-field',

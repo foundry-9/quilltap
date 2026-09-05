@@ -20,36 +20,35 @@ import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import { dissolveBundlesInSlots } from '@/lib/wardrobe/dissolve-bundles';
-import type { EquippedSlots, OutfitSelection, WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import type { CheapLLMSettings } from '@/lib/schemas/settings.types';
 import {
-  getCheapLLMProvider,
+  CLOTHING_SLOT_TYPES,
+  WARDROBE_SLOT_TYPES,
+  makeEmptyEquippedSlots,
+} from '@/lib/schemas/wardrobe.types';
+import type {
+  EquippedSlots,
+  OutfitSelection,
+  WardrobeItem,
+  WardrobeItemType,
+} from '@/lib/schemas/wardrobe.types';
+import {
+  buildCheapLLMConfig,
   DEFAULT_CHEAP_LLM_CONFIG,
   type CheapLLMConfig,
 } from '@/lib/llm/cheap-llm';
+import { selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
 import { chooseLLMOutfit } from '@/lib/memory/cheap-llm-tasks/outfit-selection';
+import { resolveWardrobeInstructions } from '@/lib/wardrobe/wardrobe-instructions';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
-import {
-  sharedWardrobeTiersForCharacter,
-  type SharedWardrobeTiers,
-} from '@/lib/wardrobe/shared-tiers';
+import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { mergeWearablePool } from '@/lib/wardrobe/wearable-pool';
-import { sortForDefaultOutfit } from '@/lib/wardrobe/default-outfit';
+import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit';
 import type {
   CreationProgressEmitter,
   OutfitPreviewSlots,
 } from '@/lib/chat/creation-progress';
 
 type Repos = RepositoryContainer;
-
-const SLOT_KEYS = ['top', 'bottom', 'footwear', 'accessories'] as const;
-
-const emptySlots = (): EquippedSlots => ({
-  top: [],
-  bottom: [],
-  footwear: [],
-  accessories: [],
-});
 
 /**
  * How long to wait on the wardrobe LLM for one character before giving up and
@@ -125,80 +124,18 @@ export interface OutfitSelectionContext {
  * Map a resolved outfit's per-slot leaf items into the lightweight preview DTO
  * the status dialog renders (no full `WardrobeItem` payloads over the wire).
  */
-function toOutfitPreviewSlots(leafItemsBySlot: {
-  top: WardrobeItem[];
-  bottom: WardrobeItem[];
-  footwear: WardrobeItem[];
-  accessories: WardrobeItem[];
-}): OutfitPreviewSlots {
+function toOutfitPreviewSlots(
+  leafItemsBySlot: Record<WardrobeItemType, WardrobeItem[]>,
+): OutfitPreviewSlots {
   const map = (items: WardrobeItem[]) =>
     items.map((i) => ({
       id: i.id,
       title: i.title,
       isComposite: (i.componentItemIds?.length ?? 0) > 0,
     }));
-  return {
-    top: map(leafItemsBySlot.top),
-    bottom: map(leafItemsBySlot.bottom),
-    footwear: map(leafItemsBySlot.footwear),
-    accessories: map(leafItemsBySlot.accessories),
-  };
-}
-
-/**
- * Resolve the default outfit for a character from every item marked default
- * across all three tiers — the character's own vault, the project's linked
- * stores, and Quilltap General. Each default item's coverage types receive the
- * item's ID appended to the slot's array.
- *
- * Personal and shared defaults **layer** rather than one winning the slot; only
- * an id collision shadows (a personal copy of a shared item replaces it, so a
- * personal `isDefault: false` override is how a character opts out of a shared
- * default). That is why the merge happens on the *full* pools and `isDefault`
- * is filtered last — filtering first would hide the opt-out.
- *
- * Order is deterministic by `createdAt` ascending (slot arrays read
- * inner-to-outer); `sortForDefaultOutfit` is shared with the client composer so
- * the preview and the chat that opens agree.
- *
- * @param opts.pool A pre-merged wearable pool, when the caller already has one
- *   (`applyOutfitSelections` fetches the shared tier once for the whole batch).
- * @param opts.tiers Used only when no `pool` is supplied. Omit both and the
- *   character is dressed from their vault and Quilltap General alone.
- */
-export async function resolveDefaultOutfit(
-  characterId: string,
-  repos: Repos,
-  opts?: { pool?: WardrobeItem[]; tiers?: SharedWardrobeTiers },
-): Promise<EquippedSlots> {
-  const pool =
-    opts?.pool ?? (await repos.wardrobe.findWearablePoolForCharacter(characterId, opts?.tiers));
-
-  const defaultItems = pool.filter((item) => item.isDefault && !item.archivedAt);
-
-  const slots: EquippedSlots = {
-    top: [],
-    bottom: [],
-    footwear: [],
-    accessories: [],
-  };
-
-  if (defaultItems.length === 0) {
-    return slots;
-  }
-
-  for (const item of sortForDefaultOutfit(defaultItems)) {
-    for (const slotType of item.types) {
-      if (slotType in slots) {
-        slots[slotType as keyof EquippedSlots].push(item.id);
-      }
-    }
-  }
-
-  // A bundle marked default dissolves into its parts, same as every other
-  // put-on gesture. The whole pool is the lookup — a shared bundle's
-  // components are in it even when the character doesn't own them.
-  return dissolveBundlesInSlots(slots, new Map(pool.map((i) => [i.id, i])));
+  return Object.fromEntries(
+    WARDROBE_SLOT_TYPES.map((slot) => [slot, map(leafItemsBySlot[slot] ?? [])]),
+  ) as OutfitPreviewSlots;
 }
 
 /**
@@ -360,15 +297,13 @@ export async function applyOutfitSelections(
 
     switch (mode) {
       case 'default':
-        return resolveDefaultOutfit(characterId, repos, {
-          pool: await getPool(characterId),
-        });
+        return buildDefaultOutfit(await getPool(characterId));
 
       case 'manual':
-        return selection.slots ?? emptySlots();
+        return selection.slots ?? makeEmptyEquippedSlots();
 
       case 'none':
-        return emptySlots();
+        return makeEmptyEquippedSlots();
 
       case 'previous_chat': {
         if (context?.sourceChatId) {
@@ -392,9 +327,7 @@ export async function applyOutfitSelections(
             characterId,
           });
         }
-        return resolveDefaultOutfit(characterId, repos, {
-          pool: await getPool(characterId),
-        });
+        return buildDefaultOutfit(await getPool(characterId));
       }
 
       case 'llm_choose': {
@@ -414,22 +347,41 @@ export async function applyOutfitSelections(
             const wardrobeItems = await getPool(characterId);
 
             if (character && wardrobeItems.length > 0) {
-              const allProfiles = await repos.connections.findAll();
-              const defaultProfile = allProfiles.find((p) => p.isDefault) || allProfiles[0];
+              const resolved = selectCheapLLMFromProfiles(
+                await repos.connections.findAll(),
+                context.cheapLLMConfig || DEFAULT_CHEAP_LLM_CONFIG,
+              );
 
-              if (defaultProfile) {
-                const cheapSelection = getCheapLLMProvider(
-                  defaultProfile,
-                  context.cheapLLMConfig || DEFAULT_CHEAP_LLM_CONFIG,
-                  allProfiles,
-                  false, // ollamaAvailable
-                );
+              if (resolved) {
+                const cheapSelection = resolved.selection;
 
                 // Narrate the slow bit: the dialog shows "Consulting the
                 // wardrobe for <name>…" until the result lands.
                 consulted = true;
                 consultedName = character.name;
                 context.progress?.wardrobeStart(characterId, character.name);
+
+                // Optional dressing instructions: nearest tier's
+                // `Wardrobe/instructions.md` wins (character > group >
+                // project > general) and the search stops there. Soft-fails
+                // to null — instructions never block the outfit choice.
+                const { groupMountPointIds } = await sharedWardrobeTiersForCharacter(
+                  characterId,
+                  [],
+                ).catch(() => ({ groupMountPointIds: [] as string[] }));
+                const dressingInstructions = await resolveWardrobeInstructions({
+                  characterMountPointId: character.characterDocumentMountPointId ?? null,
+                  groupMountPointIds: groupMountPointIds ?? [],
+                  projectMountPointIds,
+                }).catch(() => null);
+                if (dressingInstructions) {
+                  logger.debug('[applyOutfitSelections] Dressing instructions in play', {
+                    chatId,
+                    characterId,
+                    tier: dressingInstructions.tier,
+                    mountPointId: dressingInstructions.mountPointId,
+                  });
+                }
 
                 const startedAt = Date.now();
                 const result = await withTimeout(
@@ -440,6 +392,7 @@ export async function applyOutfitSelections(
                     character.manifesto || null,
                     wardrobeItems,
                     context.scenarioText || null,
+                    dressingInstructions?.content ?? null,
                     cheapSelection,
                     context.userId,
                     chatId,
@@ -461,8 +414,11 @@ export async function applyOutfitSelections(
                   // answer therefore means either "nothing usable" or "naked on
                   // purpose", and only the model's own `deliberate` flag tells
                   // the two apart. Without it, dress them in their defaults.
+                  // Only the *clothing* slots count here: a pick of nothing but
+                  // a hairdo is still "chose nothing to wear".
                   const picked =
-                    !!result.result && SLOT_KEYS.some((slot) => result.result!.slots[slot].length > 0);
+                    !!result.result &&
+                    CLOTHING_SLOT_TYPES.some((slot) => result.result!.slots[slot].length > 0);
                   const declaredBare = result.result?.deliberatelyUnclothed === true;
 
                   if (result.success && result.result && (picked || declaredBare)) {
@@ -508,9 +464,7 @@ export async function applyOutfitSelections(
           return chosen;
         }
 
-        const slots = await resolveDefaultOutfit(characterId, repos, {
-          pool: await getPool(characterId),
-        });
+        const slots = buildDefaultOutfit(await getPool(characterId));
         // If we already told the dialog we were consulting this character,
         // resolve their panel with the default we fell back to (and note it).
         if (consulted && context?.progress) {
@@ -560,22 +514,4 @@ export async function applyOutfitSelections(
       });
     }
   }
-}
-
-/**
- * Build a CheapLLMConfig from a chatSettings row (or fall back to defaults).
- * Shared so callers don't have to repeat the same merge.
- */
-export function buildCheapLLMConfig(
-  chatSettings: { cheapLLMSettings?: CheapLLMSettings | null } | null | undefined,
-): CheapLLMConfig {
-  const settings = chatSettings?.cheapLLMSettings;
-  if (!settings) return DEFAULT_CHEAP_LLM_CONFIG;
-  return {
-    ...DEFAULT_CHEAP_LLM_CONFIG,
-    strategy: settings.strategy,
-    fallbackToLocal: settings.fallbackToLocal,
-    userDefinedProfileId: settings.userDefinedProfileId ?? undefined,
-    defaultCheapProfileId: settings.defaultCheapProfileId ?? undefined,
-  };
 }

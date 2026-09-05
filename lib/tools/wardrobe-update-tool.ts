@@ -14,6 +14,8 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
+import { HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance'
 import type { WardrobeReadToolOutput } from './wardrobe-read-tool'
 
 /**
@@ -51,9 +53,9 @@ export const wardrobeUpdateToolInputSchema = z
       .describe('New context tags (e.g. "casual", "formal"). Omit to leave unchanged.')
       .optional(),
     types: z
-      .array(z.enum(['top', 'bottom', 'footwear', 'accessories']))
+      .array(WardrobeItemTypeEnum)
       .nonempty()
-      .describe('Replace the coverage slots. Omit to leave unchanged.')
+      .describe('Replace the coverage slots. Omit to leave unchanged. ' + HAIR_SLOT_GUIDANCE)
       .optional(),
     is_default: z
       .boolean()

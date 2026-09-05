@@ -32,8 +32,8 @@
  * continuation token, tiny), `attachments`, `contextSummary`, `chats.state`,
  * memories, `summaryAnchor`.
  *
- * Gated on CHAT staleness via the same exported `isStale` the asset collapse
- * uses, so the sweeps can never disagree on "stale". An active chat is never
+ * Gated on CHAT staleness via the same exported `forEachStaleChat` / `isStale`
+ * walk the asset collapse uses, so the sweeps can never disagree on "stale". An active chat is never
  * touched. NULLing frees pages inside the file; actual file shrink happens at
  * the periodic manual `npx quilltap db optimize` (VACUUM).
  *
@@ -46,7 +46,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { rawQuery } from '@/lib/database/manager';
 import { dropInMemoryCompressionCache } from '@/lib/services/chat-message/compression-cache.service';
 import type { ChatMetadata } from '@/lib/schemas/types';
-import { isStale } from './collapse-stale-chat-assets';
+import { forEachStaleChat } from './collapse-stale-chat-assets';
 import { resolveStaleChatDays, retentionCutoff } from './retention-constants';
 
 const moduleLogger = logger.child({ module: 'maintenance.collapse-stale-chat-caches' });
@@ -139,9 +139,8 @@ export async function collapseStaleChatCaches(
   const cutoffMs = cutoff.getTime();
   const cutoffIso = cutoff.toISOString();
 
-  const allChats = await repos.chats.findAll();
   const summary: StaleChatCacheCollapseSummary = {
-    chatsScanned: allChats.length,
+    chatsScanned: 0,
     staleChats: 0,
     chatsCollapsed: 0,
     chatRowsCleared: 0,
@@ -149,10 +148,10 @@ export async function collapseStaleChatCaches(
     chunkEmbeddingsCleared: 0,
   };
 
-  for (const chat of allChats) {
-    if (!(await isStale(chat, cutoffMs, repos))) continue;
-    summary.staleChats++;
-    try {
+  const { chatsScanned, staleChats } = await forEachStaleChat(
+    repos,
+    cutoffMs,
+    async (chat) => {
       const { chatRows, messageRows, chunkEmbeddings } = await collapseOneChat(
         chat,
         repos,
@@ -164,13 +163,16 @@ export async function collapseStaleChatCaches(
         summary.messageRowsCleared += messageRows;
         summary.chunkEmbeddingsCleared += chunkEmbeddings;
       }
-    } catch (error) {
+    },
+    (chat, error) => {
       moduleLogger.warn('Failed to collapse stale chat caches — continuing', {
         chatId: chat.id,
         error: error instanceof Error ? error.message : String(error),
       });
-    }
-  }
+    },
+  );
+  summary.chatsScanned = chatsScanned;
+  summary.staleChats = staleChats;
 
   moduleLogger.info('Stale-chat cache collapse complete', { ...summary });
   return summary;

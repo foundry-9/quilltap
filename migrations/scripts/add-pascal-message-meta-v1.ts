@@ -17,9 +17,9 @@ import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import {
   isSQLiteBackend,
-  getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
 
 export const addPascalMessageMetaMigration: Migration = {
@@ -37,19 +37,15 @@ export const addPascalMessageMetaMigration: Migration = {
       return false;
     }
 
-    const columns = getSQLiteTableColumns('chat_messages');
-    const columnNames = columns.map((col) => col.name);
-    return !columnNames.includes('pascalMeta');
+    return !sqliteColumnExists('chat_messages', 'pascalMeta');
   },
 
   async run(): Promise<MigrationResult> {
     const startTime = Date.now();
 
     try {
-      const db = getSQLiteDatabase();
-
       // JSON: the custom-tool roll record; NULL on every non-Pascal message
-      db.exec(`ALTER TABLE "chat_messages" ADD COLUMN "pascalMeta" TEXT DEFAULT NULL`);
+      const added = addColumnIfMissing('chat_messages', 'pascalMeta', 'TEXT DEFAULT NULL');
 
       const durationMs = Date.now() - startTime;
 
@@ -61,7 +57,7 @@ export const addPascalMessageMetaMigration: Migration = {
       return {
         id: 'add-pascal-message-meta-v1',
         success: true,
-        itemsAffected: 1,
+        itemsAffected: added ? 1 : 0,
         message: 'Added pascalMeta column to chat_messages table',
         durationMs,
         timestamp: new Date().toISOString(),

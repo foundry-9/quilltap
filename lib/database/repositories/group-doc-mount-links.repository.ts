@@ -22,8 +22,8 @@ import { GroupDocMountLink, GroupDocMountLinkSchema } from '@/lib/schemas/mount-
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
-import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
-import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
+import { generateDDL, classifySchemaColumns } from '../schema-translator';
 
 /**
  * Group Document Mount Links Repository
@@ -42,14 +42,7 @@ export class GroupDocMountLinksRepository extends AbstractBaseRepository<GroupDo
    * database instead of the main database.
    */
   protected async getCollection(): Promise<DatabaseCollection<GroupDocMountLink>> {
-    if (isMountIndexDegraded()) {
-      throw new Error('Mount index database is in degraded mode');
-    }
-
-    const db = getRawMountIndexDatabase();
-    if (!db) {
-      throw new Error('Mount index database not initialized');
-    }
+    const db = requireMountIndexDb();
 
     // Ensure the table exists in the mount index DB on first access
     if (!this.mountIndexCollectionInitialized) {
@@ -68,16 +61,7 @@ export class GroupDocMountLinksRepository extends AbstractBaseRepository<GroupDo
     }
 
     // Detect JSON, array, and boolean columns from schema
-    const metadata = extractSchemaMetadata(this.collectionName, this.schema);
-    const jsonColumns = metadata.fields
-      .filter(f => f.type === 'array' || f.type === 'object')
-      .map(f => f.name);
-    const arrayColumns = metadata.fields
-      .filter(f => f.type === 'array')
-      .map(f => f.name);
-    const booleanColumns = metadata.fields
-      .filter(f => f.type === 'boolean')
-      .map(f => f.name);
+    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
 
     return new SQLiteCollection<GroupDocMountLink>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
   }

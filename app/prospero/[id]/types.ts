@@ -4,6 +4,8 @@
  * Shared types for the project detail page components.
  */
 
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+
 export interface ProjectCharacter {
   id: string
   name: string
@@ -44,12 +46,14 @@ export interface ProjectChat {
   participants: ProjectChatParticipant[]
   tags?: ProjectChatTag[]
   lastMessageAt?: string | null
+  createdAt: string
   updatedAt: string
   storyBackground?: {
     id: string
     filepath: string
   } | null
-  isDangerousChat?: boolean
+  conciergeState?: ConciergeState
+  dangerCategories?: string[]
 }
 
 export interface ProjectFile {
@@ -69,7 +73,7 @@ export interface ProjectFile {
   relativePath?: string
 }
 
-export type BackgroundDisplayMode = 'latest_chat' | 'project' | 'static' | 'theme'
+export type BackgroundDisplayMode = 'latest_chat' | 'theme'
 
 export interface Project {
   id: string

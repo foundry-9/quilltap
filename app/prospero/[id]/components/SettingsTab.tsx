@@ -8,6 +8,8 @@
 
 import type { Project, EditForm } from '../types'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
+import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 
 interface SettingsTabProps {
   project: Project
@@ -28,10 +30,7 @@ export function SettingsTab({
     <div className="max-w-2xl space-y-6">
       {/* Instructions */}
       <div>
-        <h3 className="qt-text-section mb-2">Project Instructions</h3>
-        <p className="qt-text-small mb-3">
-          These instructions are included in the system prompt for all conversations in this project.
-        </p>
+        <PromptFieldLabel hint={PROMPT_FIELD_HINTS.projectInstructions} />
         <MarkdownLexicalEditor
           value={editForm.instructions}
           onChange={(value) => onEditFormChange({ ...editForm, instructions: value })}

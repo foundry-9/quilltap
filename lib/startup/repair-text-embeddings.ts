@@ -31,6 +31,7 @@ interface RepairResult {
   vectorEntriesRepaired: number
   memoriesRepaired: number
   helpDocsRepaired: number
+  helpDocChunksRepaired: number
   conversationChunksRepaired: number
   durationMs: number
 }
@@ -42,6 +43,7 @@ const EMBEDDING_TABLES: ReadonlyArray<{ table: string; unit: string }> = [
   { table: 'vector_entries', unit: 'vector entries' },
   { table: 'memories', unit: 'memories' },
   { table: 'help_docs', unit: 'help docs' },
+  { table: 'help_doc_chunks', unit: 'help doc sections' },
   { table: 'conversation_chunks', unit: 'conversation chunks' },
 ]
 
@@ -158,6 +160,7 @@ export async function repairTextEmbeddings(): Promise<RepairResult> {
     vectorEntriesRepaired: counts['vector_entries'] ?? 0,
     memoriesRepaired: counts['memories'] ?? 0,
     helpDocsRepaired: counts['help_docs'] ?? 0,
+    helpDocChunksRepaired: counts['help_doc_chunks'] ?? 0,
     conversationChunksRepaired: counts['conversation_chunks'] ?? 0,
     durationMs: Date.now() - startTime,
   })

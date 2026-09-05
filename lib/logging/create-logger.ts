@@ -33,24 +33,6 @@ export function createLogger(module: string) {
 }
 
 /**
- * Create a logger for an API route
- *
- * Standardizes logging context for API routes with endpoint information.
- *
- * @param endpoint - The API endpoint path (e.g., '/api/v1/characters')
- * @returns A child logger with the endpoint context
- *
- * @example
- * ```ts
- * const logger = createApiLogger('/api/v1/characters');
- *
- * ```
- */
-export function createApiLogger(endpoint: string) {
-  return logger.child({ endpoint, module: 'api' });
-}
-
-/**
  * Create a logger for a service class
  *
  * Standardizes logging context for service classes.
@@ -71,29 +53,6 @@ export function createApiLogger(endpoint: string) {
  */
 export function createServiceLogger(serviceName: string) {
   return logger.child({ service: serviceName, module: 'service' });
-}
-
-/**
- * Create a logger for a repository
- *
- * Standardizes logging context for repository classes.
- *
- * @param repositoryName - The repository name (e.g., 'CharactersRepository')
- * @returns A child logger with the repository context
- *
- * @example
- * ```ts
- * class CharactersRepository {
- *   private logger = createRepositoryLogger('CharactersRepository');
- *
- *   async findById(id: string) {
- *     this.
- *   }
- * }
- * ```
- */
-export function createRepositoryLogger(repositoryName: string) {
-  return logger.child({ repository: repositoryName, module: 'repository' });
 }
 
 /**

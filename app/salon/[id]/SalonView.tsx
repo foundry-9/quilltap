@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useRealtimeFallbackPoll, useRealtimeTopic } from '@/hooks/useRealtime'
 import ChatSidebar from '@/components/chat/ChatSidebar'
 import SpeakerSelector from '@/components/chat/SpeakerSelector'
 import { showSuccessToast, showErrorToast, showInfoToast } from '@/lib/toast'
@@ -17,8 +18,16 @@ import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { usePageToolbar } from '@/components/providers/page-toolbar-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { getPendingMessageNavigation, scrollToMessage } from '@/lib/chat/message-navigation'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { getConciergeState, shouldShowDangerStyling } from '@/lib/services/dangerous-content/chat-override'
+import {
+  CONCIERGE_STATE_PRESENTATION,
+  conciergeToneSuffix,
+  describeConciergeState,
+} from '@/lib/services/dangerous-content/concierge-state-presentation'
+import { Tooltip } from '@/components/ui/Tooltip'
+import { ConciergeTooltipBody } from '@/components/chat/ConciergeMark'
 import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer'
+import { staffAvatar } from '@/lib/chat/staff-display-names'
 import {
   type TurnState,
   type TurnSelectionResult,
@@ -31,7 +40,7 @@ import {
   isUserDrivenSeat,
   findActiveUserParticipant,
 } from '@/lib/chat/turn-manager'
-import type { ChatEvent, ChatParticipantBase, Character } from '@/lib/schemas/types'
+import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { RenderingPattern, DialogueDetection, NarrationDelimiters } from '@/lib/schemas/template.types'
 
 // Import extracted hooks
@@ -53,8 +62,11 @@ import {
 } from './hooks'
 import type { Chat, Message, PendingToolResult, CharacterData } from './types'
 import { groupToolMessagesIntoAssistants } from './group-tool-messages'
+import { toTurnEvents } from './turn-events'
+import { appendMessageOnce } from './hooks/useSSEStreaming'
 import { buildRenderItems } from './announcement-render-items'
 import { isMessageVisibleToOperator } from './whisper-visibility'
+import { resolveComposerSubmitText, resolveComposerHasContent } from './composer-source-mode'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import {
   ChatComposer,
@@ -77,6 +89,11 @@ import { useDocumentMode, type DocFocusTarget } from './hooks/useDocumentMode'
 import { useTerminalMode, TerminalModeContext } from './hooks/useTerminalMode'
 import { Icon } from '@/components/ui/icon'
 import { CopyChatIdButton } from '@/components/chat/CopyChatIdButton'
+
+/** Fallback re-read cadence for the avatar watch, while the socket is down. */
+const AVATAR_POLL_INTERVAL_MS = 5000
+/** How long the avatar watch waits before giving up on a generation. */
+const AVATAR_WATCH_TIMEOUT_MS = 2 * 60_000
 
 export interface SalonViewProps {
   /** The conversation this Salon tab renders. */
@@ -200,60 +217,69 @@ export function SalonView({ chatId }: SalonViewProps) {
     setWhisperTarget({ participantId, name })
   }, [chat?.participants])
 
-  // --- Avatar generation polling ---
-  // After triggering avatar generation, poll fetchChat until the avatar updates
-  const avatarPollRef = useRef<NodeJS.Timeout | null>(null)
-  const avatarPollCountRef = useRef(0)
+  // --- Avatar generation watch ---
+  // After triggering avatar generation, watch for the participant's avatar URL
+  // to change and then refresh the chat.
+  //
+  // The live signal is a `chats:<id>` hint, published when the
+  // CHARACTER_AVATAR_GENERATION job's writes commit — normally the very first
+  // check finds the new avatar. The interval is the fallback for a dropped
+  // socket, and the expiry keeps a failed generation from watching forever.
+  const [avatarWatch, setAvatarWatch] = useState<
+    { characterId: string; snapshotAvatarUrl: string | null; expiresAt: number } | null
+  >(null)
+
+  const checkAvatarUpdate = useCallback(async (watch: {
+    characterId: string
+    snapshotAvatarUrl: string | null
+  }) => {
+    try {
+      const res = await fetch(`/api/v1/chats/${id}`, { cache: 'no-store' })
+      if (!res.ok) return
+      const data = await res.json()
+      // Check the enriched participant avatar URL — this changes when avatarOverrides update
+      const updatedParticipant = data.chat?.participants?.find(
+        (p: { character?: { id?: string } }) => p.character?.id === watch.characterId
+      )
+      const newAvatarUrl = updatedParticipant?.character?.avatarUrl ?? null
+      if (newAvatarUrl && newAvatarUrl !== watch.snapshotAvatarUrl) {
+        setAvatarWatch(null)
+        await fetchChat()
+        showInfoToast('Avatar updated')
+      }
+    } catch {
+      // Silently keep watching.
+    }
+  }, [id, fetchChat])
 
   const startAvatarPoll = useCallback((characterId: string) => {
     // Snapshot the current avatar URL for this character to detect when it changes
     const participant = chat?.participants.find(p => p.character?.id === characterId)
-    const snapshotAvatarUrl = participant?.character?.avatarUrl ?? null
+    setAvatarWatch({
+      characterId,
+      snapshotAvatarUrl: participant?.character?.avatarUrl ?? null,
+      expiresAt: Date.now() + AVATAR_WATCH_TIMEOUT_MS,
+    })
+  }, [chat?.participants])
 
-    // Clear any existing poll
-    if (avatarPollRef.current) {
-      clearInterval(avatarPollRef.current)
-    }
-    avatarPollCountRef.current = 0
+  useRealtimeTopic('chats', () => {
+    if (avatarWatch) void checkAvatarUpdate(avatarWatch)
+  }, id)
 
-    avatarPollRef.current = setInterval(async () => {
-      avatarPollCountRef.current++
-      // Poll for up to 2 minutes (24 polls at 5s intervals)
-      if (avatarPollCountRef.current > 24) {
-        if (avatarPollRef.current) clearInterval(avatarPollRef.current)
-        avatarPollRef.current = null
-        return
-      }
-      try {
-        const res = await fetch(`/api/v1/chats/${id}`, { cache: 'no-store' })
-        if (!res.ok) return
-        const data = await res.json()
-        // Check the enriched participant avatar URL — this changes when avatarOverrides update
-        const updatedParticipant = data.chat?.participants?.find(
-          (p: { character?: { id?: string } }) => p.character?.id === characterId
-        )
-        const newAvatarUrl = updatedParticipant?.character?.avatarUrl ?? null
-        if (newAvatarUrl && newAvatarUrl !== snapshotAvatarUrl) {
-          // Avatar URL changed — do a full fetchChat to update React state
-          if (avatarPollRef.current) clearInterval(avatarPollRef.current)
-          avatarPollRef.current = null
-          await fetchChat()
-          showInfoToast('Avatar updated')
-        }
-      } catch {
-        // Silently continue polling
-      }
-    }, 5000)
-  }, [chat?.participants, id, fetchChat])
+  useRealtimeFallbackPoll(
+    () => { if (avatarWatch) void checkAvatarUpdate(avatarWatch) },
+    AVATAR_POLL_INTERVAL_MS,
+    avatarWatch != null,
+  )
 
-  // Cleanup avatar polling on unmount
   useEffect(() => {
-    return () => {
-      if (avatarPollRef.current) {
-        clearInterval(avatarPollRef.current)
-      }
-    }
-  }, [])
+    if (!avatarWatch) return
+    const timer = setTimeout(
+      () => setAvatarWatch(null),
+      Math.max(0, avatarWatch.expiresAt - Date.now()),
+    )
+    return () => clearTimeout(timer)
+  }, [avatarWatch])
 
   const handleRegenerateAvatar = useCallback(async (participantId: string) => {
     const participant = chat?.participants.find(p => p.id === participantId)
@@ -340,10 +366,7 @@ export function SalonView({ chatId }: SalonViewProps) {
   // The Librarian announces document opens and saves as ASSISTANT-role system messages, so the
   // user never loses their turn. The hook hands us the server-persisted message; we just append.
   const appendLibrarianMessage = useCallback((message: Message) => {
-    setMessages(prev => {
-      if (prev.some(m => m.id === message.id)) return prev
-      return [...prev, message]
-    })
+    setMessages(prev => appendMessageOnce(prev, message))
   }, [setMessages])
   const documentModeHook = useDocumentMode({
     chatId: id,
@@ -648,22 +671,10 @@ export function SalonView({ chatId }: SalonViewProps) {
   )
 
   // --- Unpause callback for turn management ---
-  const unpauseChat = useCallback(async () => {
-    setIsPaused(false)
-    chatControls.userStoppedStreamRef.current = false
-    try {
-      const response = await fetch(`/api/v1/chats/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { isPaused: false } }),
-      })
-      if (!response.ok) {
-        console.error('[Chat] Failed to persist unpause state', response.status)
-      }
-    } catch (error) {
-      console.error('[Chat] Error persisting unpause state', error)
-    }
-  }, [id, chatControls.userStoppedStreamRef])
+  // The pause setter without its toast: clears the local pause and the
+  // user-stopped flag, then persists.
+  const { setPauseState } = chatControls
+  const unpauseChat = useCallback(() => setPauseState(false), [setPauseState])
 
   // Stable callback wrapper using ref
   const stableTriggerContinueMode = useCallback(
@@ -718,26 +729,8 @@ export function SalonView({ chatId }: SalonViewProps) {
   useEffect(() => {
     if (participantsWithImpersonation.participantsAsBase.length === 0 || messages.length === 0) return
 
-    const messageEvents = messages.map(m => ({
-      type: 'message' as const,
-      id: m.id,
-      role: m.role as 'USER' | 'ASSISTANT' | 'SYSTEM' | 'TOOL',
-      content: m.content,
-      participantId: m.participantId,
-      createdAt: m.createdAt,
-      attachments: m.attachments?.map(a => a.id) ?? [],
-      targetParticipantIds: m.targetParticipantIds ?? null,
-      // Staff fields so turn-pass records (systemSender='host', systemKind='turn-pass')
-      // are recognized by calculateTurnStateFromHistory / the skip guard.
-      systemSender: m.systemSender ?? null,
-      systemKind: m.systemKind ?? null,
-      hostEvent: m.hostEvent ?? null,
-    }))
-
     const newTurnState = calculateTurnStateFromHistory({
-      // Cast: the client Message shape carries nullable hostEvent fields the
-      // schema MessageEvent narrows; the turn-state reader only reads them.
-      messages: messageEvents as unknown as Parameters<typeof calculateTurnStateFromHistory>[0]['messages'],
+      messages: toTurnEvents(messages) as Parameters<typeof calculateTurnStateFromHistory>[0]['messages'],
       participants: participantsWithImpersonation.participantsAsBase,
       userParticipantId: participantsWithImpersonation.userParticipantId,
       spokenThisCycleParticipantIds: chat?.spokenThisCycleParticipantIds,
@@ -1060,23 +1053,31 @@ export function SalonView({ chatId }: SalonViewProps) {
               />
             </button>
           )}
-          {chat.conciergeOverride === 'OFF' ? (
-            <span
-              className="qt-danger-badge flex-shrink-0"
-              title="The Concierge is off-duty for this chat. No moderation, no rerouting — set from the sidebar's Chat section."
-            >
-              <Icon name="check-circle" className="w-3 h-3" />
-              Off-duty
-            </span>
-          ) : chat.isDangerousChat ? (
-            <span
-              className="qt-danger-badge flex-shrink-0"
-              title={`The Concierge has flagged this chat${chat.dangerCategories?.length ? `: ${chat.dangerCategories.join(', ')}` : ''}`}
-            >
-              <Icon name="alert-triangle" className="w-3 h-3" />
-              Flagged
-            </span>
-          ) : null}
+          {(() => {
+            // Monitored is the default and renders no badge — the pill means
+            // "something other than the default is set." Everything the pill
+            // says comes from the presentation table, so it speaks the same
+            // words as the list marks and the sidebar's helper text.
+            const conciergeState = getConciergeState(chat)
+            if (conciergeState === 'monitored') return null
+
+            const { label, icon, tone } = CONCIERGE_STATE_PRESENTATION[conciergeState]
+            const description = describeConciergeState(conciergeState, chat.dangerCategories ?? undefined)
+            const toneSuffix = conciergeToneSuffix(tone)
+
+            return (
+              <Tooltip content={<ConciergeTooltipBody {...description} />} placement="bottom">
+                <span
+                  className={`qt-danger-badge${toneSuffix ? ` qt-danger-badge${toneSuffix}` : ''} flex-shrink-0`}
+                  role="img"
+                  aria-label={`Concierge: ${label}`}
+                >
+                  <Icon name={icon} className="w-3 h-3" />
+                  {label}
+                </span>
+              </Tooltip>
+            )
+          })()}
           <a
             href={`/salon/${id}`}
             className="qt-text-primary truncate hover:text-foreground transition-colors"
@@ -1187,35 +1188,12 @@ export function SalonView({ chatId }: SalonViewProps) {
         }
       }
     }
-    if (message.systemSender === 'lantern') {
-      return { name: 'The Lantern', title: null, avatarUrl: '/images/avatars/lantern-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'aurora') {
-      return { name: 'Aurora', title: null, avatarUrl: '/images/avatars/aurora-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'librarian') {
-      return { name: 'The Librarian', title: null, avatarUrl: '/images/avatars/librarian-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'concierge') {
-      return { name: 'The Concierge', title: null, avatarUrl: '/images/avatars/concierge-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'prospero') {
-      return { name: 'Prospero', title: null, avatarUrl: '/images/avatars/prospero-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'host') {
-      return { name: 'The Host', title: null, avatarUrl: '/images/avatars/host-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'commonplaceBook') {
-      return { name: 'The Commonplace Book', title: null, avatarUrl: '/images/avatars/commonplace-book-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'ariel') {
-      return { name: 'Ariel', title: null, avatarUrl: '/images/avatars/ariel-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'suparna') {
-      return { name: 'Suparṇā', title: null, avatarUrl: '/images/avatars/suparna-avatar.webp', defaultImage: null }
-    }
-    if (message.systemSender === 'pascal') {
-      return { name: 'Pascal', title: 'the Croupier', avatarUrl: '/images/avatars/pascal-avatar.webp', defaultImage: null }
+    // Staff-authored messages render with the member's own name and face,
+    // from the one table in lib/chat/staff-display-names.ts. Carina (null
+    // there) and an unrecognised sender fall through.
+    const staff = staffAvatar(message.systemSender)
+    if (staff) {
+      return { ...staff, defaultImage: null }
     }
     // Carina (inline LLM queries): a reference answer renders with the ANSWERER
     // character's own avatar — there is no dedicated Carina staff avatar. Resolve
@@ -1452,7 +1430,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           participantNames={participantNames}
           currentUserId={chat?.user?.id ?? null}
           userParticipantIdSet={userParticipantIdSet}
-          isDangerousChat={isChatActiveDangerous(chat)}
+          isDangerousChat={shouldShowDangerStyling(chat)}
           showThinking={chat?.showThinking ?? chatSettings?.thinkingDisplay?.defaultVisible ?? true}
           thinkingCollapsedByDefault={chatSettings?.thinkingDisplay?.defaultCollapsed ?? true}
           streamingReasoning={sseStreaming.streamingReasoning}
@@ -1494,21 +1472,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           let mustSpeak = false
           try {
             if (next.character) {
-              const events = messages.map(m => ({
-                type: 'message' as const,
-                id: m.id,
-                role: m.role,
-                content: m.content,
-                participantId: m.participantId,
-                createdAt: m.createdAt,
-                targetParticipantIds: m.targetParticipantIds ?? null,
-                systemSender: m.systemSender ?? null,
-                systemKind: m.systemKind ?? null,
-                hostEvent: m.hostEvent ?? null,
-                isSilentMessage: m.isSilentMessage,
-              })) as unknown as ChatEvent[]
               const eligibility = computeSkipEligibility({
-                events,
+                events: toTurnEvents(messages),
                 participants: participantsWithImpersonation.participantsAsBase as unknown as ChatParticipantBase[],
                 respondingParticipantId: next.id,
                 respondingCharacter: next.character as unknown as Character,
@@ -1547,7 +1512,10 @@ export function SalonView({ chatId }: SalonViewProps) {
           speakingAs={speakingAsSeat}
           input={input}
           setInput={setInput}
-          hasContent={hasComposerContent}
+          // Bug 67: in raw-source view the textarea is the visible surface and
+          // the editor bridge is suspended, so `input` — not the editor's
+          // presence flag — is what decides whether there is anything to send.
+          hasContent={resolveComposerHasContent(modals.showPreview, input, hasComposerContent)}
           onContentChange={handleComposerContentChange}
           onPersistDraft={persistDraft}
           attachedFiles={attachedFiles}
@@ -1565,6 +1533,7 @@ export function SalonView({ chatId }: SalonViewProps) {
           setShowSource={modals.setShowPreview}
           uploadingFile={uploadingFile}
           toolExecutionStatus={sseStreaming.toolExecutionStatus}
+          onDismissToolExecutionStatus={sseStreaming.dismissToolExecutionStatus}
           customToolsAvailable={customToolsAvailable}
           onCustomToolRan={fetchChat}
           renderingPatterns={roleplayRenderingPatterns}
@@ -1577,8 +1546,11 @@ export function SalonView({ chatId }: SalonViewProps) {
           onSubmit={(e) => sseStreaming.sendMessage(
             e,
             // Read the live text straight from the editor handle — page `input`
-            // intentionally lags while typing (that's the decoupling).
-            inputRef.current?.getMarkdown() ?? input,
+            // intentionally lags while typing (that's the decoupling). Except in
+            // raw-source view (bug 67), where the textarea is the edited surface
+            // and the editor's bridge is suspended: its handle still holds the
+            // pre-toggle document, so send what the writer can see.
+            resolveComposerSubmitText(modals.showPreview, input, inputRef.current?.getMarkdown()),
             clearComposerInput,
             attachedFiles,
             pendingToolResults,
@@ -1686,6 +1658,10 @@ export function SalonView({ chatId }: SalonViewProps) {
               ?.character?.id ?? null}
             initialImageProfileId={chat.imageProfileId ?? null}
             initialAvatarGenerationEnabled={chat.avatarGenerationEnabled ?? false}
+            /* A spicy conversation that changes venue stays spicy by default —
+               and the new chat's Concierge bubble says so, which the replayed
+               history alone would not. Overridable on the form. */
+            initialConciergeState={getConciergeState(chat)}
           />
         )}
 
@@ -1839,6 +1815,8 @@ export function SalonView({ chatId }: SalonViewProps) {
           roleplayTemplateId={chat?.roleplayTemplateId}
           onChatUpdated={fetchChat}
           projectName={chat?.projectName}
+          projectId={chat?.projectId}
+          scenarioText={chat?.scenarioText}
           onProjectClick={modals.openChatProject}
           imageProfileId={chat?.imageProfileId}
           alertCharactersOfLanternImages={chat?.alertCharactersOfLanternImages}

@@ -638,6 +638,34 @@ describe('reconcileFilesystem', () => {
       expect(mockFilesRepo.delete).not.toHaveBeenCalled()
     })
 
+    // Bug 69: an ARCHIVE row's sha256 is the digest of the DECRYPTED bundle,
+    // while the bytes on disk are encrypted — re-deriving it makes the bundle
+    // unrehydratable ("the bundle is corrupt"). Re-encryption after a
+    // passphrase change is exactly when the size moves and this fires.
+    it('corrects an archive bundle\'s size without touching its content digest', async () => {
+      const scannedFile = makeScannedFile('archive-file-1/character-archive.qtap', 9100)
+      const bundleRow = makeDbRecord({
+        id: 'archive-file-1',
+        storageKey: 'archive-file-1/character-archive.qtap',
+        category: 'ARCHIVE',
+        folderPath: '/archives',
+        sha256: 'plaintext-digest',
+        size: 9070,
+      })
+
+      mockScanDirectory.mockResolvedValue([scannedFile])
+      mockFilesRepo.findByUserId.mockResolvedValue([bundleRow])
+      mockComputeSha256.mockResolvedValue('ciphertext-digest')
+
+      await reconcileFilesystem()
+
+      expect(mockFilesRepo.update).toHaveBeenCalledWith('archive-file-1', { size: 9100 })
+      expect(mockFilesRepo.update).not.toHaveBeenCalledWith(
+        'archive-file-1',
+        expect.objectContaining({ sha256: expect.anything() })
+      )
+    })
+
     it('continues processing remaining records when character lookup fails', async () => {
       const staleRecord1 = makeDbRecord({
         id: 'stale-a',

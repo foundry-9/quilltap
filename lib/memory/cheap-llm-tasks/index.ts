@@ -21,6 +21,15 @@ export type {
   CharacterAppearanceInput,
 } from './types'
 
+// Execution surface — the deadline machinery and the two helpers a caller
+// needs to tell "the pass never happened" apart from "the pass disappointed".
+export type { CheapLLMLatencyClass, CheapLLMTaskOptions } from './core-execution'
+export {
+  CheapLLMTaskLostError,
+  isTimeoutFailure,
+  throwIfLostToTimeout,
+} from './core-execution'
+
 // Memory tasks
 export {
   extractSelfMemoriesFromTurn,

@@ -79,7 +79,9 @@ Most characters have a **First Message** — an introductory message the charact
 
 Between the moment you press **Start** and the moment the room is yours to speak in, a good deal of unseen bustle takes place behind the scenes — and it is not always instantaneous. The cast must be gathered, everyone's particulars committed to memory, the opening scene set, and — most time-consuming of all — any character you have asked to *choose their own attire* must repair to the wardrobe and settle on an outfit, each such decision being a small consultation that takes a moment or two.
 
-Rather than leave you drumming your fingers at a blank screen, Quilltap now raises a small status dialog — **The Green Room** — for the duration. It reports, in plain terms, what is presently afoot; and as each character finishes deciding, it displays their chosen ensemble across the four slots (**Top**, **Bottom**, **Footwear**, and **Accessories**), so you may see at a glance what everyone has elected to wear. A running log beneath keeps a tidy record of the proceedings.
+Rather than leave you drumming your fingers at a blank screen, Quilltap now raises a small status dialog — **The Green Room** — for the duration. It reports, in plain terms, what is presently afoot; and as each character finishes deciding, it displays their chosen ensemble across the five slots (**Top**, **Bottom**, **Footwear**, **Accessories**, and **Hair**), so you may see at a glance what everyone has elected to wear. A blank **Hair** panel means nothing more alarming than hair left in its natural state. A running log beneath keeps a tidy record of the proceedings.
+
+One quiet rule governs those wardrobe consultations: **an archived garment is never offered.** Whatever a character may be shown, it is drawn only from garments still in circulation — archived pieces are withheld from the candidate list entirely, in every tier, with no way to ask otherwise. (See *Wardrobe* for how to archive and restore.)
 
 The dialog cannot be waved away while the work is underway — there would be nothing to return to — and it retires of its own accord the instant the conversation is ready for you. The one exception is trouble: should something go amiss, it will say so and offer you a **Close** button. (This attends fresh conversations and the *Continue Elsewhere* manoeuvre; autonomous rooms keep their own counsel.)
 
@@ -102,6 +104,21 @@ It arrives already set to whatever this conversation would have chosen for itsel
 Change it and the new conversation begins in that style — no visit to the sidebar required. Leave it be and nothing whatever is different from before. And should you think better of it once the conversation is under way, the **Roleplay Template** dropdown in the chat's own sidebar remains where it always was, ready to be reconsidered.
 
 (The dropdown keeps its counsel when you have no templates installed at all, there being nothing to choose between.)
+
+### A Word With the Concierge, Before the Doors Open
+
+Some conversations announce their character before the first syllable is spoken, and it has always been a small indignity to have to start such a chat in the ordinary way, wait for the room to be dressed, open the sidebar, and only *then* inform the Concierge of what everybody already knew — by which time the opening line had gone out through the ordinary desk and, on occasion, come back refused.
+
+The new-chat form therefore carries **The Concierge** directly above **Starting Scenario**, offering the same four postures as the chat's own sidebar, in the same two companies:
+
+- **The Concierge decides** — *Monitored* (the default, and the state of every chat that has ever been created without a word on the subject) and *Flagged*.
+- **You decide** — *Vouched Safe* and *Uncensored*.
+
+Beneath the dropdown, the Concierge states plainly what the posture you have selected commits him to. Choose one other than Monitored and he posts a brief note at the top of the new conversation saying so, immediately after the system prompt and before the scene is set — the history is thereby honest about which arrangement was in force from the very first word. The opening greeting is then composed under that arrangement: a chat opened *Uncensored* goes to the frank desk on the first attempt rather than after a refusal, and a chat opened *Vouched Safe* is never rerouted at all.
+
+Two consequences worth knowing before you choose. A chat created *Uncensored* or *Flagged* wears its mark in every list from its first appearance, and vanishes the moment you pull the **Quick-hide** cord with *Dangerous Chats* selected — which is generally the point. And when you take a conversation elsewhere by way of **Continue Elsewhere**, the new venue inherits the old one's posture, so a spirited conversation does not quietly become a decorous one on changing rooms; the dropdown is right there should you wish otherwise.
+
+None of this is a life sentence. The **The Concierge** control in the chat's own sidebar remains exactly where it was, ready to reconsider the matter at any hour.
 
 ## The Chat Interface
 
@@ -228,6 +245,28 @@ Each chat can have its own configuration:
 - **Filter** — Show chats by character, project, or date
 - **Sort** — Organize by recent, alphabetical, or other criteria
 
+#### How a Chat Is Dated
+
+The date beside a conversation — in this list, on the home dashboard, in a project's or a
+character's roster of chats, and in the merge picker — records **the last time somebody actually
+said something**. That means you, or one of your characters. Nothing else disturbs it.
+
+This distinction is less pedantic than it sounds. A great many things happen in a chat without
+anyone uttering a word: the Lantern completes a story background at leisure, the Librarian folds
+a summary, the Concierge posts a notice, the Commonplace Book murmurs a recollection, Pascal
+announces the fall of the dice. Each of these is a message of sorts, and were they to count, a
+conversation abandoned since March would present itself at the head of your list, freshly dated,
+with nothing whatever new in it. The house tidying up is not the same as the company talking.
+
+- **Counts as talk** — anything you post, anything a character posts, whispers included. A
+  remark made quietly to one guest is still a remark.
+- **Does not count** — announcements from the staff (the Lantern, Aurora, the Librarian, the
+  Concierge, Prospero, the Host, the Commonplace Book, Ariel, Carina, Suparṇā, and Pascal),
+  bubbles posted under a custom announcer's name, tool results, and system events.
+
+Delete the most recent message and the date obligingly steps back to the one before it. A chat in
+which no one has yet spoken is dated from its creation, and stays put.
+
 ### Renaming Chats
 
 1. Open the chat
@@ -261,7 +300,7 @@ There comes an evening — there always does — when one wishes to carry the co
 
 Open the **Chat Sidebar** on the right, expand the **Organize** drawer, and press **Export Markdown**. The file arrives named after the chat, and contains:
 
-- The chat's title and its opening scenario, set at the head of the document.
+- The chat's title and the scene in force, set at the head of the document. Where the scene was revised mid-conversation, the Host's revision notices appear in the body at the moment they were made.
 - Every message anyone actually said, each under a heading of the form `## Speaker — timestamp`. Where a message has been regenerated into several variants, only the one showing in the Salon makes the page.
 - Pascal's roll announcements, Carina's answers (Brahma's included, under his own name), and any announcements you inserted yourself — voiced by a Staff member, a character, or a name of your own invention.
 - The Host's notices recording that the conversation continues from another chat, has moved elsewhere, or absorbed a neighbouring thread — so the paper trail survives the change of address.
@@ -270,6 +309,22 @@ Open the **Chat Sidebar** on the right, expand the **Organize** drawer, and pres
 The timestamps are the chat's *own* clock. A chat running on fictional time is transcribed in fictional time; a chat with a configured timezone keeps it; a chat with neither simply reads the household clock. The Staff's housekeeping chatter — memory whispers, image announcements, the marking of hours — is left out of the record, as are the prompts sent to the models; the transcript is what a reader would want, not what the machinery required.
 
 The same transcript twice is the same file twice, to the letter — nothing in it depends on the moment of export.
+
+### Changing the Scene Mid-Conversation
+
+A scene chosen at the outset is not a sentence passed. The party that began in the conservatory may, by degrees, find itself wanting the shipyard at dawn — and there is no reason on earth to abandon a perfectly good conversation merely to change the furniture.
+
+Open the **Chat Sidebar** on the right, expand the **Chat** drawer, and find **Scenario**. The dropdown offers precisely what the new-chat dialog offered: your project's scenarios, the general ones kept in the Quilltap General shelf, any belonging to groups the present company keeps, and — when a single character holds the floor — that character's own. Choose one and its text is displayed beneath for your inspection. Choose **Custom...** instead and a writing-box appears, in which you may set whatever scene you please, in your own words. Press **Change scenario** to make it so.
+
+Three things then happen, and they happen together:
+
+- The chat's scene is rewritten — this is the `{{scenario}}` your characters read in their standing instructions.
+- Every character's instructions are recompiled on the spot, so nobody is left performing yesterday's play.
+- **The Host announces the revision** to the assembled company, phrased as a revision rather than a fresh proclamation, so the earlier scene-setting further up the transcript is understood to have been superseded rather than contradicted.
+
+Leaving the box empty and pressing the button retires the scene altogether; the Host notes, with admirable composure, that the company carries on without one. Re-choosing the scene you already have does nothing at all, and says nothing at all — the Host is not in the business of announcing that matters stand precisely as they stood.
+
+The earlier scene-setting notice is left where it is. The transcript is a record, not a fair copy, and the household does not go back with an eraser.
 
 ### Continuing a Conversation Elsewhere
 

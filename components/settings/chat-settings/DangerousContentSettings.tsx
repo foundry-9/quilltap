@@ -125,7 +125,7 @@ export function DangerousContentSettings({
                 value={dangerSettings.threshold}
                 onChange={(e) => onUpdate({ threshold: parseFloat(e.target.value) })}
                 disabled={saving}
-                className="w-full max-w-xs"
+                className="qt-range w-full max-w-xs"
               />
               <p className="qt-text-small">
                 Lower values are more sensitive (more content flagged). Higher values only flag strongly dangerous content.

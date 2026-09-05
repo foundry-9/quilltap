@@ -8,6 +8,7 @@
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
+import { applySqlcipherKey } from './sqlcipher-key';
 import { stopPeriodicCheckpoints, runShutdownCheckpoint } from './protection';
 import { closeLLMLogsSQLiteClient } from './llm-logs-client';
 import { closeMountIndexSQLiteClient } from './mount-index-client';
@@ -86,13 +87,7 @@ export function getSQLiteClient(config: SQLiteConfig): DatabaseType {
     });
 
     // SQLCipher key MUST be the first pragma before any other operations.
-    // The pepper is a 32-byte base64 string; we convert to raw hex for SQLCipher's
-    // raw key format (x'...') which bypasses SQLCipher's own KDF.
-    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
-    if (sqlcipherKey) {
-      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
-      db.pragma(`key = "x'${keyHex}'"`);
-    }
+    applySqlcipherKey(db);
 
     // Configure pragmas
     configurePragmas(db, config);

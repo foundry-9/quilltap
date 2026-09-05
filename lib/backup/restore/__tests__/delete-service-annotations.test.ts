@@ -28,6 +28,10 @@ jest.mock('@/lib/file-storage/manager', () => ({
   fileStorageManager: { deleteFile: jest.fn() },
 }));
 
+jest.mock('@/lib/memory/memory-gate', () => ({
+  deleteMemoriesWithUnlinkBatch: jest.fn().mockResolvedValue(0),
+}));
+
 const emptyUserRepos = {
   characters: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
   chats: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },

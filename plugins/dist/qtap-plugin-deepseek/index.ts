@@ -85,7 +85,7 @@ const optionsSchema: ProviderOptionsSchema = {
     {
       title: 'DeepSeek Options',
       helpText:
-        'Thinking mode enables DeepSeek\'s extended reasoning. While enabled, temperature, top_p, and frequency / presence penalties are ignored. Reasoning effort is only effective with thinking enabled.',
+        'The V4 models reason before answering by default, so "(model default)" means thinking is ON — set Disabled to turn it off. While thinking, temperature, top_p, and frequency / presence penalties are ignored, and Quilltap anchors multi-character turns in prose rather than with a [Name] prefill, which DeepSeek rejects mid-thinking.',
       fields: [
         {
           key: 'thinking',
@@ -146,6 +146,21 @@ export const plugin: TextProviderPlugin = {
    * Connection-profile options schema rendered by the host's profile editor.
    */
   getProviderOptionsSchema: () => optionsSchema,
+
+  /**
+   * Which profile option decides whether a turn will be a thinking turn.
+   * The host needs the answer to pick the multi-character turn anchor:
+   * DeepSeek's thinking mode reads a trailing assistant `[Name]` prefill as a
+   * turn to continue and 400s demanding the `reasoning_content` that produced
+   * it, which a synthetic prefill has none of (bug 85). `(model default)` —
+   * the empty string — leaves the answer to the model's `thinksByDefault`
+   * flag, and both V4 models reason unasked.
+   */
+  thinkingTurnRule: {
+    optionKey: 'thinking',
+    enabledValues: ['enabled'],
+    disabledValues: ['disabled'],
+  },
 
   createProvider: (_baseUrl?: string) => {
     return new DeepSeekProvider();

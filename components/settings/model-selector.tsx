@@ -20,6 +20,10 @@ export interface ModelInfo {
   missingCapabilities?: string[]
   maxOutputTokens?: number
   contextWindow?: number
+  /** Whether the model can run a reasoning turn at all. */
+  supportsThinking?: boolean
+  /** Whether it reasons without the profile asking it to (bug 85). */
+  thinksByDefault?: boolean
 }
 
 interface ModelSelectorProps {

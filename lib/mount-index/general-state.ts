@@ -21,9 +21,8 @@ import { logger } from '@/lib/logger';
 import { getGeneralMountPointId } from '@/lib/instance-settings';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
-  readDatabaseDocument,
+  readDatabaseDocumentIfExists,
   writeDatabaseDocument,
-  DatabaseStoreError,
 } from '@/lib/mount-index/database-store';
 
 /** Relative path of the general state document inside the mount. */
@@ -69,7 +68,10 @@ export async function readGeneralState(): Promise<Record<string, unknown>> {
   }
 
   try {
-    const { content } = await readDatabaseDocument(mountPointId, GENERAL_STATE_JSON_PATH);
+    const content = await readDatabaseDocumentIfExists(mountPointId, GENERAL_STATE_JSON_PATH);
+    if (content === null) {
+      return {};
+    }
     const parsed = JSON.parse(content) ?? {};
     if (typeof parsed !== 'object' || Array.isArray(parsed)) {
       logger.warn('[GeneralState] state.json is not a JSON object; defaulting to {}', {
@@ -79,9 +81,6 @@ export async function readGeneralState(): Promise<Record<string, unknown>> {
     }
     return parsed as Record<string, unknown>;
   } catch (error) {
-    if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
-      return {};
-    }
     logger.warn('[GeneralState] state.json unparseable; defaulting to {}', {
       mountPointId,
       error: error instanceof Error ? error.message : String(error),

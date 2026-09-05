@@ -7,9 +7,14 @@
  */
 
 import type { Character } from '@/lib/schemas/character.types';
-import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, bySlot } from '@/lib/schemas/wardrobe.types';
+import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import type { getRepositories } from '@/lib/repositories/factory';
-import { describeOutfit, decorateOutfitItems } from '@/lib/wardrobe/outfit-description';
+import {
+  describeOutfit,
+  decorateOutfitItems,
+  buildOutfitSlotValues,
+} from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
 import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { genderNounFromPronouns } from '@/lib/characters/pronoun-gender';
@@ -45,7 +50,7 @@ interface BuildPromptResult {
   /** Whether any appearance data (physical description or wardrobe) was found. */
   hasAppearance: boolean;
   /** Per-slot leaf counts after composite expansion (for logging/debug). */
-  leafCounts: { top: number; bottom: number; footwear: number; accessories: number };
+  leafCounts: Record<WardrobeItemType, number>;
 }
 
 /**
@@ -61,7 +66,7 @@ export async function buildCharacterAvatarPrompt(
   const { equippedSlots } = options;
   const projectMountPointIds = options.projectMountPointIds;
 
-  const leafCounts = { top: 0, bottom: 0, footwear: 0, accessories: 0 };
+  const leafCounts = bySlot(() => 0);
 
   // Physical description — fall back through the canonical fields the avatar
   // handler has always favored.
@@ -102,34 +107,44 @@ export async function buildCharacterAvatarPrompt(
 
     topIsBare = resolved.leafItemsBySlot.top.length === 0;
     const accessories = decorateOutfitItems(resolved.leafItemsBySlot.accessories, { titleOnly: true });
+    // A hairdo is the most visible thing in a head-and-shoulders portrait, so
+    // it rides along on BOTH branches below.
+    const hair = decorateOutfitItems(resolved.leafItemsBySlot.hair, { titleOnly: true });
 
     if (topIsBare) {
       // Bare-topped character. We deliberately do NOT emit "topless"/"naked"
       // wardrobe language: it trips SFW image-provider moderation and implies
       // breasts in frame. The tighter collarbone crop in the intro conveys the
       // exposure honestly (bare shoulders, chest out of frame); here we only
-      // list any accessories that sit at or above the collar. We also avoid
-      // describeOutfit's "completely naked and unadorned" fallback, which would
-      // fire (and reintroduce nudity language) when accessories are empty too.
-      outfitText = accessories.length > 0
+      // list any accessories that sit at or above the collar, plus a styled
+      // hairdo. We also avoid describeOutfit's "completely naked and unadorned"
+      // fallback, which would fire (and reintroduce nudity language) when
+      // accessories AND hair are both empty.
+      outfitText = accessories.length > 0 || hair.length > 0
         ? describeOutfit(
-            { top: [], bottom: [], footwear: [], accessories },
+            buildOutfitSlotValues((slot) =>
+              slot === 'accessories' ? accessories : slot === 'hair' ? hair : [],
+            ),
             { omit: ['top', 'bottom', 'footwear'] },
           ).trimEnd()
         : '';
     } else {
-      outfitText = describeOutfit({
-        top: decorateOutfitItems(resolved.leafItemsBySlot.top, { titleOnly: true }),
-        bottom: decorateOutfitItems(resolved.leafItemsBySlot.bottom, { titleOnly: true }),
-        footwear: decorateOutfitItems(resolved.leafItemsBySlot.footwear, { titleOnly: true }),
-        accessories,
-      }, { omit: ['bottom', 'footwear'] }).trimEnd();
+      outfitText = describeOutfit(
+        buildOutfitSlotValues((slot) =>
+          slot === 'accessories'
+            ? accessories
+            : slot === 'hair'
+              ? hair
+              : decorateOutfitItems(resolved.leafItemsBySlot[slot], { titleOnly: true }),
+        ),
+        // Hair is deliberately NOT omitted — the hairdo belongs in a portrait.
+        { omit: ['bottom', 'footwear'] },
+      ).trimEnd();
     }
 
-    leafCounts.top = resolved.leafItemsBySlot.top.length;
-    leafCounts.bottom = resolved.leafItemsBySlot.bottom.length;
-    leafCounts.footwear = resolved.leafItemsBySlot.footwear.length;
-    leafCounts.accessories = resolved.leafItemsBySlot.accessories.length;
+    for (const slot of WARDROBE_SLOT_TYPES) {
+      leafCounts[slot] = resolved.leafItemsBySlot[slot].length;
+    }
   }
 
   const hasAppearance = Boolean(physicalText) || Boolean(outfitText);

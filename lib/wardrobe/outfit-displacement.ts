@@ -14,7 +14,7 @@
  * Bundles (items with `componentItemIds`) dissolve as they go on: the leaves
  * are stored in the slots their own `types` declare and the bundle's id never
  * lands in equipped state, so what you're wearing always reads as garments
- * rather than as one opaque card over four empty slot rows. The `replace` flag
+ * rather than as one opaque card over empty slot rows. The `replace` flag
  * still governs a bundle — it clears the slots the assembled outfit lands in
  * before the parts go on. Dissolution needs an item lookup; without one (or
  * when a bundle's parts can't be resolved) the bundle is stored whole, the
@@ -47,6 +47,10 @@ import type { WearableLookup, WearableNode } from '@/lib/wardrobe/dissolve-bundl
 import { loadBundleLookup } from '@/lib/wardrobe/hydrate-components';
 import type { ComponentHydrationRepos } from '@/lib/wardrobe/hydrate-components';
 import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
+import {
+  cloneEquippedSlots,
+  makeEmptyEquippedSlots,
+} from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 /** Minimal repository interfaces needed for these primitives */
@@ -83,26 +87,13 @@ async function lookupForBundle(
   return loadBundleLookup({ wardrobe: repos.wardrobe }, characterId, item.componentItemIds, opts);
 }
 
-function freshSlots(): EquippedSlots {
-  return { top: [], bottom: [], footwear: [], accessories: [] };
-}
-
-function cloneSlots(slots: EquippedSlots): EquippedSlots {
-  return {
-    top: [...slots.top],
-    bottom: [...slots.bottom],
-    footwear: [...slots.footwear],
-    accessories: [...slots.accessories],
-  };
-}
-
 async function loadSlots(
   repos: DisplacementRepos,
   chatId: string,
   characterId: string,
 ): Promise<EquippedSlots> {
   const current = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
-  return current ? cloneSlots(current) : freshSlots();
+  return current ? cloneEquippedSlots(current) : makeEmptyEquippedSlots();
 }
 
 /**
@@ -125,7 +116,7 @@ export function wearItemIntoSlots(
     });
   }
 
-  const slots = cloneSlots(currentSlots);
+  const slots = cloneEquippedSlots(currentSlots);
   for (const slotType of item.types) {
     if (item.replace) {
       slots[slotType] = [item.id];
@@ -151,7 +142,7 @@ export function replaceItemIntoSlots(
     return layLeavesIntoSlots(currentSlots, item, leaves, { clearCoveredSlots: true });
   }
 
-  const slots = cloneSlots(currentSlots);
+  const slots = cloneEquippedSlots(currentSlots);
   for (const slotType of item.types) {
     slots[slotType] = [item.id];
   }
@@ -215,7 +206,7 @@ export function addItemToSlot(
   item: { id: string; types: WardrobeItemType[]; componentItemIds?: string[] },
   itemsById?: WearableLookup,
 ): EquippedSlots {
-  const slots = cloneSlots(currentSlots);
+  const slots = cloneEquippedSlots(currentSlots);
   const leaves = dissolveBundleToLeaves(item, itemsById);
   const forSlot = leaves?.filter((leaf) => leaf.slots.includes(slot)) ?? [];
 
@@ -307,7 +298,7 @@ export function computeDisplacedSlots(
   currentSlots: EquippedSlots,
   options: ComputeDisplacedOptions,
 ): EquippedSlots {
-  const slots = cloneSlots(currentSlots);
+  const slots = cloneEquippedSlots(currentSlots);
 
   if (options.mode === 'wear') {
     if (!options.item) return slots;

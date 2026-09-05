@@ -59,6 +59,18 @@ export const CheapLLMSettingsSchema = z.object({
   embeddingProvider: EmbeddingProviderEnum.default('OPENAI'),
   /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
   imagePromptProfileId: UUIDSchema.nullable().optional(),
+  /**
+   * Whether a cheap-LLM route with no connection profile behind it — a
+   * pure-local Ollama pick, or a provider-cheapest synthesis — may have a
+   * stand-in drafted when it fails.
+   *
+   * Fallback normally hangs off the profile (`fallbackProfileId` /
+   * `allowTierFallback`), and these selections have no profile to hang it on.
+   * This is the one place the setting lives off-profile, and the stand-in is
+   * drawn from the user's `isCheap` profiles. Off by default, like every other
+   * automatic provider choice.
+   */
+  allowCheapFallback: z.boolean().default(false),
 });
 
 export type CheapLLMSettings = z.infer<typeof CheapLLMSettingsSchema>;
@@ -172,6 +184,22 @@ export const MemoryRecallSettingsSchema = z.object({
    * directly. Costs one extra batched lookup per turn; off by default.
    */
   expandRelated: z.boolean().default(false),
+  /**
+   * When true, EVERY turn's consolidated Commonplace Book whisper also carries
+   * a freshly-searched "Relevant Past Conversations" list drawn from the
+   * responding character's vault `Conversation Summaries/` folder. The search
+   * reuses the vector already embedded for that turn's memory search, so it
+   * costs no extra embedding call — only the chunk scan and the frontmatter
+   * reads.
+   *
+   * Off by default, in which case the list refreshes on its three original
+   * cadences only: the chat-start / character-join recap, each summary fold
+   * (the standing `relevant-conversations` whisper), and retrospective turns
+   * (the `retrospective-recall` mini-recap).
+   *
+   * Instance-wide by design — no chat, project, or character override.
+   */
+  perTurnConversationSummaries: z.boolean().default(false),
 });
 
 export type MemoryRecallSettings = z.infer<typeof MemoryRecallSettingsSchema>;
@@ -525,6 +553,7 @@ export const ChatSettingsSchema = z.object({
   cheapLLMSettings: CheapLLMSettingsSchema.default({
     strategy: 'PROVIDER_CHEAPEST',
     fallbackToLocal: true,
+    allowCheapFallback: false,
     embeddingProvider: 'OPENAI',
   }),
   /** Profile ID to use for image description fallback (when provider doesn't support images) */

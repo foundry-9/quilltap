@@ -25,6 +25,11 @@
  * cache is missing or stale: the stack is rebuilt from current data and used
  * for that turn (without persisting).
  *
+ * Edits to the BUILDER (the wording `buildIdentityStack` emits) ARE
+ * invalidated, via `IDENTITY_STACK_BUILDER_VERSION`: every write is stamped
+ * with the version, reads require strict equality, and a mismatch reads as
+ * "nothing cached" so the read-through path rebuilds with current wording.
+ *
  * Errors never propagate — chat operations must never fail because the
  * cache write couldn't complete; the read-through fallback covers it.
  */
@@ -32,19 +37,58 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
-import { buildIdentityStack } from '@/lib/chat/context/system-prompt-builder';
+import {
+  buildIdentityStack,
+  IDENTITY_STACK_BUILDER_VERSION,
+} from '@/lib/chat/context/system-prompt-builder';
 import type { ChatMetadataBase, ChatParticipantBase } from '@/lib/schemas/types';
 
 /**
+ * Persisted form of `chats.compiledIdentityStacks`.
+ *
+ * The legacy shape (rows written before the version stamp) is a bare
+ * `Record<participantId, stack>` with no `version` key — participant ids are
+ * UUIDs, so `version` can never collide with a real entry. Legacy rows are
+ * detected by the absent/non-numeric `version` and read as stale; the
+ * read-through fallback in `buildSystemPrompt` then rebuilds with current
+ * wording. The Zod schema for the column stays a permissive `JsonSchema`
+ * precisely so the legacy shape remains readable.
+ */
+interface CompiledIdentityStacks {
+  /** `IDENTITY_STACK_BUILDER_VERSION` at write time. */
+  version: number;
+  /** participantId → compiled stack. */
+  stacks: Record<string, string>;
+}
+
+/**
+ * Parse the stored `compiledIdentityStacks` value, returning the stack map
+ * only when its version stamp STRICTLY equals the current builder version.
+ * Absent, legacy (bare map), older, or newer all return null — newer matters
+ * on a downgrade, where a rolled-back build must not consume stacks a later
+ * build wrote.
+ */
+function readCurrentStacks(chat: ChatMetadataBase): Record<string, string> | null {
+  const raw = chat.compiledIdentityStacks as Partial<CompiledIdentityStacks> | null | undefined;
+  if (!raw || typeof raw !== 'object') return null;
+  if (typeof raw.version !== 'number' || raw.version !== IDENTITY_STACK_BUILDER_VERSION) {
+    return null;
+  }
+  const stacks = raw.stacks;
+  if (!stacks || typeof stacks !== 'object') return null;
+  return stacks as Record<string, string>;
+}
+
+/**
  * Read the cached stack for a participant from a chat. Returns null when
- * absent (caller should fall back to fresh build).
+ * absent or version-stale (caller should fall back to fresh build).
  */
 export function getCompiledIdentityStack(
   chat: ChatMetadataBase,
   participantId: string,
 ): string | null {
-  const map = chat.compiledIdentityStacks as Record<string, string> | null | undefined;
-  if (!map || typeof map !== 'object') return null;
+  const map = readCurrentStacks(chat);
+  if (!map) return null;
   const value = map[participantId];
   return typeof value === 'string' && value.length > 0 ? value : null;
 }
@@ -118,7 +162,9 @@ async function buildStackFor(
 }
 
 /**
- * Persist a new `compiledIdentityStacks` map onto the chat row. Failure logs
+ * Persist a new `compiledIdentityStacks` map onto the chat row, stamped with
+ * the current builder version. An empty map still writes `null` — the null
+ * column is the "nothing cached" state and needs no version. Failure logs
  * but does not throw — read-through fallback in `buildSystemPrompt` covers
  * any miss.
  */
@@ -128,8 +174,13 @@ async function writeStacks(
 ): Promise<void> {
   try {
     const repos = getRepositories();
+    const envelope: CompiledIdentityStacks = {
+      version: IDENTITY_STACK_BUILDER_VERSION,
+      stacks,
+    };
     await repos.chats.update(chatId, {
-      compiledIdentityStacks: Object.keys(stacks).length > 0 ? stacks : null,
+      compiledIdentityStacks:
+        Object.keys(stacks).length > 0 ? (envelope as unknown as Record<string, unknown>) : null,
     });
   } catch (error) {
     logger.error('[SystemPromptCompiler] Failed to persist identity stacks', {
@@ -178,17 +229,27 @@ export async function compileIdentityStackForParticipant(
   const stack = await buildStackFor({ chat, participant });
   if (!stack) {
     // Drop a stale entry if there is one (e.g., participant became
-    // user-controlled or removed).
-    const existing = (chat.compiledIdentityStacks as Record<string, string> | null) ?? null;
-    if (existing && participantId in existing) {
-      const { [participantId]: _drop, ...rest } = existing;
-      void _drop;
-      await writeStacks(chat.id, rest);
+    // user-controlled or removed). On a version mismatch there is nothing
+    // meaningful to drop — write the cleared value rather than rewriting the
+    // stale map back.
+    const existing = readCurrentStacks(chat);
+    if (existing) {
+      if (participantId in existing) {
+        const { [participantId]: _drop, ...rest } = existing;
+        void _drop;
+        await writeStacks(chat.id, rest);
+      }
+    } else if (chat.compiledIdentityStacks) {
+      await writeStacks(chat.id, {});
     }
     return;
   }
 
-  const existing = (chat.compiledIdentityStacks as Record<string, string> | null) ?? {};
+  // Merge only into a version-current map. A stale or legacy map must be
+  // DISCARDED entirely, never merged into: blending a fresh stack into stale
+  // siblings and then stamping the result current would make the stamp lie,
+  // silently defeating the whole mechanism.
+  const existing = readCurrentStacks(chat) ?? {};
   const next = { ...existing, [participantId]: stack };
   logger.info('[SystemPromptCompiler] Compiled identity stack for participant', {
     context: 'system-prompt-compiler',

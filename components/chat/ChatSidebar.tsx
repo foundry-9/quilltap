@@ -14,16 +14,22 @@
 
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
+import { apiFetch, apiErrorMessage } from '@/lib/query/fetcher'
+import { patchChat } from '@/lib/chat/patch-chat'
 import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import { ParticipantCard, type ParticipantData, type ConnectionProfileOption } from './ParticipantCard'
 import { CopyChatIdButton } from './CopyChatIdButton'
+import { ChatScenarioControl } from './ChatScenarioControl'
 import { Avatar } from '@/components/ui/Avatar'
 import { CollapsibleCard } from '@/components/ui/CollapsibleCard'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { triggerUrlDownload } from '@/lib/download-utils'
-import { getConciergeState, isChatActiveDangerous, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { getConciergeState, shouldShowDangerStyling, type ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import {
+  CONCIERGE_STATE_PRESENTATION,
+  conciergeToneTextClass,
+} from '@/lib/services/dangerous-content/concierge-state-presentation'
 import type { TurnState, TurnSelectionResult } from '@/lib/chat/turn-manager'
 import { getQueuePosition, computePredictedTurnOrder } from '@/lib/chat/turn-manager'
 import type { TurnOrderEntry, TurnOrderStatus } from '@/lib/chat/turn-manager'
@@ -170,14 +176,18 @@ export interface ChatSidebarProps {
   /** Fired after any chat-record field is mutated from the sidebar (typically fetchChat). */
   onChatUpdated?: () => void
   projectName?: string | null
+  /** The chat's project id — gates the project tier of the scenario picker. */
+  projectId?: string | null
+  /** The scene currently set on the chat, shown and edited by the scenario picker. */
+  scenarioText?: string | null
   onProjectClick?: () => void
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
   avatarGenerationEnabled?: boolean | null
   /** Which clock the chat's story keeps for episodic memory (null = realtime default). */
   timelineMode?: 'realtime' | 'narrative' | null
-  /** Per-chat Concierge override ('OFF' = off-duty, null = follow global). */
-  conciergeOverride?: 'OFF' | null
+  /** Per-chat Concierge override ('OFF' = vouched safe, 'UNCENSORED' = operator-asserted uncensored, null = follow global). */
+  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
   onToolSettingsClick?: () => void
   onRunToolClick?: () => void
   storyBackgroundsEnabled?: boolean
@@ -238,6 +248,17 @@ export function ChatSidebar(props: ChatSidebarProps) {
     onTogglePause,
     className = '',
   } = props
+
+  // The LLM-controlled cast, for the scenario picker's group and character
+  // tiers. Characters that have left the room can't lend it a scenario.
+  const llmCharacterIds = useMemo(
+    () =>
+      participants
+        .filter((p) => p.controlledBy !== 'user' && p.status !== 'removed' && p.character?.id)
+        .map((p) => p.character!.id),
+    [participants]
+  )
+  const singleLlmCharacterId = llmCharacterIds.length === 1 ? llmCharacterIds[0] : null
 
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState)
   const [openSection, setOpenSection] = useState<SectionId>('participants')
@@ -492,6 +513,10 @@ export function ChatSidebar(props: ChatSidebarProps) {
             roleplayTemplateId={props.roleplayTemplateId}
             onChatUpdated={props.onChatUpdated}
             projectName={props.projectName}
+            projectId={props.projectId}
+            scenarioText={props.scenarioText}
+            llmCharacterIds={llmCharacterIds}
+            singleLlmCharacterId={singleLlmCharacterId}
             onProjectClick={props.onProjectClick}
             imageProfileId={props.imageProfileId}
             alertCharactersOfLanternImages={props.alertCharactersOfLanternImages}
@@ -824,7 +849,7 @@ function ParticipantsSection(p: ParticipantsSectionProps) {
               onWhisper={activeParticipantCount >= 3 ? p.onWhisper : undefined}
               chatId={p.chatId}
               onRegenerateAvatar={p.onRegenerateAvatar}
-              isDangerousChat={isChatActiveDangerous({ isDangerousChat: p.isDangerousChat, conciergeOverride: p.conciergeOverride })}
+              isDangerousChat={shouldShowDangerStyling({ isDangerousChat: p.isDangerousChat, conciergeOverride: p.conciergeOverride })}
             />
           )
         })}
@@ -856,13 +881,19 @@ interface ChatSectionProps {
   roleplayTemplateId?: string | null
   onChatUpdated?: () => void
   projectName?: string | null
+  projectId?: string | null
+  scenarioText?: string | null
+  /** Character IDs of the LLM-controlled cast, for the picker's group tier. */
+  llmCharacterIds: string[]
+  /** The lone LLM character's ID, or null when several share the room. */
+  singleLlmCharacterId: string | null
   onProjectClick?: () => void
   imageProfileId?: string | null
   alertCharactersOfLanternImages?: boolean | null
   avatarGenerationEnabled?: boolean | null
   timelineMode?: 'realtime' | 'narrative' | null
   isDangerousChat?: boolean
-  conciergeOverride?: 'OFF' | null
+  conciergeOverride?: 'OFF' | 'UNCENSORED' | null
   onToolSettingsClick?: () => void
   onRunToolClick?: () => void
   storyBackgroundsEnabled?: boolean
@@ -877,6 +908,10 @@ function ChatSection({
   roleplayTemplateId,
   onChatUpdated,
   projectName,
+  projectId,
+  scenarioText,
+  llmCharacterIds,
+  singleLlmCharacterId,
   onProjectClick,
   imageProfileId,
   alertCharactersOfLanternImages,
@@ -1012,15 +1047,7 @@ function ChatSection({
   const handleTimelineModeChange = async (value: 'realtime' | 'narrative') => {
     try {
       setTimelineModeSaving(true)
-      const res = await fetch(`/api/v1/chats/${chatId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat: { timelineMode: value } }),
-      })
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
-      }
+      await patchChat(chatId, { timelineMode: value })
       showSuccessToast(
         value === 'narrative'
           ? 'The story now keeps its own hours'
@@ -1028,8 +1055,7 @@ function ChatSection({
       )
       onChatUpdated?.()
     } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error)
-      showErrorToast(msg || "Failed to change the story's clock")
+      showErrorToast(apiErrorMessage(error, "Failed to change the story's clock"))
     } finally {
       setTimelineModeSaving(false)
     }
@@ -1048,11 +1074,13 @@ function ChatSection({
         throw new Error(errorData.error || `HTTP ${res.status}: ${res.statusText}`)
       }
       showSuccessToast(
-        next === 'safe'
+        next === 'monitored'
           ? 'The Concierge is on watch'
           : next === 'flagged'
             ? 'Marked as flagged'
-            : 'The Concierge is off-duty'
+            : next === 'vouched'
+              ? 'You have vouched for this chat'
+              : 'The uncensored door stands open'
       )
       onChatUpdated?.()
     } catch (error) {
@@ -1089,27 +1117,42 @@ function ChatSection({
     : alertCharactersOfLanternImages ? 'enabled' : 'disabled'
 
   const conciergeState = getConciergeState({ isDangerousChat, conciergeOverride })
-  const conciergeHelperText =
-    conciergeState === 'off'
-      ? "Off-duty gives the Concierge the afternoon off. Censored providers may refuse the conversation, and image prompts go out unaltered — the risk is yours."
-      : conciergeState === 'flagged'
-        ? 'Flagged routes this chat through the Concierge\'s uncensored providers.'
-        : 'Safe lets the Concierge keep watch; he\'ll flip the switch if the conversation calls for it.'
+  // Four states, one 2×2: rows are the route (ordinary vs uncensored),
+  // columns are the provenance (the Concierge's classifier vs the operator).
+  // The optgroups carry the provenance structurally; the helper text names
+  // the actor; the icon/color pair gives a third, colorblind-safe channel.
+  // All of it comes from the presentation table, which this section's own
+  // sentences seeded — so the list marks and the header pill say the same
+  // words, and a copy edit here lands in all three.
+  const conciergePresentation = CONCIERGE_STATE_PRESENTATION[conciergeState]
+  const conciergeHelperText = conciergePresentation.detail
+  const conciergeStateIcon = {
+    name: conciergePresentation.icon,
+    className: conciergeToneTextClass(conciergePresentation.tone),
+  }
 
   return (
     <div className="qt-chat-sidebar-section qt-chat-sidebar-section-chat flex flex-col gap-3">
-      {/* The Concierge — per-chat tri-state */}
+      {/* The Concierge — per-chat four-state */}
       <label className="qt-label">
-        <span className="block mb-1">The Concierge</span>
+        <span className="mb-1 flex items-center gap-1.5">
+          The Concierge
+          <Icon name={conciergeStateIcon.name} className={`w-3.5 h-3.5 ${conciergeStateIcon.className}`} />
+        </span>
         <select
           value={conciergeState}
           onChange={(e) => handleConciergeStateChange(e.target.value as ConciergeState)}
           disabled={conciergeSaving}
           className="qt-select text-sm"
         >
-          <option value="safe">Safe</option>
-          <option value="flagged">Flagged</option>
-          <option value="off">Off-duty</option>
+          <optgroup label="The Concierge decides">
+            <option value="monitored">Monitored</option>
+            <option value="flagged">Flagged</option>
+          </optgroup>
+          <optgroup label="You decide">
+            <option value="vouched">Vouched Safe</option>
+            <option value="uncensored">Uncensored</option>
+          </optgroup>
         </select>
         <span className="block mt-1 qt-text-secondary text-xs">{conciergeHelperText}</span>
       </label>
@@ -1144,6 +1187,17 @@ function ChatSection({
           ))}
         </select>
       </label>
+
+      {/* Scenario — the scene this chat runs on */}
+      <ChatScenarioControl
+        chatId={chatId}
+        projectId={projectId}
+        scenarioText={scenarioText}
+        llmCharacterIds={llmCharacterIds}
+        singleLlmCharacterId={singleLlmCharacterId}
+        enabled={hasEverOpened}
+        onChatUpdated={onChatUpdated}
+      />
 
       {/* The Story's Clock — episodic-memory timeline mode */}
       <label className="qt-label">

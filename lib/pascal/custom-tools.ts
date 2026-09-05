@@ -40,11 +40,13 @@ import { getErrorMessage } from '@/lib/error-utils';
 import { parsePath, getAtPath } from '@/lib/state/state-paths';
 import {
   QtapCustomToolSchema,
+  classifyPlaceholder,
   collectUnknownKeys,
   formatDefinitionIssues,
   isParamRef,
   isStateRef,
   parseEffectTarget,
+  type PlaceholderRef,
   MAX_LLM_OUTPUT_LENGTH,
   MAX_ROSTER_SIZE,
   TOOLS_FOLDER,
@@ -70,7 +72,7 @@ import {
 import { evaluateExpression, formatValue, parseExpression, type ExprValue } from './expressions';
 
 export { formatValue };
-import { isPrimitive, metadataComparatorHolds } from './metadata-match';
+import { compareOrdered, isPrimitive, metadataComparatorHolds } from './metadata-match';
 import { evaluateToolGate, hasToolGate } from './tool-gate';
 
 /**
@@ -871,26 +873,11 @@ function matchesComparator(
       state
     );
 
-  const order = (key: 'gt' | 'gte' | 'lt' | 'lte'): [number, number] => [
-    requireNumber(toolName, subject, subjectLabel),
-    requireNumber(toolName, operandFor(key), `${subjectLabel} ${key}`),
-  ];
-
-  if (comparator.gt !== undefined) {
-    const [a, b] = order('gt');
-    if (!(a > b)) return false;
-  }
-  if (comparator.gte !== undefined) {
-    const [a, b] = order('gte');
-    if (!(a >= b)) return false;
-  }
-  if (comparator.lt !== undefined) {
-    const [a, b] = order('lt');
-    if (!(a < b)) return false;
-  }
-  if (comparator.lte !== undefined) {
-    const [a, b] = order('lte');
-    if (!(a <= b)) return false;
+  for (const key of ['gt', 'gte', 'lt', 'lte'] as const) {
+    if (comparator[key] === undefined) continue;
+    const a = requireNumber(toolName, subject, subjectLabel);
+    const b = requireNumber(toolName, operandFor(key), `${subjectLabel} ${key}`);
+    if (!compareOrdered(key, a, b)) return false;
   }
   if (comparator.eq !== undefined && subject !== operandFor('eq')) return false;
   if (comparator.neq !== undefined && subject === operandFor('neq')) return false;
@@ -1003,15 +990,7 @@ function matchesLlmComparator(
     if (numericAnswer === null || typeof operand !== 'number') {
       return decline(`${comparatorKey} orders ${JSON.stringify(answer)}, and only numbers can be ordered`);
     }
-    const held =
-      comparatorKey === 'gt'
-        ? numericAnswer > operand
-        : comparatorKey === 'gte'
-          ? numericAnswer >= operand
-          : comparatorKey === 'lt'
-            ? numericAnswer < operand
-            : numericAnswer <= operand;
-    if (!held) return false;
+    if (!compareOrdered(comparatorKey, numericAnswer, operand)) return false;
   }
 
   const equalsAnswer = (operand: number | string | boolean): boolean => {
@@ -1139,22 +1118,8 @@ export function isApplicableEffect(
  */
 function resolveEffects(definition: QtapCustomTool, subjects: EffectSubjects): ResolvedEffect[] {
   const resolveRef = (refname: string): ExprValue | undefined => {
-    if (refname === 'value') return subjects.value;
-    if (refname === 'roll') return subjects.roll;
-    if (refname === 'dice') return subjects.dice;
-    if (refname === 'llm') return subjects.llm?.output;
-    if (refname.startsWith('params.')) {
-      return subjects.params[refname.slice('params.'.length)];
-    }
-    if (refname.startsWith('metadata.')) {
-      const v = subjects.metadata?.[refname.slice('metadata.'.length)];
-      return isPrimitive(v) ? v : undefined;
-    }
-    if (refname.startsWith('state.')) {
-      const v = getAtPath(subjects.state ?? {}, parsePath(refname.slice('state.'.length)));
-      return isPrimitive(v) ? v : undefined;
-    }
-    return undefined;
+    const v = resolvePlaceholderValue(classifyPlaceholder(refname), subjects);
+    return isPrimitive(v) ? v : undefined;
   };
 
   const skipped = (index: number, reason: string): ResolvedEffect => {
@@ -1222,6 +1187,49 @@ export function collectMetadataTested(
 // `./expressions` — one number-rendering convention for templates and effect
 // expressions alike — and is re-exported above for existing importers.
 
+/** What a `{{placeholder}}` may be resolved against — a run's subjects, as a template sees them. */
+export interface PlaceholderSubjects {
+  value: number;
+  roll: number;
+  dice: string;
+  params: ResolvedParams;
+  metadata?: Record<string, unknown>;
+  /** The consult's result. Absent while rendering the consult's own prompt. */
+  llm?: LlmSubject;
+  /** The merged persistent state, for `{{state.path}}` placeholders. */
+  state?: CustomToolState;
+}
+
+/**
+ * The value a classified placeholder names in a run's subjects, RAW — a
+ * `{{metadata.key}}` holding a list comes back as the list, an absent key as
+ * `undefined`, an unknown family as `undefined`. The two readers (the template
+ * renderer and the effect-expression resolver) share this lookup and differ
+ * only in what they make of a non-primitive: the renderer logs why and leaves
+ * the placeholder as written, the resolver fails the expression soft.
+ */
+export function resolvePlaceholderValue(ref: PlaceholderRef, vars: PlaceholderSubjects): unknown {
+  switch (ref.kind) {
+    case 'value':
+      return vars.value;
+    case 'roll':
+      return vars.roll;
+    case 'dice':
+      return vars.dice;
+    case 'llm':
+      return vars.llm?.output;
+    case 'params':
+      return vars.params[ref.name];
+    case 'metadata':
+      return vars.metadata?.[ref.key];
+    case 'state':
+      // `state.` is stripped and the remainder is a full state path.
+      return getAtPath(vars.state ?? {}, parsePath(ref.path));
+    case 'unknown':
+      return undefined;
+  }
+}
+
 /**
  * Substitute the four placeholder families. Plain string replacement — user
  * text is never interpreted, and an unknown placeholder is left as written.
@@ -1230,75 +1238,36 @@ export function collectMetadataTested(
  * absent or holds a list or an object: the alternative — rendering an empty
  * string — would quietly eat the hole in the sentence, where the placeholder
  * left standing tells the author exactly which key their character lacks.
+ * `{{state.path}}` follows the same doctrine.
  */
-export function renderTemplate(
-  message: string,
-  vars: {
-    value: number;
-    roll: number;
-    dice: string;
-    params: ResolvedParams;
-    metadata?: Record<string, unknown>;
-    /** The consult's result. Absent while rendering the consult's own prompt. */
-    llm?: LlmSubject;
-    /** The merged persistent state, for `{{state.path}}` placeholders. */
-    state?: CustomToolState;
-  }
-): string {
+export function renderTemplate(message: string, vars: PlaceholderSubjects): string {
   return message.replace(/\{\{([^}]+)\}\}/g, (whole, rawKey: string) => {
-    const key = rawKey.trim();
+    const ref = classifyPlaceholder(rawKey.trim());
+    const v = resolvePlaceholderValue(ref, vars);
+    if (isPrimitive(v)) return typeof v === 'number' ? formatValue(v) : String(v);
 
-    if (key === 'value') return formatValue(vars.value);
-    if (key === 'roll') return formatValue(vars.roll);
-    if (key === 'dice') return vars.dice;
-
-    if (key === 'llm') {
-      if (vars.llm) return vars.llm.output;
-      logger.debug('Custom tool message references {{llm}} with no consult to render', { context: CONTEXT });
-      return whole;
+    // Nothing renderable: say why, and leave the hole visible.
+    switch (ref.kind) {
+      case 'llm':
+        logger.debug('Custom tool message references {{llm}} with no consult to render', { context: CONTEXT });
+        break;
+      case 'metadata':
+        logger.debug('Custom tool message references metadata the character cannot render', {
+          context: CONTEXT,
+          placeholder: whole,
+          reason: v === undefined ? 'no such metadata key' : 'the key does not hold a primitive',
+        });
+        break;
+      case 'state':
+        logger.debug('Custom tool message references state it cannot render', {
+          context: CONTEXT,
+          placeholder: whole,
+          reason: v === undefined ? 'no such state path' : 'the path does not hold a primitive',
+        });
+        break;
+      default:
+        logger.debug('Custom tool message carries an unknown placeholder', { context: CONTEXT, placeholder: whole });
     }
-
-    if (key.startsWith('params.')) {
-      const name = key.slice('params.'.length);
-      if (name in vars.params) {
-        const v = vars.params[name];
-        return typeof v === 'number' ? formatValue(v) : String(v);
-      }
-    }
-
-    if (key.startsWith('metadata.')) {
-      const name = key.slice('metadata.'.length);
-      const v = vars.metadata?.[name];
-      if (isPrimitive(v)) {
-        return typeof v === 'number' ? formatValue(v) : String(v);
-      }
-      logger.debug('Custom tool message references metadata the character cannot render', {
-        context: CONTEXT,
-        placeholder: whole,
-        reason: v === undefined ? 'no such metadata key' : 'the key does not hold a primitive',
-      });
-      return whole;
-    }
-
-    if (key.startsWith('state.')) {
-      // `{{state.path}}` follows the `{{metadata.*}}` doctrine: render the value
-      // when the path holds a primitive, otherwise leave the placeholder as
-      // written so the hole in the sentence is visible rather than silently
-      // eaten. `state.` is stripped and the remainder is a full state path.
-      const statePath = key.slice('state.'.length);
-      const v = getAtPath(vars.state ?? {}, parsePath(statePath));
-      if (isPrimitive(v)) {
-        return typeof v === 'number' ? formatValue(v) : String(v);
-      }
-      logger.debug('Custom tool message references state it cannot render', {
-        context: CONTEXT,
-        placeholder: whole,
-        reason: v === undefined ? 'no such state path' : 'the path does not hold a primitive',
-      });
-      return whole;
-    }
-
-    logger.debug('Custom tool message carries an unknown placeholder', { context: CONTEXT, placeholder: whole });
     return whole;
   });
 }
@@ -1350,6 +1319,55 @@ async function resolveLlmConsult(
   };
 }
 
+/** A definition's roll, parsed once so a thousand draws need not re-parse it. */
+type PreparedRoll = { form: 'dice'; notation: string; parsed: DiceNotation } | { form: 'range'; range: RollRange };
+
+/**
+ * Parse a definition's `roll` for drawing. Load-time validation precedes this;
+ * a dice string that no longer parses is a regression and must still fail
+ * loudly rather than invent a number.
+ */
+function prepareRoll(definition: QtapCustomTool): PreparedRoll {
+  if (typeof definition.roll === 'string') {
+    const parsed = parseDiceNotation(definition.roll);
+    if (!parsed) {
+      throw new CustomToolRunError(`${definition.name}: "${definition.roll}" is not dice notation this build can roll`);
+    }
+    return { form: 'dice', notation: definition.roll, parsed };
+  }
+  return { form: 'range', range: definition.roll ?? {} };
+}
+
+/**
+ * One draw. Dice carry their own modifier — Form A's multiplier/offset/round
+ * do not apply, so raw and value are the same total; the range form draws
+ * and transforms through {@link rollRange}.
+ */
+function drawRoll(
+  definition: QtapCustomTool,
+  roll: PreparedRoll,
+  params: ResolvedParams,
+  state: CustomToolState
+): { raw: number; value: number; dice?: DiceRollResult } {
+  if (roll.form === 'dice') {
+    const rolled = rollNotation(roll.parsed);
+    return { raw: rolled.total, value: rolled.total, dice: rolled };
+  }
+  return rollRange(definition, roll.range, params, state);
+}
+
+/**
+ * The index of the first outcome whose test holds. The schema's mandatory
+ * trailing catch-all makes "none" unreachable, so it throws as a regression.
+ */
+function pickOutcome(definition: QtapCustomTool, subjects: OutcomeSubjects): number {
+  const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, subjects, definition.name));
+  if (outcomeIndex < 0) {
+    throw new CustomToolRunError(`${definition.name}: no outcome matched ${formatValue(subjects.value)}`);
+  }
+  return outcomeIndex;
+}
+
 /**
  * Run a definition: validate params, roll, transform, consult (when declared),
  * evaluate, render.
@@ -1373,36 +1391,12 @@ export async function executeCustomTool(
   const state = overrides?.state ?? {};
   const params = resolveParams(definition, suppliedParams, state);
 
-  let raw: number;
-  let value: number;
-  let rollForm: 'range' | 'dice';
-  let notation: string | undefined;
-  let diceRolls: number[] | undefined;
-  let diceBreakdown = '';
-
-  if (typeof definition.roll === 'string') {
-    rollForm = 'dice';
-    const parsed = parseDiceNotation(definition.roll);
-    if (!parsed) {
-      // Load-time validation should have caught this; a regression here must
-      // still fail loudly rather than invent a number.
-      throw new CustomToolRunError(`${definition.name}: "${definition.roll}" is not dice notation this build can roll`);
-    }
-    const rolled: DiceRollResult = rollNotation(parsed);
-    notation = definition.roll;
-    diceRolls = rolled.results;
-    diceBreakdown = formatDiceBreakdown(rolled);
-    // Dice carry their own modifier; Form A's multiplier/offset/round do not
-    // apply, so raw and value are the same total.
-    raw = rolled.total;
-    value = rolled.total;
-  } else {
-    rollForm = 'range';
-    const range = definition.roll ?? {};
-    const drawn = rollRange(definition, range, params, state);
-    raw = drawn.raw;
-    value = drawn.value;
-  }
+  const roll = prepareRoll(definition);
+  const { raw, value, dice } = drawRoll(definition, roll, params, state);
+  const rollForm = roll.form;
+  const notation = roll.form === 'dice' ? roll.notation : undefined;
+  const diceRolls = dice?.results;
+  const diceBreakdown = dice ? formatDiceBreakdown(dice) : '';
 
   const metadata = overrides?.metadata ?? {};
 
@@ -1415,11 +1409,7 @@ export async function executeCustomTool(
   }
 
   const subjects: OutcomeSubjects = { value, roll: raw, params, metadata, state, ...(llm ? { llm } : {}) };
-  const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, subjects, definition.name));
-  if (outcomeIndex < 0) {
-    // The schema's mandatory trailing catch-all makes this unreachable.
-    throw new CustomToolRunError(`${definition.name}: no outcome matched ${formatValue(value)}`);
-  }
+  const outcomeIndex = pickOutcome(definition, subjects);
   const outcome = definition.outcomes[outcomeIndex];
 
   const message = renderTemplate(outcome.message, { value, roll: raw, dice: diceBreakdown, params, metadata, llm, state });
@@ -1510,17 +1500,7 @@ export function simulateOutcomes(
   state: CustomToolState = {}
 ): CustomToolAuditResult {
   const params = resolveParams(definition, suppliedParams, state);
-
-  let parsedDice: DiceNotation | null = null;
-  let rangeRoll: RollRange = {};
-  if (typeof definition.roll === 'string') {
-    parsedDice = parseDiceNotation(definition.roll);
-    if (!parsedDice) {
-      throw new CustomToolRunError(`${definition.name}: "${definition.roll}" is not dice notation this build can roll`);
-    }
-  } else {
-    rangeRoll = definition.roll ?? {};
-  }
+  const roll = prepareRoll(definition);
 
   const hits = new Array<number>(definition.outcomes.length).fill(0);
   let valueMin = Infinity;
@@ -1528,26 +1508,10 @@ export function simulateOutcomes(
   let valueSum = 0;
 
   for (let i = 0; i < runs; i++) {
-    let raw: number;
-    let value: number;
-
-    if (parsedDice) {
-      const rolled = rollNotation(parsedDice);
-      raw = rolled.total;
-      value = rolled.total;
-    } else {
-      const drawn = rollRange(definition, rangeRoll, params, state);
-      raw = drawn.raw;
-      value = drawn.value;
-    }
+    const { raw, value } = drawRoll(definition, roll, params, state);
 
     const subjects: OutcomeSubjects = { value, roll: raw, params, metadata: metadata ?? {}, state, ...(llm ? { llm } : {}) };
-    const outcomeIndex = definition.outcomes.findIndex((o) => matchesWhen(o.when, subjects, definition.name));
-    if (outcomeIndex < 0) {
-      // The schema's mandatory trailing catch-all makes this unreachable.
-      throw new CustomToolRunError(`${definition.name}: no outcome matched ${formatValue(value)}`);
-    }
-    hits[outcomeIndex] += 1;
+    hits[pickOutcome(definition, subjects)] += 1;
 
     if (value < valueMin) valueMin = value;
     if (value > valueMax) valueMax = value;

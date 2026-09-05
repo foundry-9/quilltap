@@ -191,7 +191,7 @@ Each theme includes colors for:
 
 - **Background** — The main background color for pages and components
 - **Foreground** — Text and primary content color
-- **Primary** — Accent color for important UI elements, buttons, links
+- **Primary** — Accent color for important UI elements, buttons, links, and the filled portion of sliders
 - **Secondary** — Additional accent color for supporting elements
 - **Accent** — Highlight color for special elements
 - **Muted** — Subtle colors for borders, dividers, and less important content

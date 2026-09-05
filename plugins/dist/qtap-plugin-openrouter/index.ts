@@ -18,7 +18,7 @@ import type {
   ImageOrientationSupport,
   ProviderOptionsSchema,
 } from './types';
-import { OpenRouterProvider } from './provider';
+import { OpenRouterProvider, SUPPORTED_IMAGE_MIME_TYPES } from './provider';
 import { OpenRouterEmbeddingProvider } from './embedding-provider';
 import { OpenRouterImageProvider } from './image-provider';
 import {
@@ -69,14 +69,25 @@ const capabilities = {
 
 /**
  * File attachment support
- * Model-dependent, so we report conservative defaults
+ *
+ * The plugin registry reads this declaration, and every image-transport
+ * decision in the host (`providerCanTransportImages`, the describe-fallback,
+ * the image-description-profile guard) turns on it. It therefore has to
+ * describe what `provider.ts` actually puts on the wire, not a conservative
+ * guess: the MIME list is imported from there so the two cannot drift (bug
+ * 97 — the pre-vision `false` outlived the bug-45 fix that taught the
+ * provider to serialise `image_url` parts).
+ *
+ * Model-dependence is still real, and is still the host's call: attachments
+ * only reach a profile whose `supportsImageUpload` flag is set, and the
+ * describe-fallback substitutes text otherwise.
  */
 const attachmentSupport = {
-  supportsAttachments: false as const,
-  supportedMimeTypes: [] as string[],
-  description: 'File attachment support depends on the underlying model',
+  supportsAttachments: true as const,
+  supportedMimeTypes: SUPPORTED_IMAGE_MIME_TYPES,
+  description: 'Images (JPEG, PNG, GIF, WebP) — requires a vision-capable routed model',
   notes:
-    'OpenRouter proxies to 100+ models with varying capabilities. Some models may support image/file attachments.',
+    'OpenRouter proxies to 100+ models with varying capabilities. The plugin forwards images for any model and lets the host decide: attachments only reach a profile whose "Supports image attachments" flag is set, and the describe-fallback substitutes text otherwise.',
 };
 
 /**

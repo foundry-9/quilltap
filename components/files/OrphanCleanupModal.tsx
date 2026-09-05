@@ -57,7 +57,7 @@ export default function OrphanCleanupModal({
       <button
         onClick={onDelete}
         disabled={isProcessing}
-        className="qt-button bg-destructive qt-text-destructive-foreground hover:qt-bg-destructive/90 disabled:opacity-50"
+        className="qt-button qt-bg-destructive qt-text-on-destructive hover:qt-bg-destructive/90 disabled:opacity-50"
       >
         {isProcessing ? 'Processing...' : 'Delete All'}
       </button>
@@ -74,7 +74,7 @@ export default function OrphanCleanupModal({
       closeOnEscape={!isProcessing}
     >
       <div className="space-y-4">
-        <p className="qt-text-base font-semibold">
+        <p className="text-base font-semibold">
           We have discovered <strong>{orphanedCount} files</strong> loitering about the premises without proper documentation — rather like uninvited guests at a garden party who nonetheless appear to have brought their own sandwiches.
         </p>
 

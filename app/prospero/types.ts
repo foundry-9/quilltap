@@ -21,7 +21,8 @@ export interface UseProjectsReturn {
   projects: Project[]
   loading: boolean
   error: string | null
-  fetchProjects: () => Promise<void>
+  /** `silent` refreshes in place without flipping `loading` (tab re-activation). */
+  fetchProjects: (opts?: { silent?: boolean }) => Promise<void>
   createProject: (name: string, description: string | null) => Promise<Project | null>
   deleteProject: (id: string) => Promise<boolean>
 }

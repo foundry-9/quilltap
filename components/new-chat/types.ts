@@ -1,4 +1,29 @@
 import type { TimestampConfig } from '@/lib/schemas/types'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+/**
+ * Scenario option shapes and dropdown tokens are shared with the Salon
+ * sidebar's in-chat picker — they live in `components/scenario/types` and are
+ * re-exported here so this module stays the New Chat dialog's single import.
+ */
+export type {
+  CharacterScenario,
+  ProjectScenarioOption,
+  GeneralScenarioOption,
+  GroupScenarioOption,
+  ScenarioSelection,
+} from '@/components/scenario/types'
+export {
+  CUSTOM_SCENARIO_VALUE,
+  PROJECT_SCENARIO_PREFIX,
+  GENERAL_SCENARIO_PREFIX,
+  GROUP_SCENARIO_PREFIX,
+} from '@/components/scenario/types'
+import type {
+  CharacterScenario,
+  ProjectScenarioOption,
+  GeneralScenarioOption,
+  GroupScenarioOption,
+} from '@/components/scenario/types'
 import type { OutfitSelection } from '@/components/wardrobe'
 
 export interface SystemPrompt {
@@ -6,58 +31,6 @@ export interface SystemPrompt {
   name: string
   content?: string
   isDefault: boolean
-}
-
-export interface CharacterScenario {
-  id: string
-  title: string
-  content: string
-  description?: string
-}
-
-/**
- * Project-scoped scenario sourced from the project's `Scenarios/` folder
- * (`/api/v1/projects/[id]/scenarios`). Identified by relativePath rather
- * than UUID, since the file system is the source of truth.
- */
-export interface ProjectScenarioOption {
-  path: string
-  filename: string
-  name: string
-  description?: string
-  isDefault: boolean
-  body: string
-}
-
-/**
- * Instance-wide scenario sourced from the "Quilltap General" mount's
- * `Scenarios/` folder (`/api/v1/scenarios`). Same shape as a project
- * scenario, but applies to every non-help chat regardless of project.
- */
-export interface GeneralScenarioOption {
-  path: string
-  filename: string
-  name: string
-  description?: string
-  isDefault: boolean
-  body: string
-}
-
-/**
- * Group-scoped scenario sourced from a group's `Scenarios/` folder
- * (`/api/v1/groups/scenarios`). Same shape as project and general
- * scenarios, but applies when specific participant character IDs
- * are selected that belong to a group.
- */
-export interface GroupScenarioOption {
-  groupId: string
-  groupName: string
-  path: string
-  filename: string
-  name: string
-  description?: string
-  isDefault: boolean
-  body: string
 }
 
 export interface Character {
@@ -171,6 +144,14 @@ export interface NewChatAutonomousState {
 export interface NewChatFormState {
   imageProfileId: string
   /**
+   * The Concierge state the chat is created with — the sidebar's four-state
+   * control, moved earlier in time so the choice is in force for the opening
+   * greeting. `'monitored'` is the default and is omitted from the create
+   * request; anything else is applied server-side through `applyConciergeFlip`
+   * right after the system-prompt message.
+   */
+  conciergeState: ConciergeState
+  /**
    * Roleplay template for the new chat. Seeded with whatever the chat would
    * have defaulted to (project default > user/global default), and sent
    * verbatim at create time — `null` means "no template".
@@ -199,20 +180,3 @@ export interface NewChatFormState {
 }
 
 export const USER_CONTROLLED_PROFILE = '__USER_CONTROLLED__'
-export const CUSTOM_SCENARIO_VALUE = '__custom__'
-/**
- * Stable token used in the dropdown's `<option value>` to identify a project
- * scenario. Format: `project:<relativePath>`. Character scenarios continue
- * to use their UUID; "Custom" uses CUSTOM_SCENARIO_VALUE.
- */
-export const PROJECT_SCENARIO_PREFIX = 'project:'
-/**
- * Stable token for general scenarios in the dropdown. Format:
- * `general:<relativePath>`.
- */
-export const GENERAL_SCENARIO_PREFIX = 'general:'
-/**
- * Stable token for group scenarios in the dropdown. Format:
- * `group:<groupId>:<relativePath>`.
- */
-export const GROUP_SCENARIO_PREFIX = 'group:'

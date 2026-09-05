@@ -81,6 +81,12 @@ Before creating a connection profile, you need an API key:
    - **Top P** — Nucleus sampling (alternative to temperature)
    - **Provider-specific options** — May vary by provider
 
+   > **The API key keeps to its own provider, as of 4.9.** The key you select is chosen from the keys belonging to the provider currently named in the dropdown, and it stays with that provider. Move the dropdown elsewhere and the selection is set aside: on Ollama, which asks for no key at all, the field withdraws entirely; on another hosted provider it stands empty, since none of that provider's keys have yet been chosen. In either case nothing is sent and nothing is saved. This was previously a small tragedy of manners. The key stayed on in secret — invisible on Ollama, shown as blank on OpenAI — and was despatched regardless, so *Connect* went out bearing an Anthropic key while the dialog maintained that none was selected, and *Save* was refused with the baffling protest that **"API key provider does not match profile provider"**, naming a field nowhere on the page and offering no means to correct it. Any profile already burdened with such a key is relieved of it the next time you save. And your original selection is not thrown away: return the dropdown to the provider it belongs to and you will find it waiting, exactly as you left it.
+
+   > **On blank boxes, as of 4.9.** Every numeric provider option is entitled to be left empty, and an empty one means *the model's own default stands* — but until now the box would not permit it. Delete the contents of, say, an Ollama profile's *Request Timeout* and the default sprang straight back with the cursor tucked in behind it, so the `5` you typed next arrived as `3005` and was saved with a perfectly straight face. Cleared fields now stay cleared. The default is shown in grey behind the empty box, as a suggestion rather than an occupant, and a field left that way is genuinely absent — which means the day a provider revises its default, your profile receives the revision.
+
+   > **A correction, as of 4.9.** *Max Tokens* and *Top P* were, until now, written down faithfully and then left in the drawer: the Salon sent neither to the provider, which fell back on whatever default it kept for itself. Regenerating a reply used your figures; the original reply did not — which explains a good deal of otherwise inexplicable difference between the two. Both settings are now sent on every path. If a profile has been carrying a *Max Tokens* far above what you actually want spent, this is the moment to look at it, because it will now be honoured.
+
 3. Click **Save** to create the profile
 
 ### Step 3: Test the Connection
@@ -197,6 +203,8 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 4. Complete other settings as needed
 5. Test to verify connection works
 
+**The Base URL keeps to its own provider.** The box appears only for the providers that require one — Ollama and OpenAI-Compatible — and selecting either fills in the customary local address. Should you then move the dropdown to a hosted provider, the box withdraws and, as of 4.9, so does its contents: nothing is sent, and nothing is saved onto the profile. This was formerly a most unsporting trap. A brief visit to Ollama, purely to see what was on offer, left `http://localhost:11434` clinging invisibly to the profile, and every subsequent attempt to connect was despatched to that address instead of the provider's own — a profile that could not connect, with nothing on screen to say why and no gesture available to put it right. Any profile already labouring under such a stowaway is cleared the next time you save it. A base URL you typed yourself is remembered, and returns should you return to a provider that uses one.
+
 > **Docker users:** If you're running Quilltap in Docker and local services (like Ollama) on your host machine, you don't need to change any URLs. Add the port to the `HOST_REDIRECT_PORTS` environment variable when starting the container (e.g., `HOST_REDIRECT_PORTS="11434"`), and `http://localhost:11434` works transparently inside the container.
 
 ## Provider-Specific Notes
@@ -233,7 +241,15 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - **Thinking Mode** — the GLM hybrid-reasoning models deliberate by default, so their chain-of-thought streams into the Salon's thinking fold (display only — it is never fed back to any model) with no prompting at all. Set this to *Disabled* should you want a plain reply and no fold; *Enabled* keeps the working on; and *(model default)* defers to Z.AI, which at present means enabled. With thinking off, the fold simply never appears, however hard the model may be working behind the curtain.
 - **Reasoning Effort** *(glm-5.2 only)* — a dial for how hard glm-5.2 cogitates before it speaks, effective only while thinking is lit; older and lesser GLMs pay it no heed. *Minimal* all but silences the rumination; *High* and *Max* open the throttle — and mind that Z.AI's own scale is coarse, folding low/medium up to *High* and xhigh up to *Max*. Here is the kindness of it: glm-5.2 thinks by default, and left to its own devices the engine would labour at the API's spendthrift *Max*. So unless you set *Disabled* thinking or pick a level yourself, Quilltap quietly sends *High* on glm-5.2 — curbing runaway thinking-token spend without a word of fuss. (Effort is no hard cap on output: the rumination still counts against your token ceiling, and striking it yields a *length* finish. Pair a modest effort with a sensible token limit for the surest economy.)
 
-### Google (Gemini)
+### NanoGPT
+
+- A pay-as-you-go gateway seating six hundred models and more at one table — OpenAI's, Anthropic's, Google's, the open-weight houses', and NanoGPT's own `auto-model` maîtres d'hôtel, which choose a model for you — all behind a single key that also serves image generation and embeddings
+- Fetch Models asks the gateway for its current register, so the picker stays honest as the catalogue turns over
+- Routed thinking models stream their deliberations into the Salon's thinking fold (display only — never fed back), just as they would at the front door of their own establishments. A model id wearing the `:thinking` suffix is the reasoning variant of its house and deliberates without being asked
+- **Reasoning Effort** — NanoGPT's one dial for the whole arcade. Any setting other than *None* asks the routed model to reason, from *Minimal* through *XHigh* (NanoGPT translates the scale into each establishment's own dialect); *None* asks it to come straight to the point; and *(model default)* leaves the matter to the model — a `:thinking` id thinks, the rest generally do not. Two candles of caution: not every model shows its working even when it reasons, and reasoning tokens bill as output tokens, so a generous effort on a verbose model makes for a generous invoice
+- Multi-character scenes mind the same etiquette here as everywhere: a profile that will run a thinking turn — by an effort you set, or by a `:thinking` model's own habit — anchors turns in prose rather than with the `[Name]` prefill some reasoning models refuse mid-thought
+- **Enable Prompt Caching** — the OpenAI- and Gemini-routed houses cache repeated context of their own accord, gratis; the Anthropic-routed (Claude) models wait to be asked. Tick this and NanoGPT sets the cache checkpoints itself, so a long chat re-reads its own history at roughly a tenth the usual rate from the second turn onward. Writing the cache carries a modest premium over plain input, so the economy is in the return visits. Models routed elsewhere simply pay it no mind
+- **Cache Duration** *(visible only when Prompt Caching is enabled)* — five minutes is the default and the cheapest entry in the ledger (1.25x to write); one hour costs more upfront (2x) but suits the slow, deliberate session that outlives the five-minute window
 
 - Multiple model sizes (Flash, Pro)
 - Good for vision tasks
@@ -253,6 +269,25 @@ For self-hosted or alternative LLM providers (like local Ollama instances):
 - No API costs
 - Set Base URL to your local server
 - Good for privacy-sensitive work
+- **Enable Thinking** — for models of the ruminative persuasion (Qwen3, DeepSeek-R1, and their kin), this checkbox decides whether the model may pace the study before speaking. Ticked, the deliberation streams into the Salon's thinking fold (display only — it is never fed back to any model) and the reply follows once the pacing concludes. Unticked — the default — the model is asked to come straight to the point, which is precisely what you want when the output must be tidy JSON rather than a soliloquy. Models without a contemplative bone in their weights are unaffected either way; should one refuse the instruction outright, Quilltap quietly withdraws it and carries on rather than spoiling the call.
+- **Thinking and multi-character scenes do not mix by default.** An Ollama model opens its deliberation at the very start of its turn — so in a group chat, where Quilltap ordinarily hands the model a turn it has already opened with `[Name]`, the deliberation never happens at all and the reply arrives bare. Untick **Announce the speaker in multi-character scenes** on any Ollama profile whose thinking you actually want to read; the character stays just as firmly pinned to its own turn by the prose instruction that takes its place.
+- Some locally-hosted models mutter their reasoning straight into the reply between `<think>` tags, rather than through any proper channel. Quilltap now recognises these blocks as they stream in, ushers them into the thinking fold where they belong, and keeps them out of the visible message — whichever way the checkbox is set. Certain models are more disreputable still: asked not to think, they think anyway, and the opening tag goes missing in transit, leaving bare rumination with only a closing `</think>` as evidence. Quilltap recognises that dodge too, and the answer emerges unstained.
+- **Max Context is now a genuine instruction, not a polite suggestion.** An Ollama server left to its own devices allocates a modest default window and quietly lops the middle out of any conversation that outgrows it — while telling no one. Set *Max Context* on an Ollama profile and Quilltap now passes it to the server as the actual window to load (`num_ctx`), so the server keeps precisely as much conversation as Quilltap believes it does. Choose a figure your machine's memory can honour — the model's ledger of remembered tokens grows in strict proportion — and note that changing it prompts the server to reload the model on the next call, a one-time pause of a half-minute or so. Leave *Max Context* empty to let the server carry on with its own default, as before.
+- **And Quilltap now packs to the same figure it declares.** Until 4.9 the household kept two sets of books: the window announced to the server came from your *Max Context*, while the budget that decides how much conversation to pack came from a lookup table of known model names — and a model the table had never heard of (any `hf.co/…` tag, any bespoke OpenAI-compatible endpoint) was quietly rationed to 8,192 tokens however generous your setting. The visible symptom was a character with an unaccountably short memory, and a warning in the log to the effect that the conversation was getting long. Both books are now kept by the same clerk: whatever *Max Context* says is what Quilltap budgets against. Anyone running a large local model on an unrecognised tag should find their characters remembering a great deal more of the afternoon than they did.
+- **Request Timeout (seconds)** — how long Quilltap will stand at the door before concluding that nobody is coming. Five minutes by default, which is ample for a modest model on an idle machine and not remotely ample for a twenty-seven-billion-parameter houseguest being roused from disk to consider a twenty-thousand-token prompt on a machine already busy with other errands. The clock measures only the wait for the *first* word — once the reply begins it may run as long as it likes, and no answer is ever cut off mid-sentence — but rousing the model and reading the prompt both happen in that silence, and on a large model with a generous *Max Context* the silence can run for minutes without anything being wrong. If your turns die with a complaint that the operation was aborted, and the arithmetic says the abort landed at exactly five minutes, this is the field you want; set it to whatever your slowest honest turn requires, with room to spare. Lower it instead if you would rather a wedged server say so promptly. Leave it blank for the default.
+- **Tool use** — the *Allow tool use* checkbox governs, per profile. Newly minted Ollama profiles now start with the box ticked, since modern local models (the Qwen3 line, Llama 3.x, and their contemporaries) handle native function calling perfectly well; untick it for models that can't be trusted with machinery. For models whose template lacks native tool support, the *Tool format* selector's pseudo-tool modes remain at your service.
+- **Thinking Effort** *(appears once Enable Thinking is ticked)* — how long the model may pace the study before it speaks: *Low*, *Medium*, *High*, *Maximum*, or the model's own default. On a machine where every token of rumination is paid for in seconds rather than pennies, this is the single largest lever on how long a turn takes — the difference between a reply over the course of a cigarette and a reply over the course of a cigar. It requires a reasonably modern Ollama and a model whose template understands the notion of effort; where either is absent the model simply thinks as it always did.
+- **Keep Model Loaded** — Ollama shows a model the door after five minutes of idleness, and rousing a large one again costs the better part of a minute on your next message. This dial decides the matter per profile: *Unload immediately* for a small utility model that has no business occupying memory, *5 minutes* / *30 minutes* / *1 hour* for something you mean to return to, or *Keep loaded* to leave the model resident for as long as the server runs. Left on *Server default* — where it starts, and where it stays unless you say otherwise — Quilltap says nothing at all on the subject, and any `OLLAMA_KEEP_ALIVE` you have configured on the server governs undisturbed.
+- **Strict chat templates no longer strangle the conversation at the second turn.** A Qwen model on Ollama would open with a perfectly civil greeting and then never speak again — every subsequent turn refused by the server with a complaint that the system message must come first. Quilltap writes the head of a turn as up to three system blocks (a matter of prompt caching, and of real value on the hosted services), and the Qwen templates — along with several Llama- and Gemma-derived ones — will not hear of more than one. They are now folded into a single block on the way to Ollama, in order and complete.
+- **Sampling** — a second group of fields carrying the settings a model's publisher actually specifies: *Top K*, *Min P*, *Repeat Penalty*, *Presence Penalty*, *Frequency Penalty* and *Seed*. Until 4.9 these could be saved but never sent, so every local model ran at whatever its defaults happened to be, however firmly its publisher recommended otherwise (Qwen3 asks for a Top K of 20 and a Min P of 0; many an instruct model names a repeat penalty). Fill in only what your model's card calls for and leave the rest blank — a blank field is not sent at all, and the model's own default stands.
+
+### OpenAI-Compatible Endpoints (llama-server, vLLM, LM Studio, and kin)
+
+- Point *Base URL* at your server's OpenAI-compatible route — `http://localhost:8080/v1` for `llama-server`, and whatever your runtime advertises otherwise. An API key is optional.
+- **And optional now means offered, as of 4.9.** This is the one provider that keeps a foot in both camps — the unbolted llama.cpp on your own desk, and a hosted service that will not exchange a syllable without a bearer token — and until now Quilltap had only one word for the matter and used it wrongly. Because no key was *required*, the *API Key* field was not shown at all, and **OpenAI-Compatible** was absent from the Add-New-API-Key list besides, so no such key could be brought into existence in the first place. Anyone aiming this provider at Together, Fireworks, Groq, DeepInfra, a vLLM behind a door, or a corporate gateway was answered with a flat 401 and given nothing to do about it. The two questions are now asked separately: the field appears, unstarred, and you may fill it or leave it empty as your endpoint requires. Create the key first under **Settings → AI Providers → API Keys**, choosing **OpenAI-Compatible** as its provider, and then select it here. A local server that wants no key wants none still — leave the field on *None* and nothing is sent.
+- **Endpoint Options** — a group of provider settings that, until 4.9, this provider had never had at all. *Reasoning Effort* (from *None* through *Extra high*) tells a reasoning model how long it may think; *Top K*, *Min P*, *Repeat Penalty*, *Presence Penalty*, *Frequency Penalty* and *Seed* are the sampling settings your model's publisher specifies; *Reuse Cached Prompt* is an escape hatch for servers that do not already reuse the part of a prompt they have processed before (`llama-server` does, so most people can leave it alone). Everything here is sent only when you fill it in, and an endpoint that does not recognise a setting generally ignores it.
+- **Tool use is now yours to grant.** Because this provider points at an endpoint of unknown character, new profiles start with *Allow tool use* unticked and Prospero falls back to its pseudo-tool formats. If your server does speak native function calling — `llama-server --jinja`, vLLM, LM Studio — tick the box, and Quilltap will send the tool definitions and act on the calls that come back. Should the endpoint prove to have been boasting, the error is shown rather than swallowed.
+- **Strict chat templates no longer strangle the conversation at the second turn.** Certain model templates — the Qwen family most insistently, and a number of Llama- and Gemma-derived ones — will accept a system message only as the very first item on the programme and raise a formal objection to any that follows. Quilltap assembles the head of a turn in up to three separate system blocks, for excellent reasons to do with prompt caching on the hosted services, and the consequence was a chat that greeted you charmingly and then fell silent forever: every turn after the opening was refused outright by the server before a single token was generated. The blocks are now folded into one on their way to a local endpoint, in the order they were written and with nothing left out. The hosted providers keep their three, and their caches with them.
 
 ### Groq
 
@@ -291,6 +326,8 @@ Add tags to profiles for easy filtering:
 2. Add tags like: "production", "testing", "fast", "expensive"
 3. Tags help you remember each profile's purpose
 
+> **This actually works now, as of 4.9.** An awkward admission: the labels one attached to a connection profile were being posted to an address at which no clerk had ever sat. Every tag went into the void — the panel showed none however many you added, and the attempt itself returned nothing more helpful than *"Failed to add tag."* The correspondence is now correctly directed, the profile card displays the tag's name rather than the blank lozenge it used to manage, and a tag applied today will still be there tomorrow. Any labels you attempted to attach before this were never recorded and will need attaching again — though the tags themselves were duly created, so you will find them waiting in the suggestions list.
+
 ## Allow Tool Use
 
 The **Allow tool use** checkbox on each connection profile acts as a master switch for all LLM tools. When unchecked, no tools whatsoever — built-in or plugin-provided — will be dispatched to the model when using that profile, regardless of what the per-chat or per-project tool settings say.
@@ -313,6 +350,8 @@ Profiles with tool use disabled display a **No Tools** badge on their profile ca
 
 To re-enable tools, simply check the box again. Per-chat and per-project tool settings will resume their normal effect immediately.
 
+**A word on providers that decline to vouch for themselves.** A new profile arrives with the box ticked or unticked according to what its provider claims about tool support — and for an OpenAI-compatible endpoint, which might be anything at all, the claim is a cautious *no*. That is a starting position and never a locked door: the box remains yours to tick, and a great many local servers (`llama-server --jinja`, vLLM, LM Studio) handle native function calling perfectly well. You know what you have pointed Quilltap at; Quilltap does not.
+
 ## Tool Format
 
 When tool use is allowed, the **Tool format** selector beneath the checkbox decides *how* a tool call travels between Quilltap and your model. Different models, you see, have been raised in different households and each has its own customs for the dinner table.
@@ -328,6 +367,31 @@ The Simple JSON surface was designed for smaller and local models that lack nati
 
 When in doubt, leave the setting on **Auto**. The keeper of the keys can always rearrange the silverware later.
 
+## Announcing the Speaker in Multi-Character Scenes
+
+When several characters share a room, each reply must be pinned to exactly one of them, or the model will cheerfully write the whole cast's evening for you. Quilltap has two ways of pinning it, and the **Announce the speaker in multi-character scenes ([Name] prefill)** checkbox decides which one this profile uses.
+
+**Ticked** — the turn is handed to the model already opened, with `[Marie]` written at the top of a reply she has not begun. Structurally she cannot be anyone else; the model has no choice but to continue the line it has been handed. The tag never reaches the transcript — Quilltap strips it on the way back. This is the firmer of the two grips, and it is where most profiles begin.
+
+**Unticked** — the same instruction is delivered in prose, appended quietly to the system prompt: *respond as Marie and only Marie, and never label anything with another participant's name.* The conversation is left ending on the user's turn, and the model begins its reply itself. A polite request rather than a hand on the elbow — but some models will not tolerate the hand.
+
+**Quilltap unticks it for you in two cases.** A new profile arrives with the box already settled, and it settles it against the prefill when either of these holds:
+
+- **Anthropic.** Their recent models refuse outright to accept a reply that someone else has already started, and will return an error on every multi-character turn. New Anthropic profiles therefore begin with the box unticked, and you should think twice before ticking it.
+- **Any model that will reason before it answers.** A thinking turn and a turn already opened are poor company. Some providers refuse the request outright — DeepSeek's V4 models reason whether or not you asked them to, and reply to a pre-opened turn with a brusque note about `reasoning_content` and nothing else. Others accept the request and quietly swallow the deliberation instead: a local Ollama model opens its study door at the very start of its turn, so if Quilltap has already opened the turn the door is shut before the model reaches it, and the reply arrives with no thinking whatsoever however firmly you have ticked *Enable Thinking*.
+
+  Quilltap judges this per profile rather than per provider, because the same provider will serve you a ruminative model and a plain one on the same key. Set **Thinking Mode** to *Disabled* (or leave *Enable Thinking* unticked) and the prefill — the firmer grip, and the one a plainer model benefits from most — comes back of its own accord. If you have watched your thinking model take the prefill in its stride, tick the box: an explicit choice outranks Quilltap's, always. A warning appears beneath it, and nothing more.
+
+**One case is left to your judgement:**
+
+- **Models that get suspicious.** A certain sort of model will spend a paragraph of its reply working out whether `[Marie]` was an instruction to it or a slip left behind by whoever spoke last. If you see the model narrating its own confusion about the name in the brackets, untick the box and the question stops being asked.
+
+**Profiles made before all this** were given the prefill by an older rule that only knew about Anthropic. Quilltap corrects them once, on the upgrade, and only where the profile is genuinely running a thinking turn — a DeepSeek profile that has been failing every turn since you made it should simply start working. Nothing else is touched, and a box you tick yourself is never touched again.
+
+**Profiles arriving from an older archive** are settled by the same courtesy. A backup or a `.qtap` bundle made before the checkbox existed carries no opinion about it, and rather than reading that silence as a *yes*, Quilltap leaves the matter open and lets the provider's own good sense decide — which is to say the box stays unticked on an Anthropic profile, where a ticked one would refuse every turn in a crowded room. A box the archive does carry is honoured exactly as it was set.
+
+Either way, Quilltap keeps a structural backstop: a reply that wanders off into another participant's turn is truncated at the first foreign name tag, whichever route pinned it. And single-character chats use neither route — there is only one person who could possibly be speaking.
+
 ## Supports Image Attachments
 
 The **Supports image attachments (vision input)** checkbox tells Quilltap that this particular profile's model can read images — photographs, screenshots, diagrams, character portraits, and so forth. Some models see; most do not; a single provider will happily serve both sorts on the same API, so the distinction must be made at the profile level rather than by guessing from the provider's name on the door.
@@ -336,7 +400,7 @@ The **Supports image attachments (vision input)** checkbox tells Quilltap that t
 
 - You're configuring a known vision model — GPT‑4o, Claude Sonnet or Opus, Gemini 1.5+, Grok 2 Vision, and their descendants.
 - You've pointed an **OpenRouter** profile at a vision‑capable model ID (`openai/gpt-4o`, `anthropic/claude-sonnet-4-5`, and so on).
-- You're running a local vision model through **Ollama** (LLaVA, MiniCPM‑V, Llama 3.2 Vision) or an **OpenAI Compatible** endpoint whose backing model handles images.
+- You're running a local vision model through **Ollama** (LLaVA, MiniCPM‑V, Llama 3.2 Vision) or an **OpenAI Compatible** endpoint whose backing model handles images. Tick it freely: the box now states an intention rather than issuing an instruction, and Quilltap will not act on it further than the plumbing permits (see *Two questions, not one*, below).
 
 **When to leave it unticked:**
 
@@ -344,6 +408,117 @@ The **Supports image attachments (vision input)** checkbox tells Quilltap that t
 - You're unsure. When unticked, Quilltap routes any image the user attaches through your configured *Image Description Profile* (set in Chat settings), which produces a written description using whichever other profile *is* ticked. The conversation continues as if the image had been typed out in words — imperfect, but serviceable, and it never sends image bytes to a model that will baulk.
 
 **What happens under the hood:** every bit of Quilltap that asks "can this profile see pictures?" — the Salon's attachment handler, the wardrobe image analyzer, the Aurora wizard's *Describe from image* step, the *Image Description Profile* dropdown in Chat settings — consults this checkbox. Existing installs were seeded automatically: profiles on OpenAI, Anthropic, Google, and Grok had the box pre‑ticked to match their prior behaviour; everything else starts unticked, so users who want vision on OpenRouter or Ollama must opt in explicitly.
+
+
+### Two questions, not one
+
+The checkbox answers *can this model read pictures?* There is a second question underneath it — *can Quilltap's connector for this provider actually put an image on the wire?* — and for a while nobody was asking it.
+
+They are not the same question, and for a handful of providers the answers differ. NanoGPT and Z.AI both serve genuinely vision-capable models; until recently only one of the two connectors knew how to send a picture. The DeepSeek and OpenAI‑Compatible connectors still cannot, and neither can Ollama's, however capable the model behind them may be.
+
+A third possibility, rarer and more vexing still, is a connector that *can* send a picture but has neglected to say so. **OpenRouter** was in precisely this position: its connector has forwarded images competently for some time, while the paperwork it files with Quilltap on startup still declared the old abstinence. Quilltap, reading the paperwork rather than the deed, routed every OpenRouter image to the description fallback and — with a straight face — refused an OpenRouter profile the post of describer in the very sentence that recommended OpenRouter for the job. The declaration has been corrected and now takes its list of formats directly from the connector that does the sending, so the two can no longer fall out of step. If your describer or your vision profile sits on OpenRouter, it will simply begin receiving the pictures themselves; nothing needs re-ticking.
+
+Formerly the checkbox was taken as the whole answer, with an unhappy result: ticking it on such a profile switched off the description fallback *and* handed the bytes to a connector that quietly discarded them. The model received no picture and no notice that there had been one, and — models being obliging creatures — wrote a confident paragraph about it regardless.
+
+Both questions are now asked, and the profile is served by whichever answer is the more pessimistic:
+
+- **Model sees, connector sends** → the image goes to the model whole. (OpenAI, Anthropic, Google, Grok, OpenRouter, Z.AI, and NanoGPT.)
+- **Model sees, connector cannot** → the description fallback is used, exactly as though the box were unticked. Nothing is silently lost. (DeepSeek, OpenAI‑Compatible, Ollama.)
+- **Model does not see** → the description fallback, as always.
+
+The same care is taken over the *Image Description Profile* itself: a profile whose connector cannot send images is no longer eligible to be your describer, since a describer that never receives the picture will describe one it has imagined.
+
+You need do nothing about any of this. Tick the box when the model can see; Quilltap will decline to be reckless with it.
+
+## The Understudies: Fallback
+
+Every performer, however reliable, is occasionally indisposed. A key is refused,
+a rate limit descends without warning, a provider goes dark on a Tuesday
+afternoon for reasons it declines to share. Before this, that was the end of the
+matter: the call failed, and you were left staring at an error where a reply
+ought to have been.
+
+Now each connection profile may name an **understudy**, and the show goes on.
+
+### How the chain is walked
+
+Should a call through a profile fail outright, Quilltap tries, in order:
+
+1. **The profile itself** — the performer you cast.
+2. **Its understudy** — the profile named in the *Fallback* section.
+3. **One stand-in drafted from the company**, if you have permitted it.
+
+Three attempts, and no more. If none of them can produce a reply, the call fails
+in earnest and the Salon says who was asked and how each one declined.
+
+Chains do not go on forever. When profile A falls back to profile B, *B's own
+understudy is not consulted* — so you may cheerfully have A name B and B name A
+without setting anything spinning. It simply stops.
+
+Nor is the arrangement sticky. A successful fallback applies to that one call and
+no other: your next message tries the profile you actually chose, so a passing
+outage heals itself without you having to go and undo anything.
+
+### Naming an understudy
+
+Open a profile for editing and find the **Fallback** section, just below Model
+Class.
+
+- **Understudy** — any of your other profiles. Courier profiles are not offered,
+  for the obvious reason that a request you carry across the room by hand cannot
+  step in at a moment's notice.
+- **Draft a stand-in from the company** — when ticked, and when both named
+  players have failed, Quilltap may make one further attempt with a profile of
+  the same standing or better, preferring a different provider than the one that
+  just failed. Off by default: a drafted stand-in spends money at a provider you
+  did not choose for that call.
+
+The stand-in is chosen by **Model Class**, so a profile with none set is rather
+harder to cast for — only your other unclassified profiles are eligible. Setting
+Model Class on your profiles makes the choice a great deal better informed.
+
+If you name an understudy that has no API key yet, you'll see a gentle note
+rather than a refusal. Keys may arrive later; the understudy is simply skipped
+until one does.
+
+One further courtesy: on a turn carrying an image, an understudy that cannot
+see is passed over. The picture has already been packed into the request, and
+handing it to a model with no eyes would be refused at the door — so the turn
+goes to the next candidate rather than being spent on a certainty.
+
+### What counts as an indisposition
+
+A fallback fires for problems of *availability*: a rejected key, a rate limit, a
+network failure, a model that no longer exists, a provider returning a 500, an
+empty reply, a moderation refusal.
+
+It pointedly does **not** fire for problems that would recur identically
+elsewhere:
+
+- **A prompt too long for the model** — this has its own recovery, and a
+  second provider would refuse the same prompt for the same reason.
+- **A model that does not support tools** — already retried on the same profile
+  with the tools set aside, which is the better answer.
+
+### In dangerous territory
+
+If the Concierge has flagged the content, or has already rerouted the call to an
+uncensored profile, any stand-in *drafted automatically* must itself be marked
+suitable for dangerous content. There would be little sense in routing around one
+refusal straight into another.
+
+An understudy you name yourself is always honoured — that choice is yours to
+make.
+
+### Background work
+
+The same arrangement covers the cheap-LLM tasks that run out of sight: titling,
+memory extraction, summarising, scene tracking and the rest. When those run
+through a connection profile, that profile's chain applies. When they don't —
+a local model, or a route Quilltap assembled on the spot — see the *Allow a
+Similar-Tier Stand-In* option in [Chat Settings](chat-settings.md).
+
+Background work fails quietly, as it always has. Only chats speak up.
 
 ## Connection Profile Limitations
 

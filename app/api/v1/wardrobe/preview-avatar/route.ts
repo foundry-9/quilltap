@@ -14,14 +14,16 @@
  * Response: { fileId, url, mimeType, prompt }
  */
 
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { createContextHandler } from '@/lib/api/middleware';
+import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError } from '@/lib/api/responses';
 import { buildCharacterAvatarPrompt } from '@/lib/wardrobe/avatar-prompt';
 import { resolveAesthetic } from '@/lib/image-gen/aesthetic';
+import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
+import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import {
   getCharacterVaultStore,
   writeCharacterAvatarToVault,
@@ -37,7 +39,7 @@ const previewAvatarSchema = z.object({
   imageProfileId: z.string().min(1).optional(),
 });
 
-export const POST = createContextHandler(async (req, { user, repos }) => {
+const handlePreviewAvatar = async (req: NextRequest, { user, repos }: RequestContext) => {
   let parsed: z.infer<typeof previewAvatarSchema>;
   try {
     parsed = previewAvatarSchema.parse(await req.json());
@@ -101,20 +103,19 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
   // operator chose the model and the outfit, and the in-chat regen path is
   // where the classifier guards against character-driven generations.
   const provider = createImageProvider(imageProfile.provider);
-  const generationResponse = await provider.generateImage(
-    {
-      prompt,
-      model: imageProfile.modelName,
-      n: 1,
-      size: '1024x1792',
-      quality: (imageProfile.parameters as Record<string, unknown>)?.quality as
-        | 'standard'
-        | 'hd'
-        | undefined,
-      style: 'natural',
-    },
-    apiKey.key_value,
-  );
+  // Through the shared builder, so the preview shows what the profile actually
+  // produces — LoRAs, residual options and all — rather than a hand-rolled
+  // subset that would make the preview lie about the real avatar. Portrait is
+  // resolved onto the provider's own mechanism instead of the hardcoded
+  // 1024x1792 that only OpenAI ever accepted.
+  const { params: previewParams } = buildImageGenParams({
+    profile: imageProfile,
+    prompt,
+    overrides: { n: 1, style: 'natural' },
+    orientation: 'portrait',
+    logContext: { context: 'api.v1.wardrobe.preview-avatar', profileId: imageProfile.id },
+  });
+  const generationResponse = await provider.generateImage(previewParams, apiKey.key_value);
 
   const imageData = generationResponse.images?.[0];
   const rawData = imageData?.data || imageData?.b64Json;
@@ -212,4 +213,13 @@ export const POST = createContextHandler(async (req, { user, repos }) => {
     );
     return serverError('Failed to save avatar preview');
   }
-});
+};
+
+/**
+ * Avatar previews generate synchronously rather than through the job queue, so
+ * the route registers with the activity registry — the toolbar's "Img" chip
+ * stays lit for the whole preview, prompt build and provider wait included.
+ */
+export const POST = createContextHandler((req, ctx) =>
+  trackActivity('image', () => handlePreviewAvatar(req, ctx))
+);

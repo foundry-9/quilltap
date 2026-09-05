@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useRealtimeRefetchInterval } from '@/hooks/useRealtime'
 
 interface StoryBackgroundState {
   backgroundUrl: string | null
@@ -25,6 +26,9 @@ interface StoryBackgroundState {
  *                              Lantern announcements posted alongside the new backdrop appear).
  * @returns Background URL, file ID, loading state, and polling controls
  */
+/** Fallback passive-sweep cadence, used only while the realtime socket is down. */
+const PASSIVE_POLL_INTERVAL_MS = 30000
+
 export function useStoryBackground(
   chatId: string | null,
   projectId?: string | null,
@@ -65,7 +69,10 @@ export function useStoryBackground(
         { signal }
       ),
     enabled: !!backgroundUrl_toFetch,
-    refetchInterval: enablePassivePolling ? 30000 : false,
+    // Pushed: STORY_BACKGROUND_GENERATION completing publishes `chats:<id>` /
+    // `projects:<id>`, which invalidates this key. The 30 s sweep is what's left
+    // when the socket is down.
+    refetchInterval: useRealtimeRefetchInterval(enablePassivePolling ? PASSIVE_POLL_INTERVAL_MS : false),
     refetchOnReconnect: false,
   })
 
@@ -113,9 +120,10 @@ export function useStoryBackground(
       const result = await refetchBackground()
       const newUrl = result.data?.backgroundUrl ?? null
 
-      // Stop if we detect a change (new URL or URL appeared where there was none)
+      // Stop if we detect a change (new URL or URL appeared where there was none).
+      // The change callback belongs to the shared effect below, which sees the
+      // same transition whether it arrived by poll or by push.
       if (newUrl !== initialUrlRef.current) {
-        onBackgroundChangedRef.current?.()
         stopPolling()
         return
       }
@@ -127,9 +135,11 @@ export function useStoryBackground(
     }, 5000)
   }, [backgroundUrl_derived, refetchBackground, stopPolling])
 
-  // Passive-polling path: SWR revalidates every 30s when enablePassivePolling is true.
-  // If the background URL changes between revalidations (because a background job wrote one),
-  // notify the caller so it can refresh sibling state (e.g., chat messages).
+  // The one place a background change is noticed, however the new value
+  // arrived — a realtime invalidation, the passive sweep, or the active watch
+  // below. Notify the caller so it can refresh sibling state (e.g. chat
+  // messages carrying the Lantern's announcement), and retire an active watch
+  // that has now seen what it was waiting for.
   const previousUrlRef = useRef<string | null | undefined>(undefined)
   useEffect(() => {
     const previous = previousUrlRef.current
@@ -138,8 +148,9 @@ export function useStoryBackground(
     if (previous === undefined) return
     if (previous !== backgroundUrl_derived) {
       onBackgroundChangedRef.current?.()
+      if (pollingIntervalRef.current) stopPolling()
     }
-  }, [backgroundUrl_derived])
+  }, [backgroundUrl_derived, stopPolling])
 
   // Cleanup on unmount
   useEffect(() => {

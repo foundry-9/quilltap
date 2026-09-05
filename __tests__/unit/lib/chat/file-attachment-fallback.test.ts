@@ -25,6 +25,7 @@ import {
   generateImageDescription,
   processFileAttachmentFallback,
   formatFallbackAsMessagePrefix,
+  verifyImageReachedModel,
 } from '@/lib/chat/file-attachment-fallback'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { createLLMProvider } from '@/lib/llm'
@@ -73,6 +74,20 @@ const mockRepos = {
   },
 }
 
+/**
+ * A stub `usage` for a describe call that genuinely carried an image.
+ *
+ * Bug 116: prompt tokens at or below what `IMAGE_DESCRIPTION_INSTRUCTION`
+ * costs on its own are proof the image was discarded before the model saw it,
+ * and the describer's answer is then invented. These stubs originally reported
+ * 5-10 prompt tokens, which is precisely the shape of the live failure — so
+ * every one of them now reports a plausible vision call instead, and the
+ * low-token case is asserted deliberately in its own test.
+ */
+function visionUsage(completionTokens: number) {
+  return { promptTokens: 812, completionTokens, totalTokens: 812 + completionTokens }
+}
+
 const mockFileAttachment: FileAttachment = {
   id: 'file-1',
   filepath: 'uploads/chat-files/chat-1/image.png',
@@ -101,6 +116,51 @@ describe('lib/chat/file-attachment-fallback', () => {
     mockProfileSupportsMimeType.mockReturnValueOnce(false).mockReturnValueOnce(true)
     expect(needsFallbackProcessing(baseProfile, 'image/png')).toBe(true)
     expect(needsFallbackProcessing(baseProfile, 'image/png')).toBe(false)
+  })
+
+  it('forces the describe-fallback when the model reads images but the plugin cannot send them', () => {
+    // Bug 91: a NanoGPT profile with supportsImageUpload ticked is a truthful
+    // statement about the routed model, not about the plugin. Before the
+    // transport check the pair answered "no fallback needed" and the plugin
+    // then discarded the bytes, so the model received nothing and nothing said
+    // so. Both halves have to agree.
+    mockProfileSupportsMimeType.mockReturnValue(true)
+    const visionOnNonTransportingPlugin: ConnectionProfile = {
+      ...baseProfile,
+      provider: 'OLLAMA',
+      modelName: 'llava',
+      supportsImageUpload: true,
+    }
+    expect(needsFallbackProcessing(visionOnNonTransportingPlugin, 'image/png')).toBe(true)
+    // Non-image types are unaffected — the transport check is image-specific.
+    expect(needsFallbackProcessing(visionOnNonTransportingPlugin, 'text/plain')).toBe(false)
+    // A provider whose plugin does serialise images still short-circuits.
+    expect(needsFallbackProcessing(baseProfile, 'image/png')).toBe(false)
+  })
+
+  it('refuses a describer whose plugin cannot transport images', async () => {
+    const ollamaDescriber: ConnectionProfile = {
+      ...baseProfile,
+      id: '66666666-6666-6666-6666-666666666666',
+      name: 'Local llava',
+      provider: 'OLLAMA',
+      modelName: 'llava',
+    }
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: ollamaDescriber.id,
+    })
+    mockRepos.connections.findById.mockResolvedValue(ollamaDescriber)
+    mockProfileSupportsMimeType.mockReturnValue(true)
+    const sendMessage = jest.fn()
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    // No call is made at all — describing from a prompt the model can't see
+    // would produce a confident fabrication.
+    expect(sendMessage).not.toHaveBeenCalled()
+    expect(result.type).toBe('unsupported')
+    expect(result.error).toContain('cannot send images')
   })
 
   it('classifies text and image MIME types', () => {
@@ -175,7 +235,7 @@ describe('lib/chat/file-attachment-fallback', () => {
     const sendMessage = jest.fn().mockResolvedValue({
       content: 'Beautiful scene description',
       finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      usage: visionUsage(20),
     })
     mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
 
@@ -210,7 +270,7 @@ describe('lib/chat/file-attachment-fallback', () => {
     const sendMessage = jest.fn().mockResolvedValue({
       content: 'Beautiful scene description',
       finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      usage: visionUsage(20),
     })
     mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
 
@@ -270,7 +330,7 @@ describe('lib/chat/file-attachment-fallback', () => {
     const sendMessage = jest.fn().mockResolvedValue({
       content: 'Beautiful scene description',
       finishReason: 'stop',
-      usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+      usage: visionUsage(20),
     })
     mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
 
@@ -290,7 +350,7 @@ describe('lib/chat/file-attachment-fallback', () => {
     const sendMessage = jest.fn().mockResolvedValue({
       content: 'Error: not supported',
       finishReason: 'stop',
-      usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+      usage: visionUsage(5),
     })
     mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
 
@@ -298,6 +358,179 @@ describe('lib/chat/file-attachment-fallback', () => {
 
     expect(result.type).toBe('unsupported')
     expect(result.error).toContain('appears to be an error')
+  })
+
+  // ---- Bug 116: the describer's answer is verified before it is believed ----
+  //
+  // The live incident: a NanoGPT route accepted the image_url part, discarded
+  // it, and answered the instruction alone with 3175 characters about a tabby
+  // kitten. The picture was a warship. Every content signal this function
+  // looks at read as healthy — length was taken as evidence of success — and
+  // the invention was persisted to files.description, where it short-circuited
+  // the chat turn, describe_image, the gallery and exports, permanently.
+
+  describe('verifyImageReachedModel', () => {
+    it('rejects a long, confident answer billed for the instruction alone', () => {
+      // 38 prompt tokens is the number off the live llm_logs row.
+      const verdict = verifyImageReachedModel(
+        {
+          usage: { promptTokens: 38, completionTokens: 683, totalTokens: 721 },
+        } as any,
+        'file-1'
+      )
+      expect(verdict.arrived).toBe(false)
+      expect(verdict.arrived === false && verdict.reason).toContain('38 prompt tokens')
+    })
+
+    it('rejects when the plugin reports the attachment as not sent', () => {
+      const verdict = verifyImageReachedModel(
+        {
+          usage: { promptTokens: 4000, completionTokens: 100, totalTokens: 4100 },
+          attachmentResults: {
+            sent: [],
+            failed: [{ id: 'file-1', error: 'provider does not forward attachments' }],
+          },
+        } as any,
+        'file-1'
+      )
+      expect(verdict.arrived).toBe(false)
+      expect(verdict.arrived === false && verdict.reason).toContain('does not forward attachments')
+    })
+
+    it('accepts a prompt well above what the instruction costs', () => {
+      expect(
+        verifyImageReachedModel(
+          {
+            usage: { promptTokens: 812, completionTokens: 240, totalTokens: 1052 },
+            attachmentResults: { sent: ['file-1'], failed: [] },
+          } as any,
+          'file-1'
+        ).arrived
+      ).toBe(true)
+    })
+
+    it('treats silence about tokens as silence, not as evidence', () => {
+      // A provider that reports nothing must not be failed for it.
+      expect(verifyImageReachedModel({} as any, 'file-1').arrived).toBe(true)
+      expect(
+        verifyImageReachedModel(
+          { usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } } as any,
+          'file-1'
+        ).arrived
+      ).toBe(true)
+    })
+
+    it('adds cache reads back before judging', () => {
+      // Every plugin normalises cache-hit tokens *out* of promptTokens (the
+      // 4.6.1 invariant), so a cached prompt would otherwise read as a
+      // dropped image.
+      expect(
+        verifyImageReachedModel(
+          {
+            usage: { promptTokens: 12, completionTokens: 200, totalTokens: 212 },
+            cacheUsage: { cacheReadInputTokens: 1400 },
+          } as any,
+          'file-1'
+        ).arrived
+      ).toBe(true)
+    })
+  })
+
+  it('discards a confident description the model was never shown (bug 116)', async () => {
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: baseProfile.id,
+      uncensoredImageDescriptionProfileId: null,
+    })
+    mockRepos.connections.findById.mockResolvedValue(baseProfile)
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    // The live response's shape: a long, well-formed, section-headed
+    // description that passes every content check, and 38 prompt tokens.
+    const inventedDescription =
+      'The image is a vertical, close-up portrait photograph of a small, fluffy kitten. ' +
+      'The subject has a classic tabby coat with large, round, bright amber eyes. ' +
+      'The background falls away into soft bokeh. There is no text or watermark present in the image.'
+    const sendMessage = jest.fn().mockResolvedValue({
+      content: inventedDescription,
+      finishReason: 'stop',
+      usage: { promptTokens: 38, completionTokens: 683, totalTokens: 721 },
+    })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    // Pre-fix this returned the description, and the caller persisted it.
+    expect(result.type).toBe('unsupported')
+    expect(result.imageDescription).toBeUndefined()
+    expect(result.error).toContain('did not process the image')
+    expect(result.error).toContain(baseProfile.modelName)
+  })
+
+  it('advances to the uncensored fallback when the primary never saw the image', async () => {
+    const fallbackProfile: ConnectionProfile = {
+      ...baseProfile,
+      id: '77777777-7777-7777-7777-777777777777',
+      name: 'Honest describer',
+      provider: 'OPENROUTER',
+    }
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: baseProfile.id,
+      uncensoredImageDescriptionProfileId: fallbackProfile.id,
+    })
+    mockRepos.connections.findById.mockImplementation(async (id: string) =>
+      id === baseProfile.id ? baseProfile : fallbackProfile
+    )
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest
+      .fn()
+      .mockResolvedValueOnce({
+        content: 'A small fluffy kitten with large amber eyes, framed vertically.',
+        finishReason: 'stop',
+        usage: { promptTokens: 38, completionTokens: 683, totalTokens: 721 },
+      })
+      .mockResolvedValueOnce({
+        content: 'A gothic warship named FLYING DUTCHMAN in orbit over an asteroid field.',
+        finishReason: 'stop',
+        usage: visionUsage(120),
+      })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    expect(sendMessage).toHaveBeenCalledTimes(2)
+    expect(result.type).toBe('image_description')
+    expect(result.imageDescription).toContain('FLYING DUTCHMAN')
+    expect(result.processingMetadata?.usedUncensoredFallback).toBe(true)
+  })
+
+  it('rejects a description when the plugin reported the attachment as dropped', async () => {
+    mockRepos.chatSettings.findByUserId.mockResolvedValue({
+      imageDescriptionProfileId: baseProfile.id,
+      uncensoredImageDescriptionProfileId: null,
+    })
+    mockRepos.connections.findById.mockResolvedValue(baseProfile)
+    mockRepos.connections.findApiKeyByIdAndUserId.mockResolvedValue({ key_value: 'sk-test' })
+    mockProfileSupportsMimeType.mockReturnValue(true)
+
+    const sendMessage = jest.fn().mockResolvedValue({
+      content: 'A plausible-sounding description of something the model never received.',
+      finishReason: 'stop',
+      usage: visionUsage(64),
+      attachmentResults: {
+        sent: [],
+        failed: [{ id: 'file-1', error: 'Standard messages (strip attachments)' }],
+      },
+    })
+    mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
+
+    const result = await generateImageDescription(mockFileAttachment, mockRepos, baseProfile.userId)
+
+    expect(result.type).toBe('unsupported')
+    expect(result.error).toContain('did not process the image')
+    expect(result.error).toContain('strip attachments')
   })
 
   it('processes text attachments when provider lacks native support', async () => {
@@ -350,12 +583,17 @@ describe('lib/chat/file-attachment-fallback', () => {
   })
 
   it('falls back to the uncensored profile when the primary refuses', async () => {
+    // Deliberately NOT an Ollama profile: the Ollama plugin drops image
+    // attachments ("not yet implemented"), so an Ollama describer would answer
+    // from the prompt alone and invent a picture. `providerCanTransportImages`
+    // now excludes such profiles from describer selection (bug 91), which is
+    // asserted separately below.
     const uncensoredProfile: ConnectionProfile = {
       ...baseProfile,
       id: '55555555-5555-5555-5555-555555555555',
-      name: 'Local llava',
-      provider: 'OLLAMA',
-      modelName: 'llava-uncensored',
+      name: 'Uncensored vision',
+      provider: 'OPENROUTER',
+      modelName: 'uncensored-vision-model',
     }
     mockRepos.chatSettings.findByUserId.mockResolvedValue({
       imageDescriptionProfileId: baseProfile.id,
@@ -372,12 +610,12 @@ describe('lib/chat/file-attachment-fallback', () => {
       .mockResolvedValueOnce({
         content: 'I cannot describe this image.',
         finishReason: 'stop',
-        usage: { promptTokens: 5, completionTokens: 8, totalTokens: 13 },
+        usage: visionUsage(8),
       })
       .mockResolvedValueOnce({
         content: 'A copper kettle on a windowsill at sunset; warm tones; long horizontal composition.',
         finishReason: 'stop',
-        usage: { promptTokens: 10, completionTokens: 30, totalTokens: 40 },
+        usage: visionUsage(30),
       })
     mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
 
@@ -402,7 +640,7 @@ describe('lib/chat/file-attachment-fallback', () => {
     const sendMessage = jest.fn().mockResolvedValue({
       content: 'I cannot describe this image.',
       finishReason: 'stop',
-      usage: { promptTokens: 5, completionTokens: 8, totalTokens: 13 },
+      usage: visionUsage(8),
     })
     mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
 
@@ -425,7 +663,7 @@ describe('lib/chat/file-attachment-fallback', () => {
     const sendMessage = jest.fn().mockResolvedValue({
       content: 'I cannot describe this image.',
       finishReason: 'stop',
-      usage: { promptTokens: 5, completionTokens: 8, totalTokens: 13 },
+      usage: visionUsage(8),
     })
     mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
 
@@ -455,12 +693,12 @@ describe('lib/chat/file-attachment-fallback', () => {
       .mockResolvedValueOnce({
         content: 'Cannot do this.',
         finishReason: 'stop',
-        usage: { promptTokens: 5, completionTokens: 5, totalTokens: 10 },
+        usage: visionUsage(5),
       })
       .mockResolvedValueOnce({
         content: '',
         finishReason: 'stop',
-        usage: { promptTokens: 5, completionTokens: 0, totalTokens: 5 },
+        usage: visionUsage(0),
       })
     mockCreateLLMProvider.mockReturnValue({ sendMessage } as any)
 

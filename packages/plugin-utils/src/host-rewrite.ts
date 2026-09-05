@@ -1,30 +1,28 @@
 /**
- * Host URL Rewriting for VM/Container Environments
+ * Host URL Rewriting for Container Environments
  *
- * When Quilltap runs inside Docker, Lima VMs, or WSL2, `localhost` and
- * `127.0.0.1` resolve to the container/VM's own loopback — not the host
- * machine where services like Ollama or LM Studio are running.
+ * When Quilltap runs inside Docker — or inside a virtual machine the user has
+ * built and manages themselves — `localhost` and `127.0.0.1` resolve to the
+ * container/VM's own loopback, not the host machine where services like Ollama
+ * or LM Studio are running.
  *
  * This module provides a single function that transparently rewrites
  * localhost URLs to point at the host, so users can configure
  * `http://localhost:11434` and have it Just Work in every environment.
  *
  * Gateway resolution order:
- * 1. `QUILLTAP_HOST_IP` env var (explicit override) → rewrite to that IP
- * 2. In Docker (not Lima): rewrite `localhost` → `host.docker.internal`
+ * 1. `QUILLTAP_HOST_IP` env var (explicit override) → rewrite to that IP.
+ *    This is also the only supported route for a self-managed VM, where
+ *    Quilltap has no reliable way to detect the host gateway on its own.
+ * 2. In Docker: rewrite `localhost` → `host.docker.internal`
  *    (Docker Desktop DNS or --add-host on Linux handles the forwarding)
- * 2.5. In WSL2: nameserver IP from /etc/resolv.conf (WSL2 auto-generates
- *    this to point at the Windows host with special localhost forwarding)
- * 3. Default gateway from /proc/net/route (works in Lima where
- *    NAT networking forwards to host loopback)
- * 4. Fallback: try DNS lookup of `host.docker.internal` via /etc/hosts
- * 5. Give up gracefully — return URL unchanged
+ * 3. Give up gracefully — return URL unchanged
  *
  * @module @quilltap/plugin-utils/host-rewrite
  */
 
 import { createPluginLogger } from './logging';
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 
 // ============================================================================
 // Types
@@ -49,15 +47,6 @@ const rewriteLogger = createPluginLogger('host-rewrite');
 // ============================================================================
 // Environment Detection (self-contained)
 // ============================================================================
-
-/**
- * Check if running inside a Lima VM.
- *
- * Lima VMs are provisioned with LIMA_CONTAINER=true in /etc/profile.d/quilltap.sh.
- */
-function isLimaEnvironment(): boolean {
-  return process.env.LIMA_CONTAINER === 'true';
-}
 
 /**
  * Check if running in a Docker container.
@@ -94,10 +83,14 @@ function isDockerEnvironment(): boolean {
 // ============================================================================
 
 /**
- * Check if running in any VM or container environment that needs URL rewriting.
+ * Check if running in an environment that needs URL rewriting.
+ *
+ * Docker is detected automatically. A hand-rolled VM cannot be, so setting
+ * `QUILLTAP_HOST_IP` is what opts one in — it both enables rewriting and
+ * supplies the gateway address.
  */
 export function isVMEnvironment(): boolean {
-  return isDockerEnvironment() || isLimaEnvironment();
+  return isDockerEnvironment() || !!process.env.QUILLTAP_HOST_IP;
 }
 
 /**
@@ -127,97 +120,13 @@ export function resolveHostGateway(): string | null {
   // start scripts).  Either way, host.docker.internal correctly forwards
   // to services bound to the host's loopback (127.0.0.1).
   //
-  // This MUST run before /proc/net/route for Docker because the bridge
-  // gateway IP returned by /proc/net/route (e.g. 172.17.0.1) is just
-  // the Docker bridge interface — services listening on the host's
-  // localhost are NOT reachable through it.
-  //
-  // Lima VMs are excluded here: they trigger isDockerEnvironment() (they
-  // have /app) but don't have host.docker.internal in DNS.  Lima uses
-  // VZ NAT networking where the /proc/net/route gateway genuinely
-  // forwards to the host loopback.
-  if (isDockerEnvironment() && !isLimaEnvironment()) {
+  // The bridge gateway IP (e.g. 172.17.0.1) is deliberately not used as a
+  // fallback: it is only the Docker bridge interface, and services listening
+  // on the host's localhost are NOT reachable through it.
+  if (isDockerEnvironment()) {
     rewriteLogger.info('Docker environment detected — using host.docker.internal as gateway hostname');
     cachedGatewayHost = 'host.docker.internal';
     return cachedGatewayHost;
-  }
-
-  // Strategy 2.5: WSL2 — use nameserver from /etc/resolv.conf
-  // WSL2 auto-generates resolv.conf with a nameserver entry pointing to
-  // the Windows host's IP on the Hyper-V virtual network. This IP has
-  // special forwarding in WSL2's networking stack that can reach services
-  // bound to 127.0.0.1 on the Windows host — unlike the /proc/net/route
-  // gateway which only reaches the Hyper-V vNIC interface.
-  //
-  // Detection: /proc/sys/fs/binfmt_misc/WSLInterop exists only in WSL2.
-  try {
-    if (existsSync('/proc/sys/fs/binfmt_misc/WSLInterop')) {
-      const resolv = readFileSync('/etc/resolv.conf', 'utf-8');
-      for (const line of resolv.split('\n')) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('#') || trimmed === '') continue;
-        const match = trimmed.match(/^nameserver\s+(\S+)/);
-        if (match) {
-          const ip = match[1];
-          rewriteLogger.info('WSL2 host IP from /etc/resolv.conf nameserver', { ip });
-          cachedGatewayHost = ip;
-          return cachedGatewayHost;
-        }
-      }
-    }
-  } catch {
-    rewriteLogger.debug('Could not detect WSL2 or read /etc/resolv.conf');
-  }
-
-  // Strategy 3: Default gateway from /proc/net/route (Lima)
-  // Parse the kernel routing table directly instead of shelling out to
-  // `ip route`, which is unavailable in Alpine Linux images.
-  // The file format is tab-separated with hex-encoded IPs.
-  // This works for Lima where NAT networking forwards traffic
-  // from the gateway IP to the host's loopback.
-  try {
-    const routeTable = readFileSync('/proc/net/route', 'utf-8');
-    for (const line of routeTable.split('\n').slice(1)) { // skip header
-      const fields = line.trim().split('\t');
-      // fields[1] = Destination, fields[2] = Gateway
-      // Default route has destination 00000000
-      if (fields.length >= 3 && fields[1] === '00000000') {
-        const hexGateway = fields[2];
-        // Convert hex gateway to dotted-quad IP (little-endian on Linux)
-        const ip = [
-          parseInt(hexGateway.substring(6, 8), 16),
-          parseInt(hexGateway.substring(4, 6), 16),
-          parseInt(hexGateway.substring(2, 4), 16),
-          parseInt(hexGateway.substring(0, 2), 16),
-        ].join('.');
-        rewriteLogger.info('Host gateway IP from /proc/net/route', { ip });
-        cachedGatewayHost = ip;
-        return cachedGatewayHost;
-      }
-    }
-  } catch {
-    rewriteLogger.debug('Could not read /proc/net/route for default gateway lookup');
-  }
-
-  // Strategy 4: Fallback — resolve host.docker.internal from /etc/hosts
-  // Covers edge cases where Docker adds it to /etc/hosts but we're not
-  // detected as Docker (e.g., custom container runtimes).
-  try {
-    const hosts = readFileSync('/etc/hosts', 'utf-8');
-    for (const line of hosts.split('\n')) {
-      const trimmed = line.trim();
-      if (trimmed.startsWith('#') || trimmed === '') continue;
-      // /etc/hosts format: <IP> <hostname1> [hostname2] ...
-      const parts = trimmed.split(/\s+/);
-      if (parts.length >= 2 && parts.slice(1).includes('host.docker.internal')) {
-        const ip = parts[0];
-        rewriteLogger.info('Host gateway IP from /etc/hosts (host.docker.internal)', { ip });
-        cachedGatewayHost = ip;
-        return cachedGatewayHost;
-      }
-    }
-  } catch {
-    rewriteLogger.debug('Could not read /etc/hosts for host.docker.internal lookup');
   }
 
   rewriteLogger.warn('Could not resolve host gateway — localhost URLs will not be rewritten');
@@ -229,7 +138,7 @@ export function resolveHostGateway(): string | null {
  * Rewrite a localhost URL to point at the host gateway.
  *
  * No-ops when:
- * - Not running in a VM/container environment
+ * - Not running in a container (and QUILLTAP_HOST_IP is unset)
  * - The URL doesn't point to localhost or 127.0.0.1
  * - Gateway resolution fails
  *

@@ -21,8 +21,23 @@ Every Group keeps an **official document store** of its very own. Inside it you
 will find:
 
 - **A Description** — a few lines on what the Group is and what it's for.
+- **Standing Instructions** — an optional prompt slipped into every member's
+  system prompt, in every chat they grace. Where the Description tells *you* what
+  the club is for, the Instructions tell the *members* how to comport themselves —
+  a house style, a code of conduct, a standing order from the committee. Like
+  everything else a Group provides, they follow the member: a fellow guest in the
+  same chat who isn't in the Group neither sees nor obeys them. They ride along
+  even when a member is consulted for a quick one-off answer (an `@Name?` aside),
+  though the Help desk and the Brahma Console remain outside their jurisdiction.
+  Since the Instructions land in each member's own system prompt, write them as
+  though addressing the members directly. Written as: *You have known the others
+  here for years; you do not explain yourselves to each other.*
 - **A Scenarios shelf** — chat-starters that members can reach for when a new
-  conversation is struck up.
+  conversation is struck up. A scenario that has fallen out of season may be
+  **archived** rather than deleted: it withdraws from the Group Scenarios heading
+  in every menu until you tick **Show archived**, and chats that already began
+  with it carry on undisturbed. An archived scenario can never be the Group's
+  default.
 - **A Knowledge cabinet** — reference material the members can consult and search,
   woven into their replies as the moment demands.
 - **A Core shelf** *(optional)* — a `Core/` folder of shared grounding. Whatever a
@@ -33,11 +48,20 @@ will find:
   the household livery, the regimental kit, the club's dinner jackets. Every member
   may *wear* them — in any chat, whether or not the club is mentioned — without any
   one of them owning the coat. Move or copy a garment onto the shelf from the item's
-  `⋮` menu in the Wardrobe dialog, choosing the Group under **Groups**. A group
+  `⋮` menu in the Wardrobe dialog, choosing the Group under **Groups** — or select
+  the Group itself from the dialog's **Wardrobe** dropdown to stock, tailor, and
+  prune the shelf directly — the same `⋮` menu offers **Archive**, which retires a
+  garment from the shelf's listings (and from any member choosing their own attire)
+  without destroying it; tick **Show archived** in the dialog to see and restore
+  what has been put away. A group
   garment marked **default** dresses every member at the opening of the curtain. It
   sits between a character's own armoire and the project's wardrobe in the tiers, so
   a member's personal copy of an item shadows the Group's; see
-  *[The Wardrobe](wardrobe.md)*.
+  *[The Wardrobe](wardrobe.md)*. The shelf may also keep an optional page of
+  **Dressing Instructions** (`instructions.md`) — a standing second-person word on how
+  members prefer to dress, consulted when a member dresses themselves and keeps no
+  instructions of their own; see *[Dressing
+  Instructions](wardrobe.md#dressing-instructions-a-standing-word-with-the-valet)*.
 - **A shared ledger of State** — a `state.json` of persistent values the whole circle
   reads and writes. It is the **group tier** of the four-tier state cascade
   (chat → project → group → general); edit it from the **Group State** button on the
@@ -86,8 +110,9 @@ characters.
   invited into a chat.
 - **Link or unlink stores** — attach any of your existing document stores to the
   Group so its members can reach them as well.
-- **Edit the particulars** — name, description, colour, and icon are all yours to
-  change.
+- **Edit the particulars** — name, description, standing instructions, colour, and
+  icon are all yours to change. The Instructions get a proper writing desk — the
+  same rich Markdown editor the Projects enjoy — and may run to 10,000 characters.
 
 Any member may add, edit, or remove files in the Group's official store and in any
 store linked to it — these shelves are working shelves, not glass cases.

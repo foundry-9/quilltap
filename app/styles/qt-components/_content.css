@@ -206,6 +206,7 @@
   .qt-badge-provider-openai,
   .qt-badge-provider-ollama,
   .qt-badge-provider-openrouter,
+  .qt-badge-provider-nanogpt,
   .qt-badge-provider-builtin,
   .qt-badge-silent,
   .qt-badge-absent,
@@ -213,6 +214,7 @@
   .qt-badge-wardrobe-bottom,
   .qt-badge-wardrobe-footwear,
   .qt-badge-wardrobe-accessories,
+  .qt-badge-wardrobe-hair,
   .qt-badge-wardrobe-shared {
     @apply inline-flex items-center justify-center flex-shrink-0;
     padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
@@ -360,6 +362,19 @@
    */
   .qt-queue-badge-idle {
     opacity: var(--qt-queue-badge-idle-opacity);
+  }
+
+  /**
+   * Queue badge blip — work that started and finished between two polls never
+   * shows up as a count, so the badge pulses once to mark that it happened.
+   */
+  .qt-queue-badge-pulse {
+    animation: qt-queue-badge-blip 600ms ease-in-out 2;
+  }
+
+  @keyframes qt-queue-badge-blip {
+    0%, 100% { opacity: var(--qt-queue-badge-idle-opacity); }
+    50% { opacity: 1; }
   }
 
   /**
@@ -1666,6 +1681,14 @@
   }
 
   /**
+   * Wardrobe hair badge (rose)
+   */
+  .qt-badge-wardrobe-hair {
+    background-color: var(--qt-badge-wardrobe-hair-bg);
+    color: var(--qt-badge-wardrobe-hair-fg);
+  }
+
+  /**
    * Wardrobe shared/archetype badge (indigo)
    */
   .qt-badge-wardrobe-shared {
@@ -1702,6 +1725,15 @@
     background: var(--qt-status-warning-bg);
     color: var(--qt-status-warning-fg);
     border: 1px solid var(--qt-status-warning-border);
+  }
+
+  /**
+   * NanoGPT provider badge (primary/accent semantic)
+   */
+  .qt-badge-provider-nanogpt {
+    background: var(--qt-badge-primary-bg);
+    color: var(--qt-badge-primary-fg);
+    border: 1px solid var(--qt-badge-primary-border);
   }
 
   /**

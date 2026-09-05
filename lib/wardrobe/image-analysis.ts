@@ -10,11 +10,14 @@
  */
 
 import { createLLMProvider } from '@/lib/llm'
+import { trackActivity } from '@/lib/background-jobs/activity-registry'
 import { profileSupportsMimeType } from '@/lib/llm/connection-profile-utils'
 import { logLLMCall } from '@/lib/services/llm-logging.service'
+import { profileParams } from '@/lib/llm/cheap-llm'
 import { logger } from '@/lib/logger'
 import type { ConnectionProfile } from '@/lib/schemas/types'
 import type { RepositoryContainer } from '@/lib/repositories/factory'
+import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 
 const moduleLogger = logger.child({ module: 'wardrobe-image-analysis' })
@@ -120,8 +123,9 @@ const SYSTEM_PROMPT = `You are a fashion and costume analyst. Your task is to id
 For each item you identify:
 1. Give it a concise, evocative title (e.g., "Emerald Silk Evening Gown", "Worn Leather Ankle Boots")
 2. Write a detailed description capturing texture, fit, color, material, and notable details. Use vivid, descriptive language — not clinical catalog copy.
-3. Classify it into one or more slot types: "top", "bottom", "footwear", "accessories"
+3. Classify it into one or more slot types: "top", "bottom", "footwear", "accessories", "hair"
    - Items that span multiple slots (e.g., a dress covering top + bottom, a jumpsuit) should include all applicable types
+   - If the subject wears a distinct, deliberate hairstyle (braids, an updo, an elaborate coif, a wig), emit ONE "hair" item describing the styling. Plain, loose, unstyled hair is NOT an item.
 4. Suggest appropriateness tags (e.g., "formal", "casual", "combat", "intimate", "evening", "everyday") based on the visual context
 
 Return your analysis as a JSON object with this exact structure:
@@ -137,14 +141,15 @@ Return your analysis as a JSON object with this exact structure:
 }
 
 Important rules:
-- Focus ONLY on clothing and accessories. Do not describe people, backgrounds, or non-wearable objects.
+- Focus ONLY on clothing, accessories, and a deliberate hairstyle if one is present. Do not describe faces, bodies, backgrounds, or other non-wearable features.
 - Each distinct garment or accessory should be its own item.
-- Valid types are ONLY: "top", "bottom", "footwear", "accessories"
+- Valid types are ONLY: "top", "bottom", "footwear", "accessories", "hair"
 - If you cannot identify any clothing items, return {"items": []}
 - Return ONLY the JSON object, no additional text or markdown.`
 
 function buildUserPrompt(guidance?: string): string {
-  let prompt = 'Analyze this image and identify all visible clothing items and accessories.'
+  let prompt =
+    'Analyze this image and identify all visible clothing items, accessories, and any deliberate hairstyle.'
 
   if (guidance) {
     prompt += `\n\nAdditional guidance from the user: ${guidance}`
@@ -157,7 +162,7 @@ function buildUserPrompt(guidance?: string): string {
 // RESPONSE PARSING
 // ============================================================================
 
-const VALID_TYPES = new Set<string>(['top', 'bottom', 'footwear', 'accessories'])
+const VALID_TYPES = new Set<string>(WardrobeItemTypeEnum.options)
 
 /**
  * Parse and validate the LLM's JSON response into ProposedWardrobeItem[]
@@ -226,8 +231,19 @@ function parseAnalysisResponse(content: string): ProposedWardrobeItem[] {
  * @param repos - Repository container for data access
  * @param userId - The user's ID for profile/key resolution
  * @returns Proposed wardrobe items or throws an error
+ *
+ * Reading an image with a vision model is image work the user waits on, so the
+ * whole analysis registers with the activity registry and lights "Img".
  */
 export async function analyzeImageForWardrobeItems(
+  params: ImageAnalysisParams,
+  repos: RepositoryContainer,
+  userId: string
+): Promise<ImageAnalysisResult> {
+  return trackActivity('image', () => runAnalyzeImageForWardrobeItems(params, repos, userId))
+}
+
+async function runAnalyzeImageForWardrobeItems(
   params: ImageAnalysisParams,
   repos: RepositoryContainer,
   userId: string
@@ -306,9 +322,7 @@ export async function analyzeImageForWardrobeItems(
         temperature: 0.5,
         // Forward the profile's provider params (e.g. DeepSeek thinking mode)
         // so a "reasoning off" setting on the analysis profile takes effect.
-        profileParameters: profile.parameters && typeof profile.parameters === 'object'
-          ? (profile.parameters as Record<string, unknown>)
-          : undefined,
+        profileParameters: profileParams(profile),
       },
       apiKeyValue
     )

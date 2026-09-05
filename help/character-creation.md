@@ -45,6 +45,7 @@ This guide walks you through creating new characters in Quilltap, from simple ch
   - "A clever detective from Victorian London"
   - "An ancient dragon with a love of riddles"
   - "A cheerful barista who writes poetry in free time"
+- Only *other* characters ever read this field, so write it about the character from outside. Written as: *She finishes other people's sentences, then apologises for it.*
 
 ### Character Details
 
@@ -54,6 +55,7 @@ This guide walks you through creating new characters in Quilltap, from simple ch
 - How they typically behave
 - Their temperament and attitude
 - Examples: "Sarcastic but kind", "Serious and professional", "Playful and mischievous"
+- Only the character themselves reads this field, so address them directly. Written as: *You keep your worry behind your teeth. You have never once asked for help first.*
 
 **Scenarios**
 
@@ -62,6 +64,7 @@ This guide walks you through creating new characters in Quilltap, from simple ch
 - A character may have any number of scenarios — or none at all, if they prefer to remain contextually mysterious
 - The active scenario provides context to the AI during conversation
 - Examples of scenario titles: "The Brass Lantern Tavern", "Aboard the *Perseverance*", "The Detective's Office, 1923"
+- Scenario content is scene text addressed to no one — set the stage, don't address the players. Written as: *The reading room is empty at this hour, rain against the high windows.*
 - When starting a new chat, you may select which scenario applies — or leave all scenarios to their own devices and let the character roam free of fixed context
 
 **First Message**
@@ -86,6 +89,7 @@ This guide walks you through creating new characters in Quilltap, from simple ch
 
 - Instructions for AI on how to behave as character
 - Detailed behavior guidelines
+- Write as though speaking to the character. Written as: *You are Ariadne. You answer plainly and you never flatter.*
 - Can be edited later in System Prompts tab
 - If not provided, AI generates one based on description
 
@@ -183,17 +187,19 @@ If you want AI to generate content:
    - Check which fields AI should create:
      - ☐ Name (if not provided)
      - ☐ Title
-     - ☐ Identity (outside view — what strangers know on sight)
-     - ☐ Description (acquaintance view — behaviour and mannerisms, not appearance)
-     - ☐ Manifesto (axiomatic core — load-bearing truths and basic tenets)
-     - ☐ Personality (internal view — self-knowledge and inner drivers)
+     - ☐ Properties (pronouns and aliases — only what the source material supports; no invented placeholders)
+     - ☐ Identity (outside view — what strangers know on sight; written about the character: *"Ariadne is a research librarian at the Athenaeum."*)
+     - ☐ Description (acquaintance view — behaviour and mannerisms, not appearance; written about the character: *"She finishes other people's sentences, then apologises for it."*)
+     - ☐ Manifesto (axiomatic core — load-bearing truths and basic tenets; addressed to the character: *"You do not lie to Charlie, not even kindly."*)
+     - ☐ Personality (internal view — self-knowledge and inner drivers; addressed to the character: *"You keep your worry behind your teeth."*)
      - ☐ Scenarios
      - ☐ Example Dialogues
-     - ☐ System Prompt
-     - ☐ Physical Description (appearance only)
-     - ☐ Wardrobe Items
+     - ☐ First Message (the character's opening message for new chats)
+     - ☐ System Prompt (addressed to the character: *"You are Ariadne. You answer plainly and you never flatter."*)
+     - ☐ Physical Description (appearance only — nothing removable; bare descriptive phrases, since this text also drives image generation: *"auburn hair cut short; grey eyes; a scar across the left knuckle"*)
+     - ☐ Wardrobe (slot-typed items with image cues, plus composite outfits; the everyday outfit is marked default)
    - Leave others blank for manual entry
-   - The wizard treats Identity, Description, Manifesto, Personality, and Physical Description as distinct vantage points — the same trait won't be repeated across them.
+   - The wizard treats Identity, Description, Manifesto, Personality, and Physical Description as distinct vantage points — the same trait won't be repeated across them — and keeps everything removable in the Wardrobe rather than the Physical Description.
 8. **Step 4: Review and Generate**
    - AI generates selected content
    - Review generated text
@@ -205,6 +211,8 @@ If you want AI to generate content:
 **Best for:** When you have a concept but need help fleshing it out, or want a completely random character
 
 ## Character Fields: Detailed Guide
+
+A word before the particulars: every field is delivered to *somebody*, and the courteous thing is to address that somebody. Fields only the character themselves ever reads (Manifesto, Personality, System Prompts) are written **to** the character — *"You do not lie to Charlie, not even kindly."* Fields only other characters read (Identity, Description) are written **about** the character from outside — *"Ariadne is a research librarian at the Athenaeum."* Physical descriptions are bare phrases for the image pipeline; scenarios are scene text addressed to no one. The full etiquette lives in [Editing Characters](character-editing.md), and the editor shows a "Written as:" example beneath each field.
 
 ### Writing Effective Descriptions
 

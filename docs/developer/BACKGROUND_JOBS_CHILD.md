@@ -41,6 +41,7 @@ Child → parent:
 | `job-result` | `{ id, ok, writes, error? }` | Job finished; `writes` is the batched list of repository write calls accumulated during the handler run (`{ method, args }[]`) |
 | `log` | `{ record }` | Forwards a log record to the parent's file transport (single writer; no rotation races) |
 | `status` | `{ inFlight, completedSinceLast, ... }` | Periodic snapshot for `getProcessorStatus()` |
+| `activity` | `{ kind, delta }` | Fire-and-forget mirror of an in-flight activity span (`lib/background-jobs/activity-registry.ts`) so the toolbar chips cover inline work done *inside* a job handler — a Concierge classification during scene tracking, an embedding minted mid-handler. `delta` is `1`/`-1` for the live count or `'blip'` for a completed span. The parent keeps this mirror separate from its own counts and zeroes it whenever the child exits, so an unpaired delta from a crash self-heals. A handler is attributed to its *own* kind without a count (the job row already is the count), so same-kind work inside collapses rather than double-counting. |
 | `shutdown-ack` | `{}` | Child's acknowledgement that it has drained in-flight jobs and is exiting; lets the parent resolve its shutdown promise instead of waiting on the kill timeout. |
 | `host-rpc` | `{ requestId, method, args }` | Synchronous request for an RW operation the child cannot perform on its readonly connection. The parent runs it immediately (outside the per-job buffered-writes transaction) and replies with `host-rpc-response`. Methods (see the `switch` in `host/host-rpc-dispatcher.ts`): `uploadFile`, `writeCharacterAvatarToVault`, `writeLanternBackgroundToMountStore`, `writeConversationSummaryToVaults`, `removeConversationSummariesFromVaults`, and `startScheduledAutonomousRun`. The first five are file-storage / vault writes whose server-computed return values (`storageKey`/`blobId`/`linkId`) the buffered-write proxy cannot model; `startScheduledAutonomousRun` is an *ordering* bridge (see its note in the handler audit) — it must commit `currentRunId` on the parent's RW connection *before* the turn job it enqueues becomes claimable. Side-effects committed here are **not** rolled back if the job's later buffered writes fail; periodic file reconciliation cleans up orphan blobs. See `host/host-rpc-dispatcher.ts` and `child/host-rpc-client.ts`. |
 
@@ -92,6 +93,44 @@ Two handlers (`story-background` and `character-avatar`) write image files to `<
 The fix is the **deferred-file-write pattern**: the child stages files in `<dataDir>/files/.staging/<jobId>/` and includes a `{ method: '__finalizeFile', args: { stagingPath, finalPath } }` entry in the writes batch. The parent applies it inside the transaction body via `fs.renameSync` (atomic on the same volume). If the transaction throws, the parent cleans up `.staging/<jobId>/`. This narrows the orphan window to "child wrote file, then died before sending job-result" — the same as the pre-refactor worst case, not wider.
 
 ## Handler audit
+
+### A cheap-LLM pass lost to a timeout fails the job
+
+Several handlers exist to do one thing: put a short question to the cheap LLM
+and record the answer. When that question times out, the answer never arrives,
+nothing re-queues it, and the handler used to log a warning and return — which
+the dispatcher reads as a clean finish and marks COMPLETED. That is a hole in
+the data reported as work done, and it was invisible from every counter the
+operator has (bug 107).
+
+Six handlers now call `throwIfLostToTimeout(result, taskType)` from
+`lib/memory/cheap-llm-tasks` instead: **scene-state-tracking**,
+**title-update**, **context-summary**, **story-background**,
+**memory-extraction** and **carina-memory-extraction**. The helper throws a
+`CheapLLMTaskLostError` only when `CheapLLMTaskResult.timedOut` is set — a
+refusal, an unparseable answer or a rejected key would fail identically on every
+retry, so those keep the old log-and-return behaviour.
+
+Throwing is the right lever *because of* the write model above: a handler that
+throws in the child has its buffered writes discarded rather than applied
+(`handleChildJobResult` only calls `applyWritesAtomically` when `msg.ok`), so
+the backed-off retry re-runs the handler from the state this attempt started in.
+Three consequences worth knowing before adding a seventh:
+
+- **The retry is atomic, not incremental.** The multi-pass extractors are the
+  case that matters: a turn that lost one character's pass and completed the
+  others discards the others too. That keeps the re-run duplicate-free, at the
+  cost of redoing successful work. It is the right trade when the retry
+  succeeds and worse data with better information when it does not.
+- **Anything the handler wanted to persist about the failure is lost with it.**
+  The extraction debug logs describing the timeout never reach the message,
+  because they are child writes. What survives is the server log and the job's
+  own `lastError`, which the *parent* writes on `markFailed`.
+- **Order matters where a handler writes a cursor on failure.** `title-update`
+  advances `lastRenameCheckInterchange` when the cheap call fails, so a
+  persistently-broken provider does not re-fire the job every turn. That is
+  right for a quota error and wrong for a pass that never ran, which is why the
+  throw sits *before* the cursor write.
 
 | Handler | Read-your-writes? | Idempotent under retry? | External side effects | Expected RPC writes |
 |---------|-------------------|-------------------------|-----------------------|---------------------|
@@ -150,3 +189,17 @@ The Next.js dev server reloads the module graph; if the host module re-evaluates
 Both parent and child build their own per-character vector stores and mount-chunk caches lazily. After the parent applies an embedding write that affects character X, it calls `unloadStore(X)` locally and posts `{ type: 'invalidate', target: 'vectorStore', key: characterId }` to the child. The child's RPC handler unloads its copy. Stale reads on the child are bounded to the IPC round-trip (~ms).
 
 The same pattern applies to `mount-chunk-cache` after `doc-mount-chunks` writes.
+
+### Realtime hints ride the same moment
+
+`dispatchInvalidations` also publishes realtime invalidation hints to every connected browser tab —
+`topicsForWriteBatch(writes)` maps each buffered write's repository namespace to a topic (+ id) and
+calls `publishRealtime`. Separate concern from the caches above (that one is about *this process's*
+in-memory state, this one about every tab's query cache), same moment: the writes have committed and
+are readable.
+
+The child never publishes. `publishRealtime` is a no-op when `QUILLTAP_JOB_CHILD=1`, so shared modules
+that run on both sides — `queue-service`, `activity-registry` — need no guard of their own. A handler's
+changes reach the socket through the parent: the write batch here, `topicsForCompletedJob(job.type,
+job.payload)` on `markCompleted`, and `applyChildActivityDelta` for the mirrored activity spans. Full
+design: [features/complete/realtime-updates.md](features/complete/realtime-updates.md).

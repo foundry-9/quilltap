@@ -45,6 +45,29 @@ Attach files to individual messages:
 - Can be downloaded from chat
 - Can be promoted to permanent files
 
+**A word on pictures.** An image attached to a chat is quietly shown to a
+describing model shortly after it lands (see [Chat Settings](chat-settings.md)),
+and the description is filed in three places: on the file's own record, on
+every shelf in the [Scriptorium](scriptorium.md) where those same bytes appear,
+and in the search index — so *"the photograph of the kettle on the windowsill"*
+finds the picture later even though a picture holds no words. Until 4.9.0 only
+the first of the three was reached for any bitmap the house converted to WebP
+on its way in, which was rather a lot of them; converted uploads made before
+that release are repaired on first start.
+
+**A word on company.** When several characters share a room, an attachment is
+put before *each* of them in turn, and not merely before whoever happens to
+speak first. Until 4.9.0 the file was unrolled for the opening reply and then,
+with the quiet finality of a butler clearing a plate, taken away again — so the
+second character to speak, and every character on every later turn, was left
+holding your typed words and an empty gesture toward a document nobody would
+show them. The attachment clip in the transcript said otherwise, which is the
+sort of thing that makes a perfectly honest companion look forgetful, and a
+less scrupulous one look inventive. The file is now re-read from the shelf for
+each character who has not yet been shown it — once apiece, not once a turn,
+since even the most engrossing transcript wears out its welcome on the fourth
+reading — and this holds for pictures exactly as it does for prose.
+
 ### Character Profiles
 
 Upload images for character profiles:

@@ -19,7 +19,6 @@ import {
   getShellCapabilities,
   isDockerEnvironment,
   isElectronShell,
-  isLimaEnvironment,
   Platform,
 } from '@/lib/paths';
 import { logger } from '@/lib/logger';
@@ -40,8 +39,6 @@ interface DataDirInfo {
   platform: Platform;
   /** Whether running in Docker */
   isDocker: boolean;
-  /** Whether running inside a VM (Lima on macOS or WSL2 on Windows) */
-  isVM: boolean;
   /** Whether the server was spawned by the Quilltap Electron shell */
   isElectronShell: boolean;
   /** quilltap-shell version string, if running under Electron */
@@ -62,7 +59,6 @@ export const GET = createContextHandler(async () => {
   const dirInfo = getBaseDataDirWithSource();
   const platform = getPlatform();
   const isDocker = isDockerEnvironment();
-  const isVM = isLimaEnvironment();
 
   const hostPath = getHostDataDir();
 
@@ -72,7 +68,6 @@ export const GET = createContextHandler(async () => {
     sourceDescription: dirInfo.sourceDescription,
     platform,
     isDocker,
-    isVM,
     isElectronShell: isElectronShell(),
     shellVersion: getElectronShellVersion(),
     shellCapabilities: [...getShellCapabilities()],

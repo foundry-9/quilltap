@@ -12,8 +12,6 @@ const {
   enrichWithApiKey,
   enrichWithTags,
   enrichProfile,
-  enrichMany,
-  unsetAllDefaults,
 } = require('@/lib/api/middleware/enrichment');
 
 describe('API Enrichment Utilities', () => {
@@ -368,102 +366,4 @@ describe('API Enrichment Utilities', () => {
     });
   });
 
-  describe('enrichMany', () => {
-    it('should enrich multiple entities in parallel', async () => {
-      const entities = [
-        { id: 'e-1', value: 1 },
-        { id: 'e-2', value: 2 },
-        { id: 'e-3', value: 3 },
-      ];
-
-      const enrichFn = jest.fn().mockImplementation(async (entity: any) => ({
-        ...entity,
-        enriched: true,
-      }));
-
-      const result = await enrichMany(entities, enrichFn);
-
-      expect(enrichFn).toHaveBeenCalledTimes(3);
-      expect(result).toEqual([
-        { id: 'e-1', value: 1, enriched: true },
-        { id: 'e-2', value: 2, enriched: true },
-        { id: 'e-3', value: 3, enriched: true },
-      ]);
-    });
-
-    it('should handle empty array', async () => {
-      const enrichFn = jest.fn();
-      const result = await enrichMany([], enrichFn);
-
-      expect(result).toEqual([]);
-      expect(enrichFn).not.toHaveBeenCalled();
-    });
-
-    it('should preserve order', async () => {
-      const entities = [
-        { id: 'first' },
-        { id: 'second' },
-        { id: 'third' },
-      ];
-
-      const enrichFn = jest.fn().mockImplementation(async (e: any) => ({
-        ...e,
-        timestamp: Date.now(),
-      }));
-
-      const result = await enrichMany(entities, enrichFn);
-
-      expect(result[0].id).toBe('first');
-      expect(result[1].id).toBe('second');
-      expect(result[2].id).toBe('third');
-    });
-
-    it('should process all entities even if one fails', async () => {
-      const entities = [
-        { id: 'e-1' },
-        { id: 'e-2' },
-        { id: 'e-3' },
-      ];
-
-      const enrichFn = jest.fn().mockImplementation(async (e: any) => {
-        if (e.id === 'e-2') {
-          throw new Error('Enrichment failed');
-        }
-        return { ...e, enriched: true };
-      });
-
-      await expect(enrichMany(entities, enrichFn)).rejects.toThrow('Enrichment failed');
-      expect(enrichFn).toHaveBeenCalledTimes(3);
-    });
-  });
-
-  describe('unsetAllDefaults', () => {
-    it('should call unset function with userId', async () => {
-      const unsetFn = jest.fn().mockResolvedValue(undefined);
-      const userId = 'user-123';
-
-      await unsetAllDefaults(userId, unsetFn);
-
-      expect(unsetFn).toHaveBeenCalledWith(userId);
-    });
-
-    it('should propagate errors from unset function', async () => {
-      const unsetFn = jest.fn().mockRejectedValue(new Error('Database error'));
-      const userId = 'user-123';
-
-      await expect(unsetAllDefaults(userId, unsetFn)).rejects.toThrow('Database error');
-    });
-
-    it('should handle async unset functions', async () => {
-      let resolved = false;
-      const unsetFn = jest.fn().mockImplementation(async () => {
-        await new Promise(resolve => setTimeout(resolve, 10));
-        resolved = true;
-      });
-
-      await unsetAllDefaults('user-123', unsetFn);
-
-      expect(resolved).toBe(true);
-    });
-  });
 });

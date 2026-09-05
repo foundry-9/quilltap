@@ -2,6 +2,12 @@
 
 All notable changes to this package will be documented in this file.
 
+## [2.0.19] - 2026-08-30
+
+### Added
+- Bundle `styles.css` template: commented `--qt-range-accent` / `--qt-range-focus-ring` scaffold for the new `.qt-range` slider class, with a note on what overriding `.qt-range` with `appearance: none` costs.
+- Theme-development doc template: the two range tokens in the overridable-variable reference.
+
 ## [2.0.13] - 2026-06-14
 
 ### Added

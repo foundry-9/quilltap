@@ -1,6 +1,7 @@
 'use client'
 
 import { SettingsCard } from '@/components/ui/SettingsCard'
+import { SettingsToggleRow } from './components/SettingsToggleRow'
 import {
   ChatSettings,
   AnswerConfirmationSettings as AnswerConfirmationSettingsType,
@@ -29,26 +30,19 @@ export function AnswerConfirmationSettings({ settings, saving, onUpdate }: Answe
       subtitle="Vet a character's looked-up answers against what they actually knew this turn"
     >
       <div className="space-y-3">
-        <label className="flex items-start gap-3 p-4 border qt-border-default rounded qt-hover-accent cursor-pointer transition-colors">
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(e) => onUpdate({ enabled: e.target.checked })}
-            disabled={saving}
-            className="qt-checkbox mt-1"
-          />
-          <div className="flex-1">
-            <div className="font-medium">Confirm looked-up answers by default</div>
-            <div className="qt-text-small">
-              When a character&apos;s reply rests on their recollections or a lookup (a web search, a peek back
-              through the conversation, or a document read), a swift second reader checks the reply for
-              contradictions before it lands. Should something ring false, the character is asked to stand by their
-              words or amend them — and every checked reply wears a small mark you can hover for the particulars.
-              This adds a round-trip or two per qualifying turn, so it arrives switched off; enable it here, or for a
-              particular project or chat.
-            </div>
-          </div>
-        </label>
+        <SettingsToggleRow
+          checked={enabled}
+          disabled={saving}
+          onChange={(value) => onUpdate({ enabled: value })}
+          heading="Confirm looked-up answers by default"
+        >
+          When a character&apos;s reply rests on their recollections or a lookup (a web search, a peek back
+          through the conversation, or a document read), a swift second reader checks the reply for
+          contradictions before it lands. Should something ring false, the character is asked to stand by their
+          words or amend them — and every checked reply wears a small mark you can hover for the particulars.
+          This adds a round-trip or two per qualifying turn, so it arrives switched off; enable it here, or for a
+          particular project or chat.
+        </SettingsToggleRow>
       </div>
     </SettingsCard>
   )

@@ -33,6 +33,19 @@ export interface HelpDocumentWithEmbedding extends HelpDocument {
 }
 
 /**
+ * The section of a document that matched, when the match came from a chunk
+ * rather than from the whole-document vector.
+ */
+export interface HelpMatchedSection {
+  /** Nearest Markdown heading above the matching text, if any */
+  heading: string | null
+  /** The matching excerpt itself */
+  content: string
+  /** 0-based position of this chunk within the document */
+  chunkIndex: number
+}
+
+/**
  * Search result returned by semantic search
  */
 export interface HelpSearchResult {
@@ -40,4 +53,10 @@ export interface HelpSearchResult {
   document: HelpDocument
   /** Cosine similarity score (0-1, higher is more similar) */
   score: number
+  /**
+   * The best-matching section, when the score came from a section vector.
+   * Absent when the document matched only on its whole-document embedding —
+   * i.e. it has no chunk rows embedded yet.
+   */
+  matchedSection?: HelpMatchedSection
 }

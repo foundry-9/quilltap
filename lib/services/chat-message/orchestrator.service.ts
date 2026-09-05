@@ -7,7 +7,7 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { createLLMProvider } from '@/lib/llm'
-import { requiresApiKey } from '@/lib/plugins/provider-validation'
+import { acceptsApiKey, requiresApiKey } from '@/lib/plugins/provider-validation'
 import {
   isMultiCharacterChat,
   computeSkipEligibility,
@@ -17,8 +17,9 @@ import {
   findActiveUserParticipant,
   isUserDrivenSeat,
   selectNextSpeakerAfterUserMessage,
+  getPresentCharacterSeats,
 } from '@/lib/chat/turn-manager'
-import { isParticipantPresent } from '@/lib/schemas/chat.types'
+import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
 import { postHostTurnPassAnnouncement, postHostNudgeAnnouncement } from '@/lib/services/host-notifications/writer'
 import { z } from 'zod'
 
@@ -36,6 +37,7 @@ import {
   loadAndProcessFiles,
   buildMessageContext,
 } from './context-builder.service'
+import { collectTurnExtras, extractToolNames } from './turn-extras'
 import {
   loadProsperoProjectContext,
   loadProsperoGeneralContext,
@@ -64,7 +66,7 @@ import {
   safeClose,
 } from './streaming.service'
 import { dispatchCourierTransport } from './courier-transport.service'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import {
   buildNativeToolSystemInstructions,
   determineEnabledToolOptions,
@@ -93,7 +95,7 @@ import {
 } from './memory-trigger.service'
 import { flushPendingWardrobeAnnouncements } from '@/lib/tools/handlers/wardrobe-handler-shared'
 import { countMessagesTokens } from '@/lib/tokens/token-counter'
-import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
+import { getCheapLLMProvider, profileParams, DEFAULT_CHEAP_LLM_CONFIG } from '@/lib/llm/cheap-llm'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import type { RosterContext as CustomToolRosterContext } from '@/lib/pascal/custom-tools'
 import { runPreContextPreCompute } from './pre-compute.service'
@@ -111,7 +113,6 @@ import {
 } from './message-finalizer.service'
 import {
   resolveAgentModeSetting,
-  buildAgentModeInstructions,
   type ResolvedAgentMode,
 } from './agent-mode-resolver.service'
 import { resolveUserIdentity } from './user-identity-resolver.service'
@@ -123,6 +124,8 @@ import {
   attemptEmptyResponseRecovery,
   getEmptyResponseReason,
 } from './provider-failover.service'
+import { extractFinishReason } from '@/lib/llm/extract-finish-reason'
+import { isModerationFinishReason } from '@/lib/llm/moderation-finish-reason'
 import type { DangerFlag } from '@/lib/schemas/chat.types'
 
 const logger = createServiceLogger('ChatMessageOrchestrator')
@@ -387,13 +390,20 @@ async function processMessage(
   // can all short-circuit later.
   const isCourierTransport = connectionProfile.transport === 'courier'
 
-  // Validate API key for providers that require it
+  // Validate the API key for providers that require one — and forward it for
+  // providers that merely accept one. `requiresApiKey` alone answered both
+  // questions and so dropped the key an OpenAI-Compatible profile had attached
+  // for a hosted endpoint, which then answered 401 (Bug 81). The key itself was
+  // already decrypted upstream by the participant resolver, which asks no
+  // question of the provider at all.
   let apiKey = ''
-  if (!isCourierTransport && requiresApiKey(connectionProfile.provider)) {
-    if (!rawApiKey) {
+  if (!isCourierTransport) {
+    if (requiresApiKey(connectionProfile.provider) && !rawApiKey) {
       throw new Error('No API key configured for this connection profile')
     }
-    apiKey = rawApiKey
+    if (acceptsApiKey(connectionProfile.provider)) {
+      apiKey = rawApiKey
+    }
   }
 
   // Resolve user identity through fallback chain:
@@ -572,8 +582,8 @@ async function processMessage(
   // ============================================================================
   // Project + General Context Re-injection (Phase E: Prospero whisper)
   // ============================================================================
-  // The chat-start whisper is posted by `createInitialMessages` when the chat
-  // is created. Here we handle the cadence-based refresh: every
+  // The chat-start whisper is posted by `createInitialMessagesScenarioAndStaff`
+  // when the chat is created. Here we handle the cadence-based refresh: every
   // `projectContextReinjectInterval` messages we post a fresh Prospero
   // context whisper into the transcript so the LLM keeps the project's
   // description / instructions / linked stores in mind alongside the
@@ -1031,7 +1041,7 @@ async function processMessage(
     resolvedToolMode === 'simple-json' ? SIMPLE_JSON_STOP : undefined
 
   // Build message context
-  const modelParams = streamingState.effectiveProfile.parameters as Record<string, unknown>
+  const modelParams = profileParams(streamingState.effectiveProfile) ?? {}
   const contextChatSettings = chatSettings ? {
     cheapLLMSettings: chatSettings.cheapLLMSettings ? {} : undefined,
     defaultTimestampConfig: chatSettings.defaultTimestampConfig,
@@ -1055,7 +1065,13 @@ async function processMessage(
     ),
   )
 
-  const { cachedCompressionResponse, preSearchedMemories, recallSignals, stopKeepAlive } = await runPreContextPreCompute({
+  const {
+    cachedCompressionResponse,
+    preSearchedMemories,
+    recallSignals,
+    preSearchedQueryEmbedding,
+    stopKeepAlive,
+  } = await runPreContextPreCompute({
     chatId,
     userId,
     chat,
@@ -1073,6 +1089,18 @@ async function processMessage(
     allProfiles,
     controller,
     encoder,
+  })
+
+  // Everything this turn will add to the payload *after* the context is built —
+  // the tool schemas, plus the agent-mode and tool-change system messages
+  // spliced in below. Built and measured here, before the context, so the
+  // builder can hold room for them instead of packing history into space they
+  // are about to occupy. The strings are reused at the splice sites.
+  const turnExtras = collectTurnExtras({
+    tools: actualTools,
+    agentMode,
+    toolSettingsChanged,
+    provider: streamingState.effectiveProfile.provider,
   })
 
   // Send status update for context gathering
@@ -1107,6 +1135,9 @@ async function processMessage(
       // Autonomous-room per-turn context cap (tokens). Clamps the model-derived
       // budget so a token-budgeted room paces its run across multiple turns.
       autonomousContextCap: options.autonomousContextCap,
+      // Room held back for the tool schemas and the system messages spliced in
+      // after this returns.
+      reservedOutgoingTokens: turnExtras.reservedTokens,
       // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
       turnSkip,
       // Pass cached compression result and message count for dynamic window calculation
@@ -1115,9 +1146,10 @@ async function processMessage(
       // Proactive memory recall results
       preSearchedMemories,
       recallSignals,
+      preSearchedQueryEmbedding,
       // Memory recap: uncensored fallback for dangerous chats. Off-duty
       // chats opt out, so the fallback is not engaged for them.
-      uncensoredFallbackOptions: (isChatActiveDangerous(chat) && dangerSettings && cheapLLMSelection)
+      uncensoredFallbackOptions: (shouldUseUncensoredRoute(chat) && dangerSettings && cheapLLMSelection)
         ? { dangerSettings, availableProfiles: allProfiles, isDangerousChat: true }
         : undefined,
       // Status callback for budget-driven compression phases
@@ -1211,23 +1243,12 @@ async function processMessage(
   // ============================================================================
   // If tool settings were changed, inject a system message to inform the LLM
   // This only happens when the user explicitly changed settings, not on first message or interval
-  if (toolSettingsChanged) {
-    // Extract tool names from the tools array
-    const toolNames = actualTools.map((tool: unknown) => {
-      const toolObj = tool as { function?: { name?: string }; name?: string }
-      return toolObj.function?.name || toolObj.name || 'unknown'
-    }).filter(name => name !== 'unknown')
-
-    let toolChangeContent: string
-    if (toolNames.length === 0) {
-      toolChangeContent = '[System Notice] Your available tools have been updated. All tools have been disabled for this chat. Do not attempt to use any tools.'
-    } else {
-      toolChangeContent = `[System Notice] Your available tools have been updated. You now have access to the following ${toolNames.length} tool(s): ${toolNames.join(', ')}. Tools not listed are no longer available for this chat.`
-    }
+  if (turnExtras.toolChangeNotice) {
+    const toolNames = extractToolNames(actualTools)
 
     const toolChangeMessage = {
       role: 'system',
-      content: toolChangeContent,
+      content: turnExtras.toolChangeNotice,
       attachments: [],
     }
 
@@ -1253,11 +1274,10 @@ async function processMessage(
   // Agent Mode Instructions
   // ============================================================================
   // If agent mode is enabled, inject instructions into the system prompt
-  if (agentMode.enabled) {
-    const agentModeInstructions = buildAgentModeInstructions(agentMode.maxTurns)
+  if (turnExtras.agentModeInstructions) {
     const agentModeMessage = {
       role: 'system',
-      content: agentModeInstructions,
+      content: turnExtras.agentModeInstructions,
       attachments: [],
     }
 
@@ -1311,12 +1331,17 @@ async function processMessage(
     characterName: character.name,
     characterId: character.id,
   }))
-  const estimatedInputTokens = countMessagesTokens(
+  // Measure the whole payload, not just the message array: the tool schemas
+  // ride alongside it and count against the same window. The ceiling is the
+  // budget's own `safeInputLimit` — the number the builder packed to — so this
+  // check can no longer fire on a context that was filled exactly as instructed.
+  const messageTokens = countMessagesTokens(
     formattedMessages.map(m => ({ content: m.content, role: m.role }))
   )
+  const estimatedInputTokens = messageTokens + turnExtras.toolSchemaTokens
   const modelContextLimit = builtContext.budget.totalLimit
   const responseReserve = builtContext.budget.responseReserve
-  const safeInputLimit = modelContextLimit - responseReserve - Math.ceil(modelContextLimit * 0.10)
+  const safeInputLimit = builtContext.budget.safeInputLimit
 
   if (estimatedInputTokens > safeInputLimit) {
     logger.warn('Context exceeds model safe input limit, payload may be rejected', {
@@ -1325,9 +1350,14 @@ async function processMessage(
       provider: streamingState.effectiveProfile.provider,
       model: streamingState.effectiveProfile.modelName,
       estimatedInputTokens,
+      messageTokens,
+      toolSchemaTokens: turnExtras.toolSchemaTokens,
+      toolCount: actualTools.length,
       safeInputLimit,
       modelContextLimit,
       responseReserve,
+      safetyMargin: builtContext.budget.safetyMargin,
+      reservedOutgoingTokens: turnExtras.reservedTokens,
       compressionApplied: builtContext.compressionApplied ?? false,
       overage: estimatedInputTokens - safeInputLimit,
     })
@@ -1383,6 +1413,12 @@ async function processMessage(
     attachedFiles: fileProcessing.attachedFiles,
     originalMessage: options.content,
     connectionProfile,
+    // Dangerous-routed context: the Concierge either flagged this content or
+    // swapped the profile out for an uncensored one. Either way an auto-picked
+    // stand-in must be cleared for it, or the fallback would hand the content
+    // straight back to the moderation that refused it.
+    isDangerousRouted:
+      (dangerFlags?.length ?? 0) > 0 || streamingState.effectiveProfile.id !== connectionProfile.id,
     streaming: streamingState,
     controller,
     encoder,
@@ -1517,23 +1553,35 @@ async function processMessage(
   }
 
   const contentWasFlaggedDangerous = !!(dangerFlags && dangerFlags.length > 0)
-  const { uncensoredRetryAttempted, sameProviderRetryAttempted } = await attemptEmptyResponseRecovery({
-    state: streamingState,
-    toolMessagesLength: toolMessages.length,
-    contentWasFlaggedDangerous,
-    dangerSettings,
-    connectionProfile,
-    formattedMessages,
-    modelParams,
-    actualTools,
-    useNativeWebSearch,
-    userId,
-    chatId,
-    character,
-    controller,
-    encoder,
-    preGeneratedAssistantMessageId,
-  })
+  const { uncensoredRetryAttempted, sameProviderRetryAttempted, chainAttempts } =
+    await attemptEmptyResponseRecovery({
+      state: streamingState,
+      toolMessagesLength: toolMessages.length,
+      contentWasFlaggedDangerous,
+      dangerSettings,
+      connectionProfile,
+      formattedMessages,
+      modelParams,
+      actualTools,
+      useNativeWebSearch,
+      userId,
+      chatId,
+      character,
+      controller,
+      encoder,
+      preGeneratedAssistantMessageId,
+      repos,
+      stop: initialStopSequences,
+      fallbackContext: {
+        dangerous: contentWasFlaggedDangerous,
+        // Read from the array, not from what the user uploaded: an image the
+        // primary could not take was already replaced by its description
+        // upstream, and a chain that still called the turn vision-bearing
+        // would skip understudies that are perfectly able to answer it.
+        needsVision: collectAttachmentMimeTypes(formattedMessages).some((m) => m.startsWith('image/')),
+        needsTools: actualTools.length > 0,
+      },
+    })
 
   // Save assistant message
   let assistantMessageId: string | null = null
@@ -1664,15 +1712,31 @@ async function processMessage(
     }
   } else {
     // Empty response
+    // The provider may have said why it returned nothing. Z.AI reports
+    // `finish_reason: sensitive` on a moderation refusal, OpenAI
+    // `content_filter`, Google `SAFETY` — all of which make "try resending"
+    // actively wrong advice (bug 93).
+    const emptyFinishReason = extractFinishReason(streamingState.rawResponse)
     const emptyReason = getEmptyResponseReason({
       uncensoredRetryAttempted,
       sameProviderRetryAttempted,
       contentWasFlaggedDangerous,
+      chainAttempts,
+      finishReason: emptyFinishReason,
+      provider: streamingState.effectiveProfile.provider,
+      modelName: streamingState.effectiveProfile.modelName,
     })
     logger.warn(`Empty response for chat ${chatId}`, {
       uncensoredRetryAttempted,
       sameProviderRetryAttempted,
       contentWasFlaggedDangerous,
+      chainAttempts: chainAttempts.map((a) => ({
+        profileName: a.profileName,
+        provider: a.provider,
+        trigger: a.trigger,
+      })),
+      finishReason: emptyFinishReason,
+      moderationRefusal: isModerationFinishReason(emptyFinishReason),
       dangerMode: dangerSettings.mode,
       provider: streamingState.effectiveProfile.provider,
       model: streamingState.effectiveProfile.modelName,
@@ -1735,9 +1799,7 @@ async function maybePauseForUserSeatTurn(
   // NB: `getActiveCharacterParticipants` is a misnomer — it returns LLM seats
   // only — so filter the full roster here; a user-controlled seat (and the
   // impersonated overlay) must both count.
-  const activeChars = chat.participants.filter(p =>
-    p.type === 'CHARACTER' && isParticipantPresent(p.status) && !!p.characterId,
-  )
+  const activeChars = getPresentCharacterSeats(chat.participants)
   const userDrivenSeatCount = activeChars.filter(p =>
     isUserDrivenSeat(p, chat.impersonatingParticipantIds),
   ).length

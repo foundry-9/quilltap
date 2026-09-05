@@ -145,10 +145,16 @@ export function remapBackupData(
   });
 
 
-  // Remap connection profiles
+  // Remap connection profiles.
+  //
+  // `fallbackProfileId` points at another row in this same table, so it has to
+  // be remapped alongside `id` or a restored profile's understudy would name a
+  // uuid that no longer exists. The remapper is lazy and consistent — the same
+  // old id always yields the same new one — so a profile naming an understudy
+  // that appears later in the array is remapped correctly either way.
   const remappedConnectionProfiles = data.connectionProfiles.map((profile) => ({
     ...remapper.remapArrayFields(
-      remapper.remapFields(profile, ['id', 'apiKeyId']),
+      remapper.remapFields(profile, ['id', 'apiKeyId', 'fallbackProfileId']),
       ['tags']
     ),
     userId: targetUserId,

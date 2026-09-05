@@ -178,6 +178,15 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'vectorIndices.entryExists': 'read',
 
   // ---- Writes with non-conforming names ------------------------------------
+  // folders: find-or-create. Buffered *whole* so the parent replays it on its
+  // RW connection, where read-your-writes and the (userId, projectId, path)
+  // unique index make it genuinely idempotent — a child-side read could not see
+  // another job's buffered create, which is how the legacy `folders` table
+  // grew a row per generated image (bug 114). Its in-child callers (the
+  // story-background and character-avatar handlers) DISCARD the return value,
+  // so the `undefined` synthetic write result is fine; a caller that needs the
+  // folder back must not run in the child.
+  'folders.ensureByPath': 'write',
   // memories
   'memories.updateForCharacter': 'write',
   // chats
@@ -193,6 +202,11 @@ const METHOD_OVERRIDES: Record<string, 'read' | 'write'> = {
   'tfidfVocabularies.upsertByProfileId': 'write',
   // help docs
   'helpDocs.clearAllEmbeddings': 'write',
+  // `replaceForDoc` is buffered whole and replayed by the parent, so its
+  // internal creates never run in the child. Its return (a row count) is the
+  // synthetic `undefined` — no caller may consume it. `deleteByDocId` and
+  // `deleteOrphaned` classify as writes from their prefix already.
+  'helpDocChunks.replaceForDoc': 'write',
   // llm logs
   'llmLogs.cleanupOldLogs': 'write',
   // vector indices

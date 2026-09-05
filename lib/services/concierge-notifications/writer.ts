@@ -169,10 +169,11 @@ export function buildDangerOpaqueContent(details?: ConciergeDangerDetails): stri
  * announcing their own choice, in their own voice, through the Concierge.
  */
 export type ConciergeManualKind =
-  | 'manual-flagged'      // Safe -> Flagged (the operator flipped the switch themselves)
-  | 'manual-safe'         // Flagged -> Safe (the operator says all clear)
-  | 'manual-off-duty'     // anything -> Off-duty (operator waves the Concierge off)
-  | 'manual-on-duty';     // Off-duty -> back on (operator calls the Concierge back)
+  | 'manual-flagged'      // -> Flagged (the operator flipped the switch themselves)
+  | 'manual-safe'         // Flagged -> Monitored (the operator says all clear)
+  | 'manual-vouched'      // anything -> Vouched Safe (operator vouches; the Concierge stops watching)
+  | 'manual-resumed'      // Vouched/Uncensored -> Monitored (operator calls the Concierge back)
+  | 'manual-uncensored';  // anything -> Uncensored (operator opens the uncensored door themselves)
 
 function buildManualContent(kind: ConciergeManualKind): string {
   switch (kind) {
@@ -180,10 +181,12 @@ function buildManualContent(kind: ConciergeManualKind): string {
       return "By the operator's own hand, the Concierge has thrown the switch: the conversation is to be entrusted henceforth to a desk better appointed to subjects of its particular character. Pray continue at your leisure.";
     case 'manual-safe':
       return "By the operator's own hand, the Concierge stands down for the moment. Routine arrangements are restored; he shall, of course, return to his post should the matter again take a turn.";
-    case 'manual-off-duty':
-      return "By the operator's own direction, the Concierge takes the afternoon off. No moderation, no rerouting, no quiet interventions; the present conversation proceeds entirely on the operator's own recognizance.";
-    case 'manual-on-duty':
+    case 'manual-vouched':
+      return "The operator has vouched for the present company, and the Concierge, satisfied, takes the afternoon off. No moderation, no rerouting, no quiet interventions; the ordinary desks remain in service, on the operator's own recognizance.";
+    case 'manual-resumed':
       return "The Concierge returns to his post. Customary watch is resumed; the present arrangements are once again subject to his discreet attentions.";
+    case 'manual-uncensored':
+      return "By the operator's own hand, the Concierge has been sent away and the uncensored door stands open. Nothing is to be examined, nothing softened; the conversation and its errands go henceforth to the frank desk, entirely on the operator's own recognizance.";
   }
 }
 
@@ -193,10 +196,12 @@ function buildManualOpaqueContent(kind: ConciergeManualKind): string {
       return 'Operator advisory: this conversation has been manually marked for handling by an uncensored provider. Subsequent traffic may be routed accordingly.';
     case 'manual-safe':
       return 'Operator advisory: the prior dangerous-content mark has been manually cleared. Standard routing is restored.';
-    case 'manual-off-duty':
-      return 'Operator advisory: moderation is disabled for this conversation. No classification, scanning, or provider rerouting will run on the operator’s behalf.';
-    case 'manual-on-duty':
+    case 'manual-vouched':
+      return 'Operator advisory: moderation is disabled for this conversation. No classification, scanning, or provider rerouting will run on the operator’s behalf. Ordinary providers still apply.';
+    case 'manual-resumed':
       return 'Operator advisory: standard moderation is restored for this conversation.';
+    case 'manual-uncensored':
+      return 'Operator advisory: this conversation has been manually routed to the uncensored providers. No classification or scanning will run; prompts go out unaltered.';
   }
 }
 

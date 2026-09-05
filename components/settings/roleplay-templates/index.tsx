@@ -7,6 +7,8 @@ import type { DelimiterFormEntry } from './types'
 import type { DelimiterAddOns } from '@/lib/schemas/template.types'
 import { DEFAULT_TAG_TOKEN_PATTERN } from '@/lib/schemas/template.types'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
+import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 
 /** Known CSS style options for delimiter entries */
 const STYLE_OPTIONS = [
@@ -291,24 +293,23 @@ export default function RoleplayTemplatesTab() {
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="qt-label">
-                      LLM Prompt <span className="qt-text-destructive">*</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={appendFormattingHint}
-                      disabled={formData.delimiters.length === 0 && !formData.narrationOpen.trim()}
-                      className="px-2 py-1 text-xs rounded border qt-border-default qt-hover-accent disabled:opacity-50"
-                      title="Append a starter formatting guide drafted from the delimiters above"
-                    >
-                      Draft formatting instructions
-                    </button>
-                  </div>
-                  <p className="qt-text-xs mb-2">
-                    The formatting instructions prepended to the character&rsquo;s system prompt when this template is selected.
-                    You can use placeholders like {'{{char}}'} and {'{{user}}'}.
-                  </p>
+                  <PromptFieldLabel
+                    hint={PROMPT_FIELD_HINTS.roleplayTemplatePrompt}
+                    label="LLM Prompt"
+                    required
+                    helper={`${PROMPT_FIELD_HINTS.roleplayTemplatePrompt.helper} You can use placeholders like {{char}} and {{user}}.`}
+                    actions={
+                      <button
+                        type="button"
+                        onClick={appendFormattingHint}
+                        disabled={formData.delimiters.length === 0 && !formData.narrationOpen.trim()}
+                        className="px-2 py-1 text-xs rounded border qt-border-default qt-hover-accent disabled:opacity-50"
+                        title="Append a starter formatting guide drafted from the delimiters above"
+                      >
+                        Draft formatting instructions
+                      </button>
+                    }
+                  />
                   <MarkdownLexicalEditor
                     value={formData.systemPrompt}
                     onChange={(value) => setFormData(prev => ({ ...prev, systemPrompt: value }))}

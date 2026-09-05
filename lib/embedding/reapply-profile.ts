@@ -15,6 +15,7 @@
  *   - vector_entries           (main DB)
  *   - conversation_chunks      (main DB)
  *   - help_docs                (main DB)
+ *   - help_doc_chunks          (main DB)
  *   - doc_mount_chunks         (mount index DB)
  *
  * Rules:
@@ -33,6 +34,7 @@ import path from 'path'
 import Database, { Database as DatabaseType } from 'better-sqlite3'
 import { logger } from '@/lib/logger'
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client'
+import { applySqlcipherKey } from '@/lib/database/backends/sqlite/sqlcipher-key'
 import { getMountIndexDatabasePath, getSQLiteDatabasePath } from '@/lib/paths'
 import { invalidateAll as invalidateMountChunkCacheAll } from '@/lib/mount-index/mount-chunk-cache'
 import { getVectorStoreManager } from '@/lib/embedding/vector-store'
@@ -43,7 +45,7 @@ import type { EmbeddingProfile } from '@/lib/schemas/types'
 const FLUSH_BATCH = 500
 const ZERO_MAG = 1e-10
 
-const MAIN_DB_TABLES = ['memories', 'vector_entries', 'conversation_chunks', 'help_docs'] as const
+const MAIN_DB_TABLES = ['memories', 'vector_entries', 'conversation_chunks', 'help_docs', 'help_doc_chunks'] as const
 
 function requireMainDatabase(): DatabaseType {
   const db = getRawDatabase()
@@ -114,11 +116,7 @@ function openMountIndexDb(): DatabaseType | null {
   if (!fs.existsSync(dbPath)) return null
   const db = new Database(dbPath)
   try {
-    const pepper = process.env.ENCRYPTION_MASTER_PEPPER
-    if (pepper) {
-      const keyHex = Buffer.from(pepper, 'base64').toString('hex')
-      db.pragma(`key = "x'${keyHex}'"`)
-    }
+    applySqlcipherKey(db)
     db.pragma('busy_timeout = 5000')
     return db
   } catch (error) {

@@ -36,17 +36,23 @@ import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import {
   isSQLiteBackend,
-  getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
 
-const MESSAGE_COLUMNS: Array<{ name: string; ddl: string }> = [
-  { name: 'confirmed', ddl: 'INTEGER DEFAULT NULL' },
-  { name: 'confirmationChecked', ddl: 'INTEGER DEFAULT NULL' },
-  { name: 'confirmationRevised', ddl: 'INTEGER DEFAULT NULL' },
-  { name: 'confirmationNotes', ddl: 'TEXT DEFAULT NULL' },
-  { name: 'confirmationOriginalContent', ddl: 'TEXT DEFAULT NULL' },
+const COLUMNS: Array<{ table: string; name: string; ddl: string }> = [
+  { table: 'chat_messages', name: 'confirmed', ddl: 'INTEGER DEFAULT NULL' },
+  { table: 'chat_messages', name: 'confirmationChecked', ddl: 'INTEGER DEFAULT NULL' },
+  { table: 'chat_messages', name: 'confirmationRevised', ddl: 'INTEGER DEFAULT NULL' },
+  { table: 'chat_messages', name: 'confirmationNotes', ddl: 'TEXT DEFAULT NULL' },
+  { table: 'chat_messages', name: 'confirmationOriginalContent', ddl: 'TEXT DEFAULT NULL' },
+  { table: 'chats', name: 'answerConfirmationOverride', ddl: 'TEXT DEFAULT NULL' },
+  {
+    table: 'chat_settings',
+    name: 'answerConfirmationSettings',
+    ddl: `TEXT DEFAULT '${JSON.stringify({ enabled: false })}'`,
+  },
 ];
 
 export const addAnswerConfirmationColumnsMigration: Migration = {
@@ -60,30 +66,9 @@ export const addAnswerConfirmationColumnsMigration: Migration = {
       return false;
     }
 
-    let needed = false;
-
-    if (sqliteTableExists('chat_messages')) {
-      const columnNames = getSQLiteTableColumns('chat_messages').map((col) => col.name);
-      if (MESSAGE_COLUMNS.some((c) => !columnNames.includes(c.name))) {
-        needed = true;
-      }
-    }
-
-    if (sqliteTableExists('chats')) {
-      const columnNames = getSQLiteTableColumns('chats').map((col) => col.name);
-      if (!columnNames.includes('answerConfirmationOverride')) {
-        needed = true;
-      }
-    }
-
-    if (sqliteTableExists('chat_settings')) {
-      const columnNames = getSQLiteTableColumns('chat_settings').map((col) => col.name);
-      if (!columnNames.includes('answerConfirmationSettings')) {
-        needed = true;
-      }
-    }
-
-    return needed;
+    return COLUMNS.some(
+      (col) => sqliteTableExists(col.table) && !sqliteColumnExists(col.table, col.name)
+    );
   },
 
   async run(): Promise<MigrationResult> {
@@ -91,41 +76,10 @@ export const addAnswerConfirmationColumnsMigration: Migration = {
     let columnsAdded = 0;
 
     try {
-      const db = getSQLiteDatabase();
-
-      if (sqliteTableExists('chat_messages')) {
-        const columnNames = getSQLiteTableColumns('chat_messages').map((col) => col.name);
-        for (const col of MESSAGE_COLUMNS) {
-          if (!columnNames.includes(col.name)) {
-            db.exec(`ALTER TABLE "chat_messages" ADD COLUMN "${col.name}" ${col.ddl}`);
-            columnsAdded++;
-            logger.info(`Added ${col.name} column to chat_messages table`, {
-              context: 'migration.add-answer-confirmation-columns',
-            });
-          }
-        }
-      }
-
-      if (sqliteTableExists('chats')) {
-        const columnNames = getSQLiteTableColumns('chats').map((col) => col.name);
-        if (!columnNames.includes('answerConfirmationOverride')) {
-          db.exec(`ALTER TABLE "chats" ADD COLUMN "answerConfirmationOverride" TEXT DEFAULT NULL`);
+      for (const col of COLUMNS) {
+        if (sqliteTableExists(col.table) && addColumnIfMissing(col.table, col.name, col.ddl)) {
           columnsAdded++;
-          logger.info('Added answerConfirmationOverride column to chats table', {
-            context: 'migration.add-answer-confirmation-columns',
-          });
-        }
-      }
-
-      if (sqliteTableExists('chat_settings')) {
-        const columnNames = getSQLiteTableColumns('chat_settings').map((col) => col.name);
-        if (!columnNames.includes('answerConfirmationSettings')) {
-          const defaultAnswerConfirmationSettings = JSON.stringify({ enabled: false });
-          db.exec(
-            `ALTER TABLE "chat_settings" ADD COLUMN "answerConfirmationSettings" TEXT DEFAULT '${defaultAnswerConfirmationSettings}'`
-          );
-          columnsAdded++;
-          logger.info('Added answerConfirmationSettings column to chat_settings table', {
+          logger.info(`Added ${col.name} column to ${col.table} table`, {
             context: 'migration.add-answer-confirmation-columns',
           });
         }

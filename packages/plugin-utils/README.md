@@ -150,6 +150,37 @@ This gives you a complete `LLMProvider` implementation with:
 npm install openai
 ```
 
+### Profile Parameters
+
+A connection profile's `parameters` blob is free-form JSON, handed to the
+provider as `LLMParams.profileParameters`. A provider that never reads it drops
+every setting the user saved, in silence — so forwarding is opt-in but explicit,
+and always allow-listed:
+
+```typescript
+import { applyProfileParameters } from '@quilltap/plugin-utils';
+
+const MY_ALLOWLIST = ['top_k', 'min_p', 'reasoning_effort'] as const;
+
+applyProfileParameters(body, params, MY_ALLOWLIST, (key, value, callParams, target) => {
+  // Return the value to send, or `undefined` to omit the key.
+  // Write into `target` to send it under a different key entirely.
+  return value;
+});
+```
+
+`undefined`, `null` and the empty string omit the key — the empty string is what
+the schema-driven profile editor stores for "use the model default". Never
+spread the blob: `model`, `messages`, `stream`, `stream_options` and `tools`
+must stay unreachable from a profile.
+
+Subclasses of `OpenAICompatibleProvider` get this by declaring
+`profileParamAllowlist` (empty by default, so a subclass that declares nothing
+is byte-identical on the wire) and optionally overriding `normalizeProfileParam`;
+providers that implement `TextProvider` directly call the function themselves.
+The keys must match whatever the plugin's `getProviderOptionsSchema()` renders,
+or a field the editor draws goes nowhere.
+
 ### System Prompt Plugin Utilities
 
 Create system prompt plugins that provide character prompt templates from `.md` files:

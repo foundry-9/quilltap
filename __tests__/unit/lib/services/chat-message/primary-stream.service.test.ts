@@ -38,6 +38,7 @@ const mockEncodeStatusEvent = jest.fn((_encoder: TextEncoder, payload: unknown) 
 
 const mockSaveAssistantMessage = jest.fn<() => Promise<string>>().mockResolvedValue('preserved-id-1')
 const mockAttemptRequestLimitRecovery = jest.fn<() => Promise<{ success: boolean; messageId?: string; isStaticFallback: boolean }>>()
+const mockAttemptHardErrorFailover = jest.fn<() => Promise<{ recovered: boolean; attempts: unknown[]; tierPickWasOffered: boolean }>>()
 const mockIsToolUnsupportedError = jest.fn<(e: unknown) => boolean>(() => false)
 const mockIsRecoverableRequestError = jest.fn<(e: unknown) => boolean>(() => false)
 
@@ -75,6 +76,15 @@ jest.mock('@/lib/services/chat-message/recovery.service', () => ({
 jest.mock('@/lib/llm/errors', () => ({
   isToolUnsupportedError: (e: unknown) => mockIsToolUnsupportedError(e),
   isRecoverableRequestError: (e: unknown) => mockIsRecoverableRequestError(e),
+}))
+
+// The fallback chain is a sibling service with its own suite; isolate it here
+// the way `recovery.service` already is, so these cases keep testing what
+// `runPrimaryStream` does with an error rather than what the chain does.
+// `attemptHardErrorFailover` returning `recovered: false` with no attempts is
+// exactly what it returns for a failure that is not fallback-eligible.
+jest.mock('@/lib/services/chat-message/provider-failover.service', () => ({
+  attemptHardErrorFailover: (...args: any[]) => mockAttemptHardErrorFailover(...(args as [])),
 }))
 
 jest.mock('@/lib/llm/message-formatter', () => ({
@@ -140,6 +150,14 @@ describe('primary-stream.service', () => {
     nextStreamMessageErrors = []
     mockIsToolUnsupportedError.mockReturnValue(false)
     mockIsRecoverableRequestError.mockReturnValue(false)
+    // Default: no understudy takes the turn, so the error propagates the way
+    // it did before fallback chains existed. Cases that exercise the chain
+    // override this.
+    mockAttemptHardErrorFailover.mockResolvedValue({
+      recovered: false,
+      attempts: [],
+      tierPickWasOffered: false,
+    })
   })
 
   describe('makePreservePartialOnError', () => {

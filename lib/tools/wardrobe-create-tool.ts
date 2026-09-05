@@ -14,7 +14,9 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
+import { HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance';
 
 /**
  * Zod schema for the wardrobe create tool's input.
@@ -41,7 +43,7 @@ export const wardrobeCreateToolInputSchema = z
       )
       .optional(),
     types: z
-      .array(z.enum(['top', 'bottom', 'footwear', 'accessories']))
+      .array(WardrobeItemTypeEnum)
       .nonempty()
       .describe(
         'Coverage tags indicating what body area(s) this item covers. ' +
@@ -49,8 +51,9 @@ export const wardrobeCreateToolInputSchema = z
         'coverage is at least the union of the components\' slots; any slots ' +
         'you list here are ADDED to that union, letting a composite designate ' +
         'slots none of its components fill (e.g. a "Naked" composite that ' +
-        'designates every slot but only contains a ring — combined with ' +
-        'replace:true this clears the other slots).'
+        'designates every clothing slot but only contains a ring — combined ' +
+        'with replace:true this clears the other clothing slots). ' +
+        HAIR_SLOT_GUIDANCE
       )
       .optional(),
     appropriateness: z
@@ -149,12 +152,7 @@ export interface WardrobeCreateToolOutput {
    * Equipped slots after the create-and-equip. Each slot holds an array of
    * wardrobe item IDs (multi-item slots support layering).
    */
-  current_state?: {
-    top: string[];
-    bottom: string[];
-    footwear: string[];
-    accessories: string[];
-  };
+  current_state?: Record<WardrobeItemType, string[]>;
   error?: string;
 }
 
@@ -168,7 +166,8 @@ export const wardrobeCreateToolDefinition = {
     description:
       'Create a new wardrobe item and optionally equip it immediately. ' +
       'Use this for two cases: (1) a single garment — supply title and types ' +
-      '(e.g. ["top"] for a shirt, ["top","bottom"] for a dress); or (2) a composite ' +
+      '(e.g. ["top"] for a shirt, ["top","bottom"] for a dress, ["hair"] for a '
+      + 'braided updo); or (2) a composite ' +
       'outfit that bundles other wardrobe items — supply title and component_item_ids ' +
       '(or component_titles) referring to existing items in the character\'s wardrobe. ' +
       'For composites, the slots covered are computed from the union of the components\' ' +

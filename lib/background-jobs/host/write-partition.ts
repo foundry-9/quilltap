@@ -173,13 +173,10 @@ export function rewriteFolderRefs(
 /**
  * Whether an error thrown by a write is a SQLite uniqueness/primary-key
  * constraint violation — the signature of a concurrent folder create losing
- * the race to an already-committed row. Matches on better-sqlite3's
- * `SQLITE_CONSTRAINT_*` error codes, falling back to the message text.
+ * the race to an already-committed row.
+ *
+ * Re-exported from the database layer, which owns the single definition: the
+ * `folders.ensureByPath` chokepoint recovers from exactly the same error, and
+ * two copies of this predicate would drift.
  */
-export function isUniqueConstraintError(err: unknown): boolean {
-  if (!err || typeof err !== 'object') return false;
-  const code = (err as { code?: unknown }).code;
-  if (typeof code === 'string' && code.startsWith('SQLITE_CONSTRAINT')) return true;
-  const message = (err as { message?: unknown }).message;
-  return typeof message === 'string' && /UNIQUE constraint failed/i.test(message);
-}
+export { isUniqueConstraintError } from '@/lib/database/sqlite-errors';

@@ -159,6 +159,41 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
       ? repos.embeddingStatus.listFailedEntityIds(entityType, payload.profileId)
       : new Set<string>();
 
+  /**
+   * Queue one EMBEDDING_GENERATE job per row, skipping rows whose vector
+   * already matches the target dimension (mismatched-dim scope only) and rows
+   * in `failedIds`. `extra` supplies the per-entity payload fields beyond
+   * entityType / entityId / profileId. Returns the per-call tallies; the
+   * shared `failedSkipped` counter is bumped in place.
+   */
+  const enqueue = <T extends { id: string; embedding?: ArrayLike<number> | null }>(
+    entityType: 'MEMORY' | 'CONVERSATION_CHUNK' | 'HELP_DOC' | 'MOUNT_CHUNK',
+    rows: readonly T[],
+    failedIds: Set<string>,
+    extra: (row: T) => Record<string, unknown> = () => ({}),
+  ): { enqueued: number; skippedDim: number } => {
+    let enqueued = 0;
+    let skippedDim = 0;
+    for (const row of rows) {
+      if (scope === 'mismatched-dim' && embeddingMatchesDim(row.embedding, mismatchedTargetDim!)) {
+        skippedDim++;
+        continue;
+      }
+      if (failedIds.has(row.id)) {
+        failedSkipped++;
+        continue;
+      }
+      jobRecords.push(buildJobRecord(job.userId, {
+        entityType,
+        entityId: row.id,
+        ...extra(row),
+        profileId: payload.profileId,
+      }));
+      enqueued++;
+    }
+    return { enqueued, skippedDim };
+  };
+
   // ============================================================================
   // Phase 1: Help docs (highest priority — embed first)
   // ============================================================================
@@ -183,25 +218,16 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
     // help search.
     if (scope === 'all') {
       await repos.helpDocs.clearAllEmbeddings();
+      // Section vectors are written by the same HELP_DOC job as the
+      // whole-document one, so they clear together — otherwise the re-embed
+      // pass would skip every chunk that still had a (stale-profile) vector.
+      await repos.helpDocChunks.clearAllEmbeddings();
     }
 
     const failedHelpDocIds = await failedIdsFor('HELP_DOC');
-    for (const doc of allHelpDocs) {
-      if (scope === 'mismatched-dim' && embeddingMatchesDim(doc.embedding, mismatchedTargetDim!)) {
-        helpDocsSkipped++;
-        continue;
-      }
-      if (failedHelpDocIds.has(doc.id)) {
-        failedSkipped++;
-        continue;
-      }
-      jobRecords.push(buildJobRecord(job.userId, {
-        entityType: 'HELP_DOC',
-        entityId: doc.id,
-        profileId: payload.profileId,
-      }));
-      helpDocCount++;
-    }
+    const helpDocs = enqueue('HELP_DOC', allHelpDocs, failedHelpDocIds);
+    helpDocCount += helpDocs.enqueued;
+    helpDocsSkipped += helpDocs.skippedDim;
   } catch (error) {
     logger.error('[EmbeddingReindexAll] Failed to process help docs', {
       context: 'handleEmbeddingReindexAll',
@@ -234,24 +260,11 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
   const failedMemoryIds = await failedIdsFor('MEMORY');
   for (const characterId of memoryCharacterIds) {
     const characterMemories = await repos.memories.findByCharacterId(characterId);
-
-    for (const memory of characterMemories) {
-      if (scope === 'mismatched-dim' && embeddingMatchesDim(memory.embedding, mismatchedTargetDim!)) {
-        memoriesSkipped++;
-        continue;
-      }
-      if (failedMemoryIds.has(memory.id)) {
-        failedSkipped++;
-        continue;
-      }
-      jobRecords.push(buildJobRecord(job.userId, {
-        entityType: 'MEMORY',
-        entityId: memory.id,
-        characterId: memory.characterId,
-        profileId: payload.profileId,
-      }));
-      memoryCount++;
-    }
+    const memories = enqueue('MEMORY', characterMemories, failedMemoryIds, (memory) => ({
+      characterId: memory.characterId,
+    }));
+    memoryCount += memories.enqueued;
+    memoriesSkipped += memories.skippedDim;
   }
 
   // ============================================================================
@@ -270,24 +283,11 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
       }
 
       const chunks = await repos.conversationChunks.findByChatId(chat.id);
-
-      for (const chunk of chunks) {
-        if (scope === 'mismatched-dim' && embeddingMatchesDim(chunk.embedding, mismatchedTargetDim!)) {
-          chunksSkipped++;
-          continue;
-        }
-        if (failedChunkIds.has(chunk.id)) {
-          failedSkipped++;
-          continue;
-        }
-        jobRecords.push(buildJobRecord(job.userId, {
-          entityType: 'CONVERSATION_CHUNK',
-          entityId: chunk.id,
-          chatId: chat.id,
-          profileId: payload.profileId,
-        }));
-        chunkCount++;
-      }
+      const conversationChunks = enqueue('CONVERSATION_CHUNK', chunks, failedChunkIds, () => ({
+        chatId: chat.id,
+      }));
+      chunkCount += conversationChunks.enqueued;
+      chunksSkipped += conversationChunks.skippedDim;
     }
   } catch (error) {
     logger.error('[EmbeddingReindexAll] Failed to process conversation chunks', {
@@ -307,23 +307,9 @@ export async function handleEmbeddingReindexAll(job: BackgroundJob): Promise<voi
 
     for (const mountPoint of mountPoints) {
       const chunks = await repos.docMountChunks.findByMountPointId(mountPoint.id);
-
-      for (const chunk of chunks) {
-        if (scope === 'mismatched-dim' && embeddingMatchesDim(chunk.embedding, mismatchedTargetDim!)) {
-          mountChunksSkipped++;
-          continue;
-        }
-        if (failedMountChunkIds.has(chunk.id)) {
-          failedSkipped++;
-          continue;
-        }
-        jobRecords.push(buildJobRecord(job.userId, {
-          entityType: 'MOUNT_CHUNK',
-          entityId: chunk.id,
-          profileId: payload.profileId,
-        }));
-        mountChunkCount++;
-      }
+      const mountChunks = enqueue('MOUNT_CHUNK', chunks, failedMountChunkIds);
+      mountChunkCount += mountChunks.enqueued;
+      mountChunksSkipped += mountChunks.skippedDim;
     }
   } catch (error) {
     logger.error('[EmbeddingReindexAll] Failed to process document mount chunks', {

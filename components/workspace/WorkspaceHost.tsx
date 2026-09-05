@@ -124,7 +124,7 @@ export function WorkspaceHost() {
               if (state.focusedPane !== pane) setFocusedPane(pane)
             }}
           >
-            <TabView tab={tab} active={mounted} />
+            <TabView tab={tab} active={mounted} visible={visible} />
           </div>
         )
       })}

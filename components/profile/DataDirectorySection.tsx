@@ -100,7 +100,7 @@ export function DataDirectorySection() {
           <h2 className="text-xl font-semibold">Data Directory</h2>
         </div>
         <div className="qt-card-content">
-          <div className="qt-text-error text-sm">
+          <div className="qt-text-destructive text-sm">
             {error || 'Unable to load data directory information'}
           </div>
         </div>
@@ -157,7 +157,7 @@ export function DataDirectorySection() {
 
         {/* Action buttons and messages */}
         {error && (
-          <div className="qt-text-error text-sm">{error}</div>
+          <div className="qt-text-destructive text-sm">{error}</div>
         )}
 
         {dirInfo.canOpen ? (

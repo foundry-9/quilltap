@@ -3,7 +3,8 @@
 import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import type { CandidateItem, CandidateGroup } from './types'
-import { GROUP_LABEL, GROUP_ORDER, TYPE_BADGE_CLASS } from './constants'
+import { GROUP_LABEL, GROUP_ORDER } from './constants'
+import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 
 interface WardrobeComponentPickerProps {
   effectiveTypes: WardrobeItemType[]
@@ -68,7 +69,7 @@ export function WardrobeComponentPicker({
             effectiveTypes.map((t) => (
               <span
                 key={t}
-                className={`qt-badge ${TYPE_BADGE_CLASS[t]} uppercase`}
+                className={`qt-badge ${WARDROBE_SLOT_META[t].badgeClass} uppercase`}
               >
                 {t}
               </span>

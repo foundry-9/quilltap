@@ -9,6 +9,7 @@
  *   name: Optional Display Name        # overrides filename (without .md) as the title
  *   description: Optional subtitle      # one-line summary shown in the new-chat dropdown
  *   isDefault: true                     # marks this as the group default (one wins)
+ *   archived: true                      # hidden from lists unless "Show archived"
  *   ---
  *   <body — the scenario content delivered to the LLM>
  *
@@ -61,12 +62,13 @@ export async function ensureGroupKnowledgeFolder(
  * List all `Scenarios/*.md` files in a group's official store, parsed and
  * sorted alphabetically by path. Multiple `isDefault: true` entries resolve
  * to the alphabetically-first; the others are demoted and a warning is
- * returned.
+ * returned. Archived scenarios are omitted unless `options.includeArchived`.
  */
 export async function listGroupScenarios(
   mountPointId: string,
+  options: { includeArchived?: boolean } = {},
 ): Promise<ListGroupScenariosResult> {
-  return listScenariosInFolder(mountPointId, GROUP_SCENARIOS_FOLDER);
+  return listScenariosInFolder(mountPointId, GROUP_SCENARIOS_FOLDER, options);
 }
 
 /**

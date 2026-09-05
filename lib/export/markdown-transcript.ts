@@ -39,8 +39,19 @@ import { BRAHMA_CARINA_ANSWERER_ID } from '@/lib/services/carina/brahma-answerer
 import type { ChatMetadata, ChatEvent, MessageEvent, ChatParticipant } from '@/lib/schemas/chat.types';
 import type { TimestampConfig } from '@/lib/schemas/types';
 
-/** Host notices that record where a conversation came from or moved to. */
-const HOST_LINK_KINDS = new Set(['continuation-from', 'continuation-to', 'merge-from', 'merge-to']);
+/**
+ * Host notices a reader needs: where the conversation came from or moved to,
+ * and any mid-transcript revision of the scene. The header prints whatever
+ * scene is in force at export time, so without the revision notices a reader
+ * would see the story relocate with nothing to mark the move.
+ */
+const HOST_LINK_KINDS = new Set([
+  'continuation-from',
+  'continuation-to',
+  'merge-from',
+  'merge-to',
+  'scenario-change',
+]);
 
 export interface MarkdownTranscriptInput {
   chat: ChatMetadata;

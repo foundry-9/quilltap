@@ -11,9 +11,8 @@
 # QUILLTAP_TIMEZONE. A container that sets only one of the pair therefore ends up half
 # on the user's clock and half on UTC.
 #
-# So: whichever is set fills in the other, and QUILLTAP_TIMEZONE wins when both are —
-# matching what lima/wsl-init.sh already does for the Lima and WSL2 shells. No tzdata
-# package is required; Node resolves TZ through its bundled ICU.
+# So: whichever is set fills in the other, and QUILLTAP_TIMEZONE wins when both are.
+# No tzdata package is required; Node resolves TZ through its bundled ICU.
 if [ -n "${QUILLTAP_TIMEZONE:-}" ]; then
   export TZ="$QUILLTAP_TIMEZONE"
 elif [ -n "${TZ:-}" ]; then

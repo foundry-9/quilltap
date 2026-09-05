@@ -89,6 +89,8 @@ export type {
 
 export {
   OpenAICompatibleProvider,
+  applyProfileParameters,
+  collapseLeadingSystemMessages,
   DEFAULT_REQUEST_TIMEOUT_MS,
   resolveRequestTimeoutMs,
   buildSdkRequestOptions,
@@ -98,6 +100,7 @@ export {
 
 export type {
   OpenAICompatibleProviderConfig,
+  ProfileParamNormalizer,
 } from './providers';
 
 // ============================================================================

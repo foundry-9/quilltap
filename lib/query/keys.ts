@@ -32,12 +32,39 @@ export const queryKeys = {
   },
   chats: {
     all: ['chats'] as const,
+    /**
+     * Prefix of every `list(filters)` key — invalidates the collection reads
+     * (all filter variants) without touching per-chat detail/state/background,
+     * which open Salon tabs hold live around a possible in-flight stream.
+     */
+    lists: ['chats', 'list'] as const,
     list: (filters?: Filters) => ['chats', 'list', filters ?? {}] as const,
     detail: (id: string) => ['chats', 'detail', id] as const,
     state: (id: string) => ['chats', id, 'state'] as const,
     photoAlbums: (id: string) => ['chats', id, 'photo-albums'] as const,
     groupStores: (id: string) => ['chats', id, 'group-stores'] as const,
     background: (id: string) => ['chats', id, 'background'] as const,
+  },
+  /**
+   * Scenario option lists, per tier. Read by the New Chat dialog and the
+   * Salon sidebar's in-chat picker; the files behind them live in document
+   * stores, so these are cached per scope rather than per chat.
+   *
+   * `includeArchived` is part of every key: the two lists are different
+   * server responses, not one list filtered two ways, so they must not share
+   * a cache entry. Prefix invalidation on `scenarios.all` still sweeps both.
+   */
+  scenarios: {
+    all: ['scenarios'] as const,
+    general: (includeArchived = false) =>
+      ['scenarios', 'general', { includeArchived }] as const,
+    project: (projectId: string, includeArchived = false) =>
+      ['scenarios', 'project', projectId, { includeArchived }] as const,
+    /** Keyed by the comma-joined, sorted character IDs the groups derive from. */
+    group: (characterIdsKey: string, includeArchived = false) =>
+      ['scenarios', 'group', characterIdsKey, { includeArchived }] as const,
+    character: (characterId: string, includeArchived = false) =>
+      ['scenarios', 'character', characterId, { includeArchived }] as const,
   },
   groups: {
     all: ['groups'] as const,
@@ -48,6 +75,8 @@ export const queryKeys = {
     textReplacements: ['settings', 'text-replacements'] as const,
     generalState: ['settings', 'general-state'] as const,
     taboo: ['settings', 'taboo'] as const,
+    dataRetention: ['settings', 'data-retention'] as const,
+    brahmaConsole: ['settings', 'brahma-console'] as const,
   },
   connectionProfiles: {
     all: ['connection-profiles'] as const,
@@ -57,6 +86,9 @@ export const queryKeys = {
   },
   imageProfiles: {
     all: ['image-profiles'] as const,
+    /** The per-model options schema + LoRA support flag the profile editor renders from. */
+    optionsSchema: (provider: string, model: string) =>
+      ['image-profiles', 'options-schema', provider, model] as const,
   },
   providers: {
     all: ['providers'] as const,
@@ -76,9 +108,17 @@ export const queryKeys = {
     recent: (limit: number) => ['llm-logs', 'recent', limit] as const,
   },
   system: {
+    /**
+     * The background-activity snapshot behind the toolbar chips
+     * (`GET /api/v1/system/jobs`). Shares the `jobs` realtime topic with
+     * `tasksQueue`, which reads the same queue from a different angle.
+     */
+    jobs: ['system', 'jobs'] as const,
     tasksQueue: ['system', 'tasks-queue'] as const,
     capabilitiesReports: ['system', 'capabilities-reports'] as const,
     autonomousRooms: ['system', 'autonomous-rooms'] as const,
+    /** Fan-out status of the conversation-summary regeneration sweep. */
+    conversationSummaryRegenerate: ['system', 'conversation-summary-regenerate'] as const,
     dataDir: ['system', 'data-dir'] as const,
     unlock: ['system', 'unlock'] as const,
   },
@@ -109,6 +149,26 @@ export const queryKeys = {
       ['custom-tools', 'presets', vaultMountPointId, toolName] as const,
     /** The Workbench save-target list, grouped by attachment. */
     destinations: () => ['custom-tools', 'destinations'] as const,
+    /**
+     * One `.tool.json` as the Workbench editor opened it (content + mtime);
+     * `'new'` stands in for an unsaved draft so the key shape stays uniform.
+     */
+    file: (source: { mountPointId: string; path: string } | null) =>
+      source
+        ? (['custom-tools', 'file', source.mountPointId, source.path] as const)
+        : (['custom-tools', 'file', 'new'] as const),
+  },
+  /**
+   * The Commonplace Book's housekeeping reads (`/api/v1/memories?action=…`):
+   * fan-out job status plus the two config documents the settings cards edit.
+   */
+  memories: {
+    all: ['memories'] as const,
+    regenerateStatus: ['memories', 'regenerate-status'] as const,
+    backfillProgress: ['memories', 'backfill-progress'] as const,
+    recallConfig: ['memories', 'recall-config'] as const,
+    housekeepingConfig: ['memories', 'housekeeping-config'] as const,
+    characterMemoryCounts: ['memories', 'character-memory-counts'] as const,
   },
   userProfile: {
     detail: ['user', 'profile'] as const,

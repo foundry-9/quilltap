@@ -20,6 +20,7 @@ export {
   getJobStatus,
   getQueueStats,
   getActiveCountsByType,
+  getActivitySnapshot,
   cancelJob,
   getPendingJobsForChat,
   cleanupOldJobs,

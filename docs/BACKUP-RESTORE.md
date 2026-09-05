@@ -35,8 +35,30 @@ The backup creates a ZIP file containing:
 - LLM request/response logs
 - Plugin configurations (per-plugin settings)
 - Provider model cache
-- Wardrobe items and outfit presets
+- Chat settings (the per-user display/behaviour settings record)
+- Instance settings (every `instance_settings` key/value row, including the
+  mount-point ids that runtime routing depends on)
+- Text replacement rules (the global find→replace list)
 - Folder structure
+
+**Document stores (the Scriptorium)**
+- Mount points, their folder hierarchy, file and content rows, and hard links
+- Database-backed document text, and binary blobs (staged as loose files under
+  `mount-blobs/` rather than base64-inflated into JSON)
+- Project ↔ store and group ↔ store associations
+- This is where vault-first content travels: character fields, scenarios,
+  knowledge, and **wardrobe items** are `Wardrobe/*.md` and `Scenarios/*.md`
+  documents in a store, not rows of their own. (The `wardrobe_items` and
+  `outfit_presets` tables were dropped in 4.7 and 4.5 respectively.)
+
+**Document Mode**
+- Per-chat Document Mode pane state
+
+**Embeddings** (omitted wholesale in *compact* mode, which flags the archive so
+a restore queues a full re-index)
+- Memory embeddings, per-character vector indices and vector entries
+- Conversation chunks and document-store chunks
+- TF-IDF vocabularies and per-entity embedding sync flags
 
 **Files**
 - All uploaded files (images, documents, attachments)
@@ -51,8 +73,16 @@ The backup creates a ZIP file containing:
 - Bundled/built-in themes are not included (they ship with the app)
 
 **Not included**
-- API key values (encrypted with user-specific keys; must be re-entered after restore)
+- API key values (encrypted with user-specific keys; must be re-entered after
+  restore). This is the only category withheld for secrecy — everything else
+  left out is either regenerable or meaningless on another instance.
 - Previous backup files (to avoid recursion)
+- Help documentation (`help_docs` and `help_doc_chunks`) — shipped with the
+  app and rebuilt from disk at startup whenever a document's content hash
+  changes, so restoring a copy would only pin stale text
+- The background job queue and terminal sessions — transient runtime state
+- `migrations_state` / `migrations_metadata` — the receiving instance keeps its
+  own migration history
 
 ### API Endpoints
 

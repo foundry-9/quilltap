@@ -51,6 +51,17 @@ export interface SearchVaultConversationSummariesOptions {
   userId: string
   /** Embedding profile override (falls back to the user default). */
   embeddingProfileId?: string | null
+  /**
+   * Vector already embedded for `query` by an earlier step of the same turn
+   * (the memory search — see `captureQueryEmbedding` in
+   * `lib/memory/memory-service.ts`). When supplied, this search reuses it
+   * verbatim instead of paying a second embedding call, which is what makes
+   * the per-turn cadence affordable. MUST be the vector for this exact query
+   * text, from the same embedding profile the corpus was indexed with —
+   * a mismatched dimension is caught by the document-search guard and yields
+   * an empty list rather than nonsense.
+   */
+  precomputedEmbedding?: Float32Array | null
   /** Max conversations to return. Default 10. */
   limit?: number
   /** Minimum cosine score (defaults to searchDocumentChunks' default). */
@@ -87,22 +98,27 @@ export async function searchVaultConversationSummaries(
   const vault = await getCharacterVaultStore(characterId)
   if (!vault) return []
 
-  // Embed the query. A dead embedding provider simply yields no relevant list.
+  // Embed the query — unless the caller already did, in which case that vector
+  // is reused. A dead embedding provider simply yields no relevant list.
   let queryEmbedding
-  try {
-    const result = await generateEmbeddingForUser(
-      trimmedQuery,
-      userId,
-      embeddingProfileId ?? undefined,
-    )
-    queryEmbedding = result.embedding
-  } catch (error) {
-    logger.warn('Failed to embed query for vault conversation search', {
-      context: 'memory.conversation-summary-search',
-      characterId,
-      error: error instanceof Error ? error.message : String(error),
-    })
-    return []
+  if (options.precomputedEmbedding) {
+    queryEmbedding = options.precomputedEmbedding
+  } else {
+    try {
+      const result = await generateEmbeddingForUser(
+        trimmedQuery,
+        userId,
+        embeddingProfileId ?? undefined,
+      )
+      queryEmbedding = result.embedding
+    } catch (error) {
+      logger.warn('Failed to embed query for vault conversation search', {
+        context: 'memory.conversation-summary-search',
+        characterId,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      return []
+    }
   }
 
   let chunks
@@ -209,6 +225,17 @@ export async function searchVaultConversationSummaries(
  */
 export const READ_CONVERSATION_CALL_NOTE =
   '_Pass any of the conversation IDs above (in backticks) to the `read_conversation` tool to revisit the full transcript._'
+
+/**
+ * How long a relevant-past-conversations list may run, ramped against the
+ * connection profile's `maxContext` via `rampLimit` (3 entries at 4K, 10 at
+ * 32K). Shared by the fold-triggered refresh and the per-turn cadence so a
+ * list does not change length depending on which cadence produced it.
+ */
+export const RELEVANT_CONVERSATIONS_MIN = 3
+export const RELEVANT_CONVERSATIONS_MAX = 10
+export const RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS = 4000
+export const RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS = 32000
 
 /**
  * Render the `### Relevant Past Conversations` markdown block (entries only, no

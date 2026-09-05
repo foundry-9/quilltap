@@ -5,6 +5,8 @@
  *                                   "Quilltap General" mount's `Scenarios/`
  *                                   folder, with frontmatter parsed and
  *                                   default-conflict resolution applied.
+ *                                   `?includeArchived=true` also returns
+ *                                   archived scenarios (hidden by default).
  * POST /api/v1/scenarios          — create a new scenario file.
  *                                   Body: { filename, name?, description?,
  *                                   isDefault?, body }.
@@ -21,35 +23,25 @@ import type { RequestContext } from '@/lib/api/middleware/context';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
 import { badRequest, serverError, created } from '@/lib/api/responses';
+import { readIncludeArchived } from '@/lib/api/query-params';
 import {
   ensureGeneralScenariosFolder,
   listGeneralScenarios,
   setGeneralScenarioDefault,
   GENERAL_SCENARIOS_FOLDER,
 } from '@/lib/mount-index/general-scenarios';
-import { buildScenarioFileContent } from '@/lib/mount-index/scenarios-common';
+import { buildScenarioFileContent, createScenarioSchema } from '@/lib/mount-index/scenarios-common';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import { sanitizeFileName } from '@/lib/mount-index/character-vault';
-
-// ============================================================================
-// Schemas
-// ============================================================================
-
-const createScenarioSchema = z.object({
-  filename: z.string().min(1).max(100),
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().max(500).optional(),
-  isDefault: z.boolean().optional(),
-  body: z.string().min(1, 'Scenario body cannot be empty'),
-});
 
 // ============================================================================
 // GET — list scenarios
 // ============================================================================
 
 export const GET = createContextHandler(
-  async (_req: NextRequest, _ctx: RequestContext) => {
+  async (req: NextRequest, _ctx: RequestContext) => {
     try {
+      const includeArchived = readIncludeArchived(req);
       const ensured = await ensureGeneralScenariosFolder();
       if (!ensured.mountPointId) {
         // Pre-migration race: report empty list rather than 500.
@@ -59,7 +51,7 @@ export const GET = createContextHandler(
           warnings: [],
         });
       }
-      const { mountPointId, scenarios, warnings } = await listGeneralScenarios();
+      const { mountPointId, scenarios, warnings } = await listGeneralScenarios({ includeArchived });
       return NextResponse.json({ mountPointId, scenarios, warnings });
     } catch (error) {
       logger.error(
@@ -77,7 +69,7 @@ export const GET = createContextHandler(
 // ============================================================================
 
 export const POST = createContextHandler(
-  async (req: NextRequest, { user }: RequestContext) => {
+  async (req: NextRequest, { user, repos }: RequestContext) => {
     try {
       const body = await req.json();
       const validated = createScenarioSchema.parse(body);
@@ -94,8 +86,6 @@ export const POST = createContextHandler(
       }
       const relativePath = `${GENERAL_SCENARIOS_FOLDER}/${cleanedFilename}.md`;
 
-      const { getRepositories } = await import('@/lib/repositories/factory');
-      const repos = getRepositories();
       const existing = await repos.docMountDocuments.findByMountPointAndPath(
         mountPointId,
         relativePath,
@@ -108,6 +98,7 @@ export const POST = createContextHandler(
         name: validated.name,
         description: validated.description,
         isDefault: validated.isDefault,
+        archived: validated.archived,
         body: validated.body,
       });
 
@@ -124,7 +115,7 @@ export const POST = createContextHandler(
         isDefault: validated.isDefault === true,
       });
 
-      const fresh = await listGeneralScenarios();
+      const fresh = await listGeneralScenarios({ includeArchived: validated.archived === true });
       return created({
         mountPointId: fresh.mountPointId,
         path: relativePath,

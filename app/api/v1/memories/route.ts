@@ -122,6 +122,7 @@ const extractionLimitsConfigSchema = z.object({
 const recallConfigSchema = z.object({
   scopePolicy: z.enum(['down-weight', 'exclude']).optional(),
   expandRelated: z.boolean().optional(),
+  perTurnConversationSummaries: z.boolean().optional(),
 });
 
 const backfillStartSchema = z.object({
@@ -826,6 +827,8 @@ async function handleWriteRecallConfig(
   const merged = {
     scopePolicy: parsed.data.scopePolicy ?? currentSettings.scopePolicy,
     expandRelated: parsed.data.expandRelated ?? currentSettings.expandRelated,
+    perTurnConversationSummaries:
+      parsed.data.perTurnConversationSummaries ?? currentSettings.perTurnConversationSummaries,
   };
 
   await setMemoryRecallSettings(merged);
@@ -833,6 +836,7 @@ async function handleWriteRecallConfig(
   logger.info('[Memories API] Recall settings updated (instance-wide)', {
     scopePolicy: merged.scopePolicy,
     expandRelated: merged.expandRelated,
+    perTurnConversationSummaries: merged.perTurnConversationSummaries,
   });
 
   return NextResponse.json({ success: true, settings: merged });

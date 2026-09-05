@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 // Build-time overlay for the Next.js standalone tree.
 //
-// Compiles our custom server entry, the dynamically-loaded terminal WS handler,
-// and the forked background-job child entry into a target standalone directory,
-// then drops the shared bootstrap shim over Next's auto-generated server.js.
+// Compiles our custom server entry, each dynamically-loaded WebSocket handler
+// (terminal PTY stream, realtime invalidation stream), and the forked
+// background-job child entry into a target standalone directory, then drops the
+// shared bootstrap shim over Next's auto-generated server.js.
 //
 // Single source of truth for esbuild flags + the child's externals list.
 // Used by:
 //   - Dockerfile                                    (local docker build)
 //   - .github/workflows/release.yml :: build-app    (published images)
-//   - scripts/build-standalone-tarball.ts           (npx quilltap / shell+direct)
+//   - scripts/build-standalone-tarball.mjs           (npx quilltap / shell+direct)
 //
 // Usage: node scripts/build-standalone-overlay.mjs [targetDir]
 //   targetDir defaults to <projectRoot>/.next/standalone
@@ -65,17 +66,26 @@ function run(cmd, label) {
 
 const serverImpl = join(TARGET_DIR, 'server-impl.js');
 const wsOut = join(TARGET_DIR, 'lib', 'terminal', 'ws.js');
+// Every WebSocket handler server.ts lazy-imports needs its own bundle here.
+// Miss one and it works in dev and vanishes from the tarball — the failure
+// mode is silent, since the upgrade simply falls through to Next.
+const realtimeWsOut = join(TARGET_DIR, 'lib', 'realtime', 'ws.js');
 const childOut = join(TARGET_DIR, 'lib', 'background-jobs', 'child', 'child-entry.js');
 ensureParent(wsOut);
+ensureParent(realtimeWsOut);
 ensureParent(childOut);
 
 run(
-  `npx esbuild server.ts ${ESBUILD_SERVER} --external:./lib/terminal/ws --outfile="${serverImpl}"`,
+  `npx esbuild server.ts ${ESBUILD_SERVER} --external:./lib/terminal/ws --external:./lib/realtime/ws --outfile="${serverImpl}"`,
   'esbuild server.ts -> server-impl.js',
 );
 run(
   `npx esbuild lib/terminal/ws.ts ${ESBUILD_SERVER} --outfile="${wsOut}"`,
   'esbuild lib/terminal/ws.ts -> lib/terminal/ws.js',
+);
+run(
+  `npx esbuild lib/realtime/ws.ts ${ESBUILD_SERVER} --outfile="${realtimeWsOut}"`,
+  'esbuild lib/realtime/ws.ts -> lib/realtime/ws.js',
 );
 run(
   `npx esbuild lib/background-jobs/child/child-entry.ts ${ESBUILD_CHILD} ${CHILD_NATIVE_EXTERNALS} --outfile="${childOut}"`,

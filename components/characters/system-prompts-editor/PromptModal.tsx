@@ -2,6 +2,8 @@
 
 import { BaseModal } from '@/components/ui/BaseModal'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
+import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import { CharacterSystemPrompt, PromptFormData } from './types'
 
 interface PromptModalProps {
@@ -69,12 +71,12 @@ export function PromptModal({
         </div>
 
         <div>
-          <label className="qt-label">
-            Content *
-          </label>
-          <p className="qt-text-xs mt-1 mb-2">
-            Supports Markdown formatting. Use {'{{char}}'} and {'{{user}}'} for character/user name substitution.
-          </p>
+          <PromptFieldLabel
+            hint={PROMPT_FIELD_HINTS.systemPrompt}
+            label="Content"
+            required
+            helper={`${PROMPT_FIELD_HINTS.systemPrompt.helper} Markdown is supported, and {{char}} / {{user}} substitute the character and user names.`}
+          />
           <MarkdownLexicalEditor
             value={formData.content}
             onChange={(value) => onFormChange('content', value)}

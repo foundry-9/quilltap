@@ -18,7 +18,9 @@ import {
   isMultiCharacterChat,
   computeSpokenThisCycleAfterMessage,
   computeSpokenThisCycleAfterSkip,
+  getPresentCharacterSeats,
 } from '@/lib/chat/turn-manager'
+import { hasWhisperTargets } from '@/lib/schemas/chat.types'
 import type { ChatParticipantBase, Character, MessageEvent } from '@/lib/schemas/types'
 
 const now = new Date().toISOString()
@@ -1001,5 +1003,35 @@ describe('selectNextSpeakerAfterUserMessage — fair rotation with 2+ user-drive
     )
     expect(result.nextSpeakerId).toBe('kumar')
     expect(result.reason).toBe('queue')
+  })
+})
+
+describe('getPresentCharacterSeats (the one "who is in the scene" predicate)', () => {
+  it('keeps present CHARACTER seats with a characterId, LLM- or user-driven alike', () => {
+    const participants = [
+      makeCharacterParticipant('p-active', 'c1'),
+      makeCharacterParticipant('p-silent', 'c2', { status: 'silent' }),
+      makeUserControlledParticipant('p-user', 'c3'),
+    ]
+    expect(getPresentCharacterSeats(participants).map(p => p.id)).toEqual(['p-active', 'p-silent', 'p-user'])
+  })
+
+  it('drops absent and removed seats, and seats with no characterId', () => {
+    const participants = [
+      makeCharacterParticipant('p-absent', 'c1', { status: 'absent' }),
+      makeCharacterParticipant('p-removed', 'c2', { status: 'removed' }),
+      makeCharacterParticipant('p-no-char', '', { characterId: '' as unknown as string }),
+      makeCharacterParticipant('p-ok', 'c4'),
+    ]
+    expect(getPresentCharacterSeats(participants).map(p => p.id)).toEqual(['p-ok'])
+  })
+})
+
+describe('hasWhisperTargets', () => {
+  it('is true only for a non-empty targetParticipantIds array', () => {
+    expect(hasWhisperTargets({ ...makeMessage('m1', 'USER', 'p1'), targetParticipantIds: ['p2'] })).toBe(true)
+    expect(hasWhisperTargets({ ...makeMessage('m2', 'USER', 'p1'), targetParticipantIds: [] })).toBe(false)
+    expect(hasWhisperTargets({ ...makeMessage('m3', 'USER', 'p1'), targetParticipantIds: null })).toBe(false)
+    expect(hasWhisperTargets(makeMessage('m4', 'USER', 'p1'))).toBe(false)
   })
 })

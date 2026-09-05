@@ -218,25 +218,6 @@ export function listFolders(files: FileEntry[]): string[] {
 }
 
 /**
- * Join path segments into a folder path.
- *
- * @param segments - Path segments to join
- * @returns Normalized folder path
- *
- * @example
- * joinFolderPath("documents", "reports") // returns "/documents/reports/"
- * joinFolderPath("/documents/", "reports") // returns "/documents/reports/"
- */
-export function joinFolderPath(...segments: string[]): string {
-  const joined = '/' + segments
-    .map(s => s.replace(/^\/+|\/+$/g, '')) // Remove leading/trailing slashes
-    .filter(Boolean)
-    .join('/');
-
-  return normalizeFolderPath(joined);
-}
-
-/**
  * Folder segments that contain auto-generated images (avatars, story backgrounds).
  * Used by doc_list_files to suppress noise by default.
  */

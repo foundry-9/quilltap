@@ -178,7 +178,10 @@ describe('Compression Cache Service', () => {
       expect(mockApplyContextCompression).toHaveBeenCalledWith(
         options.messages,
         options.systemPrompt,
-        options.compressionOptions
+        // Pre-computation runs after the turn is already delivered, so it gets
+        // the generous budget — the tight one belongs to the inline call the
+        // operator is waiting on (bug 107).
+        { ...options.compressionOptions, latency: 'background' }
       )
       expect(getCompressionCacheStats().size).toBe(1)
     })

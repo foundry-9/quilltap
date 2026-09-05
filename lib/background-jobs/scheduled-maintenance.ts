@@ -151,8 +151,30 @@ async function runStartupMaintenanceTick(): Promise<void> {
 }
 
 /**
+ * Run one sweep and record its result through `apply`. A throw is swallowed —
+ * logged under `warnMessage` and pushed onto `summary.failures` as `key` — so
+ * a failing sweep can never abort the ones after it.
+ */
+async function runSweep<T>(
+  summary: MaintenanceSweepSummary,
+  key: string,
+  warnMessage: string,
+  sweep: () => Promise<T>,
+  apply: (result: T) => void,
+): Promise<void> {
+  try {
+    apply(await sweep());
+  } catch (error) {
+    summary.failures.push(key);
+    moduleLogger.warn(warnMessage, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+/**
  * One maintenance pass. Each sweep is run in order and independently
- * try/caught, so a failure in one cannot abort the rest. The
+ * try/caught (see {@link runSweep}), so a failure in one cannot abort the rest. The
  * `lastMaintenanceSweepAt` timestamp is recorded at the end (the tick ran) so
  * the startup short-circuit works across dev restarts.
  */
@@ -177,92 +199,58 @@ export async function runScheduledMaintenance(): Promise<MaintenanceSweepSummary
   };
 
   // 1. Finished background jobs (COMPLETED short window, DEAD longer window).
-  try {
-    summary.jobs = await cleanupFinishedJobs();
-  } catch (error) {
-    summary.failures.push('jobs');
-    moduleLogger.warn('Job cleanup sweep failed — continuing', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  await runSweep(summary, 'jobs', 'Job cleanup sweep failed — continuing',
+    () => cleanupFinishedJobs(),
+    (result) => { summary.jobs = result; });
 
   // 2. Stale-chat asset collapse.
-  try {
-    const result = await collapseStaleChatAssets();
-    summary.assets = {
-      staleChats: result.staleChats,
-      chatsCollapsed: result.chatsCollapsed,
-      filesDeleted: result.filesDeleted,
-    };
-  } catch (error) {
-    summary.failures.push('assets');
-    moduleLogger.warn('Stale-chat asset collapse failed — continuing', {
-      error: error instanceof Error ? error.message : String(error),
+  await runSweep(summary, 'assets', 'Stale-chat asset collapse failed — continuing',
+    () => collapseStaleChatAssets(),
+    (result) => {
+      summary.assets = {
+        staleChats: result.staleChats,
+        chatsCollapsed: result.chatsCollapsed,
+        filesDeleted: result.filesDeleted,
+      };
     });
-  }
 
   // 3. Stale-chat cache collapse + conversation-chunk cold-tiering.
-  try {
-    const result = await collapseStaleChatCaches();
-    summary.caches = {
-      staleChats: result.staleChats,
-      chatsCollapsed: result.chatsCollapsed,
-      chatRowsCleared: result.chatRowsCleared,
-      messageRowsCleared: result.messageRowsCleared,
-      chunkEmbeddingsCleared: result.chunkEmbeddingsCleared,
-    };
-  } catch (error) {
-    summary.failures.push('caches');
-    moduleLogger.warn('Stale-chat cache collapse failed — continuing', {
-      error: error instanceof Error ? error.message : String(error),
+  await runSweep(summary, 'caches', 'Stale-chat cache collapse failed — continuing',
+    () => collapseStaleChatCaches(),
+    (result) => {
+      summary.caches = {
+        staleChats: result.staleChats,
+        chatsCollapsed: result.chatsCollapsed,
+        chatRowsCleared: result.chatRowsCleared,
+        messageRowsCleared: result.messageRowsCleared,
+        chunkEmbeddingsCleared: result.chunkEmbeddingsCleared,
+      };
     });
-  }
 
   // 4. Orphaned store children — links/folders/documents whose mount point
   //    vanished (a pre-Bug-9 non-atomic delete, or a hand-built index). Run
   //    BEFORE the orphaned-file sweep so a reaped link can drop its file too.
-  try {
-    summary.orphanedStoreChildrenSwept =
-      await getRepositories().docMountFileLinks.sweepOrphanedStoreChildren();
-  } catch (error) {
-    summary.failures.push('orphan-store-children');
-    moduleLogger.warn('Orphaned store-children sweep failed — continuing', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  await runSweep(summary, 'orphan-store-children', 'Orphaned store-children sweep failed — continuing',
+    () => getRepositories().docMountFileLinks.sweepOrphanedStoreChildren(),
+    (result) => { summary.orphanedStoreChildrenSwept = result; });
 
   // 5. Orphaned mount-index files — run AFTER the collapse to mop up stragglers.
-  try {
-    summary.orphanedFilesSwept = await getRepositories().docMountFileLinks.sweepOrphanedFiles();
-  } catch (error) {
-    summary.failures.push('orphans');
-    moduleLogger.warn('Orphaned-file sweep failed — continuing', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  await runSweep(summary, 'orphans', 'Orphaned-file sweep failed — continuing',
+    () => getRepositories().docMountFileLinks.sweepOrphanedFiles(),
+    (result) => { summary.orphanedFilesSwept = result; });
 
   // 6. Closed terminal sessions + transcript files.
-  try {
-    summary.terminals = await getRepositories().terminalSessions.cleanupClosedSessions(
+  await runSweep(summary, 'terminals', 'Terminal-session cleanup failed — continuing',
+    () => getRepositories().terminalSessions.cleanupClosedSessions(
       retentionCutoff(CLOSED_TERMINAL_RETENTION_DAYS),
-    );
-  } catch (error) {
-    summary.failures.push('terminals');
-    moduleLogger.warn('Terminal-session cleanup failed — continuing', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+    ),
+    (result) => { summary.terminals = result; });
 
   // 7. Orphaned thumbnail-cache entries whose source file is gone (derived,
   //    regenerated on demand, so deletion is always safe).
-  try {
-    summary.orphanedThumbnailsSwept = await sweepOrphanedThumbnails();
-  } catch (error) {
-    summary.failures.push('orphan-thumbnails');
-    moduleLogger.warn('Orphaned-thumbnail sweep failed — continuing', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-  }
+  await runSweep(summary, 'orphan-thumbnails', 'Orphaned-thumbnail sweep failed — continuing',
+    () => sweepOrphanedThumbnails(),
+    (result) => { summary.orphanedThumbnailsSwept = result; });
 
   try {
     await setLastMaintenanceSweepAt();

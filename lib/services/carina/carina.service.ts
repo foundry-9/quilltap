@@ -38,6 +38,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { buildIdentityStack, buildPublicIdentityCard } from '@/lib/chat/context/system-prompt-builder';
+import { resolveStandingInstructionsSection } from '@/lib/chat/context/standing-instructions';
+import { processTemplate } from '@/lib/templates/processor';
 import {
   buildTools,
   streamMessage,
@@ -53,6 +55,7 @@ import { supportsCapability } from '@/lib/plugins/provider-registry';
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service';
 import { findCharactersByName } from '@/lib/services/character-resolver';
 import { formatMemoriesForContext } from '@/lib/chat/context/memory-injector';
+import { buildMemorySubjectContext } from '@/lib/memory/memory-subject';
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer';
 import { enqueueCarinaMemoryExtraction } from '@/lib/background-jobs/queue-service';
 import { postCarinaResponse } from './writer';
@@ -220,7 +223,19 @@ async function loadCarinaMemoryRecall(
     });
     if (results.length === 0) return null;
 
-    const formatted = formatMemoriesForContext(results, CARINA_MEMORY_TOKEN_BUDGET, provider);
+    // The search runs over the answerer's whole store, so it surfaces what they
+    // know about other people too — those lines must name their subject or the
+    // answerer reads them as their own life (bug 122).
+    const subject = await buildMemorySubjectContext(
+      characterId,
+      results.map(r => r.memory),
+    );
+    const formatted = formatMemoriesForContext(
+      results,
+      CARINA_MEMORY_TOKEN_BUDGET,
+      provider,
+      subject,
+    );
     if (!formatted.content || formatted.memoriesUsed === 0) return null;
 
     return buildCommonplaceLLMContext({ relevant: formatted.content });
@@ -518,6 +533,19 @@ export async function runCarinaQuery(opts: RunCarinaQueryOptions): Promise<Carin
     });
     if (scenarioText) {
       systemPrompt += `\n\n## Scenario\n${scenarioText}`;
+    }
+    // Standing instructions — the chat's project `instructions` plus the
+    // `instructions` of every group the answerer belongs to. Mirrors the
+    // Salon insertion (identity → world → who's asking → what you remember);
+    // template-processed like the Salon path so `{{char}}` resolves to the
+    // answerer. The resolver fails soft internally (never throws): a broken
+    // store never loses the query.
+    const standingInstructions = await resolveStandingInstructionsSection({
+      projectId: chat.projectId ?? null,
+      characterId: answerer.id,
+    });
+    if (standingInstructions) {
+      systemPrompt += `\n\n${processTemplate(standingInstructions, { char: answerer.name, user: 'User' })}`;
     }
     // Tell the answerer who is consulting them — the surface-level view any
     // character would have of someone addressing them (name/title/pronouns/

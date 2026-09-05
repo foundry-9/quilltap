@@ -18,6 +18,15 @@ jest.mock('@/lib/logger', () => ({
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
+    // The real logger exposes `child`; modules that build a scoped logger at
+    // import time (the realtime bus, reached through the activity registry)
+    // need it present on the mock too.
+    child: jest.fn(() => ({
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    })),
   },
 }));
 

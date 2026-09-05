@@ -9,23 +9,9 @@
 import { NextResponse } from 'next/server';
 import { createContextParamsHandler } from '@/lib/api/middleware';
 import { logger } from '@/lib/logger';
-import { z } from 'zod';
 import { notFound, serverError } from '@/lib/api/responses';
-import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types';
-
-const updateArchetypeSchema = z.object({
-  title: z.string().min(1).optional(),
-  description: z.string().nullable().optional(),
-  /** Plain-text image-generation cue; preferred over title in image prompts. */
-  imagePrompt: z.string().nullable().optional(),
-  types: z.array(WardrobeItemTypeEnum).min(1).optional(),
-  appropriateness: z.string().nullable().optional(),
-  isDefault: z.boolean().optional(),
-  /** Replace this item's composite components (use `[]` to demote to a leaf). */
-  componentItemIds: z.array(z.string()).optional(),
-  /** Composite-only: clear the designated slots on equip instead of layering. */
-  replace: z.boolean().optional(),
-});
+import { updateWardrobeSchema } from '@/lib/schemas/wardrobe.types';
+import { applyArchiveFlag, cleanupEquippedRefs } from '@/lib/wardrobe/item-route-steps';
 
 // GET /api/v1/wardrobe/[itemId]
 export const GET = createContextParamsHandler<{ itemId: string }>(
@@ -58,15 +44,24 @@ export const PUT = createContextParamsHandler<{ itemId: string }>(
     }
 
     const body = await req.json();
-    const validatedData = updateArchetypeSchema.parse(body);
+    const { archived, ...fields } = updateWardrobeSchema.parse(body);
 
-    const item = await repos.wardrobe.update(itemId, validatedData, null);
+    const archivePatch = applyArchiveFlag(existing.archivedAt, archived);
+
+    const item = await repos.wardrobe.update(
+      itemId,
+      { ...fields, ...(archivePatch ?? {}) },
+      null,
+    );
 
     if (!item) {
       return notFound('Archetype wardrobe item');
     }
 
-    logger.info('[Wardrobe Archetypes v1] Archetype item updated', { itemId });
+    logger.info('[Wardrobe Archetypes v1] Archetype item updated', {
+      itemId,
+      ...(archivePatch !== null && { archivedAt: archivePatch.archivedAt }),
+    });
 
     return NextResponse.json({ wardrobeItem: item });
   }
@@ -81,19 +76,7 @@ export const DELETE = createContextParamsHandler<{ itemId: string }>(
         return notFound('Archetype wardrobe item');
       }
 
-      // Clean up references before deleting.
-      // Outfit presets no longer exist as a separate table — composite
-      // wardrobe items may still reference this id in `componentItemIds`,
-      // but `expandComposites` tolerates unknown ids gracefully so any
-      // dangling references are harmless.
-      try {
-        await repos.chats.removeEquippedItemFromAllChats(itemId);
-      } catch (cleanupError) {
-        logger.warn('[Wardrobe Archetypes v1] Cleanup of equipped references had issues, proceeding with delete', {
-          itemId,
-          cleanupError: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-        });
-      }
+      await cleanupEquippedRefs(repos.chats, itemId, '[Wardrobe Archetypes v1]', { itemId });
 
       const success = await repos.wardrobe.delete(itemId, null);
 

@@ -16,7 +16,7 @@ import type {
   WardrobeItem,
   WardrobeItemType,
 } from '@/lib/schemas/wardrobe.types'
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
+import { WARDROBE_SLOT_TYPES, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types'
 
 export interface EquippedBundle {
   /** The composite item's id. */
@@ -98,12 +98,7 @@ export function groupEquippedSlots(
 
   // Pass 3: build slot remainders. Drop bundle composite ids from each slot;
   // anything else (including layered leaves and single-slot composites) stays.
-  const slotRemainders: EquippedSlots = {
-    top: [],
-    bottom: [],
-    footwear: [],
-    accessories: [],
-  }
+  const slotRemainders: EquippedSlots = makeEmptyEquippedSlots()
   for (const slot of WARDROBE_SLOT_TYPES) {
     const ids = slots[slot] ?? []
     slotRemainders[slot] = ids.filter((id) => !bundleIds.has(id))

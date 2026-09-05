@@ -8,6 +8,10 @@ function __quilltap_instance_names
   command quilltap instances list --names-only 2>/dev/null
 end
 
+function __quilltap_mount_names
+  command quilltap docs list --names-only 2>/dev/null
+end
+
 function __quilltap_no_subcommand
   set -l cmd (commandline -opc)
   if test (count $cmd) -lt 2
@@ -157,7 +161,7 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'rmdir' -d 'Rem
 complete -c quilltap -n '__quilltap_using_subcommand docs' -f -a 'mvdir' -d 'Rename or move a folder'
 
 # docs flags
-complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'mount' -d 'Mount name or id' -x
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'mount' -d 'Mount name or id' -x -a '(__quilltap_mount_names)'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'port' -s 'p' -d 'Server port' -x
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'folder' -d 'Folder filter' -x
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'force' -d 'Force operation'
@@ -180,6 +184,9 @@ complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'depth' -d 'Maximu
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'max-nodes' -d 'Maximum graph nodes' -x
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'long' -d 'Long-form output'
 complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'semantic' -d 'Semantic search'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'uri' -d 'Show canonical qtap:// URIs'
+complete -c quilltap -n '__quilltap_using_subcommand docs' -l 'base64' -d 'Base64 transfer for binary files'
+complete -c quilltap -n '__quilltap_using_subverb docs docker-mounts' -l 'format' -d 'Output shape' -x -a 'args json'
 
 # ---------- themes verbs ----------
 complete -c quilltap -n '__quilltap_using_subcommand themes' -f -a 'list' -d 'List themes'
@@ -218,14 +225,26 @@ complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'set-passp
 complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'passphrase' -d 'Set passphrase'
 complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'default' -d 'Set/show/clear default instance'
 complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'rename' -d 'Rename instance'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'restore-key' -d 'Rebuild .dbkey from the pepper'
+complete -c quilltap -n '__quilltap_using_subcommand instances' -f -a 'rebuild-key' -d 'Rebuild .dbkey from the pepper'
 
 # Instance names as positional for verbs that target one
-for verb in show remove rm delete set-passphrase passphrase default rename
+for verb in show remove rm delete set-passphrase passphrase default rename restore-key rebuild-key
   complete -c quilltap -n "__quilltap_using_subverb instances $verb" -f -a '(__quilltap_instance_names)'
 end
 
 complete -c quilltap -n '__quilltap_using_subcommand instances' -l 'names-only' -d 'Print one name per line'
+for verb in list ls
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -l 'json' -d 'JSON output'
+end
 complete -c quilltap -n '__quilltap_using_subverb instances default' -l 'clear' -d 'Clear default instance'
+for verb in restore-key rebuild-key
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -l 'passphrase' -d 'Passphrase for the rebuilt .dbkey'
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -l 'no-passphrase' -d 'Rebuild with no passphrase'
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -s 'd' -l 'data-dir' -r -d 'Instance root to rebuild in'
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -l 'force' -d 'Write with no database to prove against'
+  complete -c quilltap -n "__quilltap_using_subverb instances $verb" -s 'y' -l 'yes' -d 'Skip confirmation prompts'
+end
 
 # ---------- memories verbs ----------
 complete -c quilltap -n '__quilltap_using_subcommand memories' -f -a 'ls' -d 'List memories'

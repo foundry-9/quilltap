@@ -135,11 +135,11 @@ describe('Startup State - Version Guard Block and Instance Lock Conflict', () =>
       startupState.setInstanceLockConflict({
         ...testConflict,
         pid: 99999,
-        environment: 'lima',
+        environment: 'docker',
       });
 
       expect(startupState.getInstanceLockConflict()?.pid).toBe(99999);
-      expect(startupState.getInstanceLockConflict()?.environment).toBe('lima');
+      expect(startupState.getInstanceLockConflict()?.environment).toBe('docker');
     });
   });
 

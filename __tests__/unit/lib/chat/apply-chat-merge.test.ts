@@ -23,6 +23,9 @@ jest.mock('@/lib/services/system-prompt-compiler/compiler', () => ({
 
 jest.mock('@/lib/wardrobe/apply-outfit-selections', () => ({
   applyOutfitSelections: (...args: unknown[]) => mockApplyOutfitSelections(...args),
+}))
+
+jest.mock('@/lib/llm/cheap-llm', () => ({
   buildCheapLLMConfig: (...args: unknown[]) => mockBuildCheapLLMConfig(...args),
 }))
 

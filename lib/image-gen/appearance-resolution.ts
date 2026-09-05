@@ -11,7 +11,11 @@
 import type { PhysicalDescription } from '@/lib/schemas/types'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
-import { describeOutfit } from '@/lib/wardrobe/outfit-description'
+import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types'
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types'
+import { describeOutfit, buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description'
+import { resolveEquippedOutfitForCharacter, type ResolveEquippedRepos } from '@/lib/wardrobe/resolve-equipped'
+import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers'
 import {
   resolveAppearance,
   sanitizeAppearance,
@@ -73,6 +77,45 @@ export interface AppearanceResolutionInput {
   }>
 }
 
+/** Repository surface for {@link equippedWardrobeItemsForAppearance}. */
+interface EquippedWardrobeRepos extends ResolveEquippedRepos {
+  chats: {
+    getEquippedOutfitForCharacter(chatId: string, characterId: string): Promise<EquippedSlots | null>
+  }
+}
+
+/**
+ * Load a character's equipped outfit for a chat and flatten it into the
+ * `equippedWardrobeItems` shape of {@link AppearanceResolutionInput}.
+ *
+ * Equipped slots are arrays-per-slot and may contain composite items;
+ * `resolveEquippedOutfitForCharacter` expands composites and returns per-slot
+ * leaf items. Returns `undefined` when the character has nothing equipped.
+ * Errors propagate — callers own their catch-and-log.
+ */
+export async function equippedWardrobeItemsForAppearance(
+  repos: EquippedWardrobeRepos,
+  chatId: string,
+  characterId: string,
+  projectMountPointIds: string[] | undefined,
+): Promise<AppearanceResolutionInput['equippedWardrobeItems']> {
+  const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId)
+  if (!equippedSlots) return undefined
+  const resolved = await resolveEquippedOutfitForCharacter(
+    repos,
+    characterId,
+    equippedSlots,
+    await sharedWardrobeTiersForCharacter(characterId, projectMountPointIds),
+  )
+  const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = []
+  for (const slot of WARDROBE_SLOT_TYPES) {
+    for (const item of resolved.leafItemsBySlot[slot]) {
+      flat.push({ slot, title: item.title, description: item.description, imagePrompt: item.imagePrompt })
+    }
+  }
+  return flat.length > 0 ? flat : undefined
+}
+
 // ============================================================================
 // APPEARANCE RESOLUTION
 // ============================================================================
@@ -108,16 +151,11 @@ function canSkipResolution(
 function wardrobeItemsToSlotValues(
   items: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }>
 ): import('@/lib/wardrobe/outfit-description').OutfitSlotValues {
-  const valuesFor = (slot: string): string[] =>
+  return buildOutfitSlotValues((slot) =>
     items
       .filter(i => i.slot === slot)
-      .map(i => (i.imagePrompt?.trim() ? i.imagePrompt.trim() : i.title))
-  return {
-    top: valuesFor('top'),
-    bottom: valuesFor('bottom'),
-    footwear: valuesFor('footwear'),
-    accessories: valuesFor('accessories'),
-  }
+      .map(i => (i.imagePrompt?.trim() ? i.imagePrompt.trim() : i.title)),
+  )
 }
 
 /**

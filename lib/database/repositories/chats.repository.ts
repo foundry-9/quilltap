@@ -35,7 +35,7 @@ import { logger } from '@/lib/logger';
 import { TypedQueryFilter, QueryFilter, DatabaseCollection } from '../interfaces';
 import { getDatabaseAsync, getBackendType, ensureCollection } from '../manager';
 import type { EquippedSlots, EquippedOutfitState } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, normalizeEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { ChatOpsContext } from './chats-ops-context';
 import { ChatParticipantsOps } from './chats-participants.ops';
 import { ChatImpersonationOps } from './chats-impersonation.ops';
@@ -551,7 +551,14 @@ export class ChatsRepository extends TaggableBaseRepository<ChatMetadata> {
         if (!chat || !chat.equippedOutfit) {
           return null;
         }
-        return chat.equippedOutfit as EquippedOutfitState;
+        // `equippedOutfit` is unconstrained JSON: rows written before a slot
+        // existed carry fewer keys than `EquippedSlots` declares, and a raw
+        // cast hands readers an `undefined` slot they then iterate. Normalize
+        // on the way out so every consumer sees all five slots.
+        const stored = chat.equippedOutfit as Record<string, unknown>;
+        return Object.fromEntries(
+          Object.entries(stored).map(([characterId, slots]) => [characterId, normalizeEquippedSlots(slots)]),
+        ) as EquippedOutfitState;
       },
       'Failed to get equipped outfit',
       { chatId, context: 'wardrobe' },

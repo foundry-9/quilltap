@@ -36,7 +36,7 @@ import { getMountIndexSQLiteClient, closeMountIndexSQLiteClient } from './mount-
 import { runMountIndexIntegrityCheck, startMountIndexPeriodicCheckpoints } from './mount-index-protection';
 import { acquireInstanceLock, releaseActiveInstanceLock, InstanceLockError } from './instance-lock';
 import { getInstanceLockPath } from '@/lib/paths';
-import { generateDDL, extractSchemaMetadata } from '../../schema-translator';
+import { generateDDL, classifySchemaColumns } from '../../schema-translator';
 import { buildSelectQuery, buildCountQuery, buildUpdateQuery, buildDeleteQuery, translateFilter } from './query-translator';
 import { documentToRow, rowToDocument, toJson, fromJson, fromJsonSafe, blobToEmbedding } from './json-columns';
 import { parseLegacyEmbeddingText } from '@/lib/embedding/float32-conversion';
@@ -750,16 +750,7 @@ export class SQLiteBackend implements DatabaseBackend {
       }
 
       // Detect JSON, array, and boolean columns from schema
-      const metadata = extractSchemaMetadata(name, schema);
-      const jsonColumns = metadata.fields
-        .filter(f => f.type === 'array' || f.type === 'object')
-        .map(f => f.name);
-      const arrayColumns = metadata.fields
-        .filter(f => f.type === 'array')
-        .map(f => f.name);
-      const booleanColumns = metadata.fields
-        .filter(f => f.type === 'boolean')
-        .map(f => f.name);
+      const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(name, schema);
 
       this.collectionJsonColumns.set(name, jsonColumns);
       this.collectionArrayColumns.set(name, arrayColumns);

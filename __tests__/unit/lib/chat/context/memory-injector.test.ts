@@ -19,6 +19,7 @@ import {
   formatMemoriesForContext,
   formatInterCharacterMemoriesForContext,
   formatMemoryMetadataTag,
+  formatMemorySubjectPrefix,
   DYNAMIC_HEAD_TOKEN_BUDGET,
   DYNAMIC_HEAD_DEFAULT_SIZE,
 } from '@/lib/chat/context/memory-injector'
@@ -68,6 +69,15 @@ function searchResult(m: Memory, score: number = 0.8, weight: number = 0.7): Sem
   return { memory: m, score, usedEmbedding: true, effectiveWeight: weight }
 }
 
+/** The owning character in these fixtures — `memory()` stamps this as `characterId`. */
+const SELF_ID = '00000000-0000-0000-0000-0000000000c1'
+
+/**
+ * Default subject context: the memories under test are the character's own, so
+ * every self-facing line renders unprefixed.
+ */
+const SELF_SUBJECT = { selfCharacterId: SELF_ID, characterNames: new Map<string, string>() }
+
 describe('memory-injector: formatFrozenMemoryArchive (Phase 3a)', () => {
   it('emits memories in input order (caller sorts by id)', () => {
     const archive = [
@@ -76,7 +86,7 @@ describe('memory-injector: formatFrozenMemoryArchive (Phase 3a)', () => {
       memory('c-id', 'third archive entry'),
     ]
 
-    const result = formatFrozenMemoryArchive(archive, 1000, provider)
+    const result = formatFrozenMemoryArchive(archive, 1000, provider, SELF_SUBJECT)
 
     expect(result.memoriesUsed).toBe(3)
     expect(result.content).toContain('## Memory Anchors')
@@ -93,13 +103,13 @@ describe('memory-injector: formatFrozenMemoryArchive (Phase 3a)', () => {
       memory('b', 'bravo'),
       memory('c', 'charlie'),
     ]
-    const a = formatFrozenMemoryArchive(archive, 1000, provider)
-    const b = formatFrozenMemoryArchive(archive, 1000, provider)
+    const a = formatFrozenMemoryArchive(archive, 1000, provider, SELF_SUBJECT)
+    const b = formatFrozenMemoryArchive(archive, 1000, provider, SELF_SUBJECT)
     expect(b.content).toBe(a.content)
   })
 
   it('returns empty content when memories array is empty', () => {
-    const result = formatFrozenMemoryArchive([], 1000, provider)
+    const result = formatFrozenMemoryArchive([], 1000, provider, SELF_SUBJECT)
     expect(result).toEqual({ content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] })
   })
 
@@ -107,14 +117,14 @@ describe('memory-injector: formatFrozenMemoryArchive (Phase 3a)', () => {
     const archive = Array.from({ length: 30 }, (_, i) =>
       memory(`m-${i.toString().padStart(2, '0')}`, `summary item number ${i}`),
     )
-    const result = formatFrozenMemoryArchive(archive, 50, provider)
+    const result = formatFrozenMemoryArchive(archive, 50, provider, SELF_SUBJECT)
     expect(result.memoriesUsed).toBeLessThan(30)
     expect(result.tokenCount).toBeLessThanOrEqual(50)
   })
 
   it('uses summary, not full content', () => {
     const archive = [memory('a', 'short summary', 'a much longer body that should not appear')]
-    const result = formatFrozenMemoryArchive(archive, 1000, provider)
+    const result = formatFrozenMemoryArchive(archive, 1000, provider, SELF_SUBJECT)
     expect(result.content).toContain('short summary')
     expect(result.content).not.toContain('a much longer body')
   })
@@ -126,7 +136,7 @@ describe('memory-injector: formatDynamicMemoryHead (Phase 3b)', () => {
       searchResult(memory('11111111-aaaa-bbbb-cccc-000000000001', 'first relevant'), 0.95, 0.85),
       searchResult(memory('22222222-aaaa-bbbb-cccc-000000000002', 'second relevant'), 0.9, 0.8),
     ]
-    const r = formatDynamicMemoryHead(results, provider)
+    const r = formatDynamicMemoryHead(results, provider, SELF_SUBJECT)
     expect(r.content).toContain('Most relevant memories for this turn:')
     expect(r.content).toMatch(/\[m_1111\]/)
     expect(r.content).toMatch(/\[m_2222\]/)
@@ -138,7 +148,7 @@ describe('memory-injector: formatDynamicMemoryHead (Phase 3b)', () => {
     const results = Array.from({ length: 10 }, (_, i) =>
       searchResult(memory(`abcdef${i}-0000-0000-0000-000000000000`, longSummary)),
     )
-    const r = formatDynamicMemoryHead(results, provider)
+    const r = formatDynamicMemoryHead(results, provider, SELF_SUBJECT)
     expect(r.tokenCount).toBeLessThanOrEqual(DYNAMIC_HEAD_TOKEN_BUDGET)
   })
 
@@ -147,19 +157,19 @@ describe('memory-injector: formatDynamicMemoryHead (Phase 3b)', () => {
     const results = Array.from({ length: DYNAMIC_HEAD_DEFAULT_SIZE + 5 }, (_, i) =>
       searchResult(memory(`a${i}-0000-0000-0000-000000000000`, `entry ${i}`)),
     )
-    const r = formatDynamicMemoryHead(results, provider)
+    const r = formatDynamicMemoryHead(results, provider, SELF_SUBJECT)
     expect(r.memoriesUsed).toBeLessThanOrEqual(DYNAMIC_HEAD_DEFAULT_SIZE)
   })
 
   it('returns empty content when results is empty', () => {
-    const r = formatDynamicMemoryHead([], provider)
+    const r = formatDynamicMemoryHead([], provider, SELF_SUBJECT)
     expect(r).toEqual({ content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] })
   })
 
   it('orders by effective weight then score', () => {
     const lowWeight = searchResult(memory('a-aaaa-1111-1111-111111111111', 'low'), 0.99, 0.3)
     const highWeight = searchResult(memory('b-bbbb-2222-2222-222222222222', 'high'), 0.5, 0.9)
-    const r = formatDynamicMemoryHead([lowWeight, highWeight], provider, { maxEntries: 2 })
+    const r = formatDynamicMemoryHead([lowWeight, highWeight], provider, SELF_SUBJECT, { maxEntries: 2 })
     const highIdx = r.content.indexOf('high')
     const lowIdx = r.content.indexOf('low')
     expect(highIdx).toBeGreaterThan(0)
@@ -169,7 +179,7 @@ describe('memory-injector: formatDynamicMemoryHead (Phase 3b)', () => {
 
   it('uses summary, not full content', () => {
     const m = memory('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'short summary', 'long body content')
-    const r = formatDynamicMemoryHead([searchResult(m)], provider)
+    const r = formatDynamicMemoryHead([searchResult(m)], provider, SELF_SUBJECT)
     expect(r.content).toContain('short summary')
     expect(r.content).not.toContain('long body content')
   })
@@ -437,6 +447,7 @@ describe('memory-injector: metadata tag on delivered memories', () => {
       [{ memory: m, score: 0.87, usedEmbedding: true, effectiveWeight: 0.92 }],
       1000,
       provider,
+      SELF_SUBJECT,
     )
     expect(r.content).toContain('body text')
     expect(r.content).toContain('importance 0.98')
@@ -513,7 +524,7 @@ describe('memory-injector: metadata tag on delivered memories', () => {
       importance: 0.81,
       keywords: ['anchor', 'stable'],
     })
-    const r = formatFrozenMemoryArchive([m], 1000, provider)
+    const r = formatFrozenMemoryArchive([m], 1000, provider, SELF_SUBJECT)
     expect(r.content).toContain('frozen anchor entry')
     expect(r.content).toContain('importance 0.81')
     expect(r.content).toContain('keywords: anchor, stable')
@@ -526,8 +537,8 @@ describe('memory-injector: metadata tag on delivered memories', () => {
       memory('a', 'alpha', undefined, { importance: 0.7, keywords: ['x'] }),
       memory('b', 'bravo', undefined, { importance: 0.8, keywords: ['y', 'z'] }),
     ]
-    const first = formatFrozenMemoryArchive(archive, 1000, provider)
-    const second = formatFrozenMemoryArchive(archive, 1000, provider)
+    const first = formatFrozenMemoryArchive(archive, 1000, provider, SELF_SUBJECT)
+    const second = formatFrozenMemoryArchive(archive, 1000, provider, SELF_SUBJECT)
     expect(second.content).toBe(first.content)
   })
 
@@ -539,6 +550,7 @@ describe('memory-injector: metadata tag on delivered memories', () => {
     const r = formatDynamicMemoryHead(
       [{ memory: m, score: 0.88, usedEmbedding: true, effectiveWeight: 0.83 }],
       provider,
+      SELF_SUBJECT,
     )
     expect(r.content).toMatch(/\[m_1111\]/)
     expect(r.content).toContain('first relevant')
@@ -546,5 +558,116 @@ describe('memory-injector: metadata tag on delivered memories', () => {
     expect(r.content).toContain('relevance 0.88')
     expect(r.content).toContain('weight 0.83')
     expect(r.content).toContain('keywords: recall, turn')
+  })
+})
+
+/**
+ * Bug 122 — a character's memory store holds what they remember about OTHER
+ * people alongside their own, separated only by `aboutCharacterId`. All three
+ * self-facing blocks are delivered under "You remember the following entries
+ * that bear on this moment", so an unattributed line about someone else reads
+ * as autobiography — and a weak model will answer the turn in that person's
+ * voice, fluently and wrongly.
+ *
+ * Live failure: Kumar's archive carried "struggles to become offered mother"
+ * (Marion's) and his head carried "reassured Marie about her wish" (Marion's),
+ * both bare. He replied as Marion.
+ */
+describe('memory-injector: self-facing blocks attribute other characters (bug 122)', () => {
+  const MARION_ID = '00000000-0000-0000-0000-0000000000c2'
+  const subject = {
+    selfCharacterId: SELF_ID,
+    characterNames: new Map([[MARION_ID, 'Marion']]),
+  }
+
+  const marionMemory = (id: string, summary: string) =>
+    memory(id, summary, summary, { aboutCharacterId: MARION_ID })
+
+  it('formatMemorySubjectPrefix returns nothing for the character\'s own memories', () => {
+    expect(formatMemorySubjectPrefix(SELF_ID, subject)).toBe('')
+  })
+
+  it('formatMemorySubjectPrefix returns nothing for an untargeted memory', () => {
+    expect(formatMemorySubjectPrefix(null, subject)).toBe('')
+    expect(formatMemorySubjectPrefix(undefined, subject)).toBe('')
+  })
+
+  it('formatMemorySubjectPrefix names another character', () => {
+    expect(formatMemorySubjectPrefix(MARION_ID, subject)).toBe('About Marion: ')
+  })
+
+  it('formatMemorySubjectPrefix still prefixes an unresolvable subject', () => {
+    // The name is a nicety; breaking the first-person reading is the job.
+    expect(formatMemorySubjectPrefix('00000000-0000-0000-0000-00000000dead', subject)).toBe(
+      'About another character: ',
+    )
+  })
+
+  it('the frozen archive names the subject of a memory about someone else', () => {
+    const r = formatFrozenMemoryArchive(
+      [marionMemory('a-id', 'struggles to become offered mother')],
+      1000,
+      provider,
+      subject,
+    )
+    expect(r.content).toContain('- About Marion: struggles to become offered mother')
+  })
+
+  it('the dynamic head names the subject of a memory about someone else', () => {
+    const r = formatDynamicMemoryHead(
+      [searchResult(marionMemory('11111111-aaaa-bbbb-cccc-000000000001', 'reassured Marie about her wish'))],
+      provider,
+      subject,
+    )
+    expect(r.content).toContain('About Marion: reassured Marie about her wish')
+  })
+
+  it('formatMemoriesForContext names the subject of a memory about someone else', () => {
+    const r = formatMemoriesForContext(
+      [searchResult(marionMemory('1', 'breastfed Camille in the pool'))],
+      1000,
+      provider,
+      subject,
+    )
+    expect(r.content).toContain('About Marion: breastfed Camille in the pool')
+  })
+
+  it('leaves the character\'s own memories unprefixed in every self-facing block', () => {
+    const own = memory('own-id', 'ran the trial sheet twice', 'ran the trial sheet twice', {
+      aboutCharacterId: SELF_ID,
+    })
+    const archive = formatFrozenMemoryArchive([own], 1000, provider, subject)
+    const head = formatDynamicMemoryHead([searchResult(own)], provider, subject)
+    const relevant = formatMemoriesForContext([searchResult(own)], 1000, provider, subject)
+    for (const content of [archive.content, head.content, relevant.content]) {
+      expect(content).toContain('ran the trial sheet twice')
+      expect(content).not.toContain('About ')
+    }
+  })
+
+  it('keeps the frozen archive byte-stable once subjects are attributed', () => {
+    const archive = [
+      marionMemory('a-id', 'struggles to become offered mother'),
+      memory('b-id', 'ran the trial sheet twice'),
+    ]
+    const first = formatFrozenMemoryArchive(archive, 1000, provider, subject)
+    const second = formatFrozenMemoryArchive(archive, 1000, provider, subject)
+    expect(first.content).toBe(second.content)
+  })
+
+  it('counts the prefix against the token budget rather than smuggling it past', () => {
+    // The prefix is prose the model pays for, so it must be inside the
+    // estimate: the same budget that fits N own-memory lines must fit fewer
+    // attributed ones, and must still not overrun.
+    const own = Array.from({ length: 12 }, (_, i) =>
+      memory(`own-${i}`, `entry number ${i} in the archive`),
+    )
+    const others = Array.from({ length: 12 }, (_, i) =>
+      marionMemory(`m-${i}`, `entry number ${i} in the archive`),
+    )
+    const bare = formatFrozenMemoryArchive(own, 120, provider, subject)
+    const attributed = formatFrozenMemoryArchive(others, 120, provider, subject)
+    expect(attributed.tokenCount).toBeLessThanOrEqual(120)
+    expect(attributed.memoriesUsed).toBeLessThan(bare.memoriesUsed)
   })
 })

@@ -15,6 +15,7 @@ import { createServiceLogger } from '@/lib/logging/create-logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { isModerationExemptChatType } from '@/lib/schemas/chat.types';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { isClassifierOnDuty } from '@/lib/services/dangerous-content/chat-override';
 import { enqueueChatDangerClassification, enqueueContextSummary } from './queue-service';
 
 const logger = createServiceLogger('ScheduledDangerScan');
@@ -129,11 +130,11 @@ export async function runScheduledDangerScan(): Promise<{ usersProcessed: number
       //    (dangerous chats are sticky and never re-checked)
       // Moderation-exempt chat types (Help Chat, Brahma Console) are never
       // enqueued — the Concierge does not operate there at all.
-      // Off-duty chats (conciergeOverride === 'OFF') are always skipped — the
-      // operator has explicitly waved the Concierge off.
+      // Operator-decided chats (Vouched Safe or Uncensored) are always
+      // skipped — nothing may reclassify a chat out from under the operator.
       const unclassified = chats.filter((chat) => {
         if (isModerationExemptChatType(chat.chatType)) return false;
-        if (chat.conciergeOverride === 'OFF') return false;
+        if (!isClassifierOnDuty(chat)) return false;
         if (chat.isDangerousChat == null) return true;
         if (chat.isDangerousChat === false &&
             chat.dangerClassifiedAtMessageCount != null &&

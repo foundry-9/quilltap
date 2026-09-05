@@ -9,15 +9,19 @@
  * readout, and exposes an inline play/pause button.
  *
  * Polling mirrors the queue-status badges and the Settings → System
- * management list: SWR at 5s. A local 1s tick refreshes the time readout
- * between polls for running, time-budgeted rooms.
+ * management list: 5s. A shared 1s clock (`useNow`) refreshes the time readout
+ * between polls for running, time-budgeted rooms — that readout drifts because
+ * the *client's* clock advances, so it never involves the server.
  *
  * @module components/layout/autonomous-room-badges
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNow } from '@/hooks/useNow'
+import { useRealtimeRefetchInterval } from '@/hooks/useRealtime'
+import { useAutonomousRoomAction } from '@/hooks/useAutonomousRoomAction'
+import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 
@@ -151,46 +155,20 @@ function buildTooltip(room: AutonomousRoom, readout: BudgetReadout): string {
 
 
 export function AutonomousRoomBadges() {
-  const queryClient = useQueryClient()
   const { data } = useQuery({
     queryKey: queryKeys.system.autonomousRooms,
     queryFn: ({ signal }) =>
       apiFetch<{ rooms: AutonomousRoom[] }>('/api/v1/system/autonomous-rooms', { signal, cache: 'no-store' }),
-    refetchInterval: POLL_INTERVAL_MS,
+    // Pushed by the `autonomousRooms` topic; the 5 s poll is the fallback
+    // for a dropped socket.
+    refetchInterval: useRealtimeRefetchInterval(POLL_INTERVAL_MS),
   })
   const [busyChatId, setBusyChatId] = useState<string | null>(null)
-  const [nowMs, setNowMs] = useState<number>(() => Date.now())
 
   // Optimistic toggle: patch the cached run state immediately, roll back on
-  // error, revalidate on settle (the TanStack equivalent of SWR's
-  // mutate(post, { optimisticData, rollbackOnError, revalidate })).
-  const toggleMutation = useMutation({
-    mutationFn: async ({ roomId, verb }: { roomId: string; verb: 'pause' | 'resume' | 'start' }) => {
-      const res = await fetch(`/api/v1/chats/${roomId}/autonomous-room?action=${verb}`, { method: 'POST' })
-      if (!res.ok) {
-        const body = await res.json().catch(() => null)
-        throw new Error(body?.error || `Failed to ${verb}`)
-      }
-    },
-    onMutate: async ({ roomId, verb }) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.system.autonomousRooms })
-      const previous = queryClient.getQueryData<{ rooms: AutonomousRoom[] }>(queryKeys.system.autonomousRooms)
-      const optimisticState: RunState = verb === 'pause' ? 'paused' : 'running'
-      queryClient.setQueryData<{ rooms: AutonomousRoom[] }>(queryKeys.system.autonomousRooms, (cur) => ({
-        rooms: (cur?.rooms ?? []).map((r) => (r.id === roomId ? { ...r, runState: optimisticState } : r)),
-      }))
-      return { previous }
-    },
-    onError: (err, _vars, context) => {
-      if (context?.previous !== undefined) {
-        queryClient.setQueryData(queryKeys.system.autonomousRooms, context.previous)
-      }
-      console.error('Autonomous-room badge action failed', err)
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.system.autonomousRooms })
-    },
-  })
+  // error, revalidate on settle. Shared with the Settings → System management
+  // card — see hooks/useAutonomousRoomAction.
+  const toggleMutation = useAutonomousRoomAction('Autonomous-room badge action failed')
 
   const rooms = (data?.rooms ?? []).filter(
     (r) => r.runState === 'idle' || r.runState === 'running' || r.runState === 'paused',
@@ -200,11 +178,9 @@ export function AutonomousRoomBadges() {
     (r) => r.runState === 'running' && r.budgetMaxWallClockMs != null,
   )
 
-  useEffect(() => {
-    if (!hasTimeBudgetedRunning) return
-    const id = setInterval(() => setNowMs(Date.now()), TICK_INTERVAL_MS)
-    return () => clearInterval(id)
-  }, [hasTimeBudgetedRunning])
+  // Only a running, time-budgeted room needs a second hand; everything else
+  // reads a frozen snapshot and costs no re-renders at all.
+  const nowMs = useNow(TICK_INTERVAL_MS, hasTimeBudgetedRunning)
 
   if (rooms.length === 0) return null
 
@@ -223,7 +199,7 @@ export function AutonomousRoomBadges() {
     // round-trip — which can lag when the server is busy running a turn.
     setBusyChatId(room.id)
     try {
-      await toggleMutation.mutateAsync({ roomId: room.id, verb })
+      await toggleMutation.mutateAsync({ chatId: room.id, verb })
     } catch {
       // Already logged in the mutation's onError handler.
     } finally {

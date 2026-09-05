@@ -571,6 +571,9 @@ export async function handleGet(
       messages,
       projectId: chatMetadata.projectId || null,
       projectName,
+      // The scene in force. Projected so the sidebar's scenario picker can open
+      // on what the chat actually has rather than always on "Custom…".
+      scenarioText: chatMetadata.scenarioText ?? null,
       disabledTools: chatMetadata.disabledTools || [],
       disabledToolGroups: chatMetadata.disabledToolGroups || [],
       allowCrossCharacterVaultReads: chatMetadata.allowCrossCharacterVaultReads ?? false,

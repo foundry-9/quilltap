@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { wardrobeCollectionUrl, wardrobeItemUrl } from '@/lib/wardrobe/wardrobe-container'
 
 export interface CreateProjectWardrobeInput {
   title: string
@@ -27,12 +28,21 @@ export interface CreateProjectWardrobeInput {
   replace?: boolean
 }
 
-export type UpdateProjectWardrobeInput = Partial<CreateProjectWardrobeInput>
+export type UpdateProjectWardrobeInput = Partial<CreateProjectWardrobeInput> & {
+  /** Archive (true) or restore (false). Maps to `archivedAt` server-side. */
+  archived?: boolean
+}
 
 export interface UseProjectWardrobeReturn {
   items: WardrobeItem[]
   loading: boolean
   error: string | null
+  /**
+   * "Show archived" state. Flipping it re-fetches with
+   * `?includeArchived=true` rather than filtering `items` client-side.
+   */
+  showArchived: boolean
+  setShowArchived: (next: boolean) => void
   refresh: () => Promise<void>
   createItem: (
     input: CreateProjectWardrobeInput,
@@ -42,18 +52,29 @@ export interface UseProjectWardrobeReturn {
     patch: UpdateProjectWardrobeInput,
   ) => Promise<{ ok: true } | { ok: false; error: string }>
   deleteItem: (id: string) => Promise<{ ok: true } | { ok: false; error: string }>
+  /** Archive an active garment, or restore an archived one. */
+  setItemArchived: (
+    id: string,
+    archived: boolean,
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
 }
 
 export function useProjectWardrobe(projectId: string): UseProjectWardrobeReturn {
   const [items, setItems] = useState<WardrobeItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showArchived, setShowArchived] = useState(false)
+
+  const collectionUrl = wardrobeCollectionUrl(
+    { scope: 'project', id: projectId },
+    { includeArchived: showArchived },
+  )
 
   const refresh = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/v1/projects/${projectId}/wardrobe`)
+      const res = await fetch(collectionUrl)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
         throw new Error(body?.error || `Failed to load project wardrobe (${res.status})`)
@@ -65,17 +86,19 @@ export function useProjectWardrobe(projectId: string): UseProjectWardrobeReturn 
     } finally {
       setLoading(false)
     }
-  }, [projectId])
+  }, [collectionUrl])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount; setState lands inside async refresh()
+    // Initial fetch, and a refetch whenever "Show archived" flips — the server
+    // decides what's visible, so the toggle is a new request, not a filter.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState lands inside async refresh()
     void refresh()
   }, [refresh])
 
   const createItem = useCallback<UseProjectWardrobeReturn['createItem']>(
     async (input) => {
       try {
-        const res = await fetch(`/api/v1/projects/${projectId}/wardrobe`, {
+        const res = await fetch(collectionUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(input),
@@ -90,13 +113,13 @@ export function useProjectWardrobe(projectId: string): UseProjectWardrobeReturn 
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
     },
-    [projectId],
+    [collectionUrl],
   )
 
   const updateItem = useCallback<UseProjectWardrobeReturn['updateItem']>(
     async (id, patch) => {
       try {
-        const res = await fetch(`/api/v1/projects/${projectId}/wardrobe/${encodeURIComponent(id)}`, {
+        const res = await fetch(wardrobeItemUrl({ scope: 'project', id: projectId }, id), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(patch),
@@ -117,7 +140,7 @@ export function useProjectWardrobe(projectId: string): UseProjectWardrobeReturn 
   const deleteItem = useCallback<UseProjectWardrobeReturn['deleteItem']>(
     async (id) => {
       try {
-        const res = await fetch(`/api/v1/projects/${projectId}/wardrobe/${encodeURIComponent(id)}`, {
+        const res = await fetch(wardrobeItemUrl({ scope: 'project', id: projectId }, id), {
           method: 'DELETE',
         })
         const body = await res.json().catch(() => ({}))
@@ -133,5 +156,21 @@ export function useProjectWardrobe(projectId: string): UseProjectWardrobeReturn 
     [projectId, refresh],
   )
 
-  return { items, loading, error, refresh, createItem, updateItem, deleteItem }
+  const setItemArchived = useCallback<UseProjectWardrobeReturn['setItemArchived']>(
+    (id, archived) => updateItem(id, { archived }),
+    [updateItem],
+  )
+
+  return {
+    items,
+    loading,
+    error,
+    showArchived,
+    setShowArchived,
+    refresh,
+    createItem,
+    updateItem,
+    deleteItem,
+    setItemArchived,
+  }
 }

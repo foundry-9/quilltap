@@ -25,6 +25,8 @@ jest.mock('@/lib/tools/almanack/db', () => ({
   mainRows: jest.fn(),
   mountRows: jest.fn(),
   num: (value: unknown) => (typeof value === 'number' ? value : Number(value) || 0),
+  // Pure SQL-text helper; the real one keeps the routed fragments intact.
+  inClause: jest.requireActual('@/lib/tools/almanack/db').inClause,
 }))
 
 import { mainRows, mountRows } from '@/lib/tools/almanack/db'

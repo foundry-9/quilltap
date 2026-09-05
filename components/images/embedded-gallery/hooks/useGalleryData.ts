@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { triggerDownload } from '@/lib/download-utils'
 import type { GalleryImage, EntityType } from '../types'
 
 interface CharacterGalleryEntry {
@@ -139,6 +140,25 @@ export function useGalleryData(entityId: string, _entityType: EntityType) {
     }
   }
 
+  /**
+   * Fetch the picture's bytes and hand them to `triggerDownload`, which uses
+   * Electron's native save dialog when the shell is present (there is no
+   * right-click Save Image there) and an anchor click in the browser.
+   */
+  const handleDownloadImage = async (image: GalleryImage) => {
+    const src = image.url || (image.filepath.startsWith('/') ? image.filepath : `/${image.filepath}`)
+    try {
+      const res = await fetch(src)
+      if (!res.ok) throw new Error(`Failed to fetch image (${res.status})`)
+      const blob = await res.blob()
+      await triggerDownload(blob, image.filename)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      showErrorToast('Failed to download image')
+      console.error('Error downloading image:', { error: message, entityId, imageId: image.id })
+    }
+  }
+
   const handleDeleteImage = async (
     image: GalleryImage,
     currentAvatarId: string | undefined,
@@ -214,6 +234,7 @@ export function useGalleryData(entityId: string, _entityType: EntityType) {
     handleSetAvatar,
     handleClearAvatar,
     handleDeleteImage,
+    handleDownloadImage,
     handleUpload,
   }
 }

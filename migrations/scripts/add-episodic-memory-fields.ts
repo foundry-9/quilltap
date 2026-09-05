@@ -29,11 +29,20 @@ import {
   isSQLiteBackend,
   getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
 
 const MIGRATION_ID = 'add-episodic-memory-fields-v1';
 const LOG_CONTEXT = `migration.${MIGRATION_ID}`;
+
+/** The episodic-spine columns on `memories`, in the order they are added. */
+const MEMORY_COLUMNS: Array<{ name: string; ddl: string }> = [
+  { name: 'occurredAt', ddl: 'TEXT DEFAULT NULL' },
+  { name: 'narrativeTime', ddl: 'TEXT DEFAULT NULL' },
+  { name: 'entities', ddl: `TEXT DEFAULT '[]'` },
+  { name: 'kind', ddl: `TEXT DEFAULT 'semantic'` },
+];
 
 interface WorkNeeded {
   memoryColumns: string[];
@@ -54,15 +63,14 @@ function assessWork(): WorkNeeded {
   const db = getSQLiteDatabase();
 
   if (sqliteTableExists('memories')) {
-    const cols = getSQLiteTableColumns('memories').map((c) => c.name);
-    for (const col of ['occurredAt', 'narrativeTime', 'entities', 'kind']) {
-      if (!cols.includes(col)) work.memoryColumns.push(col);
+    for (const col of MEMORY_COLUMNS) {
+      if (!sqliteColumnExists('memories', col.name)) work.memoryColumns.push(col.name);
     }
     const hasIndex = db
       .prepare(`SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_memories_occurredAt'`)
       .get();
     work.needsIndex = !hasIndex;
-    if (cols.includes('occurredAt')) {
+    if (sqliteColumnExists('memories', 'occurredAt')) {
       const row = db
         .prepare(`SELECT COUNT(*) AS n FROM memories WHERE occurredAt IS NULL`)
         .get() as { n: number | bigint };
@@ -75,8 +83,7 @@ function assessWork(): WorkNeeded {
   }
 
   if (sqliteTableExists('chats')) {
-    const chatCols = getSQLiteTableColumns('chats').map((c) => c.name);
-    work.needsTimelineMode = !chatCols.includes('timelineMode');
+    work.needsTimelineMode = !sqliteColumnExists('chats', 'timelineMode');
   }
 
   return work;
@@ -108,16 +115,12 @@ export const addEpisodicMemoryFieldsMigration: Migration = {
       const db = getSQLiteDatabase();
       const work = assessWork();
 
-      const columnDDL: Record<string, string> = {
-        occurredAt: `ALTER TABLE "memories" ADD COLUMN "occurredAt" TEXT DEFAULT NULL`,
-        narrativeTime: `ALTER TABLE "memories" ADD COLUMN "narrativeTime" TEXT DEFAULT NULL`,
-        entities: `ALTER TABLE "memories" ADD COLUMN "entities" TEXT DEFAULT '[]'`,
-        kind: `ALTER TABLE "memories" ADD COLUMN "kind" TEXT DEFAULT 'semantic'`,
-      };
-      for (const col of work.memoryColumns) {
-        db.exec(columnDDL[col]);
-        itemsAffected++;
-        logger.info(`Added memories.${col} column`, { context: LOG_CONTEXT });
+      for (const col of MEMORY_COLUMNS) {
+        if (!work.memoryColumns.includes(col.name)) continue;
+        if (addColumnIfMissing('memories', col.name, col.ddl)) {
+          itemsAffected++;
+          logger.info(`Added memories.${col.name} column`, { context: LOG_CONTEXT });
+        }
       }
 
       if (work.needsIndex && sqliteTableExists('memories')) {
@@ -126,8 +129,7 @@ export const addEpisodicMemoryFieldsMigration: Migration = {
         logger.info('Created idx_memories_occurredAt', { context: LOG_CONTEXT });
       }
 
-      if (work.needsTimelineMode) {
-        db.exec(`ALTER TABLE "chats" ADD COLUMN "timelineMode" TEXT DEFAULT NULL`);
+      if (work.needsTimelineMode && addColumnIfMissing('chats', 'timelineMode', 'TEXT DEFAULT NULL')) {
         itemsAffected++;
         logger.info('Added chats.timelineMode column', { context: LOG_CONTEXT });
       }

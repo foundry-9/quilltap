@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { Icon } from '@/components/ui/icon'
 import { TagEditor } from '@/components/tags/tag-editor'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
+import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import { CharacterFormData, CharacterScenario } from '../types'
 
 interface CharacterBasicInfoProps {
@@ -327,12 +329,7 @@ export function CharacterBasicInfo({
 
       {/* Identity Field */}
       <div>
-        <label htmlFor="identity" className="block qt-text-label mb-2">
-          Identity (Optional)
-        </label>
-        <p className="text-xs qt-text-secondary mb-2">
-          What strangers know about the character on sight or by reputation &mdash; name, station, occupation, public reputation. The shallow first impression.
-        </p>
+        <PromptFieldLabel hint={PROMPT_FIELD_HINTS.identity} optional htmlFor="identity" />
         <MarkdownLexicalEditor
           value={formData.identity}
           onChange={handleMarkdownFieldChange('identity')}
@@ -345,12 +342,7 @@ export function CharacterBasicInfo({
 
       {/* Description Field */}
       <div>
-        <label htmlFor="description" className="block qt-text-label mb-2">
-          Description (Optional)
-        </label>
-        <p className="text-xs qt-text-secondary mb-2">
-          How acquaintances perceive the character &mdash; behaviour, mannerisms, verbal patterns. Not physical appearance.
-        </p>
+        <PromptFieldLabel hint={PROMPT_FIELD_HINTS.description} optional htmlFor="description" />
         <MarkdownLexicalEditor
           value={formData.description}
           onChange={handleMarkdownFieldChange('description')}
@@ -363,12 +355,7 @@ export function CharacterBasicInfo({
 
       {/* Manifesto Field */}
       <div>
-        <label htmlFor="manifesto" className="block qt-text-label mb-2">
-          Manifesto (Optional)
-        </label>
-        <p className="text-xs qt-text-secondary mb-2">
-          The foundational tenets of this character &mdash; the basic truths that anchor everything else. What this character is, at root.
-        </p>
+        <PromptFieldLabel hint={PROMPT_FIELD_HINTS.manifesto} optional htmlFor="manifesto" />
         <MarkdownLexicalEditor
           value={formData.manifesto}
           onChange={handleMarkdownFieldChange('manifesto')}
@@ -381,12 +368,7 @@ export function CharacterBasicInfo({
 
       {/* Personality Field */}
       <div>
-        <label htmlFor="personality" className="block qt-text-label mb-2">
-          Personality (Optional)
-        </label>
-        <p className="text-xs qt-text-secondary mb-2">
-          What the character knows about themselves. The internal driver of speech and behaviour. Other characters don&rsquo;t see it unless shared.
-        </p>
+        <PromptFieldLabel hint={PROMPT_FIELD_HINTS.personality} optional htmlFor="personality" />
         <MarkdownLexicalEditor
           value={formData.personality}
           onChange={handleMarkdownFieldChange('personality')}
@@ -421,8 +403,15 @@ export function CharacterBasicInfo({
             + Add Scenario
           </button>
         </div>
+        <p className="text-xs qt-text-secondary mb-1">
+          Named settings and contexts for conversations &mdash; the stage, never the actor. Each scenario can be selected when starting a chat. Stored in the vault&rsquo;s Scenarios/ folder.
+        </p>
+        <p className="text-xs qt-text-secondary mb-1">
+          Archiving a scenario keeps it here but hides it from the chat pickers unless
+          &ldquo;Show archived&rdquo; is ticked there. Chats already using it are unaffected.
+        </p>
         <p className="text-xs qt-text-secondary mb-3">
-          Named settings and contexts for conversations. Each scenario can be selected when starting a chat. Stored in the vault&rsquo;s Scenarios/ folder.
+          Written as: <em>{PROMPT_FIELD_HINTS.scenario.example}</em>
         </p>
         {formData.scenarios.length === 0 ? (
           <div className="qt-card text-center py-6">
@@ -466,6 +455,34 @@ export function CharacterBasicInfo({
                     placeholder="Scenario title"
                     className="qt-input flex-1 disabled:cursor-not-allowed disabled:opacity-60"
                   />
+                  {scenario.archived && (
+                    <span className="qt-badge qt-badge-secondary shrink-0">Archived</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const updated = formData.scenarios.map((s, i) => {
+                        if (i !== index) return s
+                        // Omission means active — drop the key rather than
+                        // writing `archived: false` into the vault file.
+                        const { archived: _was, ...rest } = s
+                        return {
+                          ...rest,
+                          ...(s.archived ? {} : { archived: true }),
+                          updatedAt: new Date().toISOString(),
+                        }
+                      })
+                      onScenariosChange(updated)
+                    }}
+                    className="qt-button-ghost qt-button-sm shrink-0"
+                    title={
+                      scenario.archived
+                        ? 'Restore this scenario to the chat pickers'
+                        : 'Hide this scenario from the chat pickers'
+                    }
+                  >
+                    {scenario.archived ? 'Restore' : 'Archive'}
+                  </button>
                   <button
                     type="button"
                     onClick={() => onScenariosChange(formData.scenarios.filter((_, i) => i !== index))}
@@ -498,12 +515,7 @@ export function CharacterBasicInfo({
 
       {/* First Message Field */}
       <div>
-        <label htmlFor="firstMessage" className="block qt-text-label mb-2">
-          First Message (Optional)
-        </label>
-        <p className="text-xs qt-text-secondary mb-2">
-          The character&rsquo;s opening message to start conversations.
-        </p>
+        <PromptFieldLabel hint={PROMPT_FIELD_HINTS.firstMessage} optional htmlFor="firstMessage" />
         <MarkdownLexicalEditor
           value={formData.firstMessage}
           onChange={handleMarkdownFieldChange('firstMessage')}
@@ -516,12 +528,7 @@ export function CharacterBasicInfo({
 
       {/* Example Dialogues Field */}
       <div>
-        <label htmlFor="exampleDialogues" className="block qt-text-label mb-2">
-          Example Dialogues (Optional)
-        </label>
-        <p className="text-xs qt-text-secondary mb-2">
-          Example conversations to guide the AI&rsquo;s responses.
-        </p>
+        <PromptFieldLabel hint={PROMPT_FIELD_HINTS.exampleDialogues} optional htmlFor="exampleDialogues" />
         <MarkdownLexicalEditor
           value={formData.exampleDialogues}
           onChange={handleMarkdownFieldChange('exampleDialogues')}
@@ -534,12 +541,7 @@ export function CharacterBasicInfo({
 
       {/* System Prompt Field */}
       <div>
-        <label htmlFor="systemPrompt" className="block qt-text-label mb-2">
-          System Prompt (Optional)
-        </label>
-        <p className="text-xs qt-text-secondary mb-2">
-          Custom system instructions (will be combined with auto-generated prompt).
-        </p>
+        <PromptFieldLabel hint={PROMPT_FIELD_HINTS.systemPrompt} optional htmlFor="systemPrompt" />
         <MarkdownLexicalEditor
           value={formData.systemPrompt}
           onChange={handleMarkdownFieldChange('systemPrompt')}

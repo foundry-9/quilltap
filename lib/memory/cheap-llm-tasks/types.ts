@@ -69,6 +69,19 @@ export interface CheapLLMTaskResult<T> {
   success: boolean
   result?: T
   error?: string
+  /**
+   * True when the failure was a timeout rather than an answer — our own
+   * deadline, or the provider abandoning the socket on the budget we handed
+   * it — and every retry the task had was spent.
+   *
+   * The distinction is what separates "the model produced a disappointing
+   * answer" from "this pass never happened". A caller that swallows the second
+   * reports a clean finish over work that is permanently lost, which is how
+   * 81 timed-out passes in 60 hours left every background job in the window
+   * marked COMPLETED (bug 107). Jobs whose whole purpose is the lost pass
+   * should surface it — see `throwIfLostToTimeout`.
+   */
+  timedOut?: boolean
   /** Token usage for cost tracking */
   usage?: {
     promptTokens: number
@@ -189,6 +202,14 @@ export interface StoryBackgroundPromptContext {
   characterAesthetic?: string | null
   /** The Ariel Clause: mandatory per-character depiction guidelines (never dropped). */
   depictionGuidelines?: Array<{ characterName: string; content: string }> | null
+  /**
+   * True when the crafted prompt is bound for a Concierge uncensored image
+   * provider — a dangerous-marked chat with one configured, or a post-hoc
+   * moderation reroute onto one. Swaps the crafter's intimacy guidance from
+   * cinematic concealment to a candid depiction. Defaults to false: a prompt
+   * headed for a moderated provider still gets the concealment treatment.
+   */
+  uncensoredImageTarget?: boolean
 }
 
 /**
@@ -231,7 +252,7 @@ export interface CharacterAppearanceInput {
   }>
   /** Equipped wardrobe items (from the wardrobe system) */
   equippedWardrobeItems?: Array<{
-    slot: string        // 'top', 'bottom', 'footwear', 'accessories'
+    slot: string        // 'top', 'bottom', 'footwear', 'accessories', 'hair'
     title: string
     description?: string | null
     /** Plain-text image cue; preferred over `title` in image prompts. */

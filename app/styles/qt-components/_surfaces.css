@@ -1056,15 +1056,82 @@
      ========================================================================== */
 
   /**
-   * Tooltip container
+   * Tooltip bubble.
+   *
+   * Drawn by `components/ui/Tooltip.tsx` into a portal on `document.body` and
+   * positioned from script, so it escapes every stacking context (including the
+   * Workspace's `isolation: isolate`) and sits above dialogs (z-60).
    */
   .qt-tooltip {
-    @apply z-50;
-    @apply px-3 py-1.5;
+    @apply fixed z-[70];
+    @apply px-3 py-2;
     @apply text-xs;
+    max-width: min(24rem, calc(100vw - 1rem));
     border-radius: var(--qt-popover-radius);
     background: var(--color-foreground);
     color: var(--color-background);
+    border: 1px solid color-mix(in srgb, var(--color-background) 20%, transparent);
+    box-shadow: var(--qt-popover-shadow);
+    line-height: 1.45;
+    text-align: left;
+    white-space: pre-line;
+    /* Transparent to the pointer, so hovering never chases the bubble away —
+       until the bubble is interactive (scrollable or pinned). */
+    pointer-events: none;
+  }
+
+  .qt-tooltip[data-interactive="true"] {
+    pointer-events: auto;
+  }
+
+  .qt-tooltip[data-pinned="true"] {
+    border-color: color-mix(in srgb, var(--color-background) 45%, transparent);
+  }
+
+  /**
+   * Fallback wrapper for a tooltip trigger that could not be cloned (not a
+   * single element). Kept layout-neutral inside the flex rows it lands in.
+   */
+  .qt-tooltip-anchor {
+    @apply inline-flex items-center;
+  }
+
+  /**
+   * Structured tooltip contents — a heading, one or more labelled sections, and
+   * a closing hint. Long notes scroll inside the bubble rather than growing it
+   * off the screen.
+   */
+  .qt-tooltip-body {
+    max-height: 40vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .qt-tooltip-title {
+    @apply font-semibold;
+    margin-bottom: 0.15rem;
+  }
+
+  .qt-tooltip-section {
+    margin-top: 0.5rem;
+  }
+
+  .qt-tooltip-section-label {
+    @apply uppercase;
+    font-size: 0.625rem;
+    letter-spacing: 0.05em;
+    opacity: 0.7;
+  }
+
+  .qt-tooltip-quote {
+    white-space: pre-wrap;
+    opacity: 0.92;
+  }
+
+  .qt-tooltip-hint {
+    margin-top: 0.5rem;
+    font-size: 0.625rem;
+    opacity: 0.65;
   }
 
   /* ==========================================================================

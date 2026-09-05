@@ -15,7 +15,7 @@ export function GeneralStateSettings() {
 
   return (
     <div className="space-y-3">
-      <p className="qt-text-sm qt-text-secondary">
+      <p className="text-sm qt-text-secondary">
         General state is the instance-wide foundation of the state cascade —
         every chat sees it unless a chat, project, or group sets the same key.
       </p>

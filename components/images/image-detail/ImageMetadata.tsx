@@ -75,7 +75,7 @@ export function ImageMetadata({
                       {character.name}
                     </span>
                     {isAvatar ? (
-                      <span className="text-xs bg-success qt-text-success-foreground px-2 py-0.5 rounded">
+                      <span className="text-xs qt-bg-success qt-text-on-success px-2 py-0.5 rounded">
                         Avatar
                       </span>
                     ) : (

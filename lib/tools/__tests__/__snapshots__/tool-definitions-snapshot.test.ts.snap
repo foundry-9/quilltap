@@ -64,6 +64,23 @@ exports[`tool definitions: derived OpenAI parameters deleteAnnotation: parameter
 }
 `;
 
+exports[`tool definitions: derived OpenAI parameters describeImage: parameters snapshot 1`] = `
+{
+  "additionalProperties": false,
+  "properties": {
+    "uuid": {
+      "description": "UUID of the image to look at: the uuid from a Librarian upload announcement, an image-v2 file uuid, the id returned by generate_image, or an album link uuid from keep_image / list_images.",
+      "minLength": 1,
+      "type": "string",
+    },
+  },
+  "required": [
+    "uuid",
+  ],
+  "type": "object",
+}
+`;
+
 exports[`tool definitions: derived OpenAI parameters docCloseDocument: parameters snapshot 1`] = `
 {
   "additionalProperties": false,
@@ -1779,13 +1796,14 @@ exports[`tool definitions: derived OpenAI parameters wardrobeCreate: parameters 
       "type": "string",
     },
     "types": {
-      "description": "Coverage tags indicating what body area(s) this item covers. Required for leaf items (no components). For composite items the coverage is at least the union of the components' slots; any slots you list here are ADDED to that union, letting a composite designate slots none of its components fill (e.g. a "Naked" composite that designates every slot but only contains a ring — combined with replace:true this clears the other slots).",
+      "description": "Coverage tags indicating what body area(s) this item covers. Required for leaf items (no components). For composite items the coverage is at least the union of the components' slots; any slots you list here are ADDED to that union, letting a composite designate slots none of its components fill (e.g. a "Naked" composite that designates every clothing slot but only contains a ring — combined with replace:true this clears the other clothing slots). The "hair" slot holds a hairstyle or hairdo (braided, permed, an updo, a wig) — the styling, not the hair itself; natural hair colour and length belong in the character's physical description, and an empty hair slot simply means unstyled hair.",
       "items": {
         "enum": [
           "top",
           "bottom",
           "footwear",
           "accessories",
+          "hair",
         ],
         "type": "string",
       },
@@ -1817,7 +1835,7 @@ exports[`tool definitions: derived OpenAI parameters wardrobeList: parameters sn
       "type": "boolean",
     },
     "type_filter": {
-      "description": "Filter items by slot type. Possible values include "top", "bottom", "footwear", "accessories". Only items matching at least one of the specified types will be returned.",
+      "description": "Filter items by slot type. Possible values include "top", "bottom", "footwear", "accessories", "hair". Only items matching at least one of the specified types will be returned.",
       "items": {
         "type": "string",
       },
@@ -1871,12 +1889,13 @@ exports[`tool definitions: derived OpenAI parameters wardrobeTakeOff: parameters
             "type": "string",
           },
           "slot": {
-            "description": "Required for clear_slot. Optional for remove (restricts the removal to that single slot instead of every slot the item covers).",
+            "description": "Required for clear_slot. Optional for remove (restricts the removal to that single slot instead of every slot the item covers). The "hair" slot holds a hairstyle or hairdo (braided, permed, an updo, a wig) — the styling, not the hair itself; natural hair colour and length belong in the character's physical description, and an empty hair slot simply means unstyled hair.",
             "enum": [
               "top",
               "bottom",
               "footwear",
               "accessories",
+              "hair",
             ],
             "type": "string",
           },
@@ -1939,13 +1958,14 @@ exports[`tool definitions: derived OpenAI parameters wardrobeUpdate: parameters 
       "type": "string",
     },
     "types": {
-      "description": "Replace the coverage slots. Omit to leave unchanged.",
+      "description": "Replace the coverage slots. Omit to leave unchanged. The "hair" slot holds a hairstyle or hairdo (braided, permed, an updo, a wig) — the styling, not the hair itself; natural hair colour and length belong in the character's physical description, and an empty hair slot simply means unstyled hair.",
       "items": {
         "enum": [
           "top",
           "bottom",
           "footwear",
           "accessories",
+          "hair",
         ],
         "type": "string",
       },
@@ -1984,12 +2004,13 @@ exports[`tool definitions: derived OpenAI parameters wardrobeWear: parameters sn
             "type": "string",
           },
           "slot": {
-            "description": "Target slot. Required for add_to_slot; ignored by wear/replace.",
+            "description": "Target slot. Required for add_to_slot; ignored by wear/replace. The "hair" slot holds a hairstyle or hairdo (braided, permed, an updo, a wig) — the styling, not the hair itself; natural hair colour and length belong in the character's physical description, and an empty hair slot simply means unstyled hair.",
             "enum": [
               "top",
               "bottom",
               "footwear",
               "accessories",
+              "hair",
             ],
             "type": "string",
           },

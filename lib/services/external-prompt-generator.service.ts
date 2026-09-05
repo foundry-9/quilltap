@@ -129,7 +129,7 @@ export async function generateExternalPrompt(
 
   // Estimate input tokens (rough: 1 token ≈ 4 characters)
   const estimatedInputTokens = Math.ceil((META_SYSTEM_PROMPT.length + userMessage.length) / 4);
-  const safeInputLimit = getSafeInputLimit(profile.provider, profile.modelName, request.maxTokens);
+  const safeInputLimit = getSafeInputLimit(profile.provider, profile.modelName, request.maxTokens, profile);
 
   if (estimatedInputTokens > safeInputLimit) {
     const errorMsg = `Character data is too large for the selected model's context window at the requested output size. Estimated input: ~${estimatedInputTokens} tokens, safe limit: ~${safeInputLimit} tokens. Try reducing the token limit or selecting a model with a larger context window.`;

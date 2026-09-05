@@ -429,6 +429,97 @@ describe('resolveProviderForDangerousContent', () => {
       expect(result.connectionProfile).toEqual(originalProfile)
     })
   })
+
+  describe('this turn\'s attachments (bug 106)', () => {
+    // The scan used to answer on `isDangerousCompatible` alone, so a text-only
+    // model was a fully eligible substitute for a vision model mid-turn — and
+    // the reroute hands it the vision model's own message array.
+    const textOnlyUncensored: ConnectionProfile = {
+      ...uncensoredProfile,
+      id: 'uncensored-text',
+      name: 'Uncensored Text Only',
+      provider: 'DEEPSEEK',
+      modelName: 'deepseek-v4-flash-latest',
+      supportsImageUpload: false,
+    }
+
+    const visionUncensored: ConnectionProfile = {
+      ...uncensoredProfile,
+      id: 'uncensored-vision',
+      name: 'Uncensored Vision',
+      provider: 'ANTHROPIC',
+      modelName: 'claude-opus-5',
+      supportsImageUpload: true,
+    }
+
+    const scanOnlySettings: DangerousContentSettings = {
+      ...autoRouteSettings,
+    }
+
+    function reposWith(profiles: ConnectionProfile[]) {
+      return {
+        connections: {
+          findById: jest.fn().mockResolvedValue(null),
+          findAll: jest.fn().mockResolvedValue(profiles),
+          findApiKeyByIdAndUserId: jest.fn().mockResolvedValue({ key_value: 'sk-scan' }),
+        },
+      }
+    }
+
+    it('prefers a candidate that can carry the turn\'s images over one that cannot', async () => {
+      // Text-only comes first in the list, so order alone would pick it.
+      ;(getRepositories as jest.Mock).mockReturnValue(
+        reposWith([originalProfile, textOnlyUncensored, visionUncensored])
+      )
+
+      const result = await resolveProviderForDangerousContent(
+        originalProfile,
+        originalApiKey,
+        scanOnlySettings,
+        userId,
+        ['image/jpeg']
+      )
+
+      expect(result.rerouted).toBe(true)
+      expect(result.connectionProfile.id).toBe('uncensored-vision')
+    })
+
+    it('still reroutes to a text-only candidate when no vision one is cleared', async () => {
+      // A degraded-but-delivered turn beats no reroute: the caller re-decides
+      // the attachment question and the describer stands in for the bytes.
+      ;(getRepositories as jest.Mock).mockReturnValue(
+        reposWith([originalProfile, textOnlyUncensored])
+      )
+
+      const result = await resolveProviderForDangerousContent(
+        originalProfile,
+        originalApiKey,
+        scanOnlySettings,
+        userId,
+        ['image/jpeg']
+      )
+
+      expect(result.rerouted).toBe(true)
+      expect(result.connectionProfile.id).toBe('uncensored-text')
+    })
+
+    it('leaves the scan order alone when the turn carries nothing', async () => {
+      ;(getRepositories as jest.Mock).mockReturnValue(
+        reposWith([originalProfile, textOnlyUncensored, visionUncensored])
+      )
+
+      const result = await resolveProviderForDangerousContent(
+        originalProfile,
+        originalApiKey,
+        scanOnlySettings,
+        userId
+      )
+
+      expect(result.rerouted).toBe(true)
+      expect(result.connectionProfile.id).toBe('uncensored-text')
+    })
+  })
+
 })
 
 describe('resolveImageProviderForDangerousContent', () => {

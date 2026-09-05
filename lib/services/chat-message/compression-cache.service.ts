@@ -342,7 +342,11 @@ export function triggerAsyncCompression(options: AsyncCompressionOptions): void 
       const result = await applyContextCompression(
         messages,
         systemPrompt,
-        compressionOptions
+        // Nobody is waiting: this runs after the turn has already been
+        // delivered, to be ready for the next one. A budget that clears the
+        // measured p99 costs nothing here and is the difference between a
+        // compressed next turn and a permanently lost pass (bug 107).
+        { ...compressionOptions, latency: 'background' }
       )
 
       // Update in-memory cache entry with result

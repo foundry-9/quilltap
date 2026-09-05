@@ -64,7 +64,7 @@ const ITEMS = [
 ]
 
 /** The worn snapshot the outfit read eventually publishes. */
-const WORN = { top: ['shirt'], bottom: [], footwear: [], accessories: [] }
+const WORN = { top: ['shirt'], bottom: [], footwear: [], accessories: [], hair: [] }
 
 /** Resolver for the held-open `?action=outfit` response. */
 let releaseOutfit: (() => void) | null = null
@@ -172,7 +172,7 @@ describe('WardrobeControlDialog — staging before the worn snapshot arrives', (
     expect(equipCalls[0]).toMatchObject({
       characterId: CHARACTER_ID,
       mode: 'set_all',
-      slots: { top: ['shirt'], bottom: [], footwear: [], accessories: ['hat'] },
+      slots: { top: ['shirt'], bottom: [], footwear: [], accessories: ['hat'], hair: [] },
     })
   })
 

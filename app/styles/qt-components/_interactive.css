@@ -315,6 +315,29 @@
     --tw-ring-color: var(--qt-radio-focus-ring);
   }
 
+  /**
+   * Range slider — the single class for every <input type="range"> in the app.
+   * Native rendering is deliberate: accent-color paints both the filled track
+   * and the thumb, which `appearance: none` would throw away in Chrome and
+   * Safari (see the RANGE note in _variables.css). Call sites add their own
+   * width/layout classes; this class owns colour, cursor and focus.
+   *
+   * Deliberately no disabled:opacity — browsers already drop the accent on a
+   * disabled range, and several call sites nest one inside an `opacity-50`
+   * wrapper that dims a whole settings group, where a second 50% would compound
+   * to 25% and wash the control out.
+   */
+  .qt-range {
+    @apply focus-visible:outline-none focus-visible:ring-2;
+    @apply disabled:cursor-not-allowed;
+    cursor: pointer;
+    accent-color: var(--qt-range-accent);
+  }
+
+  .qt-range:focus-visible {
+    --tw-ring-color: var(--qt-range-focus-ring);
+  }
+
   /* ==========================================================================
      TABS
      ========================================================================== */

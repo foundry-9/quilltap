@@ -27,13 +27,16 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
   resolveEquippedOutfitForCharacter: jest.fn(),
 }))
+jest.mock('@/lib/wardrobe/wardrobe-instructions', () => ({
+  resolveWardrobeInstructions: jest.fn().mockResolvedValue(null),
+}))
 
 const mockChooseLLMOutfit = chooseLLMOutfit as jest.MockedFunction<typeof chooseLLMOutfit>
 const mockResolve = resolveEquippedOutfitForCharacter as jest.MockedFunction<
   typeof resolveEquippedOutfitForCharacter
 >
 
-const EMPTY = { top: [], bottom: [], footwear: [], accessories: [] }
+const EMPTY = { top: [], bottom: [], footwear: [], accessories: [], hair: [] }
 
 function item(id: string, overrides: Partial<WardrobeItem> = {}): WardrobeItem {
   return {
@@ -231,6 +234,38 @@ describe('applyOutfitSelections — deliberate nudity', () => {
     )
 
     expect(state.a).toEqual(EMPTY)
+  })
+
+  // Hair is styling, not clothing: an outfit of nothing but a hairdo is still
+  // "chose nothing to wear", so the deliberate flag stays the only thing that
+  // separates deliberate nudity from a failure to choose.
+  it('honours deliberate nudity even when the model styled the hair', async () => {
+    mockChooseLLMOutfit.mockResolvedValue(chose({ hair: ['braided-crown'] }, true))
+
+    const { repos, state } = makeRepos()
+    await applyOutfitSelections(
+      'chat-1',
+      [{ characterId: 'a', mode: 'llm_choose' }],
+      repos as never,
+      { userId: 'u1', projectMountPointIds: [] },
+    )
+
+    expect((state.a as Record<string, string[]>).hair).toEqual(['braided-crown'])
+    expect((state.a as Record<string, string[]>).top).toEqual([])
+  })
+
+  it('treats a hair-only pick with no deliberate flag as "chose nothing" and uses defaults', async () => {
+    mockChooseLLMOutfit.mockResolvedValue(chose({ hair: ['braided-crown'] }, false))
+
+    const { repos, state } = makeRepos()
+    await applyOutfitSelections(
+      'chat-1',
+      [{ characterId: 'a', mode: 'llm_choose' }],
+      repos as never,
+      { userId: 'u1', projectMountPointIds: [] },
+    )
+
+    expect((state.a as Record<string, string[]>).top).toEqual(['house-coat'])
   })
 
   it('still falls back to defaults for an empty outfit with no deliberate flag', async () => {

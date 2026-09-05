@@ -1,7 +1,8 @@
 /**
  * Unit tests for postLibrarianUploadAnnouncement — the Librarian whisper that
  * exposes the UUID of every image attached to a user-uploaded chat message,
- * giving the LLM the handle it needs to call `keep_image` / `attach_image`.
+ * giving the LLM the handle it needs to call `describe_image` / `keep_image` /
+ * `attach_image`.
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals'
@@ -45,6 +46,13 @@ describe('buildUploadContent', () => {
     expect(content).toContain('sunset.png')
     // photo-album tool hints so the LLM knows what the UUID is for.
     expect(content).toContain('keep_image')
+    // Bug 92: the looking verb must be named, and named FIRST — the old copy
+    // offered only the two custodial verbs, so models reached for attach_image
+    // when what they wanted was to see the picture.
+    expect(content).toContain('describe_image')
+    expect(content.indexOf('describe_image')).toBeLessThan(content.indexOf('attach_image'))
+    // ...and attach_image must be disclaimed rather than merely mentioned.
+    expect(content).toContain('neither of those shows it to you')
   })
 
   it('lists every UUID for a multi-upload', () => {

@@ -23,9 +23,7 @@
  */
 
 import { useEffect, useRef } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 import { useLexicalComposerContext } from '@lexical/react/LexicalComposerContext'
 import {
   $getSelection,
@@ -64,10 +62,6 @@ function isBoundaryChar(ch: string): boolean {
   return TRIGGER_CHARS.has(ch)
 }
 
-interface ChatSettingsResponse {
-  textReplacementsEnabled?: boolean
-}
-
 interface CandidateWord {
   nodeKey: string
   startOffset: number
@@ -77,10 +71,7 @@ interface CandidateWord {
 
 export function TextReplacementPlugin(): null {
   const [editor] = useLexicalComposerContext()
-  const { data: chatSettings } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
-  })
+  const { data: chatSettings } = useChatSettingsQuery()
   const { compiled } = useTextReplacementRules()
 
   // Keep latest values in refs so the registered command handler doesn't need

@@ -14,6 +14,10 @@ const createJestConfig = nextJest({
 const config: Config = {
   coverageProvider: 'v8',
   testEnvironment: 'node', // Integration tests should use node environment
+  // Same globalSetup as the unit config: arms the V8 Sparkplug segfault guard
+  // (nodejs/node#62393 — see the note in jest.global-setup.js) and heals a
+  // stale native SQLCipher binding before the real-binding suites load it.
+  globalSetup: '<rootDir>/jest.global-setup.js',
   // Add more setup options before each test is run
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   moduleNameMapper: {

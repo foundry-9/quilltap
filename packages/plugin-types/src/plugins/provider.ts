@@ -106,6 +106,21 @@ export interface ProviderMetadata {
 export interface ProviderConfigRequirements {
   /** Whether this provider requires an API key */
   requiresApiKey: boolean;
+  /**
+   * Whether this provider *may* hold an API key at all.
+   *
+   * `requiresApiKey` answers "must a key be supplied before the profile is
+   * valid?"; this answers "may one be supplied?". They are the same question
+   * for every provider that is wholly hosted or wholly local, which is why one
+   * boolean served for so long — and why omitting this field means "same
+   * answer as `requiresApiKey`", so no existing plugin changes behaviour.
+   *
+   * OpenAI-Compatible is the provider that splits them: it legitimately spans
+   * an unauthenticated llama.cpp on localhost and a hosted endpoint behind a
+   * bearer token, so it declares `requiresApiKey: false, acceptsApiKey: true`
+   * and the key becomes optional rather than absent. (Bug 81.)
+   */
+  acceptsApiKey?: boolean;
   /** Whether this provider requires a custom base URL */
   requiresBaseUrl: boolean;
   /** Label text for API key input field */
@@ -172,6 +187,23 @@ export interface ModelInfo {
   supportsImages?: boolean;
   /** Whether this model supports tool/function calling */
   supportsTools?: boolean;
+  /**
+   * Whether this model is capable of a reasoning ("thinking") turn at all.
+   *
+   * Distinct from `thinksByDefault`: a model may be capable of thinking yet
+   * only do so when the profile asks for it.
+   */
+  supportsThinking?: boolean;
+  /**
+   * Whether this model runs a thinking turn **without being asked** — i.e.
+   * with no thinking option set on the connection profile.
+   *
+   * The two facts are separate because providers differ: DeepSeek's V4 tier
+   * reasons out of the box, while Anthropic's extended thinking and Ollama's
+   * thinking channel are opt-in per profile. The host uses this as the
+   * fallback answer when the profile sets no thinking option of its own.
+   */
+  thinksByDefault?: boolean;
   /** Description of the model */
   description?: string;
   /** Pricing information */
@@ -181,6 +213,38 @@ export interface ModelInfo {
     /** Price per 1M output tokens */
     output: number;
   };
+}
+
+/**
+ * How the host can tell whether a connection profile on this provider will
+ * run a reasoning ("thinking") turn.
+ *
+ * Thinking changes what a request may look like. Two providers are already on
+ * record refusing an assistant `[Name]` prefill *only* while thinking: Ollama
+ * never opens the reasoning block behind a prefilled turn, and DeepSeek 400s
+ * on continuing a thinking turn whose `reasoning_content` it never saw. The
+ * host needs a per-profile answer to seed the right multi-character turn
+ * anchor, and only the plugin knows which option key it reads.
+ *
+ * Deliberately declarative rather than a predicate function: the same answer
+ * is needed in the connection-profile editor, which runs in the browser and
+ * cannot call into a server-side plugin. A rule serialises; a closure does
+ * not.
+ *
+ * The rule answers only the *explicit* half — "has this profile switched
+ * thinking on or off?". When the profile says nothing, the host falls back to
+ * the selected model's `thinksByDefault` flag.
+ */
+export interface ThinkingTurnRule {
+  /**
+   * The `parameters` key on the connection profile that switches thinking on
+   * or off. Must match a field key from `getProviderOptionsSchema()`.
+   */
+  optionKey: string;
+  /** Values of that key meaning thinking is ON. */
+  enabledValues?: (string | number | boolean)[];
+  /** Values of that key meaning thinking is OFF. */
+  disabledValues?: (string | number | boolean)[];
 }
 
 /**
@@ -239,6 +303,34 @@ export interface ImageOrientationSupport {
 }
 
 /**
+ * What a provider (or one of its models) can do with LoRA adapters.
+ *
+ * Declaring this is the whole opt-in: the host shows the LoRA editor, stores
+ * the list on the profile, caps it, and hands it to `generateImage` as
+ * `ImageGenParams.loras`. A plugin that declares nothing never sees the key,
+ * so adding LoRA support to one provider costs every other provider zero
+ * lines.
+ */
+export interface ImageLoraSupport {
+  /** How many adapters this model accepts in one request. */
+  maxLoras: number;
+  /**
+   * Bounds for `ImageLoraSpec.scale`, used by the editor's slider. Omitted
+   * means the host offers a permissive 0–2 range and the provider's own
+   * default applies when the user leaves it alone.
+   */
+  scale?: { min: number; max: number; default: number; step?: number };
+  /** What the plugin accepts in `ImageLoraSpec.source`. */
+  sourceKinds: Array<'url' | 'hf-repo' | 'provider-id'>;
+  /**
+   * Whether this model can take a token for private or gated weights (e.g.
+   * NanoGPT's pruna family and its `hf_api_token`). The token itself travels
+   * as an ordinary options-schema field in `profileParameters`, not here.
+   */
+  supportsPrivateWeightsToken?: boolean;
+}
+
+/**
  * Information about an image generation model
  */
 export interface ImageGenerationModelInfo {
@@ -257,6 +349,12 @@ export interface ImageGenerationModelInfo {
    * Required for providers (OpenAI, Z.AI) whose legal sizes differ by model.
    */
   orientationSupport?: ImageOrientationSupport;
+  /**
+   * Per-model LoRA support, overriding any provider-level default. Resolution
+   * mirrors orientation: exact id, then longest-prefix family match, then the
+   * provider-level `ImageProviderConstraints.loraSupport`, then none.
+   */
+  loraSupport?: ImageLoraSupport;
 }
 
 /**
@@ -312,6 +410,14 @@ export interface ImageProviderConstraints {
    * (e.g. Grok, Z.AI).
    */
   orientationSupport?: ImageOrientationSupport;
+  /**
+   * Default LoRA support when no per-model override applies. Declare it only
+   * for providers where *every* image model takes adapters — otherwise leave
+   * it off and put `loraSupport` on the individual
+   * `ImageGenerationModelInfo` entries, so models that can't take a LoRA
+   * never offer the editor.
+   */
+  loraSupport?: ImageLoraSupport;
 }
 
 /**
@@ -583,6 +689,16 @@ export interface TextProviderPlugin {
   defaultContextWindow?: number;
 
   /**
+   * How to tell whether a profile on this provider will run a thinking turn
+   * (optional).
+   *
+   * Omit it and the host judges by the selected model's `thinksByDefault`
+   * flag alone. Declare it when the provider has a profile option that turns
+   * reasoning on or off, so an explicit choice outranks the model default.
+   */
+  thinkingTurnRule?: ThinkingTurnRule;
+
+  /**
    * Describe provider-specific configuration fields the connection-profile
    * editor should render (optional).
    *
@@ -598,6 +714,33 @@ export interface TextProviderPlugin {
    * @returns A schema, or undefined when this provider has no extra options
    */
   getProviderOptionsSchema?: (
+    context?: ProviderOptionsSchemaContext
+  ) => ProviderOptionsSchema | undefined;
+
+  /**
+   * Describe provider-specific fields the *image*-profile editor should
+   * render (optional). The sibling of `getProviderOptionsSchema`, sharing its
+   * schema type and its renderer — the difference is only which profile's
+   * `parameters` bag the values land in.
+   *
+   * Field keys must match what the plugin reads off
+   * `ImageGenParams.profileParameters` at call time, with two exceptions the
+   * host owns outright: `size` and `aspectRatio` keep their existing storage
+   * keys so profiles written by the old hand-rolled panel keep working.
+   *
+   * Unlike the text hook, `context.modelName` here is *not* advisory: image
+   * providers routing to hundreds of models legitimately return a different
+   * schema per model (different legal sizes, different `n` ceiling), and the
+   * host refetches whenever the selected model changes.
+   *
+   * LoRA adapters are deliberately not options-schema fields — they are a
+   * structured repeating pair with their own editor, declared through
+   * `ImageLoraSupport`.
+   *
+   * @param context Optional render context (the selected model, etc.)
+   * @returns A schema, or undefined when this provider has no extra options
+   */
+  getImageProviderOptionsSchema?: (
     context?: ProviderOptionsSchemaContext
   ) => ProviderOptionsSchema | undefined;
 }

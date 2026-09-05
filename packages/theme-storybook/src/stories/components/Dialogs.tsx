@@ -237,11 +237,32 @@ export const Dialogs: React.FC = () => {
         <h3 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '1rem', borderBottom: '1px solid var(--color-border)', paddingBottom: '0.5rem' }}>
           Tooltip
         </h3>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: '4rem', flexWrap: 'wrap' }}>
           <div style={{ position: 'relative', display: 'inline-block', marginTop: '2rem' }}>
             <button className="qt-button qt-button-secondary">Hover me</button>
             <div className="qt-tooltip" style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: '100%', marginBottom: '0.5rem', display: 'block' }}>
               Helpful tooltip text
+            </div>
+          </div>
+
+          {/* Structured (pinned) tooltip — a heading, labelled sections, a hint */}
+          <div style={{ position: 'relative', display: 'inline-block', marginTop: '14rem' }}>
+            <button className="qt-button qt-button-secondary">Pinned, with detail</button>
+            <div
+              className="qt-tooltip"
+              data-interactive="true"
+              data-pinned="true"
+              style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: '100%', marginBottom: '0.5rem', display: 'block', width: '20rem' }}
+            >
+              <div className="qt-tooltip-body">
+                <p className="qt-tooltip-title">Amended</p>
+                <p>On reflection the author corrected this reply to match the record.</p>
+                <div className="qt-tooltip-section">
+                  <p className="qt-tooltip-section-label">What looked off</p>
+                  <p className="qt-tooltip-quote">The ledger excerpt returned by the document read shows a metric column.</p>
+                </div>
+                <p className="qt-tooltip-hint">Click the badge to pin this note; Esc dismisses it.</p>
+              </div>
             </div>
           </div>
         </div>

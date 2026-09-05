@@ -25,7 +25,7 @@ For one Salon turn, in wire order:
 
 | # | Role | Content | Varies |
 |---|---|---|---|
-| 1 | `system` | **Identity stack** + roleplay template + math-notation note + Taboo section + tool instructions + tool reinforcement | Per character (cacheable prefix) |
+| 1 | `system` | **Identity stack** + roleplay template + math-notation note + Taboo section + standing instructions (project/group) + tool instructions + tool reinforcement | Per character (cacheable prefix) |
 | 2 | `system` | **Identity reminder** — fully static "you are {{char}} and only {{char}}" | Character name only |
 | 3 | `system` | **Compressed-history block** — the rolling summary, only when budget compression fired | Every few turns |
 | — | `system` | Agent-mode instructions, when agent mode is on (inserted after the system group) | Rare |
@@ -38,6 +38,8 @@ For one Salon turn, in wire order:
 
 Blocks 1–3 are emitted as separate system messages precisely so their cache lifetimes are independent: the persona prefix does not get invalidated when the rolling summary is refolded.
 
+**Local providers see them folded into one.** A local runtime applies the *model's own* chat template, and the Qwen family — plus several Llama- and Gemma-derived templates — raises an exception on any system message after index 0, rejecting the whole request. So the Ollama and OpenAI-Compatible request builders fold the leading `system` run into a single message at request-build time, joining the contents with a blank line (`collapseLeadingSystemMessages` in `@quilltap/plugin-utils`; `OpenAICompatibleProvider.acceptsRepeatedSystemMessages`, which defaults to `true`). Nothing about the assembly above changes, and no hosted provider's bytes or cache breakpoints move — see [bug 82](bugs/fixed/bug-82-three-leading-system-messages.md). A new local provider must opt into the same fold; a new hosted one must not.
+
 On Anthropic, step 8 is impossible (Sonnet 4.6+ rejects a trailing `assistant` message — "does not support assistant message prefill"), so the multi-character anchor is appended to block 1 as prose instead. The same constraint is why every Staff whisper reaching the model is re-roled to `user`.
 
 ---
@@ -48,14 +50,16 @@ On Anthropic, step 8 is impossible (Sonnet 4.6+ rejects a trailing `assistant` m
 
 1. `## Character Identity` — "You are {{char}}. Everything that follows defines who you are…"
 2. **Base system prompt** — the participant's `selectedSystemPromptId`, falling back to the character's `isDefault` prompt, falling back to nothing.
-3. `## Character Manifesto` — `character.manifesto`.
-4. `## Character Personality` — `character.personality`.
-5. `## Character Aliases` — "This character also goes by: …"
-6. `## Character Pronouns` — subject/object/possessive.
-7. `## Physical Appearance` — the selected physical description (`shortPrompt` → `mediumPrompt` → `longPrompt` → `completePrompt` → `fullDescription`, first non-empty), with its usage-context note.
-8. `## Example Dialogue Style` — `character.exampleDialogues`.
+3. `## Character Manifesto` — `character.manifesto`, under the wrapper "The following you hold as true about yourself, without question."
+4. `## Character Personality` — `character.personality`, under the wrapper "The following is what you know about yourself. Others do not see it unless you show them."
+5. `## Character Aliases` — "You also go by: …"
+6. `## Character Pronouns` — "Your pronouns are subject/object/possessive. Use them whenever you refer to yourself in narration…"
+7. `## Physical Appearance` — "This is how you look — …": the selected physical description (`shortPrompt` → `mediumPrompt` → `longPrompt` → `completePrompt` → `fullDescription`, first non-empty), with its usage-context note. The wrapper is second person; the body stays noun phrases because it is shared with the image pipelines.
+8. `## Example Dialogue Style` — `character.exampleDialogues`, under the wrapper "This is how you speak."
 
 Joined with `\n\n`. `{{char}}`, `{{user}}`, `{{scenario}}`, `{{persona}}` are resolved **here**, at compile time.
+
+Every block addresses the character in the second person — same register as the preamble — and the author-carried fields (3, 4, 8) get referent-fixing wrappers rather than any policing of the author's own person. Outward-facing renderers (§8's identity cards, Host whispers) stay third person: their referent is someone other than the reader. Design: [prompt-person-consistency](features/complete/prompt-person-consistency.md). **Any edit that changes this function's output must bump `IDENTITY_STACK_BUILDER_VERSION` (same file) and register a golden in `__tests__/unit/cache-determinism/system-prompt.test.ts`** — CI fails in both directions if you forget (see §6).
 
 ### What is deliberately *not* in the stack
 
@@ -74,8 +78,9 @@ Same file. Takes the identity stack (precompiled or freshly built) and appends, 
 1. **Roleplay template** — the chat's `roleplayTemplateId`, inherited from project default → user default on first use and then persisted onto the chat (`getRoleplayTemplate` in `lib/services/chat-message/participant-resolver.service.ts`). Template-processed.
 2. **Math-notation note** — universal, template-free. The Salon renders KaTeX only for `$$…$$`; single-`$` is deliberately disabled so prose like "$50 … $20" is not eaten as math. Without this note models reach for `$x$` or `\(x\)` and their formulas render as literal text.
 3. **Taboo section** — the instance-wide forbidden-phrase list (`instance_settings['taboo']`, Settings → Chat → Taboo). Read asynchronously by the caller and handed down, because this builder is synchronous by design. An empty list emits nothing at all, byte-for-byte. Phrases are emitted verbatim and never template-processed — a user phrase may legitimately contain `{{…}}`. The preamble's wording is load-bearing; read the comment on `TABOO_SECTION_PREAMBLE` before editing it.
-4. **Tool instructions** — native tool rules, simple-JSON instructions, or text-block instructions, selected per turn by the orchestrator from the resolved tool mode.
-5. **Tool reinforcement** — one character-voiced line, only when tools are present: "*When {{char}} uses workspace tools, they CALL them…*"
+4. **Standing instructions** — the chat's project `instructions` plus the `instructions` of every group the *responding character* belongs to (`lib/chat/context/standing-instructions.ts`), resolved async by the caller like Taboo and rendered `[STANDING INSTRUCTIONS]` → one headed block per source, groups sorted by name for cache determinism. Stable per character per chat — it changes only when a project/group is edited or a membership changes — which is why it may live in the cacheable prefix even though project *context* (description, store roster) was deliberately moved out to Prospero whispers in Phase E: the whisper content is turn-variable, instructions are not. Empty emits nothing, byte-for-byte. Unlike Taboo the section IS template-processed (`{{char}}`/`{{user}}`), matching the roleplay-template precedent. Help and Brahma chats never see it (separate builders); Carina one-off queries mirror it (see §13).
+5. **Tool instructions** — native tool rules, simple-JSON instructions, or text-block instructions, selected per turn by the orchestrator from the resolved tool mode.
+6. **Tool reinforcement** — one line, only when tools are present, second person like everything above it: "*When you use workspace tools, you CALL them — you do not merely describe calling them.*"
 
 The `{{timestamp}}` template variable is populated here **only** when `timestampConfig.autoPrepend` is false; the auto-prepend path is a Host whisper instead.
 
@@ -87,7 +92,7 @@ It deliberately **does not name the other participants**. An inline roster is ex
 
 ## 6. Compiling and caching the stack
 
-`lib/services/system-prompt-compiler/compiler.ts` builds the identity stack for every LLM-controlled CHARACTER participant and stores it on `chats.compiledIdentityStacks` (a JSON map keyed by participant ID; column added by `migrations/scripts/add-compiled-identity-stacks-field.ts`, see [DDL.md](DDL.md)).
+`lib/services/system-prompt-compiler/compiler.ts` builds the identity stack for every LLM-controlled CHARACTER participant and stores it on `chats.compiledIdentityStacks` (column added by `migrations/scripts/add-compiled-identity-stacks-field.ts`, see [DDL.md](DDL.md)). Since 4.9 the stored value is a **stamped envelope** `{ version, stacks: { participantId → stack } }`, where `version` is `IDENTITY_STACK_BUILDER_VERSION` (colocated with `buildIdentityStack`). Reads require strict version equality — absent, legacy bare-map, older, *and newer* (downgrade) all read as "nothing cached" and rebuild lazily through the read-through fallback; a stale map is discarded on merge, never blended into. Bumping the constant is how a wording change in the builder reaches every existing chat, with no migration.
 
 **Invalidation hooks** — the only places that recompile:
 
@@ -122,7 +127,7 @@ Everything the old architecture concatenated into the system prompt now has a sp
 | Silent-mode rule | **The Host** | `postHostSilentModeAnnouncement` |
 | Timestamp | **The Host** | `timestamp`, on the `autoPrepend` cadence |
 | Off-scene character cards | **The Host** | First time a non-participant workspace character is name-dropped in real dialogue; idempotent via `hostEvent.introducedCharacterIds` |
-| Project context, general shelf | **Prospero** | Chat start, then every `projectContextReinjectInterval` messages |
+| Project context, general shelf | **Prospero** | Chat start, then every `projectContextReinjectInterval` messages. Carries description + store roster only — `project.instructions` moved into the standing-instructions block of system block 1 (§4) and is deliberately absent from the whisper |
 | Group stores / personal vault | **Prospero** | Targeted whisper to the responding character, same cadence |
 | Current outfit, wardrobe, outfit changes | **Aurora** | Opening-outfit whisper; outfit-change whispers from the wardrobe job |
 | Conversation summary | **The Librarian** | Rolling-summary fold |
@@ -147,7 +152,7 @@ Recall reaches the model as plain second-person prose appended to the new user m
 Sections are appended to the new user message in this order, separated by `---`:
 
 1. Aurora Core packet
-2. Commonplace Book recall (scene state → recap → relevant memories → inter-character memories → knowledge → retrospective recall)
+2. Commonplace Book recall (scene state → recap → relevant memories → inter-character memories → knowledge → relevant past conversations → retrospective recall). The relevant-past-conversations section is present only when the instance-wide `memoryRecall.perTurnConversationSummaries` setting is on (off by default); otherwise that list reaches the character through the recap, the fold-posted `relevant-conversations` whisper, or the retrospective mini-recap.
 3. Suparṇā mail
 4. "Nothing to add" turn-skip note
 
@@ -207,9 +212,9 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 |---|---|---|
 | **Help chats** | `lib/help-chat/system-prompt-builder.ts` | Same identity preamble and identity reminder, plus a help-assistant role, page documentation context, and other help characters. No roleplay template, scene state, timestamps, Concierge, or project context. |
 | **Brahma Console** | `lib/brahma-console/system-prompt-builder.ts` | Character-less neutral brief. No identity, no personality, no page context, no memories. Optional SQL-access section when `run_sql` is enabled. |
-| **Carina** | `lib/services/carina/carina.service.ts` | `buildIdentityStack` + an explicit scenario section + a "Reference Query / Who Is Asking" section built from the asker's public identity card + the answerer's own memory recall. No conversation history — the isolation is the point. |
-| **`self_inventory`** | `lib/tools/handlers/self-inventory/builders.ts` | Reconstructs the prompt for introspection. Known fidelity gap: it omits the Taboo section a live turn carries. |
-| **Character-voiced announcer** | `lib/services/announcer/character-voiced.ts` | `buildSystemPrompt` with no Taboo phrases. |
+| **Carina** | `lib/services/carina/carina.service.ts` | `buildIdentityStack` + an explicit scenario section + the standing-instructions section (project + the answerer's groups, mirrored insertion) + a "Reference Query / Who Is Asking" section built from the asker's public identity card + the answerer's own memory recall. No conversation history — the isolation is the point. |
+| **`self_inventory`** | `lib/tools/handlers/self-inventory/builders.ts` | Reconstructs the prompt for introspection, including standing instructions. Known fidelity gap: it omits the Taboo section a live turn carries. |
+| **Character-voiced announcer** | `lib/services/announcer/character-voiced.ts` | `buildSystemPrompt` with no Taboo phrases and no standing instructions. |
 
 ## 14. Traps
 
@@ -225,6 +230,7 @@ It deliberately omits `personality` and `manifesto`, the private vantage points,
 | File | Role |
 |---|---|
 | `lib/chat/context/system-prompt-builder.ts` | `buildIdentityStack`, `buildSystemPrompt`, `buildIdentityReinforcement`, `buildPublicIdentityCard`, `renderTabooSection` |
+| `lib/chat/context/standing-instructions.ts` | Resolve + render project/group `instructions` for the standing-instructions section |
 | `lib/services/system-prompt-compiler/compiler.ts` | Compile / cache / invalidate `chats.compiledIdentityStacks` |
 | `lib/chat/context-manager.ts` | `buildContext` — budget, memory, knowledge, scene state, whisper emission, final message assembly |
 | `lib/services/chat-message/context-builder.service.ts` | History filtering, whisper role normalization, opaque body swap, multi-character anchoring |

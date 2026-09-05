@@ -152,7 +152,7 @@ export function ChangePassphraseCard() {
           autoComplete="new-password"
         />
         {mismatch && (
-          <p className="qt-text-xs mt-1 qt-text-error">Passphrases do not match</p>
+          <p className="qt-text-xs mt-1 qt-text-destructive">Passphrases do not match</p>
         )}
       </div>
 

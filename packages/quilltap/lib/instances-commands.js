@@ -30,7 +30,7 @@ Quilltap Instance Registry
 Usage: quilltap instances <verb> [args]
 
 Verbs:
-  list                          List registered instances (default)
+  list [--json]                 List registered instances (default)
   show <name>                   Show one instance (passphrase status only)
   path                          Print the path to instances.json
   add <name> [<path>]           Register an instance (prompts for missing path / passphrase)
@@ -38,6 +38,7 @@ Verbs:
   set-passphrase <name>         Change or clear the stored passphrase
   default [<name>]              Set/show/clear default instance
   rename <old> <new>            Rename an instance (preserves passphrase)
+  restore-key <name>            Rebuild a lost/locked .dbkey from the pepper
   -h, --help                    This help
 
 Storage: ~/Library/Application Support/Quilltap/instances.json on macOS,
@@ -60,6 +61,22 @@ Default Instance:
   quilltap instances default Friday          # set Friday as the default
   quilltap instances default --clear         # clear the default
   quilltap instances default                 # show the current default
+
+Rebuilding a .dbkey:
+  The .dbkey file only WRAPS the pepper — the pepper itself is the database
+  key. So if the file is lost, or its passphrase is forgotten, an operator who
+  still has the pepper can rebuild it:
+
+  quilltap instances restore-key Friday          # pepper from the environment,
+                                                 #   or a hidden prompt
+  quilltap instances restore-key Friday --no-passphrase --yes
+
+  The pepper is read from ENCRYPTION_MASTER_PEPPER or prompted for, never
+  passed as a flag (a command line lands in shell history and in ps output). It is
+  proved against the encrypted databases on disk before anything is written,
+  and the command refuses while the instance lock is held, so run it with the
+  server down. Flags: --passphrase <pass>, --no-passphrase, --data-dir <path>,
+  --force (no encrypted database to prove against), --yes.
 
 Examples:
   quilltap instances add Friday ~/iCloud/Quilltap/Friday
@@ -280,6 +297,33 @@ function cmdRename(args) {
   console.log(`Renamed instance "${oldKey}" → "${newKey}".`);
 }
 
+// Rebuild the instance's .dbkey from the pepper — see lib/dbkey-restore.js
+// for why the pepper never arrives as a flag and why the write is proved first.
+async function cmdRestoreKey(args) {
+  const opts = { name: '', dataDir: '', passphrase: undefined, noPassphrase: false, force: false, yes: false };
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    switch (a) {
+      case '-d': case '--data-dir': opts.dataDir = args[++i]; break;
+      case '--passphrase': opts.passphrase = args[++i]; break;
+      case '--no-passphrase': opts.noPassphrase = true; break;
+      case '--force': opts.force = true; break;
+      case '-y': case '--yes': opts.yes = true; break;
+      default:
+        if (a.startsWith('-')) throw new Error(`Unknown flag: ${a}`);
+        if (opts.name) throw new Error('Specify one instance.');
+        opts.name = a;
+        break;
+    }
+  }
+  if (!opts.name && !opts.dataDir) {
+    console.error('Usage: quilltap instances restore-key <name> | --data-dir <instance-root>');
+    process.exit(1);
+  }
+  const { restoreKey } = require('./dbkey-restore');
+  await restoreKey(opts);
+}
+
 async function instancesCommand(args) {
   if (args.length === 0) {
     cmdList();
@@ -322,11 +366,21 @@ async function instancesCommand(args) {
       case 'passphrase':
         await cmdSetPassphrase(rest);
         return;
-      case 'default':
-        cmdDefault(rest);
+      case 'default': {
+        // `--json` has to be lifted out of the positionals as well as read:
+        // cmdDefault treats args[0] as the instance name to set, so leaving the
+        // flag in place made `instances default --json` try to set an instance
+        // literally named "--json" and left cmdDefault's json branch unreachable.
+        const json = rest.includes('--json');
+        cmdDefault(rest.filter((a) => a !== '--json'), { json });
         return;
+      }
       case 'rename':
         cmdRename(rest);
+        return;
+      case 'restore-key':
+      case 'rebuild-key':
+        await cmdRestoreKey(rest);
         return;
       default:
         console.error(`Unknown instances verb: ${verb}`);

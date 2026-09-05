@@ -186,7 +186,7 @@ export function MemoryEditor({ characterId, memory, onClose, onSave }: MemoryEdi
                 step="0.1"
                 value={form.formData.importance}
                 onChange={form.handleChange}
-                className="w-full h-2 qt-bg-muted rounded-lg appearance-none cursor-pointer"
+                className="qt-range w-full"
               />
               <div className="flex justify-between qt-text-xs mt-1">
                 <span>Low</span>

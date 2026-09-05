@@ -82,7 +82,7 @@ export const STEP_DISPLAY_NAMES: Record<AIImportStepName, string> = {
   system_prompts: 'Creating System Prompts',
   physical_descriptions: 'Describing Appearance',
   wardrobe_items: 'Generating Wardrobe',
-  pronouns: 'Determining Pronouns',
+  pronouns: 'Determining Pronouns & Aliases',
   memories: 'Generating Memories',
   chats: 'Creating Example Chat',
   assembly: 'Assembling Export',

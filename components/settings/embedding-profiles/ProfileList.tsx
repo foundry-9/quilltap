@@ -149,7 +149,7 @@ export function ProfileList({
   }
 
   // Check if any provider needs an API key but doesn't have one
-  const needsApiKey = (provider: string) => ['OPENAI', 'OPENROUTER'].includes(provider)
+  const needsApiKey = (provider: string) => ['OPENAI', 'OPENROUTER', 'NANOGPT'].includes(provider)
 
   return (
     <div className="space-y-4">

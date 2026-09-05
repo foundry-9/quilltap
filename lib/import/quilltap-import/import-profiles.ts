@@ -15,18 +15,18 @@ import type {
   EmbeddingProfile,
 } from '@/lib/schemas/types';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
-import type { ImportOptions, IdMappingState, ImportCounts } from './types';
+import { seedLegacyConnectionProfileFields } from '@/lib/llm/connection-profile-legacy-fields';
+import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
-
-const LEGACY_IMAGE_CAPABLE_PROVIDERS = new Set(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK']);
 
 export async function importConnectionProfiles(
   userId: string,
   profiles: ConnectionProfile[],
   options: ImportOptions,
   idMaps: IdMappingState,
-  repos: ReturnType<typeof getUserRepositories>
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
@@ -38,14 +38,26 @@ export async function importConnectionProfiles(
   const takenNames = new Set(existingProfiles.map((p) => normalizeProfileName(p.name)));
 
   for (const rawProfile of profiles) {
-    // Older exports predate the per-profile supportsImageUpload flag; seed it
-    // from the historic provider capability map so image support round-trips.
-    const profile: ConnectionProfile =
-      (rawProfile as Partial<ConnectionProfile>).supportsImageUpload === undefined
-        ? { ...rawProfile, supportsImageUpload: LEGACY_IMAGE_CAPABLE_PROVIDERS.has(rawProfile.provider) }
-        : rawProfile;
-
     try {
+      // Older exports predate some of the columns; seed them so the bundle's
+      // age, not the table DEFAULT, decides what the profile comes back as.
+      // Shared with backup restore so the two paths can't drift. This lives
+      // *inside* the per-item try: a bundle is untrusted data, and one item
+      // that fails to seed must be named and skipped, not abort the import
+      // (bug 105).
+      const profile: ConnectionProfile = seedLegacyConnectionProfileFields(rawProfile);
+      if (
+        rawProfile.multiCharacterPrefill === undefined ||
+        rawProfile.supportsImageUpload === undefined
+      ) {
+        moduleLogger.debug('Seeded connection-profile columns the bundle predates', {
+          profileId: profile.id,
+          provider: profile.provider,
+          seededMultiCharacterPrefill: rawProfile.multiCharacterPrefill === undefined,
+          seededSupportsImageUpload: rawProfile.supportsImageUpload === undefined,
+        });
+      }
+
       const existing = await repos.connections.findById(profile.id);
 
       if (existing) {
@@ -73,18 +85,12 @@ export async function importConnectionProfiles(
             });
           }
           takenNames.add(normalizeProfileName(uniqueName));
-          const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-          const newProfile = options.preserveIds
-            ? await repos.connections.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: uniqueName,
-              }, createOptions)
-            : await repos.connections.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: uniqueName,
-              });
+          const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+          const newProfile = await repos.connections.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+            name: uniqueName,
+          }, createOptions);
           imported++;
           continue;
         }
@@ -99,23 +105,22 @@ export async function importConnectionProfiles(
         });
       }
       takenNames.add(normalizeProfileName(uniqueName));
-      const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-      const newProfile = options.preserveIds
-        ? await repos.connections.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-            name: uniqueName,
-          }, createOptions)
-        : await repos.connections.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-            name: uniqueName,
-          });
+      const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+      const newProfile = await repos.connections.create({
+        ...profileData,
+        apiKeyId: null, // Don't restore API keys
+        name: uniqueName,
+      }, createOptions);
       idMaps.connectionProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {
+      warnings.push(
+        `Failed to import connection profile "${rawProfile.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       moduleLogger.warn('Failed to import connection profile', {
-        profileId: profile.id,
+        profileId: rawProfile.id,
         error: error instanceof Error ? error.message : String(error),
       });
     }
@@ -129,7 +134,8 @@ export async function importImageProfiles(
   profiles: ImageProfile[],
   options: ImportOptions,
   idMaps: IdMappingState,
-  repos: ReturnType<typeof getUserRepositories>
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
@@ -153,37 +159,31 @@ export async function importImageProfiles(
           const newId = randomUUID();
           idMaps.imageProfiles.set(profile.id, newId);
           const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-          const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-          const newProfile = options.preserveIds
-            ? await repos.imageProfiles.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: `${profileData.name} (imported)`,
-              }, createOptions)
-            : await repos.imageProfiles.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: `${profileData.name} (imported)`,
-              });
+          const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+          const newProfile = await repos.imageProfiles.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+            name: `${profileData.name} (imported)`,
+          }, createOptions);
           imported++;
           continue;
         }
       }
 
       const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-      const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-      const newProfile = options.preserveIds
-        ? await repos.imageProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-          }, createOptions)
-        : await repos.imageProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-          });
+      const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+      const newProfile = await repos.imageProfiles.create({
+        ...profileData,
+        apiKeyId: null, // Don't restore API keys
+      }, createOptions);
       idMaps.imageProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {
+      warnings.push(
+        `Failed to import image profile "${profile.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       moduleLogger.warn('Failed to import image profile', {
         profileId: profile.id,
         error: error instanceof Error ? error.message : String(error),
@@ -199,7 +199,8 @@ export async function importEmbeddingProfiles(
   profiles: EmbeddingProfile[],
   options: ImportOptions,
   idMaps: IdMappingState,
-  repos: ReturnType<typeof getUserRepositories>
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
@@ -223,37 +224,31 @@ export async function importEmbeddingProfiles(
           const newId = randomUUID();
           idMaps.embeddingProfiles.set(profile.id, newId);
           const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-          const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-          const newProfile = options.preserveIds
-            ? await repos.embeddingProfiles.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: `${profileData.name} (imported)`,
-              }, createOptions)
-            : await repos.embeddingProfiles.create({
-                ...profileData,
-                apiKeyId: null, // Don't restore API keys
-                name: `${profileData.name} (imported)`,
-              });
+          const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+          const newProfile = await repos.embeddingProfiles.create({
+            ...profileData,
+            apiKeyId: null, // Don't restore API keys
+            name: `${profileData.name} (imported)`,
+          }, createOptions);
           imported++;
           continue;
         }
       }
 
       const { id: _, userId: __, createdAt, updatedAt, ...profileData } = profile;
-      const createOptions = options.preserveIds ? { id: profile.id } : undefined;
-      const newProfile = options.preserveIds
-        ? await repos.embeddingProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-          }, createOptions)
-        : await repos.embeddingProfiles.create({
-            ...profileData,
-            apiKeyId: null, // Don't restore API keys
-          });
+      const createOptions = getPreserveIdsCreateOptions(profile.id, options);
+      const newProfile = await repos.embeddingProfiles.create({
+        ...profileData,
+        apiKeyId: null, // Don't restore API keys
+      }, createOptions);
       idMaps.embeddingProfiles.set(profile.id, newProfile.id);
       imported++;
     } catch (error) {
+      warnings.push(
+        `Failed to import embedding profile "${profile.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       moduleLogger.warn('Failed to import embedding profile', {
         profileId: profile.id,
         error: error instanceof Error ? error.message : String(error),

@@ -65,6 +65,7 @@ describe('wardrobe-handler-shared', () => {
       bottom: ['rain-outfit'],
       footwear: ['rain-outfit'],
       accessories: [],
+      hair: [],
     })
 
     expect(summary).toContain('Raincoat')
@@ -105,6 +106,7 @@ describe('wardrobe-handler-shared', () => {
       bottom: ['working-outfit'],
       footwear: ['working-outfit'],
       accessories: ['working-outfit'],
+      hair: [],
     })
 
     expect(summary).toContain('Navy Sweater')

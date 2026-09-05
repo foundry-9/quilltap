@@ -1,5 +1,5 @@
 import { logger } from '@/lib/logger';
-import { EMPTY_EQUIPPED_SLOTS, WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, isSlotReportedWhenEmpty, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types';
 import { describeOutfit } from '@/lib/wardrobe/outfit-description';
 import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
@@ -9,7 +9,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor';
 
-type WardrobeRepos = ReturnType<typeof getRepositories>;
+/** The full repository container the wardrobe tool handlers operate on. */
+export type WardrobeRepos = ReturnType<typeof getRepositories>;
 
 /**
  * Sentinels an LLM sometimes emits for "no item". Treated as undefined so a
@@ -85,8 +86,9 @@ interface WardrobeReposForSummary {
   };
 }
 
+/** Fresh all-empty equipped state (fresh arrays per slot). */
 export function emptyEquippedState(): EquippedSlots {
-  return { ...EMPTY_EQUIPPED_SLOTS };
+  return makeEmptyEquippedSlots();
 }
 
 /**
@@ -159,6 +161,23 @@ interface WardrobeMutationOutput {
 }
 
 /**
+ * Render the equipped state as indented per-slot lines for LLM-facing output.
+ * Shared by the mutation formatter below and the create handler so the slot
+ * presentation (including the hair suppression rule) can never drift.
+ */
+export function formatEquippedSlotLines(state: EquippedSlots): string[] {
+  const lines: string[] = [];
+  for (const slotKey of WARDROBE_SLOT_TYPES) {
+    const ids = state[slotKey] ?? [];
+    // An unreported-if-blank slot (hair) is omitted entirely when empty rather
+    // than listed as "(empty)" — the model must never read that as baldness.
+    if (ids.length === 0 && !isSlotReportedWhenEmpty(slotKey)) continue;
+    lines.push(`  ${slotKey}: ${ids.length === 0 ? '(empty)' : ids.join(', ')}`);
+  }
+  return lines;
+}
+
+/**
  * Format a wear/take-off result for conversation context: the per-operation
  * effect lines, then the resulting per-slot outfit, then the coverage summary.
  * Identical presentation for both tools so the LLM reads them the same way.
@@ -179,15 +198,87 @@ export function formatWardrobeMutationResults(output: WardrobeMutationOutput): s
 
   lines.push('');
   lines.push('Current outfit:');
-  const state = output.current_state;
-  for (const slotKey of WARDROBE_SLOT_TYPES) {
-    const ids = state[slotKey];
-    lines.push(`  ${slotKey}: ${ids.length === 0 ? '(empty)' : ids.join(', ')}`);
-  }
+  lines.push(...formatEquippedSlotLines(output.current_state));
   lines.push('');
   lines.push(`Summary: ${output.coverage_summary}`);
 
   return lines.join('\n');
+}
+
+/**
+ * The validation-failure shape shared by `wardrobe_wear` / `wardrobe_take_off`:
+ * no operations, an empty equipped state, and the error message.
+ */
+export function buildWardrobeMutationFailure(error: string): {
+  success: false;
+  operations: never[];
+  current_state: EquippedSlots;
+  coverage_summary: string;
+  error: string;
+} {
+  return {
+    success: false,
+    operations: [],
+    current_state: emptyEquippedState(),
+    coverage_summary: '',
+    error,
+  };
+}
+
+/**
+ * Finalize a wear/take-off mutation: fire the avatar + announcement side
+ * effects ONCE (only if at least one operation actually landed), then reload
+ * the equipped state and coverage summary and assemble the tool output.
+ * Generic over the per-operation result type so both tools share it.
+ */
+export async function finalizeWardrobeMutation<TOpResult>(
+  repos: WardrobeRepos,
+  context: Pick<ToolExecutionContext, 'userId' | 'chatId' | 'pendingWardrobeAnnouncements'> & {
+    characterId: string;
+  },
+  sourceContext: string,
+  args: {
+    appliedCount: number;
+    results: TOpResult[];
+    failedError: string | undefined;
+    tiers: SharedWardrobeTiers;
+  },
+): Promise<{
+  success: boolean;
+  operations: TOpResult[];
+  current_state: EquippedSlots;
+  coverage_summary: string;
+  error?: string;
+}> {
+  // Fire side effects ONCE, only if at least one operation actually landed.
+  if (args.appliedCount > 0) {
+    await notifyWardrobeChanged(
+      repos,
+      {
+        userId: context.userId,
+        chatId: context.chatId,
+        characterId: context.characterId,
+        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
+      },
+      sourceContext,
+    );
+  }
+
+  const currentState = await loadCurrentWardrobeState(repos, context.chatId, context.characterId);
+  const coverageSummary = await buildWardrobeCoverageSummaryFromState(
+    repos,
+    context.characterId,
+    currentState,
+    args.tiers,
+  );
+
+  return {
+    success: args.failedError === undefined,
+    operations: args.results,
+    current_state: currentState,
+    coverage_summary: coverageSummary,
+    ...(args.failedError ? { error: args.failedError } : {}),
+  };
 }
 
 export async function loadCurrentWardrobeState(
@@ -242,18 +333,6 @@ export async function scheduleWardrobeAnnouncement(
 }
 
 /**
- * Record that the given character's wardrobe was modified during this turn.
- *
- * If the tool execution context has a `pendingWardrobeAnnouncements` Set
- * (the orchestrator initializes one per turn), the characterId is added to
- * it and Aurora's notification is deferred until the orchestrator drains the
- * Set at end-of-turn — collapsing N wardrobe edits in a single LLM response
- * into a single announcement.
- *
- * If the Set is missing (legacy callers without orchestrator threading), the
- * announcement is enqueued immediately so behavior degrades safely.
- */
-/**
  * The "not found" message the wardrobe tools return when an item can't be
  * resolved by id or title. Phrased identically across `wardrobe_read`,
  * `wardrobe_update`, `wardrobe_wear`, `wardrobe_take_off`, and
@@ -264,6 +343,22 @@ export function wardrobeItemNotFoundMessage(
   itemTitle: string | undefined,
 ): string {
   return `Wardrobe item not found${itemId ? ` with ID "${itemId}"` : ''}${itemTitle ? ` with title "${itemTitle}"` : ''}`;
+}
+
+/**
+ * The refusal returned when the model tries to mutate a shared (project /
+ * Quilltap General) wardrobe item. Phrased identically across
+ * `wardrobe_update` (`verb: 'changed'`) and `wardrobe_archive`
+ * (`verb: 'archived'`).
+ */
+export function sharedWardrobeItemReadOnlyMessage(
+  title: string,
+  verb: 'changed' | 'archived',
+): string {
+  return (
+    `"${title}" is a shared wardrobe item — you can wear it but not edit or retire it. ` +
+    `Only items in your own wardrobe can be ${verb}.`
+  );
 }
 
 /**
@@ -296,6 +391,18 @@ export async function notifyWardrobeChanged(
   );
 }
 
+/**
+ * Record that the given character's wardrobe was modified during this turn.
+ *
+ * If the tool execution context has a `pendingWardrobeAnnouncements` Set
+ * (the orchestrator initializes one per turn), the characterId is added to
+ * it and Aurora's notification is deferred until the orchestrator drains the
+ * Set at end-of-turn — collapsing N wardrobe edits in a single LLM response
+ * into a single announcement.
+ *
+ * If the Set is missing (legacy callers without orchestrator threading), the
+ * announcement is enqueued immediately so behavior degrades safely.
+ */
 export async function recordPendingWardrobeAnnouncement(
   context: Pick<ToolExecutionContext, 'userId' | 'chatId' | 'pendingWardrobeAnnouncements'>,
   args: {

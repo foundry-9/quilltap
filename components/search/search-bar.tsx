@@ -8,8 +8,6 @@ import { SearchResults } from './search-results'
 import { SearchDialog } from './search-dialog'
 import type { SearchResult, SearchResponse, SearchType } from './types'
 
-const ALL_TYPES: SearchType[] = ['chats', 'characters', 'messages', 'tags', 'memories']
-
 export function SearchBar() {
   const router = useRouter()
   const containerRef = useRef<HTMLDivElement>(null)

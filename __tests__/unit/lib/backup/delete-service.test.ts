@@ -33,10 +33,21 @@ jest.mock('@/lib/database/backends/sqlite/mount-index-client', () => ({
 
 const mockFilesFindAll = jest.fn();
 const mockFilesDelete = jest.fn();
+const mockCharactersFindAll = jest.fn();
+const mockMemoriesFindByCharacterId = jest.fn();
+const mockMemoriesDelete = jest.fn();
+
+const mockDeleteMemoriesBatch = jest.fn();
+jest.mock('@/lib/memory/memory-gate', () => ({
+  deleteMemoriesWithUnlinkBatch: (...args: unknown[]) => mockDeleteMemoriesBatch(...args),
+}));
 
 jest.mock('@/lib/repositories/user-scoped', () => ({
   getUserRepositories: () => ({
-    characters: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
+    characters: {
+      findAll: (...args: unknown[]) => mockCharactersFindAll(...args),
+      delete: jest.fn(),
+    },
     chats: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     tags: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     files: {
@@ -54,7 +65,10 @@ jest.mock('@/lib/repositories/user-scoped', () => ({
     projects: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     groups: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
     llmLogs: { findAll: jest.fn().mockResolvedValue([]), delete: jest.fn() },
-    memories: { findByCharacterId: jest.fn().mockResolvedValue([]), delete: jest.fn() },
+    memories: {
+      findByCharacterId: (...args: unknown[]) => mockMemoriesFindByCharacterId(...args),
+      delete: (...args: unknown[]) => mockMemoriesDelete(...args),
+    },
   }),
 }));
 
@@ -98,6 +112,23 @@ describe('delete-service keepArchivedCharacterBundles', () => {
     mockFilesDelete.mockResolvedValue(true);
     mockDeleteFile.mockResolvedValue(undefined);
     mockRawQuery.mockResolvedValue(undefined);
+    mockCharactersFindAll.mockResolvedValue([]);
+    mockMemoriesFindByCharacterId.mockResolvedValue([]);
+    mockDeleteMemoriesBatch.mockResolvedValue(0);
+  });
+
+  it('routes memory deletion through the memory-gate batch chokepoint', async () => {
+    mockCharactersFindAll.mockResolvedValue([{ id: 'char-1' }, { id: 'char-2' }]);
+    mockMemoriesFindByCharacterId
+      .mockResolvedValueOnce([{ id: 'mem-1' }, { id: 'mem-2' }])
+      .mockResolvedValueOnce([{ id: 'mem-3' }]);
+
+    await deleteUserData(USER);
+
+    expect(mockDeleteMemoriesBatch).toHaveBeenCalledTimes(1);
+    expect(mockDeleteMemoriesBatch).toHaveBeenCalledWith(['mem-1', 'mem-2', 'mem-3']);
+    // The repository's per-row delete must never be hit directly.
+    expect(mockMemoriesDelete).not.toHaveBeenCalled();
   });
 
   it('spares ARCHIVE bundles (row and bytes) by default', async () => {

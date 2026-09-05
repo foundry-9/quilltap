@@ -2,19 +2,10 @@
 
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
 import { Icon } from '@/components/ui/icon'
 import { CharacterPickerPanel, NewChatForm, useNewChat } from '@/components/new-chat'
-
-interface ChatSettingsResponse {
-  autonomousRoomSettings?: {
-    visibilityDefault?: 'owner_only' | 'household' | 'open'
-    destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
-    defaultFreshnessWindowMs?: number
-  }
-}
+import { toAutonomousSettingsHint } from '@/components/new-chat/autonomous-settings-hint'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
 
 export function NewChatPageClient() {
   const searchParams = useSearchParams()
@@ -22,20 +13,7 @@ export function NewChatPageClient() {
   const characterIdParam = searchParams.get('characterId') || undefined
   const autonomousParam = searchParams.get('autonomous') === '1'
 
-  const { data: chatSettings } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) => apiFetch<ChatSettingsResponse>('/api/v1/settings/chat', { signal }),
-  })
-  const autonomousHint = chatSettings?.autonomousRoomSettings
-    ? {
-        visibilityDefault: chatSettings.autonomousRoomSettings.visibilityDefault,
-        destructiveToolPolicy: chatSettings.autonomousRoomSettings.destructiveToolPolicy,
-        defaultFreshnessHours:
-          chatSettings.autonomousRoomSettings.defaultFreshnessWindowMs != null
-            ? Math.round(chatSettings.autonomousRoomSettings.defaultFreshnessWindowMs / (60 * 60 * 1000))
-            : undefined,
-      }
-    : undefined
+  const { data: autonomousHint } = useChatSettingsQuery(toAutonomousSettingsHint)
 
   const {
     loading,
@@ -47,6 +25,9 @@ export function NewChatPageClient() {
     project,
     projectScenarios,
     generalScenarios,
+    groupScenarios,
+    showArchivedScenarios,
+    setShowArchivedScenarios,
     roleplayTemplates,
     defaultRoleplayTemplateId,
     availableProjects,
@@ -146,6 +127,9 @@ export function NewChatPageClient() {
             project={project}
             projectScenarios={projectScenarios}
             generalScenarios={generalScenarios}
+            groupScenarios={groupScenarios}
+            showArchivedScenarios={showArchivedScenarios}
+            onShowArchivedScenariosChange={setShowArchivedScenarios}
             roleplayTemplates={roleplayTemplates}
             defaultRoleplayTemplateId={defaultRoleplayTemplateId}
             availableProjects={availableProjects}

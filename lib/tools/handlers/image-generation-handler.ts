@@ -12,9 +12,10 @@ import {
 
 import type { FileCategory, FileSource } from '@/lib/schemas/types';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
+import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import { getImageProviderConstraints } from '@/lib/plugins/provider-registry';
-import { resolveOrientation } from '@/lib/image-gen/orientation';
-import type { ImageOrientation } from '@quilltap/plugin-types';
+import { buildImageGenParams, resolveProfileLoras } from '@/lib/image-gen/params-builder';
+import type { ImageGenParams } from '@quilltap/plugin-types';
 import {
   ImageGenerationToolInput,
   ImageGenerationToolOutput,
@@ -24,10 +25,12 @@ import {
 import { convertToWebP } from '@/lib/files/webp-conversion';
 import { preparePromptExpansion, buildExpansionContext, parsePlaceholders, resolvePlaceholders } from '@/lib/image-gen/prompt-expansion';
 import { craftImagePrompt, type ChatMessage } from '@/lib/memory/cheap-llm-tasks';
-import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { buildCheapLLMConfig, resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm';
+import { resolveCheapLLMSelectionForUser, selectCheapLLMFromProfiles } from '@/lib/llm/cheap-llm-user-selection';
 import type { CheapLLMSettings, DangerousContentSettings } from '@/lib/schemas/settings.types';
 import type { ChatSettings } from '@/lib/schemas/types';
 import {
+  equippedWardrobeItemsForAppearance,
   resolveCharacterAppearances,
   sanitizeAppearancesIfNeeded,
   type AppearanceResolutionInput,
@@ -40,7 +43,7 @@ import { logLLMCall } from '@/lib/services/llm-logging.service';
 import {
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import {
   classifyContent as classifyDangerousContent,
 } from '@/lib/services/dangerous-content/gatekeeper.service';
@@ -50,33 +53,12 @@ import {
   resolveUncensoredImageProfileForReroute,
 } from '@/lib/services/dangerous-content/provider-routing.service';
 import { postLanternImageNotification } from '@/lib/services/lantern-notifications/writer';
-import { resolveEquippedOutfitForCharacter } from '@/lib/wardrobe/resolve-equipped';
-import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
 import { resolveProjectMountPointIdsForChat } from '@/lib/mount-index/tiered-mount-pool';
 import {
   resolveAesthetic,
   resolveDepictionGuidelines,
   getProjectOfficialMountPointId,
 } from '@/lib/image-gen/aesthetic';
-
-/**
- * Build the cheap-LLM config for this handler's ad-hoc LLM calls from a chat's
- * `cheapLLMSettings`, falling back to the global default when unset. Shared by
- * the prompt-expansion, appearance-resolution, and danger-classification paths
- * so all three resolve the cheap model identically.
- */
-function buildCheapLLMConfigFromSettings(
-  cheapLLMSettings: CheapLLMSettings | null | undefined,
-): CheapLLMConfig {
-  return cheapLLMSettings
-    ? {
-        strategy: cheapLLMSettings.strategy,
-        userDefinedProfileId: cheapLLMSettings.userDefinedProfileId ?? undefined,
-        defaultCheapProfileId: cheapLLMSettings.defaultCheapProfileId ?? undefined,
-        fallbackToLocal: cheapLLMSettings.fallbackToLocal,
-      }
-    : DEFAULT_CHEAP_LLM_CONFIG;
-}
 
 /**
  * Execution context for image generation tool
@@ -241,62 +223,23 @@ async function saveGeneratedImage(
 }
 
 /**
- * Merge tool input with profile defaults
+ * Turn the tool's own input into the override slice the shared builder takes.
+ *
+ * The builder owns the merge semantics; this only translates vocabulary
+ * (`count` -> `n`) so the tool's schema and `ImageGenParams` can keep their
+ * own names.
  */
-function mergeParameters(
+function toolInputOverrides(
   input: ImageGenerationToolInput,
-  profileDefaults: Record<string, unknown> = {},
-  model?: string // Model should be passed separately from profile
-): {
-  prompt: string;
-  negativePrompt?: string;
-  model: string;
-  n?: number;
-  size?: string;
-  aspectRatio?: string;
-  quality?: 'standard' | 'hd';
-  style?: 'vivid' | 'natural';
-  seed?: number;
-  guidanceScale?: number;
-  steps?: number;
-} {
+): Partial<Omit<ImageGenParams, 'prompt' | 'loras' | 'profileParameters'>> {
   return {
-    prompt: input.prompt,
-    negativePrompt: input.negativePrompt || (profileDefaults.negativePrompt as string | undefined),
-    model: model || (profileDefaults.model as string) || 'dall-e-3', // Model from parameter, profile defaults, or default to dall-e-3
-    n: input.count ?? (profileDefaults.n as number | undefined) ?? 1,
-    size: input.size || (profileDefaults.size as string | undefined),
-    aspectRatio: input.aspectRatio || (profileDefaults.aspectRatio as string | undefined),
-    quality: input.quality ||
-      (profileDefaults.quality as 'standard' | 'hd' | undefined),
-    style: input.style ||
-      (profileDefaults.style as 'vivid' | 'natural' | undefined),
-    seed: profileDefaults.seed as number | undefined,
-    guidanceScale: profileDefaults.guidanceScale as number | undefined,
-    steps: profileDefaults.steps as number | undefined,
+    negativePrompt: input.negativePrompt,
+    n: input.count,
+    size: input.size,
+    aspectRatio: input.aspectRatio,
+    quality: input.quality,
+    style: input.style,
   };
-}
-
-/**
- * Mutate merged params in place to satisfy the requested orientation for a
- * given provider/model. Sets `size` or `aspectRatio` (overriding any raw value
- * the LLM supplied) and/or appends a prompt hint, per the host resolver.
- */
-function applyOrientation(
-  params: { prompt: string; model: string; size?: string; aspectRatio?: string },
-  provider: string,
-  orientation: ImageOrientation,
-): void {
-  const resolved = resolveOrientation(provider, params.model, orientation);
-  if (resolved.params.size) {
-    params.size = resolved.params.size;
-  }
-  if (resolved.params.aspectRatio) {
-    params.aspectRatio = resolved.params.aspectRatio;
-  }
-  if (resolved.promptHint) {
-    params.prompt = `${params.prompt}\n\n${resolved.promptHint}`;
-  }
 }
 
 /**
@@ -364,18 +307,19 @@ async function generateImagesWithProvider(
   // Get the API key
   const decryptedKey: string = imageProfile.apiKey.key_value;
 
-  // Merge parameters (profile defaults + user input)
-  const mergedParams = mergeParameters(
-    toolInput,
-    imageProfile.parameters as Record<string, unknown>,
-    imageProfile.modelName
-  );
-
-  // Resolve the requested orientation onto this provider/model's own mechanism.
-  // Orientation takes precedence over any raw size/aspectRatio the LLM passed.
-  // `mergedParams.prompt` is already the expanded prompt, so appending the hint
-  // here is the intended final form.
-  applyOrientation(mergedParams, imageProfile.provider, toolInput.orientation ?? 'square');
+  // One builder for every image call site: merges the profile's defaults under
+  // the tool's input, resolves the orientation onto this provider/model's own
+  // mechanism (orientation outranks any raw size the LLM passed), and attaches
+  // the profile's capped LoRA list plus its residual parameter bag.
+  // `toolInput.prompt` is already the expanded prompt, so whatever the builder
+  // appends lands in the intended final form.
+  const { params: mergedParams } = buildImageGenParams({
+    profile: imageProfile,
+    prompt: toolInput.prompt,
+    overrides: toolInputOverrides(toolInput),
+    orientation: toolInput.orientation ?? 'square',
+    logContext: { context: 'tools.generate_image', chatId, profileId: imageProfile.id },
+  });
 
   // Generate images. Tracks the profile that actually produced the final
   // response — updated if the Concierge swaps in the uncensored profile
@@ -460,13 +404,21 @@ async function generateImagesWithProvider(
     });
 
     const rerouteProvider = createImageProvider(reroute.profile.provider);
-    const rerouteMergedParams = mergeParameters(
-      toolInput,
-      reroute.profile.parameters as Record<string, unknown>,
-      reroute.profile.modelName
-    );
-    // Re-resolve for the reroute provider/model — its shape mechanism may differ.
-    applyOrientation(rerouteMergedParams, reroute.profile.provider, toolInput.orientation ?? 'square');
+    // Rebuild from scratch for the reroute target: its shape mechanism, its
+    // LoRA support, and its stored parameters are all its own. The prompt was
+    // crafted against the original profile, so any trigger phrases the
+    // fallback's adapters want get appended here.
+    const { params: rerouteMergedParams } = buildImageGenParams({
+      profile: reroute.profile,
+      prompt: toolInput.prompt,
+      overrides: toolInputOverrides(toolInput),
+      orientation: toolInput.orientation ?? 'square',
+      logContext: {
+        context: 'tools.generate_image.concierge-reroute',
+        chatId,
+        profileId: reroute.profile.id,
+      },
+    });
     const rerouteStartTime = Date.now();
     try {
       generationResponse = await rerouteProvider.generateImage(rerouteMergedParams, reroute.apiKey);
@@ -641,12 +593,9 @@ async function expandPromptWithDescriptions(
 
     // If no override selection, use the standard cheap LLM logic
     if (!cheapLLMSelection) {
-      // Build config from user settings if provided, otherwise use defaults
-      const cheapLLMConfig = buildCheapLLMConfigFromSettings(cheapLLMSettings);
+      const resolved = selectCheapLLMFromProfiles(allProfiles, buildCheapLLMConfig({ cheapLLMSettings }));
 
-      const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-
-      if (!defaultProfile) {
+      if (!resolved) {
         // No profiles available, return original prompt
         return {
           expandedPrompt: originalPrompt,
@@ -654,13 +603,7 @@ async function expandPromptWithDescriptions(
         };
       }
 
-      cheapLLMSelection = getCheapLLMProvider(
-        defaultProfile,
-        cheapLLMConfig,
-        allProfiles,
-        false // ollamaAvailable - could be detected
-      );
-
+      cheapLLMSelection = resolved.selection;
     }
 
     // Resolve default aesthetics (scene + figures, project-over-global) and the
@@ -889,6 +832,28 @@ async function classifyAndRouteForDangerousContent(
     }
   }
 
+  // 5c. Fold in the trigger phrases of the effective profile's LoRAs, so the
+  // prompt crafter weaves each adapter's magic word into the prompt it writes
+  // rather than having it bolted on afterwards. Resolved against the profile
+  // that will actually generate — the reroute above may have swapped it. The
+  // params builder appends anything the crafter fails to say, so a skipped or
+  // fallen-back expansion still delivers the phrase.
+  const { triggerPhrase: loraTriggerPhrase } = resolveProfileLoras(effectiveImageProfile, {
+    context: 'tools.generate_image.style-options',
+    chatId: context.chatId,
+  });
+  if (loraTriggerPhrase) {
+    const combined = styleOptions?.styleTriggerPhrase
+      ? `${styleOptions.styleTriggerPhrase}, ${loraTriggerPhrase}`
+      : loraTriggerPhrase;
+    styleOptions = { ...styleOptions, styleTriggerPhrase: combined };
+    logger.debug('[Image Generation] LoRA trigger phrases routed into prompt expansion', {
+      chatId: context.chatId,
+      profileId: effectiveImageProfile.id,
+      loraTriggerPhrase,
+    });
+  }
+
   return { imagePromptDangerous, effectiveImageProfile, styleOptions };
 }
 
@@ -914,7 +879,7 @@ async function resolveAppearances(
   if (context.chatId) {
     try {
       const chat = await repos.chats.findById(context.chatId);
-      isDangerousChat = isChatActiveDangerous(chat);
+      isDangerousChat = shouldUseUncensoredRoute(chat);
 
       const chatEvents = await repos.chats.getMessages(context.chatId);
       recentChatMessages = chatEvents
@@ -941,18 +906,8 @@ async function resolveAppearances(
       // Build a cheap LLM selection for appearance resolution
       let appearanceLLMSelection = cheapLLMSelection;
       if (!appearanceLLMSelection) {
-        const allProfiles = await repos.connections.findByUserId(context.userId);
-        const cheapLLMConfig = buildCheapLLMConfigFromSettings(chatSettings?.cheapLLMSettings);
-
-        const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-        if (defaultProfile) {
-          appearanceLLMSelection = getCheapLLMProvider(
-            defaultProfile,
-            cheapLLMConfig,
-            allProfiles,
-            false
-          );
-        }
+        const resolved = await resolveCheapLLMSelectionForUser(repos, context.userId, chatSettings);
+        appearanceLLMSelection = resolved?.selection ?? null;
       }
 
       // For dangerous chats, use uncensored provider for appearance resolution
@@ -987,24 +942,12 @@ async function resolveAppearances(
           let equippedWardrobeItems: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> | undefined;
           if (context.chatId && p.entityId) {
             try {
-              const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(context.chatId, p.entityId);
-              if (equippedSlots) {
-                const resolved = await resolveEquippedOutfitForCharacter(
-                  repos,
-                  p.entityId,
-                  equippedSlots,
-                  await sharedWardrobeTiersForCharacter(p.entityId, projectMountPointIds),
-                );
-                const flat: Array<{ slot: string; title: string; description?: string | null; imagePrompt?: string | null }> = [];
-                for (const slot of ['top', 'bottom', 'footwear', 'accessories'] as const) {
-                  for (const item of resolved.leafItemsBySlot[slot]) {
-                    flat.push({ slot, title: item.title, description: item.description, imagePrompt: item.imagePrompt });
-                  }
-                }
-                if (flat.length > 0) {
-                  equippedWardrobeItems = flat;
-                }
-              }
+              equippedWardrobeItems = await equippedWardrobeItemsForAppearance(
+                repos,
+                context.chatId,
+                p.entityId,
+                projectMountPointIds,
+              );
             } catch (err) {
               logger.warn('[Image Generation] Failed to load equipped wardrobe items for character', {
                 characterId: p.entityId,
@@ -1161,12 +1104,12 @@ async function expandPromptWithContext(
 async function loadSettingsAndBuildCheapLLM(
   userId: string,
   chatSettings: ChatSettings | undefined,
-  chat?: { conciergeOverride?: 'OFF' | null } | null
+  chat?: { conciergeOverride?: 'OFF' | 'UNCENSORED' | null } | null
 ): Promise<{
   dangerSettings: DangerousContentSettings;
   cheapLLMSelection: CheapLLMSelection | null;
 }> {
-  // 4b. Resolve dangerous content settings (chat may be Off-duty)
+  // 4b. Resolve dangerous content settings (chat may carry an operator override)
   const dangerousContentResolved = resolveDangerousContentSettings(chatSettings ?? null, chat);
   const dangerSettings = dangerousContentResolved.settings;
 
@@ -1174,19 +1117,8 @@ async function loadSettingsAndBuildCheapLLM(
   let cheapLLMSelection: CheapLLMSelection | null = null;
   if (dangerSettings.mode !== 'OFF' && (dangerSettings.scanImagePrompts || dangerSettings.scanImageGeneration)) {
     try {
-      const repos = getRepositories();
-      const allProfiles = await repos.connections.findByUserId(userId);
-      const cheapLLMConfig = buildCheapLLMConfigFromSettings(chatSettings?.cheapLLMSettings);
-
-      const defaultProfile = allProfiles.find(p => p.isDefault) || allProfiles[0];
-      if (defaultProfile) {
-        cheapLLMSelection = getCheapLLMProvider(
-          defaultProfile,
-          cheapLLMConfig,
-          allProfiles,
-          false
-        );
-      }
+      const resolved = await resolveCheapLLMSelectionForUser(getRepositories(), userId, chatSettings);
+      cheapLLMSelection = resolved?.selection ?? null;
     } catch (error) {
       logger.warn('[Image Generation] Failed to build cheap LLM selection for danger classification', {
         errorMessage: getErrorMessage(error),
@@ -1199,8 +1131,20 @@ async function loadSettingsAndBuildCheapLLM(
 
 /**
  * Execute the image generation tool
+ *
+ * Runs inline in the turn rather than as a queued job, so it registers itself
+ * with the activity registry: the "Img" chip is lit from the first token of
+ * prompt crafting, through the Concierge check and the provider wait, until
+ * the image has landed (or failed).
  */
 export async function executeImageGenerationTool(
+  input: unknown,
+  context: ImageToolExecutionContext
+): Promise<ImageGenerationToolOutput> {
+  return trackActivity('image', () => runImageGenerationTool(input, context));
+}
+
+async function runImageGenerationTool(
   input: unknown,
   context: ImageToolExecutionContext
 ): Promise<ImageGenerationToolOutput> {
@@ -1226,8 +1170,8 @@ export async function executeImageGenerationTool(
       });
     }
 
-    // Fetch chat once so the Concierge off-duty override is honored everywhere downstream.
-    let chatForOverride: { conciergeOverride?: 'OFF' | null } | null = null;
+    // Fetch chat once so any operator Concierge override is honored everywhere downstream.
+    let chatForOverride: { conciergeOverride?: 'OFF' | 'UNCENSORED' | null } | null = null;
     if (context.chatId) {
       try {
         const fetched = await repos.chats.findById(context.chatId);

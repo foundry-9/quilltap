@@ -26,6 +26,7 @@ import type {
   SanitizedEmbeddingProfile,
 } from './types';
 import type { MessageEvent, Memory } from '@/lib/schemas/types';
+import { isTextDocumentFileType } from '@/lib/schemas/mount-index.types';
 import { fileStorageManager } from '@/lib/file-storage/manager';
 import { isFileExcludedFromExport } from './excluded-files';
 import { getPlugin } from '@/lib/plugins/registry';
@@ -45,6 +46,32 @@ const APP_VERSION = packageJson.version;
  * joined payload and corrupt every multi-chunk blob.
  */
 const BLOB_CHUNK_BYTES = 3 * 1024 * 1024;
+
+/**
+ * How many chunk records `bytes` splits into. Never zero: an empty blob still
+ * travels as one (empty) chunk, so the reader's "all chunks received" gate
+ * closes for it like any other.
+ */
+function chunkCountFor(bytes: Uint8Array): number {
+  return Math.max(1, Math.ceil(bytes.length / BLOB_CHUNK_BYTES));
+}
+
+/**
+ * Slice `bytes` into the `{ index, total, dataBase64 }` triples every blob
+ * chunk record carries. `BLOB_CHUNK_BYTES` is a multiple of 3, so only the last
+ * slice's base64 can carry padding and the reader concatenates the pieces
+ * verbatim.
+ */
+function* chunkBase64(
+  bytes: Buffer
+): Generator<{ index: number; total: number; dataBase64: string }> {
+  const total = chunkCountFor(bytes);
+  for (let index = 0; index < total; index++) {
+    const start = index * BLOB_CHUNK_BYTES;
+    const end = Math.min(start + BLOB_CHUNK_BYTES, bytes.length);
+    yield { index, total, dataBase64: bytes.subarray(start, end).toString('base64') };
+  }
+}
 
 // ============================================================================
 // HELPERS (profile sanitization + tag/API-key label resolution for export)
@@ -177,8 +204,6 @@ async function* streamCharacters(
       for (const item of wardrobeItems) {
         yield { kind: 'wardrobe_item', characterId: id, data: item };
       }
-      if (wardrobeItems.length > 0) {
-      }
     } catch (error) {
       logger.warn('Failed to load wardrobe items for character export', {
         characterId: id,
@@ -197,8 +222,6 @@ async function* streamCharacters(
           pluginName,
           data: pluginData[pluginName],
         };
-      }
-      if (pluginNames.length > 0) {
       }
     } catch (error) {
       logger.warn('Failed to load plugin data for character export', {
@@ -601,12 +624,7 @@ async function* streamOneStore(
       for (const d of docs) {
         // doc_mount_documents row only ever holds text content — skip
         // links that point at blob-type content (they're exported as blobs).
-        if (
-          d.fileType !== 'markdown' &&
-          d.fileType !== 'txt' &&
-          d.fileType !== 'json' &&
-          d.fileType !== 'jsonl'
-        ) {
+        if (!isTextDocumentFileType(d.fileType)) {
           continue;
         }
         yield {
@@ -635,7 +653,7 @@ async function* streamOneStore(
       const data = await repos.docMountBlobs.readData(meta.id);
       if (!data) continue;
 
-      const chunkCount = Math.max(1, Math.ceil(data.length / BLOB_CHUNK_BYTES));
+      const chunkCount = chunkCountFor(data);
 
       yield {
         kind: 'doc_mount_blob',
@@ -661,17 +679,12 @@ async function* streamOneStore(
       };
       bump(counts, 'documentStoreBlobs');
 
-      for (let index = 0; index < chunkCount; index++) {
-        const start = index * BLOB_CHUNK_BYTES;
-        const end = Math.min(start + BLOB_CHUNK_BYTES, data.length);
-        const slice = data.subarray(start, end);
+      for (const chunk of chunkBase64(data)) {
         yield {
           kind: 'doc_mount_blob_chunk',
           mountPointId: meta.mountPointId,
           sha256: meta.sha256,
-          index,
-          total: chunkCount,
-          dataBase64: slice.toString('base64'),
+          ...chunk,
         };
       }
     }
@@ -785,24 +798,15 @@ async function* streamFiles(
 
     if (!bytes) continue;
 
-    const chunkCount = Math.max(1, Math.ceil(bytes.length / BLOB_CHUNK_BYTES));
     yield {
       kind: 'file_blob',
       fileId: file.id,
       sha256: file.sha256,
       sizeBytes: bytes.length,
-      chunkCount,
+      chunkCount: chunkCountFor(bytes),
     };
-    for (let index = 0; index < chunkCount; index++) {
-      const start = index * BLOB_CHUNK_BYTES;
-      const end = Math.min(start + BLOB_CHUNK_BYTES, bytes.length);
-      yield {
-        kind: 'file_blob_chunk',
-        fileId: file.id,
-        index,
-        total: chunkCount,
-        dataBase64: bytes.subarray(start, end).toString('base64'),
-      };
+    for (const chunk of chunkBase64(bytes)) {
+      yield { kind: 'file_blob_chunk', fileId: file.id, ...chunk };
     }
   }
 }

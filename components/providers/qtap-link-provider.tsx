@@ -3,7 +3,8 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import type { QtapUriParts } from '@/lib/doc-edit/qtap-uri'
-import { openDocumentForChat, resolveDocumentExistsForChat } from '@/app/salon/[id]/hooks/documentModeApi'
+import { resolveDocumentExistsForChat } from '@/app/salon/[id]/hooks/documentModeApi'
+import { openDocumentInChat } from '@/lib/documents/open-document-in-chat'
 import ImageModal from '@/components/chat/ImageModal'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { QtapLinkContext, type QtapTargetKind, type QtapTargetResolution } from '@/components/qtap/QtapLinkContext'
@@ -139,39 +140,13 @@ export function QtapLinkProvider({ children }: QtapLinkProviderProps) {
     }
 
     focusChat(activeChatId)
-    void openDocumentForChat(activeChatId, {
-      filePath: parts.path,
-      scope: parts.scope,
-      mountPoint: parts.mountPoint,
-      mode: 'split',
+    void openDocumentInChat(
+      activeChatId,
+      { filePath: parts.path, scope: parts.scope, mountPoint: parts.mountPoint, mode: 'split' },
+      { openTab: ws && pathname === '/workspace' ? ws.openTab : null },
+    ).catch((error) => {
+      showErrorToast(error instanceof Error ? error.message : 'Failed to open document')
     })
-      .then((data) => {
-        if (ws && pathname === '/workspace') {
-          ws.openTab(
-            'document',
-            {
-              chatId: activeChatId,
-              chatDocumentId: data.document.id,
-              displayTitle: data.document.displayTitle,
-            },
-            { focus: true },
-          )
-        }
-
-        // Notify any mounted Salon for this chat to reconcile and focus the
-        // newly-opened document row immediately (no manual refresh needed).
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('qtap-document-opened', {
-            detail: {
-              chatId: activeChatId,
-              chatDocumentId: data.document.id,
-            },
-          }))
-        }
-      })
-      .catch((error) => {
-        showErrorToast(error instanceof Error ? error.message : 'Failed to open document')
-      })
   }, [activeChatId, focusChat, pathname, ws])
 
   const value = useMemo(() => ({ resolve, open }), [open, resolve])

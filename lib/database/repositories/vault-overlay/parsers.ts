@@ -496,6 +496,8 @@ export function parseScenarioFile(
       frontmatterDescription = description.trim().slice(0, 500);
     }
   }
+  // Absence means active — matches the file-backed scenario scopes.
+  const archived = parsed.data?.archived === true || parsed.data?.archived === 'true';
 
   // Body excludes the frontmatter block (parsed.bodyStartOffset is 0 when
   // no frontmatter was present, so this is safe in either case).
@@ -548,6 +550,7 @@ export function parseScenarioFile(
     title: title.slice(0, 200),
     content: body,
     ...(frontmatterDescription !== undefined && { description: frontmatterDescription }),
+    ...(archived && { archived: true }),
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };

@@ -39,7 +39,7 @@ const envSchema = z
 
     // Timezone Configuration
     // IANA timezone name from the host OS (e.g., "America/New_York")
-    // Detected automatically by Electron and passed to Lima/WSL2/Docker
+    // Detected automatically by Electron and passed through to Docker
     // Docker users can set this manually: -e QUILLTAP_TIMEZONE=America/New_York
     QUILLTAP_TIMEZONE: z.string().optional(),
 

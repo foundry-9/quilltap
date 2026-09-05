@@ -19,6 +19,8 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { getMaxConcurrentJobs } from '@/lib/instance-settings';
 import type { Database } from 'better-sqlite3';
 import { logger } from '@/lib/logger';
+import { publishRealtime } from '@/lib/realtime/bus';
+import { firstIdArg, topicsForCompletedJob, topicsForWriteBatch } from '@/lib/realtime/job-topics';
 import { getErrorMessage } from '@/lib/error-utils';
 import { getRawDatabase } from '@/lib/database/backends/sqlite/client';
 import { getRawMountIndexDatabase } from '@/lib/database/backends/sqlite/mount-index-client';
@@ -169,6 +171,11 @@ async function pumpClaim(): Promise<void> {
     while (state.inFlight.size < state.maxInFlight) {
       const repos = getRepositories();
       const job = await repos.backgroundJobs.claimNextJob();
+      if (job) {
+        // PENDING -> PROCESSING: the chips and the tasks queue both read this
+        // transition, so it earns a hint of its own.
+        publishRealtime('jobs');
+      }
       if (!job) {
         // Queue is empty — schedule a wake-up if a future retry is due.
         if (state.inFlight.size === 0) {
@@ -194,6 +201,7 @@ function dispatchJob(job: BackgroundJob): void {
     state.inFlight.delete(job.id);
     log.warn('Child unavailable; marking job failed for retry', { jobId: job.id });
     void getRepositories().backgroundJobs.markFailed(job.id, 'Child process unavailable');
+    publishRealtime('jobs');
   }
 }
 
@@ -228,6 +236,7 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
     cleanupStagingDirs(msg.writes, msg.jobId);
     await repos.backgroundJobs.markFailed(msg.jobId, errorMessage);
     await reconcileFailedAutonomousTurnIfNeeded(job, errorMessage);
+    publishRealtime('jobs');
     pumpClaim().catch(err => log.error('Post-fail claim error', { error: getErrorMessage(err) }));
     return;
   }
@@ -236,6 +245,13 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
     await applyWritesAtomically(msg.jobId, msg.writes, job?.type);
     await repos.backgroundJobs.markCompleted(msg.jobId);
     log.info('Job completed', { jobId: msg.jobId, type: job?.type, writeCount: msg.writes.length });
+    publishRealtime('jobs');
+    // Entity hints for the state this job's work just changed. The handler ran
+    // in the child, which owns no sockets; this is the first parent-side moment
+    // at which the change is actually committed and visible.
+    for (const hint of topicsForCompletedJob(job?.type, job?.payload as Record<string, unknown> | undefined)) {
+      publishRealtime(hint.topic, hint.id);
+    }
   } catch (err) {
     const errorMessage = getErrorMessage(err);
     log.error('Failed to apply child writes; marking job failed', {
@@ -246,6 +262,7 @@ export async function handleChildJobResult(msg: ChildJobResultMessage): Promise<
     cleanupStagingDirs(msg.writes, msg.jobId);
     await repos.backgroundJobs.markFailed(msg.jobId, errorMessage);
     await reconcileFailedAutonomousTurnIfNeeded(job, errorMessage);
+    publishRealtime('jobs');
   }
 
   pumpClaim().catch(e => log.error('Post-complete claim error', { error: getErrorMessage(e) }));
@@ -505,17 +522,27 @@ async function applyFolderCreateIdempotent(
 }
 
 function dispatchInvalidations(writes: ChildWritePayload[]): void {
+  // Realtime hints for whatever entities this batch touched. Separate from the
+  // server-side cache invalidation below — that one is about *this* process's
+  // in-memory caches, this one is about every open tab's query cache — but they
+  // belong at the same moment: the writes have committed and are readable.
+  for (const hint of topicsForWriteBatch(writes)) {
+    publishRealtime(hint.topic, hint.id);
+  }
+
   // Collect unique invalidation targets up front so we don't fire duplicates
   // when a single batch touches the same character/mount-point repeatedly.
   const vectorStoreKeys = new Set<string>();
   const mountPointKeys = new Set<string>();
 
   for (const w of writes) {
-    const charId = extractCharacterId(w);
+    // Many of the listed methods take the id as a top-level field on the
+    // first arg, or as the first positional arg; firstIdArg probes both shapes.
+    const charId = firstIdArg(w.args, 'characterId');
     if (charId && WRITES_INVALIDATING_VECTOR_STORE.has(w.method)) {
       vectorStoreKeys.add(charId);
     }
-    const mountId = extractMountPointId(w);
+    const mountId = firstIdArg(w.args, 'mountPointId');
     if (mountId && WRITES_INVALIDATING_MOUNT_CACHE.has(w.method)) {
       mountPointKeys.add(mountId);
     }
@@ -575,28 +602,6 @@ const WRITES_INVALIDATING_MOUNT_CACHE = new Set<string>([
   'docMountChunks.delete',
   'docMountChunks.deleteByMountPointId',
 ]);
-
-function extractCharacterId(w: ChildWritePayload): string | null {
-  // Many of the listed methods take the characterId as a top-level field on
-  // the first arg, or as the first positional arg. Probe both shapes.
-  const a0 = w.args?.[0];
-  if (typeof a0 === 'string' && a0.length > 0) return a0;
-  if (a0 && typeof a0 === 'object') {
-    const obj = a0 as Record<string, unknown>;
-    if (typeof obj.characterId === 'string') return obj.characterId;
-  }
-  return null;
-}
-
-function extractMountPointId(w: ChildWritePayload): string | null {
-  const a0 = w.args?.[0];
-  if (typeof a0 === 'string' && a0.length > 0) return a0;
-  if (a0 && typeof a0 === 'object') {
-    const obj = a0 as Record<string, unknown>;
-    if (typeof obj.mountPointId === 'string') return obj.mountPointId;
-  }
-  return null;
-}
 
 function applyRepositoryWrite(w: ChildWritePayload): unknown {
   const repos = getRepositories();

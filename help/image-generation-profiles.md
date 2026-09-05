@@ -32,6 +32,49 @@ The establishment then translates that wish into whatever each provider actually
 
 Sensible defaults are already in place: **avatars arrive in portrait**, **story backgrounds in cinematic landscape**. And because providers have a habit of returning a different shape than was requested, Quilltap now measures every finished picture and records its *true* dimensions, rather than trusting the order it placed.
 
+## The Model's Own Dials — Per-Model Options
+
+Time was, the profile form offered every provider one fixed little tray of settings, whether or not the chosen model had any use for them — a size list assembled by hand, and precious little else. That arrangement has been retired.
+
+Each provider's plugin is now asked, freshly and for **the very model you have selected**, what it would like to be asked. The gateways that route to two hundred ateliers answer differently for each one: sizes drawn from that model's own advertised canvases, an images-per-request ceiling it will actually honour, and whatever dials it genuinely reads — inference steps, guidance scale, and so forth — with the dials it has no use for simply not offered. Change the model and the form changes with it.
+
+Two courtesies worth knowing:
+
+- **Your settings are not thrown away when you change models.** A value the new model has no use for is merely not shown; return to the old model and it is waiting where you left it.
+- **A blank box means "as the model pleases."** The greyed-out number you see is the default that will apply, not a value you have chosen.
+
+Providers whose plugins have not yet adopted the arrangement carry on with the old fixed tray, and nothing about their profiles changes.
+
+## Adapters, or the Borrowing of Another Hand — LoRAs
+
+A **LoRA** is a small parcel of learned style — a look, a face, a manner of drawing — that rides along with a model and bends its hand toward some particular result. Not every atelier will accept one, and those that do disagree, as ateliers will, about how many they will entertain at once and how they wish to be told.
+
+Quilltap conducts that negotiation on your behalf. Choose a model that accepts adapters and a **LoRA Adapters** panel appears beneath the options; choose one that does not and the panel is simply absent — no empty boxes, no invitation to configure something that will be quietly ignored.
+
+Each row asks for three things, of which only the first is compulsory:
+
+- **Source** — where the weights live: a HuggingFace `owner/model-name`, or a direct URL to a `.safetensors` file. The panel says which kinds the chosen model accepts.
+- **Strength** — how firmly the adapter's hand is on the pen. The slider's range and its resting position are the model's own, not one universal guess; leave it alone and the model's default applies.
+- **Trigger Phrase** — many adapters answer only to a magic word, and sulk without it. Whatever you write here is woven into the prompt on every picture this profile paints, so you need never remember to say it yourself.
+
+**Making enquiries of the registry.** Beside the Source field sits a **Query** button, which wires HuggingFace and asks what it knows about the address you have written. It comes to life only when there is something to ask about — a bare `owner/model-name`, or any `huggingface.co` address, from which Quilltap will pluck the repository out of even a long link to a particular weights file. Weights lodged on some other host have no registry entry behind them, and the button stays dark rather than pretend otherwise.
+
+What comes back is a plain reading of the adapter's papers: the base model its card names, whether it is tagged an adapter at all or is in fact a whole model masquerading as one, which `.safetensors` files the repository holds, whether it is gated, how well regarded it is, and — most usefully — the **trigger phrase its author declared**, which a single click will drop into the row's Trigger Phrase field for you. The adapter's name in the corner of the panel is a link; it opens the model card in a new tab, so the whole story is always one click away.
+
+**It is a reading, not a ruling.** Quilltap will tell you the adapter was trained on Flux 1 Dev, and it will tell you your profile points at Flux 2 Dev, and it will pointedly decline to tell you what to make of that. Whether a given parcel of weights suits a given atelier is a question the two of them settle between themselves, and the arrangements shift too often for any confident pronouncement here to age well. A wrong warning is worse than none at all, so you are given the facts and trusted with them. When in doubt, read the card.
+
+**Two findings worth pausing over.** A repository holding *more than one* `.safetensors` file is ambiguous when named by bare `owner/model-name` — the house will pick for you, and may not pick as you would. Name the file directly if you have a preference. And a **gated** repository wants a HuggingFace token before it will surrender its weights; the panel says whether the model you have chosen has anywhere to put one, since most do not.
+
+The reading is discarded the moment you edit the Source, on the grounds that facts about the previous address are worse company than no facts at all.
+
+**A preset is not an adapter, whatever the neighbouring boxes may imply.** Certain establishments — the `flux-lora` family among them — offer a **LoRA Preset** field in the options above, and it is a different animal entirely: a name for a style the house already keeps in its own cellar, not a parcel of weights you have gone out and fetched. Write a HuggingFace address into it and the house will look for that name on its shelf, fail to find it, and say so. Adapters belong in the **Source** row below; presets belong in the preset box, and only when someone has actually given you one. Either may be used without the other.
+
+**On the matter of the cap.** Each model states how many adapters it will take, and the panel keeps the tally for you ("2 of 3"), refusing to add a fourth where three is the limit. Should you point a well-stocked profile at a stingier model, the surplus rows are **flagged, not discarded** — they sit there in amber, explaining that they will be left behind on every request until you either remove one of their elders or return to a model of more generous habits. Nothing is deleted behind your back, and switching back restores the full arrangement intact.
+
+**Where the adapters apply.** Everywhere that profile paints: pictures asked for in the Salon, character avatars, story backgrounds, and the wardrobe's preview portrait alike. A LoRA configured once is not a Salon-only affectation.
+
+**On the subject of NanoGPT**, whose arcade is the first to be wired for this: the `flux-2-dev-lora` pair will take four adapters, the wider Flux 2 Klein, Z-Image and Krea families three, and the `flux-lora` and Pruna families one apiece. Should NanoGPT advertise a LoRA-capable model whose particular dialect Quilltap does not yet know, the panel will still offer you a single adapter — but the establishment declines to guess at the wording and will say so in the logs rather than post an order the model would silently ignore.
+
 ## Accessing Image Generation Profiles
 
 1. Click **Settings** (gear icon) in the left sidebar
@@ -43,7 +86,7 @@ Sensible defaults are already in place: **avatars arrive in portrait**, **story 
 The profiles list shows:
 
 - **Profile Name** — Name you gave the profile
-- **Provider** — Which image service (DALL-E, Midjourney, Stable Diffusion, etc.)
+- **Provider** — Which image service (OpenAI, Google, Grok, OpenRouter, Z.AI, NanoGPT)
 - **Default Badge** — If this is the default image generation profile
 - **Status** — Whether configuration is complete
 - **Actions** — Buttons to edit or delete the profile
@@ -52,31 +95,38 @@ The profiles list shows:
 
 ### Step 1: Get an API Key
 
-First, obtain an API key from an image generation provider:
+First, obtain an API key from one of the image generation providers Quilltap actually speaks to:
 
-**DALL-E (OpenAI):**
+**OpenAI (DALL-E / GPT Image):**
 
 1. Go to platform.openai.com
 2. Create or use an existing OpenAI API key
 3. Return to Quilltap
 
-**Stable Diffusion:**
+**Google (Imagen / Gemini image models):**
 
-1. Create account at stability.ai
-2. Get your API key from the console
-3. Copy and save it
+1. Visit Google AI Studio (aistudio.google.com)
+2. Create a Gemini API key
 
-**Midjourney:**
+**Grok (xAI):**
 
-1. Use Midjourney Discord bot (different setup)
-2. Or use third-party API wrapper
-3. Get API key from wrapper service
+1. Visit console.x.ai
+2. Create an API key
 
-**Other Providers:**
+**OpenRouter:**
 
-1. Check their documentation
-2. Obtain API key
-3. Store it securely
+1. Visit openrouter.ai
+2. Create an API key — one key opens the door to every image-capable model they route
+
+**Z.AI (CogView / GLM-Image):**
+
+1. Visit z.ai and open the API platform
+2. Create an API key
+
+**NanoGPT (Flux / HiDream / Recraft and two hundred others):**
+
+1. Visit nano-gpt.com and open the API page
+2. Create an API key — pay-as-you-go, no subscription, and the same key serves chat and embeddings besides
 
 ### Step 2: Add the Key to Quilltap
 
@@ -100,15 +150,21 @@ First, obtain an API key from an image generation provider:
 
    **Model Selection:**
    - **Model** — Select which image model to use
-     - OpenAI GPT Image: gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini (legacy DALL-E: dall-e-3, dall-e-2)
-     - Stable Diffusion: Various model versions
-     - Midjourney: Different subscription tiers
-   - **Available Models** — Click to see what's available
+     - OpenAI: gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini (legacy DALL-E: dall-e-3, dall-e-2)
+     - Google: Imagen models and image-capable Gemini models
+     - Grok: grok-imagine-image, grok-imagine-image-pro, grok-2-image
+     - OpenRouter: every image-output model they route
+     - Z.AI: cogview-4-250304, glm-image
+     - NanoGPT: hidream, the flux-2 family, recraft-v3, gpt-image-1.5 — Fetch Models reveals the full two-hundred-strong gallery
+   - **Fetch Models** — Once an API key is chosen, press this to ask the provider itself which image models your key can reach. A green tally confirms the list came straight from the establishment; otherwise you're looking at the plugin's built-in list, and the note beneath says so plainly — no pretence either way. Only models that genuinely produce images are shown; the chat, embedding, and video sorts are firmly shooed away.
 
-   **Configuration:**
-   - **Default Size** — Image dimensions (1024x1024, 512x512, etc.)
-   - **Quality** — Level of detail (Standard, HD, Premium)
-   - **Style** — Art style options (Photorealistic, Artistic, Cartoon, etc.)
+   **Configuration:** whatever the chosen model actually reads — see *The Model's Own Dials* above. Commonly:
+   - **Default Size** — image dimensions, drawn from the model's own advertised canvases where the provider publishes them
+   - **Quality** — level of detail (Standard, HD)
+   - **Style** — art direction (Vivid, Natural), where the provider offers the choice
+   - **Inference Steps / Guidance Scale** — the diffusion dials, offered only to the open-weight models that read them
+
+   **LoRA Adapters:** present only when the chosen model accepts them — see *Adapters, or the Borrowing of Another Hand* above.
 
 4. Click **Save** to create the profile
 
@@ -121,8 +177,9 @@ To modify an existing profile:
 3. Update any settings:
    - Profile name
    - API key (switch to different key)
-   - Model (switch to different model)
+   - Model (switch to different model — the options below rearrange themselves to suit it, keeping what you had set)
    - Size, quality, or style defaults
+   - LoRA adapters, where the model accepts them
 4. Click **Save Changes**
 
 ## Setting a Default Profile
@@ -180,7 +237,7 @@ Some chats may have a different image profile selected. To check:
 
 The quality of generated images depends on:
 
-- **Provider quality** — DALL-E, Midjourney, etc. have different capabilities
+- **Provider quality** — each provider's models have different capabilities
 - **Model version** — Newer models usually produce better results
 - **Prompt quality** — Detailed descriptions produce better results
 - **Settings** — Quality, size, and style settings affect output
@@ -188,37 +245,42 @@ The quality of generated images depends on:
 
 ## Supported Image Providers
 
-### DALL-E (OpenAI)
+These are the establishments Quilltap can actually commission a picture from — no more, no fewer. (Midjourney, Stable Diffusion, and local engines such as ComfyUI are not supported.)
 
-- **Models:** DALL-E 3, DALL-E 2
+### OpenAI (DALL-E / GPT Image)
+
+- **Models:** GPT Image family (gpt-image-2, gpt-image-1.5, gpt-image-1, gpt-image-1-mini) and legacy DALL-E 3 / DALL-E 2
 - **Strengths:** Good all-around quality, text in images
-- **Sizes:** 1024x1024, 1024x1792, 1792x1024 (varies by model)
+- **Sizes:** 1024x1024, 1024x1536, 1536x1024 (GPT Image); 1024x1792, 1792x1024 (DALL-E 3)
 - **Quality:** Standard, HD
-- **Cost:** Medium ($0.04-$0.12 per image depending on size/quality)
 
-### Stable Diffusion
+### Google (Imagen / Gemini)
 
-- **Providers:** Stability AI, others
-- **Models:** Multiple versions available
-- **Strengths:** Fast, flexible, good control
-- **Sizes:** Various
-- **Quality:** Variable
-- **Cost:** Low to Medium
+- **Models:** Imagen 4 family via the predict API; image-capable Gemini models (e.g. gemini-2.5-flash-image) via generateContent
+- **Strengths:** Strong photorealism, aspect-ratio control, negative prompts (Imagen)
 
-### Midjourney
+### Grok (xAI)
 
-- **Access:** Via Discord bot or API
-- **Strengths:** High quality, artistic results
-- **Styles:** Many options
-- **Upscaling:** Available
-- **Cost:** Subscription-based
+- **Models:** grok-imagine-image, grok-imagine-image-pro, and legacy grok-2-image
+- **Strengths:** Fast, aspect-ratio control; the pro model renders at 2k
 
-### Other Providers
+### OpenRouter
 
-- **Grok** — Text-to-image capability
-- **Custom providers** — Self-hosted or alternative services
-- **Comfy UI** — Local image generation
-- Check each provider's documentation for capabilities
+- **Models:** Whichever image-output models OpenRouter routes at the moment — Fetch Models asks their catalogue directly
+- **Strengths:** One key, many ateliers
+
+### Z.AI (CogView / GLM-Image)
+
+- **Models:** cogview-4-250304, glm-image
+- **Strengths:** Discrete recommended sizes up to 1664x928 / 928x1664; economical
+- **Note:** Image URLs returned by Z.AI are valid for 30 days; Quilltap saves the picture locally on arrival, so this is Z.AI's concern rather than yours
+
+### NanoGPT (Flux / HiDream / Recraft)
+
+- **Models:** hidream by default, with the flux-2 family, recraft-v3, gpt-image-1.5, and some two hundred more behind Fetch Models
+- **Strengths:** One pay-as-you-go key admits you to every atelier in the arcade — and the same key serves chat and embeddings
+- **LoRAs:** the Flux 2 Dev, Flux 2 Klein, Z-Image, Krea, Pruna P-Image and `flux-lora` families all accept adapters — see *Adapters, or the Borrowing of Another Hand* above
+- **Note:** Each model keeps its own native canvas sizes; hand NanoGPT one of the common sizes from the profile and it seats your request at the nearest native resolution without complaint
 
 ## Configuration Tips
 
@@ -331,6 +393,16 @@ The quality of generated images depends on:
 - Use more detailed image descriptions
 - Try different provider
 
+### The adapter seems to have made no difference
+
+The most expensive failure a LoRA can suffer is the one that wears the costume of success: the order goes out, the picture comes back, the account is debited, and the result is precisely what the bare model would have painted anyway. No error is raised, because from the provider's side nothing whatever went wrong. Three causes account for very nearly all of it.
+
+**The adapter and the model are not of the same lineage.** Weights are trained against one particular base and do not transfer to its cousins on the strength of a shared surname. An adapter raised on Flux 2 Klein, pointed at Flux 2 Dev, is not a fainter version of itself — it is simply not speaking. Press **Query** beside the row's Source and Quilltap will fetch the base model the adapter's own card names; set the profile's **Model** to match that lineage, rather than to its nearest-sounding neighbour. Quilltap will post faithfully whatever you configure; it has no means of knowing the parcel was addressed to a different house.
+
+**The magic word was never said.** Most adapters answer to a trigger, and their page names it — sometimes as a single phrase, sometimes as a short list of words, in which case a phrase containing all of them will do. **Query** will often produce it for you, where the author troubled to declare it. Write it into the row's **Trigger Phrase** and Quilltap weaves it into every prompt this profile paints. Leave it blank and the adapter may attend the sitting without ever once picking up the pen.
+
+**Nobody asked for the thing the adapter was engaged to do.** This is the quiet one, and it catches the careful. An adapter hired to unlock candid depiction cannot exercise that talent upon a prompt that never requests it — and for story backgrounds the prompt crafter drapes the scene by default, however uncensored the destination. Fitting the adapter is therefore only half the arrangement. The other half is the Concierge's, and is set out under *Story Background Prompts* in [Dangerous Content Handling](dangerous-content.md).
+
 ### Generation is very slow
 
 **Causes:**
@@ -351,10 +423,13 @@ The quality of generated images depends on:
 
 **Common errors:**
 
+- "Image generation is not enabled for this chat" — no image profile resolves for this conversation's seats; set a default profile, or pick one for the chat (see *Selecting a Different Profile* above)
 - "Invalid API key" — API key is wrong or expired
 - "Insufficient credits" — Provider account is out of money
 - "Model not found" — Model is no longer available
 - "Rate limit exceeded" — Too many requests at once
+
+The notice above the composer and the toast both carry the reason verbatim, so the sentence you see is the one the machinery actually gave — no need to go spelunking in the logs for it.
 
 **Solutions:** Check error message and troubleshoot accordingly
 
@@ -371,6 +446,7 @@ Characters with help tools enabled can navigate directly to this page:
 ## Related Settings
 
 - [API Keys](api-keys-settings.md) — Store credentials for image providers
+- [Dangerous Content Handling](dangerous-content.md) — Governs whether story-background prompts are drafted candidly
 - **Chat Settings** — Configure image description provider (different from generation)
 - **Connection Profiles** — For LLM that interprets image requests
 - **Chat Memory** — Stores generated images in history

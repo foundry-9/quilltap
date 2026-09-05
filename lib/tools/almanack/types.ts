@@ -20,7 +20,7 @@ export interface RuntimeEnvironmentInfo {
   osRelease: string;
   totalMemoryBytes: number;
   freeMemoryBytes: number;
-  runtimeType: 'docker' | 'lima' | 'electron' | 'node';
+  runtimeType: 'docker' | 'electron' | 'node';
   electronShellVersion: string | null;
   shellCapabilities: string[];
   uptimeSeconds: number;
@@ -434,7 +434,8 @@ export interface ScriptoriumInfo {
     userGalleryPhotos: number;
     userGalleryBytes: number;
   };
-  scenarios: Array<{ tier: string; count: number }>;
+  /** `archived` counts the subset of `count` carrying `archived: true`. */
+  scenarios: Array<{ tier: string; count: number; archived: number }>;
   stateCascade: {
     chatsWithState: number;
     projectsWithState: number;

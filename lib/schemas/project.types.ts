@@ -34,6 +34,27 @@ import {
 // ============================================================================
 
 /**
+ * Background display modes retired in 4.9. Both were offered in the UI and
+ * neither ever worked: `'project'` read `storyBackgroundImageId`, which only
+ * the `'latest_chat'` path ever wrote, and `'static'` read
+ * `staticBackgroundImageId`, which nothing anywhere wrote — there was no upload
+ * control and the field was not even accepted by the update schema. Projects
+ * left in either mode are read as `'theme'`, which is the "no image" outcome
+ * they were already producing.
+ */
+export const RETIRED_BACKGROUND_DISPLAY_MODES = ['project', 'static'] as const;
+
+/**
+ * Coerce a stored background display mode, retired or otherwise unrecognised,
+ * to a currently-valid one. Anything not recognised becomes `'theme'`;
+ * `undefined` passes through so the schema's own `.default()` still applies.
+ */
+export function normalizeBackgroundDisplayMode(value: unknown): unknown {
+  if (value === undefined || value === null) return undefined;
+  return value === 'latest_chat' || value === 'theme' ? value : 'theme';
+}
+
+/**
  * The "everything else" bag persisted as `properties.json` in the project's
  * official document store. All fields optional/defaulted so a partial or absent
  * file still parses. Mirrors the settings fields that used to be columns.
@@ -84,8 +105,17 @@ export const ProjectPropertiesSchema = z.object({
   staticBackgroundImageId: UUIDSchema.nullable().optional(),
   /** AI-generated story background image file ID for the project */
   storyBackgroundImageId: UUIDSchema.nullable().optional(),
-  /** How to display backgrounds: 'latest_chat' = from most recent chat, 'project' = project-level generated, 'static' = user-uploaded, 'theme' = default theme */
-  backgroundDisplayMode: z.enum(['latest_chat', 'project', 'static', 'theme']).default('theme'),
+  /**
+   * How to display backgrounds: 'latest_chat' = from most recent chat,
+   * 'theme' = default theme (no image).
+   *
+   * Retired values ('project', 'static') coerce to 'theme' rather than failing
+   * the parse — this schema is `.parse`d on every project read, so a stored
+   * retired value would otherwise throw the whole project away.
+   */
+  backgroundDisplayMode: z
+    .preprocess(normalizeBackgroundDisplayMode, z.enum(['latest_chat', 'theme']))
+    .default('theme'),
 });
 
 export type ProjectProperties = z.infer<typeof ProjectPropertiesSchema>;
@@ -169,7 +199,7 @@ export const PROJECT_STORE_MANAGED_FIELDS: ReadonlySet<keyof Project> = new Set<
 ]);
 
 // Background display mode type
-export const BackgroundDisplayModeEnum = z.enum(['latest_chat', 'project', 'static', 'theme']);
+export const BackgroundDisplayModeEnum = z.enum(['latest_chat', 'theme']);
 export type BackgroundDisplayMode = z.infer<typeof BackgroundDisplayModeEnum>;
 
 // ============================================================================
