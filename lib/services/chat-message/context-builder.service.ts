@@ -263,21 +263,9 @@ export function collectLanternImageFileIdsForCharacter(
     const atts = msg.attachments
     const hasAttachments = Array.isArray(atts) && atts.length > 0
 
-    // Detect the character's own previous ASSISTANT turn. Anything older than
-    // that was already delivered, so we stop the walk there.
-    //
-    // Multi-character chats set `participantId` on every character response,
-    // while Lantern notifications leave it null — a direct id match is enough.
-    //
-    // Single-character chats don't populate participantId on character
-    // responses, so we fall back to the structural signal: Lantern
-    // notifications always carry image attachments, character responses
-    // don't. An ASSISTANT message without attachments is therefore the
-    // character's own prior turn.
-    const isOwnPriorResponse = isMultiCharacter
-      ? msg.participantId === characterParticipantId
-      : !hasAttachments
-    if (isOwnPriorResponse) break
+    // Anything older than the character's own previous turn was already
+    // delivered, so we stop the walk there.
+    if (isCharactersOwnPriorResponse(msg, characterParticipantId, isMultiCharacter)) break
 
     scanned++
 
@@ -295,6 +283,222 @@ export function collectLanternImageFileIdsForCharacter(
     }
   }
   return collected.reverse()
+}
+
+/**
+ * Has this ASSISTANT message been authored by the character we are building
+ * context for? Both attachment walkers stop there: anything older was already
+ * delivered on a previous turn and must not be re-sent.
+ *
+ * Multi-character chats set `participantId` on every character response, while
+ * Staff notifications leave it null — a direct id match is enough. Single-
+ * character chats don't populate participantId on character responses, so we
+ * fall back to the structural signal: Staff image notifications always carry
+ * attachments and character responses never do, so an ASSISTANT message
+ * without attachments is the character's own prior turn.
+ */
+function isCharactersOwnPriorResponse(
+  msg: { attachments?: string[] | null; participantId?: string | null },
+  characterParticipantId: string,
+  isMultiCharacter: boolean,
+): boolean {
+  if (isMultiCharacter) return msg.participantId === characterParticipantId
+  return !(Array.isArray(msg.attachments) && msg.attachments.length > 0)
+}
+
+/**
+ * The USER-side counterpart of `collectLanternImageFileIdsForCharacter`: walk
+ * the tail of existingMessages and collect the attachments the *human* shared
+ * that this character has not yet been shown.
+ *
+ * Bug 121. A file the user attaches is expanded into prompt text (or carried
+ * as raw bytes) at request-assembly time by `loadAndProcessFiles`, from the
+ * `fileIds` on that one HTTP request, and the expansion is never written down
+ * — `chat_messages` keeps the user's typed words and a pointer. The second
+ * character to speak in a multi-character turn is a fresh request with no
+ * `fileIds`, assembling context from those rows, so it received the typed
+ * words alone: in the reported scene a 29 KB transcript reached 1 of 13 model
+ * calls while the attachment chip sat in the UI telling the user otherwise.
+ * The Lantern walk could not cover it, because its first filter is
+ * `role !== 'ASSISTANT'` and a user upload is a USER-role message.
+ *
+ * Returns rows in chronological order so the caller can splice each file back
+ * in at the message that carried it, rather than restating it at the tail.
+ * The same "stop at the character's own prior response" rule bounds the walk
+ * and gives the budget for free: a character is shown a given attachment once,
+ * on its first turn after the upload, and never again.
+ *
+ * `historyCutoff` (ISO timestamp) excludes uploads older than a joining
+ * character's arrival; `lookback` caps the scan for very long chats.
+ *
+ * Exported for unit testing.
+ */
+export function collectUnseenUserAttachmentsForCharacter(
+  existingMessages: Array<{ type: string; role?: string; id?: string; attachments?: string[] | null; participantId?: string | null; createdAt?: string; systemSender?: string | null }>,
+  characterParticipantId: string,
+  isMultiCharacter: boolean,
+  historyCutoff: string | null,
+  lookback: number,
+): Array<{ messageId: string; fileIds: string[] }> {
+  const collected: Array<{ messageId: string; fileIds: string[] }> = []
+  const seen = new Set<string>()
+  let scanned = 0
+
+  for (let i = existingMessages.length - 1; i >= 0 && scanned < lookback; i--) {
+    const msg = existingMessages[i]
+    if (msg.type !== 'message') continue
+
+    if (msg.role === 'ASSISTANT') {
+      if (isCharactersOwnPriorResponse(msg, characterParticipantId, isMultiCharacter)) break
+      scanned++
+      continue
+    }
+
+    if (msg.role !== 'USER') continue
+    scanned++
+
+    const atts = msg.attachments
+    if (!Array.isArray(atts) || atts.length === 0) continue
+    if (!msg.id) continue
+
+    // A joining participant without history access must not see uploads from
+    // before they arrived — symmetric with the Lantern walk's own guard.
+    if (historyCutoff && msg.createdAt && msg.createdAt < historyCutoff) continue
+
+    const fileIds = atts.filter((id): id is string => typeof id === 'string' && !seen.has(id))
+    if (fileIds.length === 0) continue
+    for (const id of fileIds) seen.add(id)
+    collected.push({ messageId: msg.id, fileIds })
+  }
+
+  return collected.reverse()
+}
+
+/**
+ * How far back either attachment walk will look for a user upload the
+ * character has not seen. The real bound is the character's own previous turn;
+ * this is the safety cap for a very long chat, or a character that has never
+ * spoken and so has no previous turn to stop at.
+ */
+const USER_ATTACHMENT_LOOKBACK = 20
+
+/**
+ * Ceiling on the re-hydrated text a single turn may carry, in characters.
+ *
+ * The walk already bounds *how many* uploads come back (one pass per
+ * character, per upload), but not how large they are, and a user may attach a
+ * novel. Files are taken oldest-first until the budget is spent; what does not
+ * fit is skipped with a warning rather than silently truncated mid-document,
+ * because half a transcript is a worse input than none and a model given one
+ * has no way to tell. ~80k characters is roughly 20k tokens — comfortably
+ * inside a modern window, and `buildContext` still compresses and trims what
+ * this produces like any other message body.
+ */
+const REHYDRATED_ATTACHMENT_CHAR_BUDGET = 80_000
+
+/**
+ * Load the user uploads a character has not yet been shown and turn them back
+ * into prompt content. See `collectUnseenUserAttachmentsForCharacter` and bug
+ * 121 for why this is a read-side derivation rather than a stored body.
+ *
+ * Returns the text to splice in ahead of each carrying message, keyed by that
+ * message's row id, plus any raw attachments the provider takes natively
+ * (images on a vision profile) for the caller to anchor the usual way.
+ *
+ * Never throws: an unreadable file leaves the turn exactly as it was before
+ * this existed.
+ */
+async function rehydrateUserAttachments(args: {
+  messages: Array<{ type: string; role?: string; id?: string; content?: string; attachments?: string[] | null; participantId?: string | null; createdAt?: string }>
+  characterParticipantId?: string
+  isMultiCharacter: boolean
+  historyCutoff: string | null
+  connectionProfile: ConnectionProfile
+  repos: ReturnType<typeof getRepositories>
+  userId: string
+}): Promise<{ rehydratedContentByMessageId: Map<string, string>; rehydratedAttachmentsToKeep: unknown[] }> {
+  const rehydratedContentByMessageId = new Map<string, string>()
+  const rehydratedAttachmentsToKeep: unknown[] = []
+  const { characterParticipantId } = args
+  if (!characterParticipantId) return { rehydratedContentByMessageId, rehydratedAttachmentsToKeep }
+
+  try {
+    const unseen = collectUnseenUserAttachmentsForCharacter(
+      args.messages,
+      characterParticipantId,
+      args.isMultiCharacter,
+      args.historyCutoff,
+      USER_ATTACHMENT_LOOKBACK,
+    )
+    if (unseen.length === 0) return { rehydratedContentByMessageId, rehydratedAttachmentsToKeep }
+
+    const repos = args.repos ?? getRepositories()
+    let budgetLeft = REHYDRATED_ATTACHMENT_CHAR_BUDGET
+    let skippedForBudget = 0
+
+    for (const { messageId, fileIds } of unseen) {
+      const loaded = await loadChatFilesForLLM(fileIds, { provider: args.connectionProfile.provider })
+      let prefix = ''
+
+      for (const fileAttachment of loaded) {
+        const fallbackResult = await processFileAttachmentFallback(
+          {
+            id: fileAttachment.id,
+            filepath: fileAttachment.filepath ?? `/api/v1/files/${fileAttachment.id}`,
+            filename: fileAttachment.filename,
+            mimeType: fileAttachment.mimeType,
+            size: fileAttachment.size,
+          },
+          fileAttachment,
+          args.connectionProfile,
+          repos,
+          args.userId,
+        )
+
+        // Mirror the `loadAndProcessFiles` filter: keep the raw bytes only
+        // when the provider takes them natively. A failed fallback drops the
+        // file rather than tripping the provider's "no image input" refusal.
+        if (fallbackResult.type === 'unsupported') {
+          if (!fallbackResult.error) rehydratedAttachmentsToKeep.push(fileAttachment)
+          continue
+        }
+
+        const text = formatFallbackAsMessagePrefix(fallbackResult)
+        if (!text) continue
+        if (text.length > budgetLeft) {
+          skippedForBudget++
+          continue
+        }
+        budgetLeft -= text.length
+        prefix += text
+      }
+
+      if (prefix) rehydratedContentByMessageId.set(messageId, prefix)
+    }
+
+    if (skippedForBudget > 0) {
+      logger.warn('Re-hydrated attachments exceeded the per-turn budget; some were not re-sent', {
+        skippedForBudget,
+        budget: REHYDRATED_ATTACHMENT_CHAR_BUDGET,
+        characterParticipantId,
+      })
+    }
+    if (rehydratedContentByMessageId.size > 0 || rehydratedAttachmentsToKeep.length > 0) {
+      logger.debug('Re-hydrated user attachments from history', {
+        messagesExpanded: rehydratedContentByMessageId.size,
+        rawAttachmentsKept: rehydratedAttachmentsToKeep.length,
+        charactersUsed: REHYDRATED_ATTACHMENT_CHAR_BUDGET - budgetLeft,
+        characterParticipantId,
+      })
+    }
+  } catch (err) {
+    logger.warn('Failed to re-hydrate user attachments from history', {
+      error: getErrorMessage(err),
+      characterParticipantId,
+    })
+  }
+
+  return { rehydratedContentByMessageId, rehydratedAttachmentsToKeep }
 }
 
 /**
@@ -752,9 +956,54 @@ export async function buildMessageContext(
       .map(m => m.id as string)
   )
 
+  // If this is a joining character without history access and they have not
+  // yet responded, clamp both attachment walks to messages posted after they
+  // joined. Computed from the filtered set so opaque characters never reach
+  // Staff attachments either — symmetric with their text-side filter.
+  const hasPriorResponse = filteredExistingMessages.some(
+    m => m.type === 'message' && m.role === 'ASSISTANT' && m.participantId === characterParticipant?.id
+  )
+  const attachmentHistoryCutoff = (isMultiCharacter && characterParticipant && !characterParticipant.hasHistoryAccess && !hasPriorResponse)
+    ? (characterParticipant.createdAt ?? null)
+    : null
+
+  // Bug 121: re-hydrate the human's own attachments out of history.
+  //
+  // `loadAndProcessFiles` expands the files on *this* request's `fileIds` and
+  // the expansion dies with the request — the row keeps the typed words and a
+  // pointer. Everyone after the first character to answer therefore saw a bare
+  // message where a document had been. Re-deriving from the file here (rather
+  // than persisting the expanded body) keeps the file the single source of
+  // truth, survives regenerate, swipe, import and restore, and treats an
+  // uploaded image exactly like an uploaded transcript: the same
+  // `processFileAttachmentFallback` pass either inlines the text, describes
+  // the image, or hands the raw bytes back for a provider that takes them.
+  //
+  // This runs *before* `buildContext` so the tokens are budgeted, compressed
+  // and trimmed like any other message content — the Lantern prefix is spliced
+  // in after budgeting, which is affordable for a description and would not be
+  // for a 29 KB transcript.
+  const { rehydratedContentByMessageId, rehydratedAttachmentsToKeep } =
+    await rehydrateUserAttachments({
+      messages: filteredExistingMessages,
+      characterParticipantId: characterParticipant?.id,
+      isMultiCharacter,
+      historyCutoff: attachmentHistoryCutoff,
+      connectionProfile,
+      repos: options.repos,
+      userId,
+    })
+
+  const messagesForConversation = rehydratedContentByMessageId.size > 0
+    ? filteredExistingMessages.map(m => {
+        const prefix = m.id ? rehydratedContentByMessageId.get(m.id) : undefined
+        return prefix ? { ...m, content: prefix + (m.content ?? '') } : m
+      })
+    : filteredExistingMessages
+
   // Build conversation messages
   const { conversationMessages, messagesWithParticipants } = buildConversationMessages(
-    filteredExistingMessages,
+    messagesForConversation,
     isMultiCharacter
   )
 
@@ -873,25 +1122,14 @@ export async function buildMessageContext(
   // Without that step, non-vision providers (e.g. DeepSeek via OpenRouter)
   // reject the request because they're being handed images they can't read.
   const ASSISTANT_IMAGE_LOOKBACK = 6
-  let mergedAttachmentsToSend: unknown[] = attachmentsToSend
+  let mergedAttachmentsToSend: unknown[] = [...attachmentsToSend, ...rehydratedAttachmentsToKeep]
   let lanternImagePrefix = ''
   try {
-    // If this is a joining character without history access and they have
-    // not yet responded, clamp the walk to messages posted after they joined.
-    // Use the filtered set so opaque characters never reach Staff (Lantern et
-    // al.) image attachments either — symmetric with their text-side filter.
-    const hasPriorResponse = filteredExistingMessages.some(
-      m => m.type === 'message' && m.role === 'ASSISTANT' && m.participantId === characterParticipant.id
-    )
-    const historyCutoff = (isMultiCharacter && !characterParticipant.hasHistoryAccess && !hasPriorResponse)
-      ? (characterParticipant.createdAt ?? null)
-      : null
-
     const recentAssistantImageFileIds = collectLanternImageFileIdsForCharacter(
       filteredExistingMessages,
       characterParticipant.id,
       isMultiCharacter,
-      historyCutoff,
+      attachmentHistoryCutoff,
       ASSISTANT_IMAGE_LOOKBACK,
     )
     if (recentAssistantImageFileIds.length > 0) {
@@ -928,7 +1166,7 @@ export async function buildMessageContext(
           }
         }
         if (lanternAttachmentsToKeep.length > 0) {
-          mergedAttachmentsToSend = [...attachmentsToSend, ...lanternAttachmentsToKeep]
+          mergedAttachmentsToSend = [...mergedAttachmentsToSend, ...lanternAttachmentsToKeep]
         }
       }
     }

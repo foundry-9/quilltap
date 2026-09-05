@@ -6,6 +6,7 @@
 import {
   buildConversationMessages,
   collectLanternImageFileIdsForCharacter,
+  collectUnseenUserAttachmentsForCharacter,
   normalizeWhisperRoles,
 } from '@/lib/services/chat-message/context-builder.service'
 
@@ -725,6 +726,118 @@ describe('context-builder.service', () => {
         { type: 'message', role: 'ASSISTANT', content: 'Lantern', participantId: null, attachments: ['file-kept'] },
       ]
       expect(collectLanternImageFileIdsForCharacter(msgs, 'char-1', true, null, LOOKBACK)).toEqual(['file-kept'])
+    })
+  })
+
+  describe('collectUnseenUserAttachmentsForCharacter (bug 121)', () => {
+    const LOOKBACK = 20
+
+    it('returns an empty array when no USER message carries attachments', () => {
+      const msgs = [
+        { type: 'message', role: 'USER', content: 'hi', id: 'm1' },
+        { type: 'message', role: 'ASSISTANT', content: 'hello', id: 'm2', participantId: 'char-2' },
+      ]
+      expect(collectUnseenUserAttachmentsForCharacter(msgs, 'char-1', true, null, LOOKBACK)).toEqual([])
+    })
+
+    it('the reported shape: the second character in the turn still gets the upload', () => {
+      // Friday, chat df82edc2. Charlie attaches a transcript; Abigail answers
+      // first (her request carried the file inline, from this request's
+      // fileIds); Friday is the next participant to speak, on a fresh request
+      // with no fileIds, and used to receive the typed words alone.
+      const msgs = [
+        { type: 'message', role: 'ASSISTANT', content: 'earlier Friday turn', id: 'm1', participantId: 'friday' },
+        { type: 'message', role: 'USER', content: 'Oh, and read this transcript.', id: 'm2', attachments: ['transcript'] },
+        { type: 'message', role: 'ASSISTANT', content: 'Abigail quotes it', id: 'm3', participantId: 'abigail' },
+      ]
+      expect(collectUnseenUserAttachmentsForCharacter(msgs, 'friday', true, null, LOOKBACK)).toEqual([
+        { messageId: 'm2', fileIds: ['transcript'] },
+      ])
+    })
+
+    it('does not re-deliver an upload the character has already answered', () => {
+      const msgs = [
+        { type: 'message', role: 'USER', content: 'read this', id: 'm1', attachments: ['transcript'] },
+        { type: 'message', role: 'ASSISTANT', content: 'Friday answers', id: 'm2', participantId: 'friday' },
+        { type: 'message', role: 'USER', content: 'and now?', id: 'm3' },
+      ]
+      expect(collectUnseenUserAttachmentsForCharacter(msgs, 'friday', true, null, LOOKBACK)).toEqual([])
+    })
+
+    it('collects several uploads in chronological order, oldest first', () => {
+      const msgs = [
+        { type: 'message', role: 'ASSISTANT', content: 'own prior', id: 'm0', participantId: 'friday' },
+        { type: 'message', role: 'USER', content: 'one', id: 'm1', attachments: ['file-a'] },
+        { type: 'message', role: 'ASSISTANT', content: 'other char', id: 'm2', participantId: 'abigail' },
+        { type: 'message', role: 'USER', content: 'two', id: 'm3', attachments: ['file-b', 'file-c'] },
+      ]
+      expect(collectUnseenUserAttachmentsForCharacter(msgs, 'friday', true, null, LOOKBACK)).toEqual([
+        { messageId: 'm1', fileIds: ['file-a'] },
+        { messageId: 'm3', fileIds: ['file-b', 'file-c'] },
+      ])
+    })
+
+    it('dedupes a file id re-attached to a later message', () => {
+      const msgs = [
+        { type: 'message', role: 'USER', content: 'one', id: 'm1', attachments: ['file-a'] },
+        { type: 'message', role: 'USER', content: 'again', id: 'm2', attachments: ['file-a'] },
+      ]
+      // Walking newest-first, the later message wins the id; the earlier one
+      // is left with nothing to add and drops out.
+      expect(collectUnseenUserAttachmentsForCharacter(msgs, 'friday', true, null, LOOKBACK)).toEqual([
+        { messageId: 'm2', fileIds: ['file-a'] },
+      ])
+    })
+
+    it('honours the history cutoff for a joining character', () => {
+      const msgs = [
+        { type: 'message', role: 'USER', content: 'before you joined', id: 'm1', attachments: ['old'], createdAt: '2026-09-04T10:00:00.000Z' },
+        { type: 'message', role: 'USER', content: 'after you joined', id: 'm2', attachments: ['new'], createdAt: '2026-09-04T12:00:00.000Z' },
+      ]
+      expect(
+        collectUnseenUserAttachmentsForCharacter(msgs, 'friday', true, '2026-09-04T11:00:00.000Z', LOOKBACK)
+      ).toEqual([{ messageId: 'm2', fileIds: ['new'] }])
+    })
+
+    it('skips a message with no row id — there would be nowhere to splice it', () => {
+      const msgs = [
+        { type: 'message', role: 'USER', content: 'orphan', attachments: ['file-a'] },
+      ]
+      expect(collectUnseenUserAttachmentsForCharacter(msgs, 'friday', true, null, LOOKBACK)).toEqual([])
+    })
+
+    it('stops at the own prior turn in single-character mode, where participantId is absent', () => {
+      // Single-char chats leave participantId null on character responses, so
+      // the structural signal is used: an ASSISTANT message without
+      // attachments is the character's own turn.
+      const msgs = [
+        { type: 'message', role: 'USER', content: 'old upload', id: 'm1', attachments: ['old'] },
+        { type: 'message', role: 'ASSISTANT', content: 'own reply', id: 'm2' },
+        { type: 'message', role: 'USER', content: 'new upload', id: 'm3', attachments: ['new'] },
+      ]
+      expect(collectUnseenUserAttachmentsForCharacter(msgs, 'friday', false, null, LOOKBACK)).toEqual([
+        { messageId: 'm3', fileIds: ['new'] },
+      ])
+    })
+
+    it('respects the lookback cap for a character that has never spoken', () => {
+      const msgs = [
+        { type: 'message', role: 'USER', content: 'ancient', id: 'm0', attachments: ['ancient'] },
+        ...Array.from({ length: 5 }, (_, i) => ({
+          type: 'message', role: 'USER', content: `filler ${i}`, id: `f${i}`,
+        })),
+      ]
+      expect(collectUnseenUserAttachmentsForCharacter(msgs, 'friday', true, null, 3)).toEqual([])
+    })
+
+    it('ignores non-message rows', () => {
+      const msgs = [
+        { type: 'system', role: 'USER', content: '', id: 's1', attachments: ['file-a'] },
+        { type: 'message', role: 'USER', content: 'real', id: 'm1', attachments: ['file-b'] },
+      ]
+      expect(collectUnseenUserAttachmentsForCharacter(msgs, 'friday', true, null, LOOKBACK)).toEqual([
+        { messageId: 'm1', fileIds: ['file-b'] },
+      ])
     })
   })
 

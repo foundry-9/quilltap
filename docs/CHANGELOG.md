@@ -4,6 +4,29 @@
 
 ### 4.9-dev
 
+#### Fixed: an attachment now reaches every character in the chat, not just the first to answer (bug 121)
+
+A file attached to a chat message was expanded into prompt text at request-assembly time and never
+stored. The message row kept the typed words and a file-id pointer, and nothing turned that pointer
+back into text, so only the first character to answer ever saw the file. In a six-character scene
+the document reached 1 of 13 model calls; every later turn in any chat, single- or multi-character,
+was equally blind. The attachment chip stayed visible in the UI throughout.
+
+The same defect applied to uploaded images. The only path that pulled attachments back out of
+history is filtered to `role: ASSISTANT` — it exists to carry Lantern backgrounds and avatars
+forward — and a user upload is a USER-role message.
+
+Attachments are now re-derived from the file when context is assembled, for each character that
+has not yet been shown them. The expansion runs through the same fallback pass the upload path uses,
+so text is inlined, an image is described for a provider without vision, and raw bytes are carried
+for a provider with it. A character is shown a given attachment once, on its first turn after the
+upload, so this costs nothing on later turns. The work happens before the context budget is
+computed, so the tokens are budgeted, compressed and trimmed like any other message content, under
+an 80,000-character per-turn ceiling that skips a file rather than truncating it.
+
+Nothing is written to the database, so existing chats are repaired as well, and the behaviour
+survives regenerate, swipe, import and restore.
+
 #### Changed: install the published `@quilltap/plugin-utils` 2.6.1 everywhere
 
 Follow-on to the dependency refresh below, now that 2.6.1 is on npm. The root and all fourteen
