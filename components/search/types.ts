@@ -1,6 +1,20 @@
 // Search component types
 
-export type SearchType = 'chats' | 'characters' | 'tags' | 'memories' | 'messages'
+export type SearchType = 'chats' | 'characters' | 'tags' | 'memories' | 'messages' | 'documents'
+
+/**
+ * Every search type, in the order the filter chips and result groups show
+ * them. The single source of truth: the search dialog's chips and the route's
+ * accepted `types` values both read this, so a new type can't be half-added.
+ */
+export const ALL_SEARCH_TYPES: SearchType[] = [
+  'chats',
+  'characters',
+  'messages',
+  'documents',
+  'tags',
+  'memories',
+]
 
 // Match priority: 0=exact phrase, 1=all terms AND, 2=single term match
 export type MatchPriority = 0 | 1 | 2
@@ -62,7 +76,25 @@ export interface MessageSearchResult extends BaseSearchResult {
   messageId: string
 }
 
-export type SearchResult = ChatSearchResult | CharacterSearchResult | TagSearchResult | MemorySearchResult | MessageSearchResult
+/**
+ * A document inside any enabled document store (character vaults included,
+ * archived ones excluded). `id` is the document's link row id; `url` is the
+ * standalone deep link — the safe default that notifies no chat. The in-chat
+ * open is an upgrade applied by the click handler, which addresses the
+ * document by `(mountPointRef, relativePath)`.
+ */
+export interface DocumentSearchResultItem extends BaseSearchResult {
+  type: 'documents'
+  mountPointId: string
+  /** Display name of the store the document lives in. */
+  mountPointName: string
+  /** Addressable store reference — name, or UUID when the name is ambiguous. */
+  mountPointRef: string
+  storeType: 'documents' | 'character'
+  relativePath: string
+}
+
+export type SearchResult = ChatSearchResult | CharacterSearchResult | TagSearchResult | MemorySearchResult | MessageSearchResult | DocumentSearchResultItem
 
 export interface SearchResponse {
   results: SearchResult[]
@@ -81,6 +113,7 @@ export const TYPE_ICONS: Record<SearchType, string> = {
   tags: '🏷️',
   memories: '🧠',
   messages: '📝',
+  documents: '📄',
 }
 
 export const TYPE_LABELS: Record<SearchType, string> = {
@@ -89,6 +122,7 @@ export const TYPE_LABELS: Record<SearchType, string> = {
   tags: 'Tag',
   memories: 'Memory',
   messages: 'Message',
+  documents: 'Document',
 }
 
 export const TYPE_LABELS_PLURAL: Record<SearchType, string> = {
@@ -97,4 +131,5 @@ export const TYPE_LABELS_PLURAL: Record<SearchType, string> = {
   tags: 'Tags',
   memories: 'Memories',
   messages: 'Messages',
+  documents: 'Documents',
 }

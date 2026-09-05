@@ -296,6 +296,18 @@ export interface MemoryServiceOptions {
 }
 
 /**
+ * A query and the vector actually embedded for it. Handed back through
+ * `captureQueryEmbedding` so one turn's embedding can serve more than one
+ * search (memories, then the character's vault conversation summaries).
+ */
+export interface SearchQueryEmbedding {
+  /** The exact text that was embedded — pass it verbatim to the reusing search. */
+  query: string
+  /** Unit-length vector for `query`, from the caller's embedding profile. */
+  embedding: Float32Array
+}
+
+/**
  * Result of a semantic memory search
  */
 export interface SemanticSearchResult {
@@ -476,22 +488,13 @@ export async function createMemoryWithGate(
 }
 
 /**
- * Direct memory creation without gate (original flow).
- * Used when skipGate or skipEmbedding is true.
+ * The row persisted for a brand-new memory, shared by the direct and the
+ * gate-fed create paths so both stamp exactly the same fields (episodic
+ * spine included). `importance` is passed in because the caller keeps using
+ * the resolved value afterwards.
  */
-async function createMemoryDirect(
-  data: CreateMemoryOptions,
-  options: MemoryServiceOptions
-): Promise<Memory> {
-  const repos = getRepositories()
-  const importance = data.importance ?? 0.5
-
-  // Build create options for timestamp override (batch extraction)
-  const createOpts = data.sourceMessageTimestamp
-    ? { createdAt: data.sourceMessageTimestamp, updatedAt: data.sourceMessageTimestamp }
-    : undefined
-
-  const memory = await repos.memories.create({
+function memoryRowFromOptions(data: CreateMemoryOptions, importance: number) {
+  return {
     characterId: data.characterId,
     content: data.content,
     summary: data.summary,
@@ -511,7 +514,34 @@ async function createMemoryDirect(
     reinforcementCount: 1,
     relatedMemoryIds: [],
     reinforcedImportance: importance,
-  }, createOpts)
+  }
+}
+
+/**
+ * Create options for a new memory row: batch extraction overrides
+ * createdAt/updatedAt with the source message's timestamp.
+ */
+function memoryCreateOptions(data: CreateMemoryOptions): { createdAt: string; updatedAt: string } | undefined {
+  return data.sourceMessageTimestamp
+    ? { createdAt: data.sourceMessageTimestamp, updatedAt: data.sourceMessageTimestamp }
+    : undefined
+}
+
+/**
+ * Direct memory creation without gate (original flow).
+ * Used when skipGate or skipEmbedding is true.
+ */
+async function createMemoryDirect(
+  data: CreateMemoryOptions,
+  options: MemoryServiceOptions
+): Promise<Memory> {
+  const repos = getRepositories()
+  const importance = data.importance ?? 0.5
+
+  const memory = await repos.memories.create(
+    memoryRowFromOptions(data, importance),
+    memoryCreateOptions(data)
+  )
 
   if (options.skipEmbedding) {
     return memory
@@ -562,32 +592,10 @@ async function createMemoryDirectWithEmbedding(
   const repos = getRepositories()
   const importance = data.importance ?? 0.5
 
-  // Build create options for timestamp override (batch extraction)
-  const createOpts = data.sourceMessageTimestamp
-    ? { createdAt: data.sourceMessageTimestamp, updatedAt: data.sourceMessageTimestamp }
-    : undefined
-
-  const memory = await repos.memories.create({
-    characterId: data.characterId,
-    content: data.content,
-    summary: data.summary,
-    keywords: data.keywords || [],
-    tags: data.tags || [],
-    importance,
-    aboutCharacterId: data.aboutCharacterId || null,
-    chatId: data.chatId || null,
-    projectId: data.projectId ?? null,
-    source: data.source || 'MANUAL',
-    sourceMessageId: data.sourceMessageId || null,
-    witnessedContext: data.witnessedContext ?? null,
-    occurredAt: data.occurredAt ?? null,
-    narrativeTime: data.narrativeTime ?? null,
-    entities: data.entities ?? [],
-    kind: data.kind ?? 'semantic',
-    reinforcementCount: 1,
-    relatedMemoryIds: [],
-    reinforcedImportance: importance,
-  }, createOpts)
+  const memory = await repos.memories.create(
+    memoryRowFromOptions(data, importance),
+    memoryCreateOptions(data)
+  )
 
   if (embedding) {
     // Use the pre-computed embedding from the gate
@@ -784,6 +792,15 @@ export async function searchMemoriesSemantic(
      * memory keeps its max cosine across probes. Capped to 2 extras.
      */
     extraProbes?: readonly string[]
+    /**
+     * Called with the main query's vector the moment it is embedded (never for
+     * the `extraProbes`, and never on the text-search fallback). Lets a caller
+     * reuse the turn's one embedding for a companion search — the per-turn
+     * conversation-summary list in `lib/chat/context-manager.ts` — rather than
+     * paying for a second call on the same sentence. A callback that throws is
+     * caught and logged; the search itself carries on.
+     */
+    captureQueryEmbedding?: (captured: SearchQueryEmbedding) => void
   }
 ): Promise<SemanticSearchResult[]> {
   const repos = getRepositories()
@@ -807,6 +824,24 @@ export async function searchMemoriesSemantic(
       options.embeddingProfileId
     )
     const tEmbed = performance.now()
+
+    // Hand the caller the vector we just paid for, so a companion search in the
+    // same turn (the per-turn conversation-summary list) can reuse it instead of
+    // embedding the same sentence twice. Reported before the dimension guard
+    // below: a vector that doesn't match THIS character's memory index may still
+    // match the vault's document index, which is built separately.
+    if (options.captureQueryEmbedding) {
+      try {
+        options.captureQueryEmbedding({ query, embedding: embeddingResult.embedding })
+      } catch (captureError) {
+        // A companion search's bookkeeping must never cost the caller its
+        // memories — swallow and carry on with the search itself.
+        logger.warn('[Memory] captureQueryEmbedding callback threw; ignoring', {
+          characterId,
+          error: captureError instanceof Error ? captureError.message : String(captureError),
+        })
+      }
+    }
 
     // Relevance floor on the raw cosine, applied before the importance/recency
     // blend so a low-cosine memory can't be smuggled into recall by its weight.

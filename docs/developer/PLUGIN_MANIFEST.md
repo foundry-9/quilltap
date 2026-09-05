@@ -217,7 +217,8 @@ For plugins with `LLM_PROVIDER` capability, this section defines provider-specif
 | `colors.bg` | string | Yes | Tailwind background color class |
 | `colors.text` | string | Yes | Tailwind text color class |
 | `colors.icon` | string | Yes | Tailwind icon color class |
-| `requiresApiKey` | boolean | Yes | Whether provider needs an API key. If `true`, the provider appears in the API Keys settings dropdown, allowing users to add API keys for this provider. |
+| `requiresApiKey` | boolean | Yes | Whether the provider **must** have an API key before a connection profile is valid. |
+| `acceptsApiKey` | boolean | No | Whether the provider **may** hold an API key at all — the question that decides whether it appears in the Add-New-API-Key dropdown and whether the profile form shows the key selector. **Omit it and it means "the same answer as `requiresApiKey`"**, which is right for every provider that is wholly hosted or wholly local. Set it only where the two differ: `OPENAI_COMPATIBLE` declares `requiresApiKey: false, acceptsApiKey: true`, because the same provider serves an unauthenticated llama.cpp on localhost and a hosted endpoint behind a bearer token, and the key must be offered without being demanded. |
 | `requiresBaseUrl` | boolean | Yes | Whether provider needs a custom URL |
 | `apiKeyLabel` | string | No | Custom label for API key field |
 | `baseUrlLabel` | string | No | Custom label for base URL field |

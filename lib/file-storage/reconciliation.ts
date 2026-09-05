@@ -21,6 +21,7 @@ import { createLogger } from '@/lib/logging/create-logger';
 import { getFilesDir } from '@/lib/paths';
 import { deriveFolderPathFromStorageKey } from '@/lib/files/folder-utils';
 import { scanDirectory, computeSha256, detectMimeType } from './scanner';
+import { preservesContentDigest } from './digest-policy';
 
 const logger = createLogger('file-storage:reconciliation');
 
@@ -104,8 +105,13 @@ export async function reconcileFilesystem(): Promise<void> {
             const updates: Record<string, any> = {};
 
             if (dbRecord.size !== scannedFile.size) {
-              const sha256 = await computeSha256(join(filesDir, scannedFile.relativePath));
-              updates.sha256 = sha256;
+              // Bug 69: an ARCHIVE row's sha256 is the PLAINTEXT digest of an
+              // encrypted bundle (re-encryption after a passphrase change is
+              // exactly when its size moves) — recomputing it from disk would
+              // make the bundle unrehydratable. Correct the size alone.
+              if (!preservesContentDigest(dbRecord.category)) {
+                updates.sha256 = await computeSha256(join(filesDir, scannedFile.relativePath));
+              }
               updates.size = scannedFile.size;
             }
 

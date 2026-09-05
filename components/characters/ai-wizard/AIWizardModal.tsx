@@ -15,25 +15,7 @@ import { ProfileSelectionStep } from './steps/ProfileSelectionStep'
 import { DescriptionSourceStep } from './steps/DescriptionSourceStep'
 import { FieldSelectionStep } from './steps/FieldSelectionStep'
 import { GenerationStep } from './steps/GenerationStep'
-import type { GeneratedCharacterData, WizardStep } from './types'
-
-interface AIWizardModalProps {
-  isOpen: boolean
-  onClose: () => void
-  characterId?: string
-  characterName: string
-  currentData: {
-    title?: string
-    identity?: string
-    description?: string
-    manifesto?: string
-    personality?: string
-    scenarios?: Array<{ id: string; title: string; content: string }>
-    exampleDialogues?: string
-    systemPrompt?: string
-  }
-  onApply: (data: GeneratedCharacterData) => void
-}
+import type { AIWizardModalProps, WizardStep } from './types'
 
 const STEP_TITLES: Record<WizardStep, string> = {
   1: 'Select AI Model',

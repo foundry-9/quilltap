@@ -45,6 +45,7 @@ export { CharacterPluginDataRepository } from './character-plugin-data.repositor
 export { ConversationAnnotationsRepository } from './conversation-annotations.repository';
 export { ConversationChunksRepository } from './conversation-chunks.repository';
 export { HelpDocsRepository } from './help-docs.repository';
+export { HelpDocChunksRepository } from './help-doc-chunks.repository';
 export { DocMountPointsRepository } from './doc-mount-points.repository';
 export { DocMountFilesRepository } from './doc-mount-files.repository';
 export { DocMountFileLinksRepository } from './doc-mount-file-links.repository';
@@ -87,6 +88,7 @@ import { CharacterPluginDataRepository } from './character-plugin-data.repositor
 import { ConversationAnnotationsRepository } from './conversation-annotations.repository';
 import { ConversationChunksRepository } from './conversation-chunks.repository';
 import { HelpDocsRepository } from './help-docs.repository';
+import { HelpDocChunksRepository } from './help-doc-chunks.repository';
 import { DocMountPointsRepository } from './doc-mount-points.repository';
 import { DocMountFilesRepository } from './doc-mount-files.repository';
 import { DocMountFileLinksRepository } from './doc-mount-file-links.repository';
@@ -134,6 +136,7 @@ export interface RepositoryContainer {
   conversationAnnotations: ConversationAnnotationsRepository;
   conversationChunks: ConversationChunksRepository;
   helpDocs: HelpDocsRepository;
+  helpDocChunks: HelpDocChunksRepository;
   docMountPoints: DocMountPointsRepository;
   docMountFiles: DocMountFilesRepository;
   docMountFileLinks: DocMountFileLinksRepository;
@@ -193,6 +196,7 @@ export function createRepositories(): RepositoryContainer {
       conversationAnnotations: new ConversationAnnotationsRepository(),
       conversationChunks: new ConversationChunksRepository(),
       helpDocs: new HelpDocsRepository(),
+      helpDocChunks: new HelpDocChunksRepository(),
       docMountPoints: new DocMountPointsRepository(),
       docMountFiles: new DocMountFilesRepository(),
       docMountFileLinks: new DocMountFileLinksRepository(),

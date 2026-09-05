@@ -20,13 +20,17 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { withTimeout } from '@/lib/promise-timeout'
-import { resolveUncensoredCheapLLMSelection, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import { parseLLMJsonObject } from '@/lib/llm/llm-json'
+import { resolveUncensoredCheapLLMSelection, selectionFromProfile, type CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
 import type { UncensoredFallbackOptions, CheapLLMTaskResult } from '@/lib/memory/cheap-llm-tasks/types'
 import type { LLMMessage } from '@/lib/llm/base'
 import type { ConnectionProfile, MessageEvent, ChatMetadataBase, Character, ChatParticipantBase } from '@/lib/schemas/types'
+import type { DangerousContentSettings } from '@/lib/schemas/settings.types'
+import type { getRepositories } from '@/lib/repositories/factory'
 import { getParticipantName } from '@/lib/chat/context/message-attribution'
 import { isUserDrivenSeat } from '@/lib/chat/turn-manager/utils'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import type { ToolMessage } from './types'
 
 const logger = createServiceLogger('AnswerConfirmation')
@@ -246,21 +250,8 @@ interface ReaffirmationVerdict {
   reply?: string
 }
 
-/** Extract a JSON object from a possibly fenced/wrapped LLM response. */
-function extractJson(content: string): unknown {
-  const trimmed = content.trim()
-  // Strip ```json fences if present.
-  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i)
-  const body = fenceMatch ? fenceMatch[1].trim() : trimmed
-  // Find the first {...} span if there's leading/trailing prose.
-  const start = body.indexOf('{')
-  const end = body.lastIndexOf('}')
-  const jsonText = start >= 0 && end > start ? body.slice(start, end + 1) : body
-  return JSON.parse(jsonText)
-}
-
 function parseConsistencyVerdict(content: string): ConsistencyVerdict {
-  const obj = extractJson(content) as Record<string, unknown>
+  const obj = parseLLMJsonObject<Record<string, unknown>>(content)
   if (typeof obj.consistent !== 'boolean') {
     throw new Error('consistency verdict missing boolean "consistent"')
   }
@@ -271,7 +262,7 @@ function parseConsistencyVerdict(content: string): ConsistencyVerdict {
 }
 
 function parseReaffirmationVerdict(content: string): ReaffirmationVerdict {
-  const obj = extractJson(content) as Record<string, unknown>
+  const obj = parseLLMJsonObject<Record<string, unknown>>(content)
   if (typeof obj.revise !== 'boolean') {
     throw new Error('re-affirmation verdict missing boolean "revise"')
   }
@@ -392,16 +383,7 @@ export async function runAnswerConfirmation(
   // to stand by the reply or rewrite it. Reuse the cheap-task harness with a
   // selection built from the character's connection profile (handles provider
   // creation, API-key resolution, and LLM logging).
-  const reaffSelection: CheapLLMSelection = {
-    provider: connectionProfile.provider,
-    modelName: connectionProfile.modelName,
-    baseUrl: connectionProfile.baseUrl || undefined,
-    connectionProfileId: connectionProfile.id,
-    isLocal: false,
-    profileParameters: connectionProfile.parameters && typeof connectionProfile.parameters === 'object'
-      ? (connectionProfile.parameters as Record<string, unknown>)
-      : undefined,
-  }
+  const reaffSelection = selectionFromProfile(connectionProfile)
 
   const reaffParts: string[] = []
   if (conversationContext && conversationContext.trim().length > 0) {
@@ -475,4 +457,115 @@ export async function runAnswerConfirmation(
 
   logger.info('Answer confirmation: character stood by the flagged reply', { chatId })
   return { confirmed: false, revised: false, notes: discrepancies, revisedContent: null }
+}
+
+// ---------------------------------------------------------------------------
+// Per-turn gate: everything between "the reply is clean" and "persist it"
+// ---------------------------------------------------------------------------
+
+export interface MaybeConfirmAnswerOptions {
+  repos: Pick<ReturnType<typeof getRepositories>, 'projects' | 'chats'>
+  chatId: string
+  userId: string
+  chat: ChatMetadataBase
+  character: Character
+  characterParticipant: { id: string; status?: string }
+  /** The cleaned reply about to be persisted. */
+  reply: string
+  /** The id the reply will be stored under (for LLM-log correlation). */
+  messageId: string
+  toolMessages: ToolMessage[]
+  participantCharacters: Map<string, Character>
+  /** `chatSettings.answerConfirmationSettings.enabled` — the global default. */
+  globalEnabled: boolean
+  cheapLLMSelection: CheapLLMSelection | null
+  connectionProfile: ConnectionProfile
+  dangerSettings: DangerousContentSettings
+  allProfiles: ConnectionProfile[]
+  /** Emitted once the check is actually going to run. */
+  onConfirming?: () => void
+  /** Emitted just before the re-affirmation pass (only when a rewrite is invited). */
+  onAffirming?: () => void
+}
+
+/**
+ * What the finalizer records on the message:
+ * - `null` — the feature is off / nothing to check; every column stays unset.
+ * - `{ confirmed: null }` alone — a user-driven turn: the system can neither
+ *   confirm nor deny, and only the `confirmed` column is set.
+ * - a full {@link AnswerConfirmationOutcome} — the check ran.
+ */
+export type MaybeConfirmAnswerResult =
+  | AnswerConfirmationOutcome
+  | Pick<AnswerConfirmationOutcome, 'confirmed'>
+  | null
+
+/**
+ * Decide whether this turn's reply needs vetting and, if so, vet it. Wraps the
+ * gates (user-driven turn, silent turn, chat/project/global override, checkable
+ * inputs) around {@link runAnswerConfirmation}. Never throws on the check
+ * itself; the finalizer applies whatever comes back.
+ */
+export async function maybeConfirmAnswer(opts: MaybeConfirmAnswerOptions): Promise<MaybeConfirmAnswerResult> {
+  const {
+    repos, chatId, userId, chat, character, characterParticipant, reply, messageId, toolMessages,
+    participantCharacters, globalEnabled, cheapLLMSelection, connectionProfile, dangerSettings,
+    allProfiles, onConfirming, onAffirming,
+  } = opts
+
+  if (isUserDrivenTurn(chat, characterParticipant.id)) {
+    // A user-controlled/impersonated turn: the human may have sourced facts out
+    // of band, so the system can neither confirm nor deny. Explicit null (≠ the
+    // undefined "feature off" state).
+    logger.debug('Answer confirmation: user-driven turn, marking unverifiable', { chatId })
+    return { confirmed: null }
+  }
+  if (characterParticipant.status === 'silent') return null
+
+  const chatOverride = chat.answerConfirmationOverride as AnswerConfirmationOverride
+  let projectOverride: AnswerConfirmationOverride
+  if (!chatOverride && chat.projectId) {
+    const project = await repos.projects.findById(chat.projectId).catch(() => null)
+    projectOverride = (project?.answerConfirmationOverride as AnswerConfirmationOverride) ?? undefined
+  }
+  if (!isAnswerConfirmationActive(chatOverride, projectOverride, globalEnabled)) return null
+
+  const priorMessages = await repos.chats.getMessages(chatId)
+  const priorEvents = priorMessages.filter(
+    (m): m is typeof m & { type: 'message' } => m.type === 'message'
+  ) as unknown as MessageEvent[]
+  const whisper = findLatestCommonplaceWhisper(priorEvents, characterParticipant.id)
+  if (!hasCheckableInputs(whisper, toolMessages)) return null
+  const reference = gatherConfirmationInputs(whisper, toolMessages)
+  if (!reference) return null
+
+  // Recent live conversation, so any re-affirmation rewrite stays anchored to
+  // THIS scene instead of drifting into an old conversation the reference
+  // material may quote.
+  const conversationContext = buildRecentConversationContext(
+    priorEvents,
+    chat.participants ?? [],
+    participantCharacters,
+  )
+  onConfirming?.()
+  const isDangerousChat = shouldUseUncensoredRoute(chat)
+  return runAnswerConfirmation({
+    reply,
+    reference,
+    userId,
+    chatId,
+    messageId,
+    characterId: character.id,
+    characterName: character.name,
+    conversationContext,
+    cheapLLMSelection,
+    connectionProfile,
+    isDangerousChat,
+    uncensoredFallback: {
+      dangerSettings,
+      availableProfiles: allProfiles,
+      isDangerousChat,
+    },
+    onAffirming,
+  })
 }

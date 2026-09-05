@@ -16,6 +16,8 @@ import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/ui/icon'
 import { formatBytes } from '@/lib/utils/format-bytes'
 import { showConfirmation } from '@/lib/alert'
+import { showErrorToast } from '@/lib/toast'
+import { triggerDownload } from '@/lib/download-utils'
 import { buildMountFileItemUrl } from '@/components/files/mountBlobUrl'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import type { DocumentStoreFile, DocumentStoreBlob } from '../../types'
@@ -472,6 +474,21 @@ function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescrip
     try { await navigator.clipboard.writeText(markdown) } catch { /* no-op */ }
   }
 
+  const handleDownload = async () => {
+    if (!blobUrl) return
+    try {
+      const res = await fetch(blobUrl)
+      if (!res.ok) throw new Error(`Failed to fetch file (${res.status})`)
+      const bytes = await res.blob()
+      // file.fileName tracks the stored bytes (uploads are transcoded to WebP,
+      // so originalFileName's extension can mismatch what the endpoint serves).
+      await triggerDownload(bytes, file.fileName || blob?.originalFileName || 'file')
+    } catch (err) {
+      console.error('Failed to download store file:', { error: err instanceof Error ? err.message : String(err) })
+      showErrorToast('Failed to download file')
+    }
+  }
+
   return (
     <div className="flex flex-wrap gap-4 text-xs qt-text-secondary">
       {onOpenInWorkbench && (
@@ -526,6 +543,11 @@ function FileDetailRow({ file, blob, blobUrl, canUpload, onDelete, onSaveDescrip
               <a href={blobUrl} target="_blank" rel="noopener noreferrer" className="qt-button-secondary text-xs">
                 Open bytes
               </a>
+            )}
+            {blobUrl && (
+              <button type="button" onClick={handleDownload} className="qt-button-secondary text-xs">
+                Download
+              </button>
             )}
             <button type="button" onClick={copyMarkdown} className="qt-button-secondary text-xs">
               Copy link

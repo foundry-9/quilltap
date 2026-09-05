@@ -19,6 +19,10 @@ import { logger } from '@/lib/logger';
 import { ChatOpsContext } from './chats-ops-context';
 import { safeQuery } from './safe-query';
 import { computeSpokenThisCycleAfterMessage } from '@/lib/chat/turn-manager';
+import {
+  isCharacterAuthoredMessage,
+  CHARACTER_AUTHORED_MESSAGE_FILTER,
+} from '@/lib/chat/chat-activity';
 
 /**
  * Schema for individual chat message rows in SQLite
@@ -293,7 +297,10 @@ export class ChatMessagesOps {
         );
       }
 
-      // Update chat metadata — only update lastMessageAt and updatedAt for actual messages
+      // Update chat metadata. `lastMessageAt` moves only when a *character*
+      // posted — see `isCharacterAuthoredMessage`. A Staff announcement is a
+      // message row but not conversational activity, and must not resurrect a
+      // quiet chat at the top of the list.
       const chat = await this.ctx.findById(chatId);
       if (chat) {
         const allMessages = await this.getMessages(chatId);
@@ -301,8 +308,10 @@ export class ChatMessagesOps {
         const updateData: Record<string, unknown> = {
           messageCount: this.countVisibleMessages(allMessages),
         };
-        if (isActualMessage) {
+        if (isCharacterAuthoredMessage(validated)) {
           updateData.lastMessageAt = now;
+        }
+        if (isActualMessage) {
           updateData.updatedAt = now;
         }
         const cycleUpdate = computeSpokenThisCycleAfterMessage(
@@ -344,7 +353,9 @@ export class ChatMessagesOps {
         );
       }
 
-      // Update chat metadata — only update lastMessageAt and updatedAt if batch contains actual messages
+      // Update chat metadata. As in `addMessage`: `lastMessageAt` moves only if
+      // the batch actually carried character-authored content, while
+      // `updatedAt` moves for any message row.
       const chat = await this.ctx.findById(chatId);
       if (chat) {
         const allMessages = await this.getMessages(chatId);
@@ -352,8 +363,10 @@ export class ChatMessagesOps {
         const updateData: Record<string, unknown> = {
           messageCount: this.countVisibleMessages(allMessages),
         };
-        if (hasActualMessages) {
+        if (validated.some(isCharacterAuthoredMessage)) {
           updateData.lastMessageAt = now;
+        }
+        if (hasActualMessages) {
           updateData.updatedAt = now;
         }
         // Fold each message through the cycle helper in order so a batch that
@@ -441,17 +454,17 @@ export class ChatMessagesOps {
   }
 
   /**
-   * Timestamp of the most recent *played* message in a chat — one authored by a
-   * participant character or the human user: `type === 'message'` with NO
-   * `systemSender`. Personified-feature / Staff announcements (Lantern, Aurora,
-   * Host, Prospero, Carina, Concierge, Commonplace Book, Ariel, Suparṇā,
-   * Librarian) also persist as `type: 'message'` rows, but they carry a
-   * `systemSender`, so they are excluded — a Staff whisper into an otherwise
-   * quiet chat must not read as conversational activity.
+   * Timestamp of the most recent *played* message in a chat — one a character
+   * posted as content, per `isCharacterAuthoredMessage`
+   * (`@/lib/chat/chat-activity`), which is THE definition of chat activity and
+   * the thing to change if this needs to move. In short: `type === 'message'`,
+   * role `USER`/`ASSISTANT`, no `systemSender`, no `customAnnouncer`. Whispers
+   * count; Staff announcements, announcement bubbles, and raw tool rows don't.
    *
    * Returns the ISO `createdAt` of that message, or null when the chat has no
-   * played messages at all. Used by the stale-chat maintenance sweep to decide
-   * whether a chat has genuinely gone quiet.
+   * played messages at all. This is the value mirrored into the chat's
+   * `lastMessageAt` column (which every list and sort reads), and the value the
+   * stale-chat maintenance sweep uses to decide whether a chat has gone quiet.
    */
   async getLastPlayedMessageAt(chatId: string): Promise<string | null> {
     return safeQuery(async () => {
@@ -461,7 +474,7 @@ export class ChatMessagesOps {
         // Indexed single-row lookup — avoids loading and Zod-validating the
         // whole transcript of every chat during the daily maintenance sweep.
         const rows = await messagesCollection.find(
-          { chatId, type: 'message', systemSender: null } as QueryFilter,
+          { chatId, ...(CHARACTER_AUTHORED_MESSAGE_FILTER as object) } as QueryFilter,
           { sort: { createdAt: -1 } as SortSpec, limit: 1 },
         );
         const createdAt = (rows[0] as { createdAt?: unknown } | undefined)?.createdAt;
@@ -469,11 +482,11 @@ export class ChatMessagesOps {
       }
 
       // Legacy embedded-array backend: scan the loaded messages for the newest
-      // participant-authored one (ISO-8601 strings compare lexicographically).
+      // character-authored one (ISO-8601 strings compare lexicographically).
       const messages = await this.getMessages(chatId);
       let latest: string | null = null;
       for (const m of messages) {
-        if (m.type !== 'message' || m.systemSender) continue;
+        if (!isCharacterAuthoredMessage(m)) continue;
         if (latest === null || m.createdAt > latest) latest = m.createdAt;
       }
       return latest;
@@ -527,8 +540,12 @@ export class ChatMessagesOps {
         const chat = await this.ctx.findById(chatId);
         if (chat) {
           const allMessages = await this.getMessages(chatId);
+          // Deleting the newest character-authored message must walk
+          // `lastMessageAt` *backwards*, not leave it pointing at a row that no
+          // longer exists — recompute from what survives.
           await this.ctx.update(chatId, {
             messageCount: this.countVisibleMessages(allMessages),
+            lastMessageAt: await this.getLastPlayedMessageAt(chatId),
           } as Partial<ChatMetadata>);
         }
         logger.info('Messages deleted from chat', { chatId, removed, requested: messageIds.length });

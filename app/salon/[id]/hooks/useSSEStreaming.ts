@@ -8,6 +8,7 @@ import type { ChatParticipantBase } from '@/lib/schemas/types'
 import { findActiveUserParticipant } from '@/lib/chat/turn-manager'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
+import { useToolExecutionStatus } from './useToolExecutionStatus'
 
 export interface PendingToolCall {
   id: string
@@ -28,11 +29,9 @@ export interface StreamingToolBatch {
   calls: PendingToolCall[]
 }
 
-export interface ToolExecutionStatus {
-  tool: string
-  status: 'pending' | 'success' | 'error'
-  message: string
-}
+// The tool-execution notice owns its own lifetime (bug 77); re-exported here
+// because this hook's consumers import the type from it.
+export type { ToolExecutionStatus } from './useToolExecutionStatus'
 
 export interface ResponseStatus {
   stage: string
@@ -67,9 +66,25 @@ interface SSEEvent {
     name: string
     success: boolean
     result?: any
+    /**
+     * Human-readable failure text, set by the emitter only when `success` is
+     * false (the `result` field is usually null on error). Sibling of `result`,
+     * not nested inside it.
+     */
+    error?: string
   }
   provider?: string
   modelName?: string
+  /**
+   * What the provider plugin managed to put on the wire. `failed` entries are
+   * attachments the model never received — surfaced as a warning toast on the
+   * done event, because a silently dropped image is indistinguishable from a
+   * model that saw it and said nothing (bug 94).
+   */
+  attachmentResults?: {
+    sent?: string[]
+    failed?: Array<{ id: string; error: string }>
+  } | null
   // Turn/chain events are sent as flat JSON with boolean flags
   // e.g. { turnStart: true, participantId: "...", characterName: "...", chainDepth: 1 }
   turnStart?: boolean
@@ -112,6 +127,42 @@ interface SSEEvent {
 }
 
 /**
+ * Pull the human-readable failure sentence out of a `toolResult` frame.
+ *
+ * The emitter (`lib/services/chat-message/tool-execution.service.ts`) puts the
+ * text in `error`, a **sibling** of `result`, because `result` itself is null on
+ * failure. The nested `result.error` read is kept only as a fallback in case a
+ * provider ever puts it there. The executor wraps the sentence in its own
+ * `Error: ` prefix, which is stripped so display sites don't read
+ * "Image generation failed: Error: ..." (Bug 84).
+ */
+export function resolveToolResultErrorText(
+  toolResult: { result?: unknown; error?: string } | undefined
+): string | undefined {
+  const raw = toolResult?.error || (toolResult?.result as { error?: string } | null | undefined)?.error
+  return raw?.replace(/^Error:\s*/, '').trim() || undefined
+}
+
+/**
+ * Compose the warning for attachments the provider plugin could not put on the
+ * wire. The `attachmentResults` ledger has always been emitted and was never
+ * displayed (bug 94), so an image that silently failed to reach a vision model
+ * looked exactly like a model that had seen it and ignored it.
+ *
+ * Returns null when there is nothing to warn about, so the caller can raise the
+ * toast unconditionally on a non-null result.
+ */
+export function buildFailedAttachmentWarning(
+  failed: Array<{ id: string; error: string }> | null | undefined
+): string | null {
+  if (!Array.isArray(failed) || failed.length === 0) return null
+  const first = failed[0]?.error ?? 'unknown reason'
+  const more = failed.length > 1 ? ` (and ${failed.length - 1} more)` : ''
+  const subject = failed.length === 1 ? 'An attachment was' : `${failed.length} attachments were`
+  return `${subject} not sent to the model${more}: ${first}`
+}
+
+/**
  * Parse a raw SSE data string into a structured event, or null if it should be skipped.
  */
 export function parseSSEData(rawData: string): SSEEvent | null {
@@ -125,6 +176,16 @@ export function parseSSEData(rawData: string): SSEEvent | null {
     // Ignore JSON parse errors (SSE chunking artifacts)
     return null
   }
+}
+
+/**
+ * Append a server-posted message to the live list unless it is already there.
+ * Messages surfaced mid-turn (Carina answers, Host turn-pass notes, Pascal
+ * outcomes, Librarian announcements) are inserted optimistically and later
+ * reconciled by the post-turn `fetchChat()`, so the same id can arrive twice.
+ */
+export function appendMessageOnce(messages: Message[], message: Message): Message[] {
+  return messages.some(m => m.id === message.id) ? messages : [...messages, message]
 }
 
 interface UseSSEStreamingParams {
@@ -216,8 +277,18 @@ export function useSSEStreaming({
   // the point in the prose where each fired (see StreamingToolBatch). Replaces a
   // single flat list so the streaming bubble can interleave them with the text.
   const [streamingToolBatches, setStreamingToolBatches] = useState<StreamingToolBatch[]>([])
-  const [toolExecutionStatus, setToolExecutionStatus] = useState<ToolExecutionStatus | null>(null)
   const [responseStatus, setResponseStatus] = useState<ResponseStatus | null>(null)
+  // The tool-execution notice: raised, self-expiring, and dismissable from one
+  // place. The banner used to be cleared only from the send path's onDone, so
+  // any turn that finished by another route — a chain's intermediate done,
+  // continue mode, an error, an autonomous turn — left it pinned above the
+  // composer forever (bug 77).
+  const {
+    toolExecutionStatus,
+    publishToolExecutionStatus,
+    dismissToolExecutionStatus,
+    clearPendingToolExecutionStatus,
+  } = useToolExecutionStatus()
 
   const abortControllerRef = useRef<AbortController | null>(null)
   // Monotonic batch counter so tool-call React keys stay unique across batches.
@@ -277,6 +348,22 @@ export function useSSEStreaming({
     setStreamingReasoning('')
   }, [])
 
+  /** Insert a mid-turn surfaced message (deduped by id) and keep the view pinned. */
+  const surfaceMessage = useCallback((message: Message) => {
+    setMessages(prev => appendMessageOnce(prev, message))
+    scrollOnStreamComplete()
+  }, [setMessages, scrollOnStreamComplete])
+
+  /**
+   * "Nothing to add" turn-pass: the Host note already surfaced via
+   * `surfaceMessage`. Reset the streaming buffer without appending a phantom
+   * bubble or toasting; the chain (or chainComplete) drives the rest.
+   */
+  const finishSkippedTurn = useCallback(() => {
+    resetStreamingContent()
+    setStreaming(false)
+  }, [resetStreamingContent])
+
   // Patch a message in place with its resolved answer-confirmation state. On a
   // re-affirmation rewrite (`content` present) the optimistic bubble text is
   // replaced with the corrected reply — a deliberate, visible transparency swap.
@@ -298,6 +385,7 @@ export function useSSEStreaming({
   }, [setMessages])
 
   // Cancel any pending rAF on unmount to avoid setting state after teardown.
+  // (The tool-status auto-dismiss timer is cleaned up by its own hook.)
   useEffect(() => {
     return () => {
       if (streamingContentRafRef.current !== null) {
@@ -331,19 +419,19 @@ export function useSSEStreaming({
     }))
     setStreamingToolBatches(prev => [...prev, { offset, calls }])
     if (toolNames.includes('generate_image')) {
-      setToolExecutionStatus({
+      publishToolExecutionStatus({
         tool: 'generate_image',
         status: 'pending',
         message: `Generating image...`,
       })
     }
-  }, [])
+  }, [publishToolExecutionStatus])
 
   // Mark a tool result on the most recent batch (results stream immediately
   // after their detection) and run per-tool side effects (navigation, image
   // toasts, page callback).
   const trackToolResult = useCallback((data: SSEEvent) => {
-    const { index, name, success, result } = data.toolResult!
+    const { index, name, success, result, error } = data.toolResult!
 
     setStreamingToolBatches(prev => {
       if (prev.length === 0) return prev
@@ -367,26 +455,27 @@ export function useSSEStreaming({
     if (name === 'generate_image') {
       if (success) {
         const imageCount = result?.images?.length || 1
-        setToolExecutionStatus({
+        publishToolExecutionStatus({
           tool: name,
           status: 'success',
           message: `Successfully generated ${imageCount} image${imageCount > 1 ? 's' : ''}!`,
         })
         showSuccessToast(`Image generation complete! ${imageCount} image${imageCount > 1 ? 's' : ''} generated.`)
       } else {
-        setToolExecutionStatus({
+        const detail = resolveToolResultErrorText({ result, error })
+        publishToolExecutionStatus({
           tool: name,
           status: 'error',
-          message: result?.error || 'Failed to generate image',
+          message: detail || 'Failed to generate image',
         })
-        showErrorToast(`Image generation failed: ${result?.error || 'Unknown error'}`)
+        showErrorToast(`Image generation failed: ${detail || 'Unknown error'}`)
       }
     }
 
     // Notify the page about tool results (for Document Mode, etc.)
     onToolResultCallback?.(name, success, result)
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [])
+  }, [publishToolExecutionStatus])
 
   /**
    * Shared SSE stream reader. Processes lines from a ReadableStreamDefaultReader.
@@ -403,12 +492,13 @@ export function useSSEStreaming({
       onToolsDetected?: (data: SSEEvent, offset: number) => void
       onToolResult?: (data: SSEEvent) => void
       onDone: (fullContent: string, data: SSEEvent) => void | Promise<void>
-      /** Called when a Carina reference answer is surfaced mid-turn */
-      onCarinaAnswer?: (message: Message) => void
-      /** Called when a Host announcement (e.g. a turn-pass note) is surfaced mid-turn */
-      onHostAnnouncement?: (message: Message) => void
-      /** Called when a Pascal custom-tool outcome is surfaced mid-turn */
-      onPascalResult?: (message: Message) => void
+      /**
+       * Called for each full message surfaced mid-turn — a Carina reference
+       * answer, a Host announcement (e.g. a turn-pass note), or a Pascal
+       * custom-tool outcome — so it lands in the flow immediately rather than
+       * waiting for the post-turn fetchChat().
+       */
+      onSurfacedMessage?: (message: Message) => void
       /** Called when an answer-confirmation result resolves for a message */
       onConfirmationResult?: (result: NonNullable<SSEEvent['confirmationResult']>) => void
       /** Called for intermediate done events during a chain (not the final one) */
@@ -445,8 +535,12 @@ export function useSSEStreaming({
         // Handle status updates
         if (data.status) {
           setResponseStatus(data.status)
-          // Show warning toast when retrying due to empty response
-          if (data.status.stage === 'retrying') {
+          // Show a warning toast when the turn is being rescued: `retrying`
+          // is the same provider having another go after an empty response,
+          // `failing-over` is an understudy from the profile's fallback chain
+          // taking the turn. Both are moments where the reply the user gets is
+          // not the one they configured, so both are worth saying out loud.
+          if (data.status.stage === 'retrying' || data.status.stage === 'failing-over') {
             showWarningToast(data.status.message)
           }
         }
@@ -489,22 +583,14 @@ export function useSSEStreaming({
           opts.onToolResult(data)
         }
 
-        // Handle a Carina reference answer surfaced mid-turn — insert it into the
-        // flow immediately rather than waiting for the post-turn fetchChat().
-        if (data.carinaAnswer && opts.onCarinaAnswer) {
-          opts.onCarinaAnswer(data.carinaAnswer)
-        }
-
-        // Handle a Host announcement surfaced mid-turn (turn-pass note) — insert
-        // it immediately, deduped by id, same as Carina answers.
-        if (data.hostAnnouncement && opts.onHostAnnouncement) {
-          opts.onHostAnnouncement(data.hostAnnouncement)
-        }
-
-        // Handle a Pascal custom-tool outcome surfaced mid-turn — insert it
-        // immediately, deduped by id, same as Carina answers.
-        if (data.pascalResult && opts.onPascalResult) {
-          opts.onPascalResult(data.pascalResult)
+        // Messages surfaced mid-turn — a Carina reference answer, a Host
+        // announcement (turn-pass note), a Pascal custom-tool outcome — are
+        // inserted into the flow immediately (deduped by id) rather than
+        // waiting for the post-turn fetchChat().
+        if (opts.onSurfacedMessage) {
+          for (const surfaced of [data.carinaAnswer, data.hostAnnouncement, data.pascalResult]) {
+            if (surfaced) opts.onSurfacedMessage(surfaced)
+          }
         }
 
         // Handle an answer-confirmation result — update the badge and, on a
@@ -517,6 +603,11 @@ export function useSSEStreaming({
         // Handle completion
         if (data.done) {
           setResponseStatus(null)
+
+          // Attachments the provider plugin could not put on the wire (bug 94).
+          const attachmentWarning = buildFailedAttachmentWarning(data.attachmentResults?.failed)
+          if (attachmentWarning) showWarningToast(attachmentWarning)
+
           if (inChain && opts.onIntermediateDone) {
             // Intermediate done during a chain — lighter cleanup, no state reset
             await opts.onIntermediateDone(fullContent, data)
@@ -721,26 +812,11 @@ export function useSSEStreaming({
         participantId: firstCharParticipant?.id || null,
         onToolsDetected: trackToolsDetected,
         onToolResult: trackToolResult,
-        onCarinaAnswer: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
-        onHostAnnouncement: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
-        onPascalResult: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
+        onSurfacedMessage: surfaceMessage,
         onConfirmationResult: applyConfirmationResult,
         onDone: async (fullContent, data) => {
-          // "Nothing to add" turn-pass: the Host note already surfaced via
-          // onHostAnnouncement. Reset streaming without appending a bubble or
-          // toasting; the chain (or chainComplete) drives the rest.
           if (data.skipped) {
-            resetStreamingContent()
-            setStreaming(false)
+            finishSkippedTurn()
             return
           }
 
@@ -796,17 +872,14 @@ export function useSSEStreaming({
           scrollOnStreamComplete()
           await fetchChat()
           notifyQueueChange()
-          setTimeout(() => {
-            setToolExecutionStatus(null)
-          }, 3000)
+          // A settled notice is already counting itself down; only a 'pending'
+          // one that never got a result needs clearing at the turn boundary.
+          clearPendingToolExecutionStatus()
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
-          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
-          // reset streaming without appending a bubble.
           if (data.skipped) {
-            resetStreamingContent()
-            setStreaming(false)
+            finishSkippedTurn()
             return
           }
           if (data.emptyResponse || !fullContent) return
@@ -888,7 +961,7 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
@@ -951,27 +1024,14 @@ export function useSSEStreaming({
         participantId,
         onToolsDetected: trackToolsDetected,
         onToolResult: trackToolResult,
-        onCarinaAnswer: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
-        onHostAnnouncement: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
-        onPascalResult: (msg) => {
-          setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg])
-          scrollOnStreamComplete()
-        },
+        onSurfacedMessage: surfaceMessage,
         onConfirmationResult: applyConfirmationResult,
         onDone: (fullContent, data) => {
           setResponseStatus(null)
+          clearPendingToolExecutionStatus()
 
-          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
-          // reset streaming without appending a bubble or toasting.
           if (data.skipped) {
-            resetStreamingContent()
-            setStreaming(false)
+            finishSkippedTurn()
             return
           }
 
@@ -996,11 +1056,8 @@ export function useSSEStreaming({
         },
         onIntermediateDone: async (fullContent, data) => {
           // Intermediate done during a chain — add temp message but don't reset state
-          // "Nothing to add" turn-pass: Host note surfaced via onHostAnnouncement;
-          // reset streaming without appending a bubble.
           if (data.skipped) {
-            resetStreamingContent()
-            setStreaming(false)
+            finishSkippedTurn()
             return
           }
           if (!fullContent.trim()) return
@@ -1065,7 +1122,7 @@ export function useSSEStreaming({
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, trackToolsDetected, trackToolResult, applyConfirmationResult])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {
@@ -1077,7 +1134,7 @@ export function useSSEStreaming({
     setSending(false)
     setRespondingParticipantId(null)
     setStreamingToolBatches([])
-    setToolExecutionStatus(null)
+    dismissToolExecutionStatus()
     if (isMultiChar) {
       setPauseState(true)
     }
@@ -1085,7 +1142,7 @@ export function useSSEStreaming({
       showInfoToast('Response stopped - chat paused')
     }
     resetStreamingContent()
-  }, [streamingContent, isMultiChar, setPauseState, setRespondingParticipantId, resetStreamingContent])
+  }, [streamingContent, isMultiChar, setPauseState, setRespondingParticipantId, resetStreamingContent, dismissToolExecutionStatus])
 
   return {
     sending,
@@ -1095,6 +1152,7 @@ export function useSSEStreaming({
     waitingForResponse,
     streamingToolBatches,
     toolExecutionStatus,
+    dismissToolExecutionStatus,
     responseStatus,
     abortControllerRef,
     sendMessage,

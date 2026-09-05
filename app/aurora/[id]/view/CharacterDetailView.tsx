@@ -11,12 +11,15 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useAvatarDisplay } from '@/hooks/useAvatarDisplay'
 import { useQuickHide } from '@/components/providers/quick-hide-provider'
 import { HiddenPlaceholder } from '@/components/quick-hide/hidden-placeholder'
 import { EntityTabs } from '@/components/tabs'
 import { NewChatModal } from '@/components/new-chat'
 import { useWardrobeDialogOptional } from '@/components/providers/wardrobe-dialog-provider'
+import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstructionsSection'
+import { CanChooseOutfitToggle } from '@/components/wardrobe/CanChooseOutfitToggle'
 import { useCharacterView, useCharacterStats } from './hooks'
 import {
   CharacterHeader,
@@ -33,9 +36,7 @@ import {
   ArchiveCharacterDialog,
   RehydrateBundleDialog,
 } from './components'
-import { useQueryClient } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/query/keys'
-import { showSuccessToast, showErrorToast } from '@/lib/toast'
+import { showSuccessToast } from '@/lib/toast'
 import { CHARACTER_TABS } from './constants'
 import { SearchReplaceModal } from '@/components/tools/search-replace'
 import type { SearchReplaceResult } from '@/components/tools/search-replace/types'
@@ -107,6 +108,9 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
     handleToggleFavorite,
     handleToggleControlledBy,
     handleToggleCarina,
+    handleArchive,
+    handleRehydrate,
+    rehydrating,
     togglingNpc,
     togglingFavorite,
     togglingControlledBy,
@@ -123,61 +127,25 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
 
   const { stats, groups, fetchStats } = useCharacterStats(id)
 
-  const queryClient = useQueryClient()
   const [showArchiveDialog, setShowArchiveDialog] = useState(false)
-  const [rehydrating, setRehydrating] = useState(false)
   // Set after a successful rehydrate: the ARCHIVE bundle left on the shelf,
   // whose disposal the user gets to decide (spec §6 step 6).
   const [leftoverBundleFileId, setLeftoverBundleFileId] = useState<string | null>(null)
   const isArchived = Boolean(character?.archivedAt)
 
   const handleArchiveConfirm = async () => {
-    try {
-      const res = await fetch(`/api/v1/characters/${id}?action=archive`, { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to archive character')
-      }
+    if (await handleArchive()) {
       setShowArchiveDialog(false)
-      await fetchCharacter()
       setDataRefreshKey((prev) => prev + 1) // header stats: memory count just changed
-      await queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
-      showSuccessToast(
-        data.pruneComplete === false
-          ? `${character?.name || 'The character'} is archived, but some effects resisted packing — archive them again to finish the sweep.`
-          : `${character?.name || 'The character'} rests in the archive, bundle sealed and shelved.`
-      )
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to archive character')
     }
   }
 
-  const handleRehydrate = async () => {
-    setRehydrating(true)
-    try {
-      const res = await fetch(`/api/v1/characters/${id}?action=rehydrate`, { method: 'POST' })
-      const data = await res.json().catch(() => ({}))
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to rehydrate character')
-      }
-      await fetchCharacter()
-      setDataRefreshKey((prev) => prev + 1)
-      await queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
-      const restored = data.restored as
-        | { memories: number; documents: number; blobs: number }
-        | undefined
-      showSuccessToast(
-        restored
-          ? `${character?.name || 'The character'} is awake again — ${restored.memories} memories, ${restored.documents} papers and ${restored.blobs} photographs unpacked.`
-          : `${character?.name || 'The character'} is awake again.`
-      )
-      if (typeof data.archiveBundleFileId === 'string' && data.archiveBundleFileId) {
-        setLeftoverBundleFileId(data.archiveBundleFileId)
-      }
-    } catch (err) {
-      showErrorToast(err instanceof Error ? err.message : 'Failed to rehydrate character')
-    } finally {
-      setRehydrating(false)
+  const handleRehydrateClick = async () => {
+    const bundleFileId = await handleRehydrate()
+    if (bundleFileId === undefined) return
+    setDataRefreshKey((prev) => prev + 1)
+    if (bundleFileId) {
+      setLeftoverBundleFileId(bundleFileId)
     }
   }
 
@@ -197,6 +165,15 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
   useEffect(() => {
     fetchStats()
   }, [fetchStats, dataRefreshKey])
+
+  // Navigating back to the containing workspace tab refreshes the character
+  // and everything keyed off dataRefreshKey (stats, memories, photos…).
+  // fetchCharacter never flips `loading` after the first load, so the page
+  // stays on screen during the refresh.
+  useOnTabActivated(() => {
+    void fetchCharacter()
+    setDataRefreshKey((k) => k + 1)
+  })
 
   // Open the chat modal when arriving via ?action=chat (initialize once)
   useEffect(() => {
@@ -289,28 +266,12 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
               edit, layer, and save outfits from anywhere, including from
               inside a chat.
             </p>
-            <div className="rounded-lg border qt-border-default qt-bg-card p-4">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={character?.canChooseOutfit ?? false}
-                  onChange={(e) => handleSaveCanChooseOutfit(e.target.checked)}
-                  disabled={savingCanChooseOutfit || !character}
-                  className="mt-1 accent-[var(--primary)]"
-                />
-                <span className="flex-1 min-w-0">
-                  <span className="qt-text-label block">Let this character choose their opening outfit</span>
-                  <span className="qt-text-small qt-text-secondary block mt-0.5">
-                    When enabled, a new chat with this character defaults its
-                    Starting Outfit to “Let character choose” instead of their
-                    default wardrobe. You can still overrule it per chat.
-                  </span>
-                </span>
-                {savingCanChooseOutfit && (
-                  <span className="h-4 w-4 mt-1 animate-spin rounded-full qt-spinner shrink-0" />
-                )}
-              </label>
-            </div>
+            <CanChooseOutfitToggle
+              checked={character?.canChooseOutfit ?? false}
+              saving={savingCanChooseOutfit}
+              disabled={!character}
+              onChange={handleSaveCanChooseOutfit}
+            />
             <button
               type="button"
               onClick={() => wardrobeDialog?.open({ characterId: id })}
@@ -319,6 +280,9 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
             >
               Open wardrobe for {character?.name || 'this character'}
             </button>
+            {/* The character's own dressing instructions — the same
+                Wardrobe/instructions.md the wardrobe dialog edits. */}
+            <WardrobeInstructionsSection container={{ scope: 'character', id }} />
           </div>
         )
 
@@ -450,7 +414,7 @@ export function CharacterDetailView({ characterId: id, onBack, openChatOnMount =
           onSearchReplace={isArchived ? undefined : () => setShowSearchReplaceModal(true)}
           onGenerateExternalPrompt={isArchived ? undefined : () => setShowExternalPromptDialog(true)}
           onArchive={isArchived ? undefined : () => setShowArchiveDialog(true)}
-          onRehydrate={isArchived ? handleRehydrate : undefined}
+          onRehydrate={isArchived ? handleRehydrateClick : undefined}
           rehydrating={rehydrating}
           togglingNpc={togglingNpc}
           togglingFavorite={togglingFavorite}

@@ -96,6 +96,13 @@ function buildContextSection(
 
 export interface GreetingResult {
   content: string
+  /**
+   * Reasoning / chain-of-thought text captured from a thinking model while it
+   * composed the greeting. DISPLAY ONLY — persisted onto the greeting message
+   * so the Salon renders its thinking fold like any other turn, and never fed
+   * back to any model. Empty when the model produced none.
+   */
+  reasoningContent: string
   /** True when the LLM consumed tokens but returned empty content — likely a content filter */
   contentFilterDetected: boolean
 }
@@ -144,6 +151,10 @@ export async function generateGreetingMessage({
   // streaming them to the UI is a planned follow-up (see CHANGELOG v2.9.x).
   const startTime = Date.now()
   let accumulated = ''
+  // Providers emit `reasoningContent` CUMULATIVELY — the full thinking-so-far
+  // on every chunk that grows it, not a delta — so this is an assignment, not
+  // a concatenation. Same contract the Salon's streaming path relies on.
+  let accumulatedReasoning = ''
   let finalUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
   let streamError: Error | undefined
   try {
@@ -161,6 +172,9 @@ export async function generateGreetingMessage({
     )) {
       if (chunk.content) {
         accumulated += chunk.content
+      }
+      if (chunk.reasoningContent) {
+        accumulatedReasoning = chunk.reasoningContent
       }
       if (chunk.usage) {
         finalUsage = {
@@ -203,7 +217,18 @@ export async function generateGreetingMessage({
   }
 
   const trimmedContent = accumulated.trim()
+  const trimmedReasoning = accumulatedReasoning.trim()
   const contentFilterDetected = !trimmedContent && !!finalUsage && finalUsage.completionTokens > 0
+
+  if (trimmedReasoning) {
+    logger.debug('[Greeting Generation] Captured reasoning for the greeting', {
+      context: 'initial-greeting',
+      provider,
+      model: modelName,
+      characterName,
+      reasoningChars: trimmedReasoning.length,
+    })
+  }
 
   if (contentFilterDetected) {
     logger.warn('[Greeting Generation] LLM returned empty content despite consuming tokens - likely content filter hit', {
@@ -227,5 +252,5 @@ export async function generateGreetingMessage({
     })
   }
 
-  return { content: trimmedContent, contentFilterDetected }
+  return { content: trimmedContent, reasoningContent: trimmedReasoning, contentFilterDetected }
 }

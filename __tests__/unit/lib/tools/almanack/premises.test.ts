@@ -37,7 +37,6 @@ jest.mock('@/lib/paths', () => ({
   getShellCapabilities: () => [],
   isDockerEnvironment: () => false,
   isElectronShell: () => false,
-  isLimaEnvironment: () => false,
 }))
 
 jest.mock('@/lib/startup/dbkey', () => ({

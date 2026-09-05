@@ -73,6 +73,28 @@ async function collectProfileLifetime(userId: string): Promise<ProfileLifetimeRo
   }));
 }
 
+/**
+ * Wire records with no logs at all, under the default logging settings
+ * (enabled, 30-day retention) — what the section reads as when the collector
+ * fails.
+ */
+export function emptyWireRecords(): WireRecordsInfo {
+  return {
+    totalEntries: 0,
+    tokenUsage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+    loggingEnabled: true,
+    verboseMode: false,
+    retentionDays: 30,
+    exactProfileAttribution: false,
+    byType: [],
+    connectionProfileLifetime: [],
+    connectionProfileWindow: [],
+    imageProfileWindow: [],
+    cacheByProvider: [],
+    cacheByProfile: [],
+  };
+}
+
 /** The whole wire-records phase. */
 export async function collectWireRecords(userId: string): Promise<WireRecordsInfo> {
   const repos = getUserRepositories(userId).llmLogs;

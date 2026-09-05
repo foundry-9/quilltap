@@ -9,7 +9,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { requiresApiKey } from '@/lib/plugins/provider-validation'
+import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import { stripCharacterNamePrefix } from '@/lib/llm/message-formatter'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { MessageEvent, ChatMetadataBase } from '@/lib/schemas/types'
@@ -208,14 +208,13 @@ async function processHelpResponse(
   const connectionProfile = await repos.connections.findById(participant.connectionProfileId)
   if (!connectionProfile) throw new Error('Connection profile not found')
 
-  // Get API key
-  let apiKey = ''
-  if (requiresApiKey(connectionProfile.provider)) {
-    if (!connectionProfile.apiKeyId) throw new Error('No API key configured')
-    const apiKeyData = await repos.connections.findApiKeyById(connectionProfile.apiKeyId)
-    if (!apiKeyData) throw new Error('API key not found')
-    apiKey = apiKeyData.key_value
+  // Get API key — required for a hosted provider, optional but still forwarded
+  // for one that merely accepts a key (Bug 81)
+  const keyResolution = await resolveConnectionProfileApiKey(repos, connectionProfile)
+  if (!keyResolution.ok) {
+    throw new Error(describeProfileApiKeyFailure(keyResolution.reason))
   }
+  const apiKey = keyResolution.apiKey
 
   // Get user character identity (from user profile)
   const userSettings = await repos.users.findById(userId)

@@ -11,6 +11,7 @@ import { createContextHandler } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
 import { uploadImage, importImageFromUrl } from '@/lib/images-v2';
 import { createImageProvider } from '@/lib/llm';
+import { trackActivity } from '@/lib/background-jobs/activity-registry';
 import { logger } from '@/lib/logger';
 import {
   getLanternBackgroundsStore,
@@ -26,6 +27,7 @@ import { classifyContent as classifyDangerousContent } from '@/lib/services/dang
 import { getCheapLLMProvider, DEFAULT_CHEAP_LLM_CONFIG, type CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { getErrorMessage } from '@/lib/error-utils';
 import { convertToWebP } from '@/lib/files/webp-conversion';
+import { buildImageGenParams } from '@/lib/image-gen/params-builder';
 
 const importFromUrlSchema = z.object({
   url: z.url(),
@@ -159,9 +161,11 @@ export const GET = createContextHandler(async (request, { user, repos }) => {
 export const POST = createContextHandler(async (request, { user, repos }) => {
   const action = getActionParam(request);
 
-  // Handle generate action
+  // Handle generate action. Generation is synchronous here rather than queued,
+  // so it registers with the activity registry to keep the "Img" chip honest
+  // (the Concierge check inside counts under "Dgr" on its own).
   if (action === 'generate') {
-    return handleGenerateImage(request, user, repos);
+    return trackActivity('image', () => handleGenerateImage(request, user, repos));
   }
 
   // Default: upload or import image
@@ -271,16 +275,22 @@ async function handleGenerateImage(request: NextRequest, user: { id: string }, r
     return badRequest(`${profile.provider} provider does not support image generation`);
   }
 
-  // Build image generation request
-  const imageGenRequest = {
+  // Build the image generation request through the shared builder, so this
+  // route sees the profile's stored defaults, LoRAs and residual options the
+  // same way the Salon's `generate_image` does. No orientation is resolved:
+  // this route's caller passes an explicit size and means it.
+  const { params: imageGenRequest } = buildImageGenParams({
+    profile,
     prompt,
-    model: profile.modelName,
-    n: options.n,
-    size: options.size,
-    quality: options.quality,
-    style: options.style,
-    aspectRatio: options.aspectRatio,
-  };
+    overrides: {
+      n: options.n,
+      size: options.size,
+      quality: options.quality,
+      style: options.style,
+      aspectRatio: options.aspectRatio,
+    },
+    logContext: { context: 'api.v1.images.generate', profileId: profile.id },
+  });
 
   // Generate images
   const imageGenResponse = await provider.generateImage(imageGenRequest, decryptedKey);

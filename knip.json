@@ -4,6 +4,7 @@
     "app/**/*.{ts,tsx}",
     "scripts/*.ts",
     "migrations/*.ts",
+    "jest.integration.config.ts",
     "lib/database/index.ts",
     "lib/chat/context/index.ts"
   ],
@@ -17,6 +18,7 @@
     "plugins/**",
     "migrations/lib/**",
     "lib/background-jobs/child/child-entry.ts",
+    "__tests__/helpers/lexicalPluginHarness.tsx",
     "**/*.d.ts"
   ],
   "ignoreDependencies": [

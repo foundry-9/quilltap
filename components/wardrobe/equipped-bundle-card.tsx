@@ -5,7 +5,7 @@
  *
  * Renders a multi-slot composite ("bundle") as a single card above the slot
  * rows in the wardrobe dialog and the chat-start outfit composer. Replaces
- * the previous one-chip-per-slot duplication so a four-slot composite shows
+ * the previous one-chip-per-slot duplication so a multi-slot composite shows
  * up once.
  *
  * The card is presentational — it calls out to `onTakeOff` and `onBreakApart`
@@ -14,6 +14,7 @@
  * the action row entirely (chat-start embedded composer).
  */
 
+import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import type { EquippedBundle } from '@/lib/wardrobe/group-equipped'
 
@@ -25,20 +26,6 @@ interface EquippedBundleCardProps {
   onBreakApart: (bundle: EquippedBundle) => void
   /** When false, hide Take off / Break apart (used in the embedded composer). */
   showActions?: boolean
-}
-
-const SLOT_LABEL: Record<WardrobeItemType, string> = {
-  top: 'Top',
-  bottom: 'Bottom',
-  footwear: 'Footwear',
-  accessories: 'Accessories',
-}
-
-const TYPE_BADGE_CLASS: Record<WardrobeItemType, string> = {
-  top: 'qt-badge-wardrobe-top',
-  bottom: 'qt-badge-wardrobe-bottom',
-  footwear: 'qt-badge-wardrobe-footwear',
-  accessories: 'qt-badge-wardrobe-accessories',
 }
 
 export function EquippedBundleCard({
@@ -70,9 +57,9 @@ export function EquippedBundleCard({
             {bundle.occupiedSlots.map((slot) => (
               <span
                 key={slot}
-                className={`qt-badge ${TYPE_BADGE_CLASS[slot]} uppercase`}
+                className={`qt-badge ${WARDROBE_SLOT_META[slot].badgeClass} uppercase`}
               >
-                {SLOT_LABEL[slot]}
+                {WARDROBE_SLOT_META[slot].label}
               </span>
             ))}
           </div>

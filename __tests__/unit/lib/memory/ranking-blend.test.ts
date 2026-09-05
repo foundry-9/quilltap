@@ -86,7 +86,10 @@ describe('F2 — provider-aware cosine floor', () => {
 
 describe('F2 — empty pool yields an empty head', () => {
   it('formatDynamicMemoryHead([]) emits nothing', () => {
-    const result = formatDynamicMemoryHead([], 'anthropic')
+    const result = formatDynamicMemoryHead([], 'anthropic', {
+      selfCharacterId: 'char-1',
+      characterNames: new Map(),
+    })
     expect(result.content).toBe('')
     expect(result.memoriesUsed).toBe(0)
   })

@@ -19,9 +19,9 @@ import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import {
   isSQLiteBackend,
-  getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
 
 /**
@@ -50,10 +50,7 @@ export const addSmartTypographySettingsFieldMigration: Migration = {
       return false;
     }
 
-    const columns = getSQLiteTableColumns('chat_settings');
-    const columnNames = columns.map((col) => col.name);
-
-    return !columnNames.includes('smartTypographySettings');
+    return !sqliteColumnExists('chat_settings', 'smartTypographySettings');
   },
 
   async run(): Promise<MigrationResult> {
@@ -61,15 +58,13 @@ export const addSmartTypographySettingsFieldMigration: Migration = {
     let columnsAdded = 0;
 
     try {
-      const db = getSQLiteDatabase();
-
-      const columns = getSQLiteTableColumns('chat_settings');
-      const columnNames = columns.map((col) => col.name);
-
-      if (!columnNames.includes('smartTypographySettings')) {
-        db.exec(
-          `ALTER TABLE "chat_settings" ADD COLUMN "smartTypographySettings" TEXT DEFAULT '${DEFAULT_SMART_TYPOGRAPHY_SETTINGS}'`
-        );
+      if (
+        addColumnIfMissing(
+          'chat_settings',
+          'smartTypographySettings',
+          `TEXT DEFAULT '${DEFAULT_SMART_TYPOGRAPHY_SETTINGS}'`
+        )
+      ) {
         columnsAdded++;
         logger.info('Added smartTypographySettings column to chat_settings table', {
           context: 'migration.add-smart-typography-settings-field',

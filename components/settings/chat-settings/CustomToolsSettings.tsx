@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { Icon } from '@/components/ui/icon'
 import { useWorkspaceOptional } from '@/components/providers/workspace-provider'
 import { type ChatSettings, DEFAULT_CUSTOM_TOOLS } from './types'
+import { SettingsToggleRow } from './components/SettingsToggleRow'
 
 export interface CustomToolsSettingsProps {
   settings: ChatSettings
@@ -32,40 +33,27 @@ export function CustomToolsSettings({
   }
 
   return (
-    <div>
-      <label className="qt-settings-toggle-row">
-        <input
-          type="checkbox"
-          checked={enabled}
-          onChange={(e) => onChange(e.target.checked)}
-          disabled={saving}
-          className="qt-checkbox mt-1"
-        />
-        <div className="flex-1">
-          <div className="qt-settings-section-heading">
-            Custom tools
-          </div>
-          <div className="qt-text-small mt-1">
-            Permits Pascal to lay your own contrivances upon the baize, where any model at the
-            table may reach for one of its own accord, and posts the little button in the
-            composer&apos;s gutter for when you&apos;d rather call the play yourself. Unchecked,
-            the croupier sweeps the lot out of sight: no model is offered them, the gutter button
-            retires, and your contraptions wait — undisturbed and entirely intact — until you
-            see fit to invite them back.
-          </div>
-          <button
-            type="button"
-            className="qt-button qt-button-secondary qt-button-sm mt-2"
-            onClick={(e) => {
-              e.preventDefault()
-              openWorkbench()
-            }}
-          >
-            <Icon name="wrench" className="w-3.5 h-3.5" />
-            Open Pascal&rsquo;s Workbench
-          </button>
-        </div>
-      </label>
-    </div>
+    <SettingsToggleRow checked={enabled} disabled={saving} onChange={onChange} heading="Custom tools">
+      Permits Pascal to lay your own contrivances upon the baize, where any model at the
+      table may reach for one of its own accord, and posts the little button in the
+      composer&apos;s gutter for when you&apos;d rather call the play yourself. Unchecked,
+      the croupier sweeps the lot out of sight: no model is offered them, the gutter button
+      retires, and your contraptions wait — undisturbed and entirely intact — until you
+      see fit to invite them back.
+      {/* Block wrapper keeps the button on its own line beneath the copy. */}
+      <div>
+        <button
+          type="button"
+          className="qt-button qt-button-secondary qt-button-sm mt-2"
+          onClick={(e) => {
+            e.preventDefault()
+            openWorkbench()
+          }}
+        >
+          <Icon name="wrench" className="w-3.5 h-3.5" />
+          Open Pascal&rsquo;s Workbench
+        </button>
+      </div>
+    </SettingsToggleRow>
   )
 }

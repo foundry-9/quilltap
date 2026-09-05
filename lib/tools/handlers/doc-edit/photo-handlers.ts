@@ -1,5 +1,5 @@
 /**
- * Photo Album Tool Handlers (keep_image / list_images / attach_image)
+ * Photo Album Tool Handlers (keep_image / list_images / attach_image / describe_image)
  *
  * Photos are documents in the character vault — a `photos/` subfolder in the
  * character's mount point. `keep_image` makes a hard link to an existing
@@ -15,6 +15,7 @@
 import type { KeepImageInput, KeepImageOutput } from '../../keep-image-tool';
 import type { ListImagesInput, ListImagesOutput, ListedImage } from '../../list-images-tool';
 import type { AttachImageInput, AttachedImageDescriptor } from '../../attach-image-tool';
+import type { DescribeImageInput, DescribeImageOutput } from '../../describe-image-tool';
 import type { DocMountFileLinkWithContent } from '@/lib/schemas/mount-index.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { getCharacterVaultStore } from '@/lib/file-storage/character-vault-bridge';
@@ -31,18 +32,6 @@ import {
   type DocEditToolContext,
   collectPeerCharacterIdsForReads,
 } from './shared';
-
-// ============================================================================
-// Photo Album Tools (keep_image / list_images / attach_image)
-//
-// Photos are documents in the character vault — a `photos/` subfolder in the
-// character's mount point. `keep_image` makes a hard link to an existing
-// image binary (dedup by sha256) and writes a Markdown context document
-// (prompt + scene snapshot + caption + tags) as the link's extractedText,
-// so the standard character-vault search picks it up. `list_images` is a
-// thin facade over the existing search infrastructure. `attach_image`
-// resurfaces a kept image into the current outgoing message.
-// ============================================================================
 
 interface ResolvedCharacterVault {
   characterId: string;
@@ -68,6 +57,31 @@ async function resolveActingCharacterVault(
   };
 }
 
+/**
+ * The shared preamble for the custodial photo tools: require a character
+ * context, then resolve the acting character's vault. Returns either the
+ * resolved vault or the exact error string the caller should surface.
+ */
+async function requireActingCharacterVault(
+  context: DocEditToolContext,
+  toolName: string
+): Promise<
+  | { ok: true; vault: ResolvedCharacterVault }
+  | { ok: false; error: string }
+> {
+  if (!context.characterId) {
+    return { ok: false, error: `${toolName} requires a character context` };
+  }
+  const vault = await resolveActingCharacterVault(context);
+  if (!vault) {
+    return {
+      ok: false,
+      error: 'No database-backed character vault is linked to the acting character',
+    };
+  }
+  return { ok: true, vault };
+}
+
 async function findExistingPhotosLinkBySha(
   mountPointId: string,
   sha256: string
@@ -89,17 +103,11 @@ export async function handleKeepImage(
   input: KeepImageInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: KeepImageOutput; error?: string; formattedText?: string }> {
-  if (!context.characterId) {
-    return { success: false, error: 'keep_image requires a character context' };
+  const resolved = await requireActingCharacterVault(context, 'keep_image');
+  if (!resolved.ok) {
+    return { success: false, error: resolved.error };
   }
-
-  const vault = await resolveActingCharacterVault(context);
-  if (!vault) {
-    return {
-      success: false,
-      error: 'No database-backed character vault is linked to the acting character',
-    };
-  }
+  const vault = resolved.vault;
 
   try {
     const saved = await saveImageToAlbum({
@@ -242,17 +250,11 @@ export async function handleListImages(
   input: ListImagesInput,
   context: DocEditToolContext
 ): Promise<{ success: boolean; result?: ListImagesOutput; error?: string; formattedText?: string }> {
-  if (!context.characterId) {
-    return { success: false, error: 'list_images requires a character context' };
+  const resolved = await requireActingCharacterVault(context, 'list_images');
+  if (!resolved.ok) {
+    return { success: false, error: resolved.error };
   }
-
-  const selfVault = await resolveActingCharacterVault(context);
-  if (!selfVault) {
-    return {
-      success: false,
-      error: 'No database-backed character vault is linked to the acting character',
-    };
-  }
+  const selfVault = resolved.vault;
 
   const vaults = await collectVisiblePhotoVaults(context, selfVault);
   const vaultByMountPoint = new Map(vaults.map(v => [v.mountPointId, v]));
@@ -377,17 +379,11 @@ export async function handleAttachImage(
   error?: string;
   formattedText?: string;
 }> {
-  if (!context.characterId) {
-    return { success: false, error: 'attach_image requires a character context' };
+  const resolved = await requireActingCharacterVault(context, 'attach_image');
+  if (!resolved.ok) {
+    return { success: false, error: resolved.error };
   }
-
-  const vault = await resolveActingCharacterVault(context);
-  if (!vault) {
-    return {
-      success: false,
-      error: 'No database-backed character vault is linked to the acting character',
-    };
-  }
+  const vault = resolved.vault;
 
   const repos = getRepositories();
 
@@ -409,7 +405,7 @@ export async function handleAttachImage(
   if (!link) {
     return {
       success: false,
-      error: `No kept image found for uuid ${input.uuid} in ${vault.characterName}'s vault. Call keep_image first to save it.`,
+      error: `No kept image found for uuid ${input.uuid} in ${vault.characterName}'s vault. attach_image only shows images you have already filed with keep_image — file it first if you want to hold it up again. If what you actually wanted was to see what the image depicts, call describe_image with this uuid instead; it does not require the image to be in your album.`,
     };
   }
 
@@ -469,5 +465,120 @@ export async function handleAttachImage(
     success: true,
     result: [descriptor],
     formattedText: `Attached ${filename} kept by ${meta.linkedBy ?? vault.characterName}${captionFragment}${tagsFragment}`,
+  };
+}
+
+// ============================================================================
+// describe_image — the looking verb.
+//
+// Resolves any handle a character might be holding (image-v2 file uuid,
+// generate_image id, Librarian catalogue handle, or an album link uuid) to a
+// FileEntry, then answers with the best description available, spending a
+// vision call only when there isn't one. See bug 92 for why this exists: the
+// photo tools were all custodial, so models reached for attach_image to look
+// at things and were told to file them instead.
+// ============================================================================
+
+/**
+ * Resolve a describe_image uuid to its image-v2 FileEntry. Accepts a file
+ * uuid directly, or a doc_mount_file_links id whose sha256 identifies the
+ * bytes. Album membership is deliberately NOT required — a character may want
+ * to look at an image they have not filed, which was the whole trap.
+ */
+async function resolveDescribableFileEntry(uuid: string) {
+  const repos = getRepositories();
+  const { getImageById } = await import('@/lib/images-v2');
+
+  const direct = await getImageById(uuid);
+  if (direct && direct.category === 'IMAGE') return direct;
+
+  const link = await repos.docMountFileLinks.findByIdWithContent(uuid);
+  if (link?.sha256) {
+    const sisters = await repos.files.findBySha256(link.sha256);
+    const sister = sisters.find(f => f.category === 'IMAGE') ?? sisters[0];
+    if (sister) return sister;
+  }
+  return null;
+}
+
+export async function handleDescribeImage(
+  input: DescribeImageInput,
+  context: DocEditToolContext
+): Promise<{
+  success: boolean;
+  result?: DescribeImageOutput;
+  error?: string;
+  formattedText?: string;
+}> {
+  const entry = await resolveDescribableFileEntry(input.uuid);
+  if (!entry) {
+    return {
+      success: false,
+      error: `No image found for uuid ${input.uuid}. Use the uuid from the Librarian's upload announcement, the id generate_image returned, or a uuid from list_images.`,
+    };
+  }
+  if (!entry.mimeType?.startsWith('image/')) {
+    return {
+      success: false,
+      error: `${entry.originalFilename} is not an image (${entry.mimeType}).`,
+    };
+  }
+
+  const base = {
+    file_id: entry.id,
+    filename: entry.originalFilename,
+    mime_type: entry.mimeType,
+    width: entry.width ?? undefined,
+    height: entry.height ?? undefined,
+  };
+
+  const respond = (
+    description: string,
+    source: DescribeImageOutput['source']
+  ) => {
+    logger.info('Described image for character', {
+      fileEntryId: entry.id,
+      characterId: context.characterId,
+      source,
+      descriptionLength: description.length,
+    });
+    return {
+      success: true,
+      result: { ...base, description, source },
+      formattedText: `${entry.originalFilename}:\n\n${description}`,
+    };
+  };
+
+  // 1. A description stored at upload time — the common case, and free.
+  const stored = entry.description?.trim();
+  if (stored) return respond(stored, 'stored-description');
+
+  // 2. Quilltap generated it, so the prompt that made it is the most faithful
+  //    account available, and also free.
+  const prompt = entry.generationRevisedPrompt?.trim() || entry.generationPrompt?.trim();
+  if (prompt) return respond(prompt, 'generation-prompt');
+
+  // 3. Nothing on file: describe it now. This persists onto the FileEntry and
+  //    its blank links, so the next caller lands in case 1.
+  const repos = getRepositories();
+  const { autoDescribeChatImageAttachment } = await import('@/lib/photos/auto-describe-attachment');
+  const result = await autoDescribeChatImageAttachment({
+    fileEntryId: entry.id,
+    userId: context.userId,
+    repos,
+  });
+
+  if (result.description) return respond(result.description, 'vision-call');
+
+  // `already-described` means another writer won the race between our read
+  // and this call — re-read rather than reporting a failure.
+  if (result.skipReason === 'already-described') {
+    const fresh = (await repos.files.findById(entry.id))?.description?.trim();
+    if (fresh) return respond(fresh, 'stored-description');
+  }
+
+  return {
+    success: false,
+    error: `Could not describe ${entry.originalFilename}: the vision describer produced nothing (${result.skipReason ?? 'unknown reason'}). Check Settings → Chat → Image Description Profile.`,
   };
 }

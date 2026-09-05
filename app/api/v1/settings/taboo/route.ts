@@ -15,45 +15,17 @@
  * case-insensitively — so the UI's local cache matches the database.
  */
 
-import { NextRequest } from 'next/server';
-import { createContextHandler } from '@/lib/api/middleware';
-import { successResponse, serverError, validationError } from '@/lib/api/responses';
-import { logger } from '@/lib/logger';
+import { createInstanceSettingHandlers } from '@/lib/api/instance-setting-handlers';
 import {
   getTabooSettings,
   setTabooSettings,
   TabooSettingsSchema,
 } from '@/lib/instance-settings';
 
-export const GET = createContextHandler(async () => {
-  try {
-    const settings = await getTabooSettings();
-    logger.debug('[Settings v1] Taboo settings fetched', {
-      phraseCount: settings.phrases.length,
-    });
-    return successResponse(settings);
-  } catch (error) {
-    logger.error('[Settings v1] Error fetching taboo settings', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to fetch taboo settings');
-  }
-});
-
-export const PUT = createContextHandler(async (req: NextRequest) => {
-  try {
-    const body = await req.json();
-    const current = await getTabooSettings();
-    const parsed = TabooSettingsSchema.safeParse({ ...current, ...body });
-    if (!parsed.success) {
-      return validationError(parsed.error);
-    }
-
-    const saved = await setTabooSettings(parsed.data);
-    logger.info('[Settings v1] Taboo settings updated (instance-wide)', {
-      phraseCount: saved.phrases.length,
-    });
-    return successResponse(saved);
-  } catch (error) {
-    logger.error('[Settings v1] Error updating taboo settings', {}, error instanceof Error ? error : undefined);
-    return serverError('Failed to update taboo settings');
-  }
+export const { GET, PUT } = createInstanceSettingHandlers({
+  label: 'taboo',
+  get: getTabooSettings,
+  set: setTabooSettings,
+  schema: TabooSettingsSchema,
+  logSummary: (settings) => ({ phraseCount: settings.phrases.length }),
 });

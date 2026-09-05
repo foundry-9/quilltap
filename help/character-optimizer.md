@@ -57,7 +57,7 @@ The optimizer works through three stages, each reported with an animated progres
 
 The progress bar shows three segments — one per stage — that fill as each proceeds. An elapsed timer counts up below. When filters narrow the results, you'll see a message such as "142 memoirs matched; top 30 selected for analysis."
 
-During **Generating**, the optimizer makes *one focused pass per subject* rather than pooling everything into a single verdict. A first pass handles the general fields (identity, description, manifesto, personality, example dialogues, talkativeness); then each of the character's existing scenarios is considered on its own terms, as is each existing system prompt; a dedicated pass refines the physical description (the prose appearance and its tiered image prompts); and a final pass asks whether any genuinely new system prompts are warranted by the patterns the memoirs reveal. The optimizer no longer invents new scenarios — existing scenarios may be refined, but new ones are out of scope. The modal shows a sub-step label such as "Scenario 2 of 5 — Tea Room" so you can see which subject is currently under consideration. This is more thorough (and, in candour, more costly in model calls) than a single sweeping pass, but it means per-subject quirks are no longer averaged out across siblings.
+During **Generating**, the optimizer makes *one focused pass per subject* rather than pooling everything into a single verdict. A first pass handles the general fields (identity, description, manifesto, personality, example dialogues, talkativeness); then each of the character's existing scenarios is considered on its own terms, as is each existing system prompt; a dedicated pass refines the physical description (the prose appearance and its tiered image prompts); a wardrobe pass considers whether the memoirs establish a habitual garment or accessory worth adding (or an existing item's description worth sharpening); an aliases pass listens for nicknames other characters repeatedly use; and a final pass asks whether any genuinely new system prompts are warranted by the patterns the memoirs reveal. The optimizer no longer invents new scenarios — existing scenarios may be refined, but new ones are out of scope. The modal shows a sub-step label such as "Scenario 2 of 5 — Tea Room" so you can see which subject is currently under consideration. This is more thorough (and, in candour, more costly in model calls) than a single sweeping pass, but it means per-subject quirks are no longer averaged out across siblings.
 
 When the analysis completes, you'll see a summary of the behavioural patterns discovered.
 
@@ -93,7 +93,7 @@ For characters that have a linked document-store vault, a second output mode is 
 Suggestions/refinement-<YYYYMMDD-HHMMSS>.md
 ```
 
-inside the character's vault. The dossier opens with YAML frontmatter identifying the run, then carries the analysis summary, the observed behavioural patterns, and each proposed change as its own section — grouped as General Fields, Scenario Refinements, Physical Description, System Prompt Refinements, and Proposed New System Prompts. Each proposal shows the current and proposed text in fenced blocks, its significance score, the rationale, and the supporting memoir excerpts.
+inside the character's vault. The dossier opens with YAML frontmatter identifying the run, then carries the analysis summary, the observed behavioural patterns, and each proposed change as its own section — grouped as General Fields, Scenario Refinements, Physical Description, Wardrobe, Aliases, System Prompt Refinements, and Proposed New System Prompts. Each proposal shows the current and proposed text in fenced blocks, its significance score, the rationale, and the supporting memoir excerpts.
 
 Nothing is applied to the character in this mode — the dossier exists for the author and the character to read together (or for the character to consult via `doc_read_file` in-chat) and then commission piecemeal at leisure. To actually commission a proposal, edit the relevant vault file (or re-run the optimizer in its default apply-and-review mode with the proposal as your guide). The checkbox only appears when the character is vault-backed; it has no effect on characters whose properties live solely in the database.
 
@@ -109,11 +109,15 @@ The optimizer may propose changes to:
 - **Example Dialogues** — Sample conversations demonstrating voice
 - **Physical Description** — The character's appearance: the prose `fullDescription` and the tiered image-generation prompts (`shortPrompt`, `mediumPrompt`, `longPrompt`, `completePrompt`). Only refined when the memories genuinely reveal a visible, physical trait.
 - **System Prompts** — Existing named system prompts may be refined, and the optimizer may also propose an *entirely new* system prompt (with a suggested name) when the memories reveal an interaction style the existing set doesn't cover. New prompts are saved under their proposed name.
+- **Wardrobe** — When the memoirs establish a signature garment or accessory the wardrobe lacks, the optimizer may propose adding it (as a proper slot-typed item, image cue and all), or sharpening an existing item's description. It never proposes bodily features as wardrobe (those belong to the physical description), and never proposes removing items.
+- **Aliases** — Nicknames or alternate names that other characters repeatedly use may be proposed as additions to the alias list — one suggestion per alias, additions only.
 - **Talkativeness** — The character's verbosity setting (a number between 0.1 and 1.0)
 
-The optimizer will **not** touch names, aliases, pronouns, titles, first messages, or other structural fields.
+The optimizer will **not** touch names, pronouns, titles, first messages, or other structural fields — though it now *sees* all of them (along with the full wardrobe) as context, so its suggestions no longer collide with what's already on record. Pronouns in particular are read-only: the optimizer will never propose changing them.
 
 The optimizer enforces these vantage points strictly: it will not, for instance, slip a private mannerism into Identity, nor put public reputation into Personality. Each suggestion is sorted into the field whose vantage point matches the underlying memory.
+
+It also preserves each field's established form of address. Fields the character alone reads (Manifesto, Personality, System Prompts) are written to the character — *"You keep your worry behind your teeth"* — while fields only others read (Identity, Description) speak of the character from outside, and physical-description prompts remain bare descriptive phrases. Proposed text keeps to the voice its field already speaks in; if a suggestion seems to have wandered into the wrong register, that alone is fair grounds for Edit & Accept.
 
 ## What Counts as "About This Character"
 

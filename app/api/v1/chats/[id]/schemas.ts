@@ -32,6 +32,23 @@ export const updateChatSchema = z.object({
   rightPaneVerticalSplit: z.number().min(20).max(80).optional(),
 });
 
+/**
+ * `POST ?action=scenario` — change the scene mid-conversation.
+ *
+ * Field names mirror the New Chat dialog's create payload one-for-one so both
+ * surfaces feed the same resolver: at most one preset pointer plus optional
+ * free text, resolved by the precedence chain in `lib/chat/scenario-selection`.
+ * An entirely empty payload clears the scenario.
+ */
+export const setScenarioSchema = z.object({
+  scenario: z.string().nullish(),
+  scenarioId: z.uuid().nullish(),
+  projectScenarioPath: z.string().max(500).nullish(),
+  groupScenarioPath: z.string().max(500).nullish(),
+  groupScenarioGroupId: z.uuid().nullish(),
+  generalScenarioPath: z.string().max(500).nullish(),
+});
+
 export const updateParticipantSchema = z.object({
   participantId: z.uuid(),
   connectionProfileId: z.uuid().optional(),
@@ -98,13 +115,14 @@ export const chatUpdateRequestSchema = z.object({
   roleplayTemplateId: z.string().nullish(),
   imageProfileId: z.uuid().nullish(), // Chat-level image profile (shortcut, same as chat.imageProfileId)
   /**
-   * Tri-state per-chat Concierge mode set from the sidebar:
-   *   - 'safe'    : moderation runs as usual, classifier may auto-flip → 'flagged'
-   *   - 'flagged' : the chat is treated as dangerous (uncensored routing, etc.)
-   *   - 'off'     : the Concierge is off-duty for this chat (no moderation)
+   * Four-state per-chat Concierge mode set from the sidebar:
+   *   - 'monitored'  : moderation runs as usual, classifier may auto-flip → 'flagged'
+   *   - 'flagged'    : the Concierge's verdict — dangerous (uncensored routing, etc.)
+   *   - 'vouched'    : the operator vouches the chat safe (no moderation, ordinary providers)
+   *   - 'uncensored' : the operator asserts the chat spicy (uncensored routing, no moderation)
    * The handler maps this onto chats.conciergeOverride + chats.isDangerousChat.
    */
-  conciergeState: z.enum(['safe', 'flagged', 'off']).optional(),
+  conciergeState: z.enum(['monitored', 'flagged', 'vouched', 'uncensored']).optional(),
 });
 
 export const addTagSchema = z.object({
@@ -163,17 +181,6 @@ export const toolResultSchema = z.object({
   images: z.array(z.object({
     id: z.string(),
     filename: z.string(),
-  })).optional(),
-});
-
-export const queueMemoriesSchema = z.object({
-  characterId: z.string().optional(),
-  characterName: z.string().optional(),
-  messagePairs: z.array(z.object({
-    userMessageId: z.string(),
-    assistantMessageId: z.string(),
-    userContent: z.string(),
-    assistantContent: z.string(),
   })).optional(),
 });
 

@@ -2,6 +2,7 @@
 
 import { Icon } from '@/components/ui/icon'
 import { formatRelativeDate } from '@/lib/format-time'
+import { useNow } from '@/hooks/useNow'
 import type { JobDetail } from './types'
 
 interface TaskItemProps {
@@ -31,7 +32,11 @@ export function TaskItem({
     return tokens.toString()
   }
 
-  const formatDate = formatRelativeDate
+  // Shared minute clock, so a queued task's "3m ago" actually becomes "4m ago"
+  // instead of waiting for the next unrelated re-render.
+  const nowMs = useNow(60_000)
+  const formatDate = (dateString: string | null | undefined) =>
+    formatRelativeDate(dateString, nowMs)
 
   const getStatusColor = (status: string): string => {
     switch (status) {

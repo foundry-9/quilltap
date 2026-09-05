@@ -37,6 +37,15 @@ jest.mock('@/lib/logger', () => ({
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
+    // The real logger exposes `child`; modules that build a scoped logger at
+    // import time (the realtime bus, reached through the activity registry)
+    // need it present on the mock too.
+    child: jest.fn(() => ({
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    })),
   },
 }))
 
@@ -184,6 +193,32 @@ describe('deleteMemoriesWithUnlinkBatch', () => {
     const deleted = await deleteMemoriesWithUnlinkBatch([])
     expect(deleted).toBe(0)
     expect(dbMock.rawQuery).not.toHaveBeenCalled()
+  })
+
+  it('chunks the doomed-ID resolve query under the SQLite variable limit', async () => {
+    const ids = Array.from({ length: 2000 }, (_, i) => `mem-${i}`)
+    const { repo, bulkDeleted } = buildRepo([])
+    factoryMock.getRepositories.mockReturnValue(repo)
+
+    // Candidate scan finds no neighbours; each resolve chunk echoes its IDs
+    // back under a single character.
+    dbMock.rawQuery.mockResolvedValueOnce([])
+    dbMock.rawQuery.mockImplementation(async (_sql: string, params: string[]) =>
+      params.map(id => ({ id, characterId: 'char-1' }))
+    )
+
+    const deleted = await deleteMemoriesWithUnlinkBatch(ids)
+
+    expect(deleted).toBe(2000)
+    // 1 candidate scan + 3 resolve chunks (900 + 900 + 200).
+    expect(dbMock.rawQuery).toHaveBeenCalledTimes(4)
+    const resolveCalls = dbMock.rawQuery.mock.calls.slice(1)
+    expect(resolveCalls.map(([, params]) => (params as string[]).length)).toEqual([900, 900, 200])
+    for (const [sql, params] of resolveCalls) {
+      expect((sql as string).match(/\?/g)?.length).toBe((params as string[]).length)
+    }
+    // Every doomed ID still reaches bulkDelete after the chunks accumulate.
+    expect(bulkDeleted).toEqual([{ characterId: 'char-1', ids }])
   })
 
   it('groups doomed IDs by character for bulkDelete', async () => {

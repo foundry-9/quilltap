@@ -58,10 +58,13 @@ export function selectRecentMessages(
       break
     }
 
-    // Preserve all fields including name and participantId
+    // Preserve all fields including id, name and participantId. `id` is the
+    // source chat_messages row — the attachment anchor needs it to tell the
+    // user's own turn from a staff whisper wearing role=user (bug 95).
     selectedMessages.unshift({
       role: msg.role,
       content: msg.content,
+      id: msg.id,
       thoughtSignature: msg.thoughtSignature,
       name: msg.name,
       participantId: msg.participantId,

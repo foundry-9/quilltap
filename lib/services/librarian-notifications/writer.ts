@@ -90,6 +90,16 @@ export type LibrarianActorOrigin =
   | { kind: 'by-user' }
   | { kind: 'by-character'; characterName: string };
 
+/**
+ * The open announcement predates {@link LibrarianActorOrigin} and keeps its
+ * own `opened-by-*` kinds; this is the one place the two vocabularies meet.
+ */
+export function toLibrarianOpenKind(origin: LibrarianActorOrigin): LibrarianOpenKind {
+  return origin.kind === 'by-character'
+    ? { kind: 'opened-by-character', characterName: origin.characterName }
+    : { kind: 'opened-by-user' };
+}
+
 export interface LibrarianOpenAnnouncement {
   chatId: string;
   displayTitle: string;
@@ -453,7 +463,7 @@ function attachIdHint(linkId: string, isImage: boolean): string {
   if (!isImage) {
     return `Catalogue handle: \`${linkId}\`.`;
   }
-  return `The illustration is catalogued under uuid \`${linkId}\` — it may be filed away in your own album later with keep_image, or re-summoned with attach_image.`;
+  return `The illustration is catalogued under uuid \`${linkId}\` — call describe_image with it to be told what it depicts, file it in your own album with keep_image, or hold it up to the room again later with attach_image.`;
 }
 
 export function buildAttachContent(params: LibrarianAttachAnnouncement): string {
@@ -739,8 +749,8 @@ export async function postLibrarianBlobWriteAnnouncement(
  * attachments on their next message. The bytes are already carried by the
  * user's own message (`attachments: [fileId, ...]`), so this whisper does NOT
  * re-attach them — its sole job is to surface each file's UUID in the chat
- * transcript so the LLM has the handle required to call `keep_image` /
- * `attach_image`. Mirrors the avatar / background announcements posted by the
+ * transcript so the LLM has the handle required to call `describe_image` /
+ * `keep_image` / `attach_image`. Mirrors the avatar / background announcements posted by the
  * Lantern notifications writer.
  *
  * Non-image uploads are out of scope: the photo album tools only operate on
@@ -756,10 +766,10 @@ export function buildUploadContent(params: LibrarianUploadAnnouncement): string 
   if (uploads.length === 0) return '';
   if (uploads.length === 1) {
     const { fileId, filename } = uploads[0];
-    return `The Librarian has catalogued the user's freshly-uploaded illustration "${filename}" under uuid \`${fileId}\`. The bytes ride with the user's message above; the image may be filed away later with keep_image, or re-summoned with attach_image.`;
+    return `The Librarian has catalogued the user's freshly-uploaded illustration "${filename}" under uuid \`${fileId}\`. The bytes ride with the user's message, and if your eyes read pictures you are looking at it already. If they do not — or if you want the particulars set down in words — call describe_image with that uuid and the Librarian will read it aloud to you. It may also be filed in your own album with keep_image, or held up to the room again later with attach_image; neither of those shows it to you.`;
   }
   const list = uploads.map(u => `- "${u.filename}" — uuid \`${u.fileId}\``).join('\n');
-  return `The Librarian has catalogued the user's freshly-uploaded illustrations. The bytes ride with the user's message above; each may be filed away later with keep_image, or re-summoned with attach_image:\n\n${list}`;
+  return `The Librarian has catalogued the user's freshly-uploaded illustrations. The bytes ride with the user's message, and if your eyes read pictures you are looking at them already. If they do not — or if you want the particulars set down in words — call describe_image with the uuid of any of them. Each may also be filed in your own album with keep_image, or held up to the room again later with attach_image; neither of those shows it to you:\n\n${list}`;
 }
 
 export function buildUploadOpaqueContent(params: LibrarianUploadAnnouncement): string {
@@ -767,10 +777,10 @@ export function buildUploadOpaqueContent(params: LibrarianUploadAnnouncement): s
   if (uploads.length === 0) return '';
   if (uploads.length === 1) {
     const { fileId, filename } = uploads[0];
-    return `The user has uploaded an illustration: "${filename}" — uuid \`${fileId}\`. The bytes ride with the user's message above; the image may be filed away later with keep_image, or re-summoned with attach_image.`;
+    return `The user has uploaded an illustration: "${filename}" — uuid \`${fileId}\`. The bytes ride with the user's message, so a vision-capable model can see it already. To have its contents described in words, call describe_image with that uuid. keep_image files it in your album and attach_image shows it to the room again; neither one shows it to you.`;
   }
   const list = uploads.map(u => `- "${u.filename}" — uuid \`${u.fileId}\``).join('\n');
-  return `The user has uploaded illustrations. The bytes ride with the user's message above; each may be filed away later with keep_image, or re-summoned with attach_image:\n\n${list}`;
+  return `The user has uploaded illustrations. The bytes ride with the user's message, so a vision-capable model can see them already. To have any of them described in words, call describe_image with its uuid. keep_image files one in your album and attach_image shows it to the room again; neither one shows it to you:\n\n${list}`;
 }
 
 export async function postLibrarianUploadAnnouncement(

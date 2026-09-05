@@ -86,6 +86,12 @@ async function updateChatSettings(
       if (settings.embeddingProvider && !validEmbeddingProviders.includes(settings.embeddingProvider)) {
         throw new Error('Invalid embedding provider')
       }
+      if (
+        typeof settings.allowCheapFallback !== 'undefined' &&
+        typeof settings.allowCheapFallback !== 'boolean'
+      ) {
+        throw new Error('allowCheapFallback must be a boolean')
+      }
     }
     updateData.cheapLLMSettings = cheapLLMSettings
   }

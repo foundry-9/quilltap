@@ -49,7 +49,7 @@ export const listImagesToolDefinition = {
   function: {
     name: 'list_images',
     description:
-      "List images previously saved to your photo album (and other characters' albums if cross-character vault reads are enabled for this chat). When `query` is set, results are ranked by semantic similarity over the saved image's prompt, scene snapshot, caption, and tags. The returned metadata includes the prompt excerpt so even a non-image-capable model can reason about each entry without rendering it. Use the returned uuid with `attach_image` to show one of these images again in the chat.",
+      "List images previously saved to your photo album (and other characters' albums if cross-character vault reads are enabled for this chat). When `query` is set, results are ranked by semantic similarity over the saved image's prompt, scene snapshot, caption, and tags. The returned metadata includes the prompt excerpt so even a non-image-capable model can reason about each entry without rendering it. Use a returned uuid with `attach_image` to show one of these images in the chat again, or with `describe_image` to be told what it depicts.",
     parameters: zodToOpenAISchema(listImagesToolInputSchema),
   },
 };

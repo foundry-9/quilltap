@@ -117,7 +117,7 @@ export function TabooSettings() {
 
   if (error) {
     return (
-      <p className="qt-text-small qt-text-error">
+      <p className="qt-text-small qt-text-destructive">
         {apiErrorMessage(error, 'Failed to load the Taboo list')}
       </p>
     )
@@ -160,7 +160,7 @@ export function TabooSettings() {
           One phrase at a time &mdash; commas are perfectly welcome inside a phrase, so they cannot
           serve as separators. Press Enter or use Add.
         </p>
-        {addError && <div className="qt-text-small qt-text-error">{addError}</div>}
+        {addError && <div className="qt-text-small qt-text-destructive">{addError}</div>}
       </form>
 
       <div className="qt-settings-shell space-y-2">

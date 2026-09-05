@@ -189,9 +189,9 @@ export function useOutfit(chatId: string | null, characterIds: string[] = []) {
     const itemsById = new Map<string, WardrobeItemSummary>()
     for (const item of items) itemsById.set(item.id, item)
 
-    const bySlot: ResolvedSlotItems = {
-      top: [], bottom: [], footwear: [], accessories: [],
-    }
+    const bySlot: ResolvedSlotItems = Object.fromEntries(
+      WARDROBE_SLOT_TYPES.map((slot) => [slot, []]),
+    )
 
     for (const slot of WARDROBE_SLOT_TYPES) {
       const equippedIds = slots[slot] ?? []

@@ -14,6 +14,13 @@ export {
 } from './openai-compatible';
 
 export {
+  applyProfileParameters,
+  type ProfileParamNormalizer,
+} from './profile-parameters';
+
+export { collapseLeadingSystemMessages } from './system-messages';
+
+export {
   DEFAULT_REQUEST_TIMEOUT_MS,
   resolveRequestTimeoutMs,
   buildSdkRequestOptions,

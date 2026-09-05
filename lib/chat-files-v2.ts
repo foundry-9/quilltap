@@ -4,11 +4,11 @@
  */
 
 import { extname } from 'node:path';
-import { sha256OfBuffer } from '@/lib/utils/sha256';
+import { transcodeToWebP } from './mount-index/blob-transcode';
 import { FileAttachment } from './llm/base';
 import { getRepositories } from './repositories/factory';
 import { fileStorageManager } from './file-storage/manager';
-import { writeUserUploadToMountStore } from './file-storage/user-uploads-bridge';
+import { writeLibraryFileBytes } from './file-storage/library-file-writer';
 import { detectTextContent, getBestMimeType } from './files/text-detection';
 import type { FileEntry, FileCategory, Provider } from './schemas/types';
 import { logger } from '@/lib/logger';
@@ -132,12 +132,36 @@ export async function uploadChatFile(
   validateChatFile(file);
 
   const bytes = await file.arrayBuffer();
-  const buffer = Buffer.from(bytes);
-  const sha256 = sha256OfBuffer(buffer);
+  const inputBuffer = Buffer.from(bytes);
 
-  // Detect text content and infer better MIME type if needed
-  const textDetection = detectTextContent(buffer, file.name, file.type);
-  const mimeType = getBestMimeType(textDetection, file.type);
+  // Detect text content and infer better MIME type if needed. This reads the
+  // *input* bytes, before any transcode, which is the only thing it can mean.
+  const textDetection = detectTextContent(inputBuffer, file.name, file.type);
+  const inputMimeType = getBestMimeType(textDetection, file.type);
+
+  // Bug 117: run the transcode the storage bridge is about to run, here,
+  // before anything is hashed — the same shape `lib/images-v2.ts` has always
+  // had, and the reason all 2541 of its generated rows join cleanly while
+  // 118 of 239 chat uploads did not.
+  //
+  // `transcodeToWebP` is the bridge's own function (`storeMountFile` calls it
+  // with these exact arguments) and is a no-op for anything already WebP or
+  // not an image, so handing it the result a second time changes nothing: the
+  // bytes we hash here are the bytes that land on disk. That makes one hash
+  // serve both jobs — dedup against other uploads, *and* the join to
+  // `doc_mount_files.sha256` that carries a description into the search index
+  // and lets describe_image/attach_image resolve a mount link back to its
+  // FileEntry.
+  //
+  // The residual: sharp's WebP encoding has to be deterministic for dedup to
+  // keep working across two uploads of the same source file. It is, for a
+  // given sharp version; a version bump can cost a missed duplicate (a second
+  // row, nothing worse), which is the same bargain images-v2 has always made.
+  const stored = await transcodeToWebP(inputBuffer, inputMimeType);
+  const buffer = stored.data;
+  const mimeType = stored.storedMimeType;
+  const sha256 = stored.sha256;
+
   // Determine category based on MIME type
   const category: FileCategory = mimeType.startsWith('image/') ? 'IMAGE' : 'ATTACHMENT';
 
@@ -309,7 +333,12 @@ export async function uploadChatFile(
 }
 
 /**
- * Internal helper to upload file to S3 and create repository entry
+ * Internal helper to upload file to S3 and create repository entry.
+ *
+ * `buffer` / `mimeType` / `sha256` all describe the *stored* bytes — the
+ * caller has already run the bridge's transcode (bug 117). The hash is passed
+ * in only so a bridge that disagrees can be caught below; the bridge's own
+ * answer is what reaches the row.
  */
 async function uploadFileToProject(
   buffer: Buffer,
@@ -330,39 +359,40 @@ async function uploadFileToProject(
   // Route project-bound attachments through the project mount (via FSM, which
   // resolves to project-store-bridge). Project-less attachments land in the
   // Quilltap Uploads mount under chat/, not the catch-all _general/.
-  let storageKey: string;
-  let fileFolderPath: string | null;
-  let fileProjectId: string | null;
   // The bridges may transcode bitmap uploads to WebP; the FileEntry must
-  // record the stored mimeType/size, not the input, or vision providers will
-  // be handed "you said JPEG, bytes are WebP" rejections.
-  let storedMimeType: string;
-  let storedSize: number;
-  if (projectId) {
-    const uploaded = await fileStorageManager.uploadFile({
+  // record the stored mimeType/size/sha256 — all three — not the input.
+  // mimeType and size were always taken from here; sha256 was not, and that
+  // one omission is bug 117: `files.sha256` named bytes that were never
+  // stored, so every join to `doc_mount_files.sha256` was between two
+  // different languages and returned an empty result nobody logged.
+  const {
+    storageKey,
+    storedMimeType,
+    sizeBytes: storedSize,
+    sha256: storedSha256,
+  } = await writeLibraryFileBytes({
+    filename,
+    content: buffer,
+    contentType: mimeType,
+    projectId,
+    folderPath: '/',
+    subfolder: 'chat',
+  });
+  const fileFolderPath: string | null = projectId ? '/' : null;
+  const fileProjectId: string | null = projectId || null;
+
+  // The caller pre-ran the bridge's own transcode, so these agree by
+  // construction. If they ever stop agreeing, a bridge has changed its
+  // storage policy and the dedup hash computed upstream is stale — say so
+  // rather than let the join rot silently a second time. The bridge wins.
+  if (storedSha256 !== sha256) {
+    logger.warn('Stored-bytes hash differs from the pre-upload hash; recording the stored one', {
+      context: 'chat-files-v2',
       filename,
-      content: buffer,
-      contentType: mimeType,
-      projectId,
-      folderPath: '/',
+      preUploadSha256: sha256,
+      storedSha256,
+      storedMimeType,
     });
-    storageKey = uploaded.storageKey;
-    storedMimeType = uploaded.storedMimeType;
-    storedSize = uploaded.sizeBytes;
-    fileFolderPath = '/';
-    fileProjectId = projectId;
-  } else {
-    const written = await writeUserUploadToMountStore({
-      filename,
-      content: buffer,
-      contentType: mimeType,
-      subfolder: 'chat',
-    });
-    storageKey = written.storageKey;
-    storedMimeType = written.storedMimeType;
-    storedSize = written.sizeBytes;
-    fileFolderPath = null;
-    fileProjectId = null;
   }
   // Inherit tags from the chat (and any other linked entities)
   const inheritedTags = await getInheritedTags(linkedTo, userId);
@@ -370,7 +400,7 @@ async function uploadFileToProject(
   // IMPORTANT: Pass the fileId to ensure metadata matches storage path
   const fileEntry = await repos.files.create({
     userId,
-    sha256,
+    sha256: storedSha256,
     originalFilename: filename,
     mimeType: storedMimeType,
     size: storedSize,

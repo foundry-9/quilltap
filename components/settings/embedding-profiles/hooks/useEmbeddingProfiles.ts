@@ -56,6 +56,12 @@ const PROVIDER_METADATA: Record<string, Omit<EmbeddingProviderInfo, 'name'>> = {
     requiresBaseUrl: false,
     description: 'Access multiple embedding models through OpenRouter',
   },
+  NANOGPT: {
+    displayName: 'NanoGPT',
+    requiresApiKey: true,
+    requiresBaseUrl: false,
+    description: 'OpenAI, BGE, Jina, Qwen, and Gemini embedding models through NanoGPT',
+  },
   OLLAMA: {
     displayName: 'Ollama (Local)',
     requiresApiKey: false,

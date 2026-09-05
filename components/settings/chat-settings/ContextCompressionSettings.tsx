@@ -182,7 +182,7 @@ export function ContextCompressionSettingsComponent({
             onMouseUp={handleWindowSizeCommitWithValidation}
             onTouchEnd={handleWindowSizeCommitWithValidation}
             disabled={!compressionSettings.enabled}
-            className="w-full cursor-pointer"
+            className="qt-range w-full"
           />
           <div className="flex justify-between qt-text-xs qt-text-secondary mt-1">
             <span>3 (more aggressive)</span>
@@ -213,7 +213,7 @@ export function ContextCompressionSettingsComponent({
             onMouseUp={handleCompressionTargetCommit}
             onTouchEnd={handleCompressionTargetCommit}
             disabled={!compressionSettings.enabled}
-            className="w-full cursor-pointer"
+            className="qt-range w-full"
           />
           <div className="flex justify-between qt-text-xs qt-text-secondary mt-1">
             <span>300 (minimal)</span>
@@ -243,7 +243,7 @@ export function ContextCompressionSettingsComponent({
             onMouseUp={handleProjectContextIntervalCommit}
             onTouchEnd={handleProjectContextIntervalCommit}
             disabled={!compressionSettings.enabled}
-            className="w-full cursor-pointer"
+            className="qt-range w-full"
           />
           <div className="flex justify-between qt-text-xs qt-text-secondary mt-1">
             <span>{displayWindowSize} (minimum)</span>

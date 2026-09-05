@@ -125,6 +125,7 @@ export async function getOrCreateSingleUser(): Promise<User> {
       cheapLLMSettings: {
         strategy: 'PROVIDER_CHEAPEST',
         fallbackToLocal: true,
+        allowCheapFallback: false,
         embeddingProvider: 'OPENAI',
       },
     });

@@ -27,7 +27,11 @@ describe('quilltap completion templates', () => {
     const template = fs.readFileSync(templatePath, 'utf8');
 
     expect(template).toContain('_arguments -C');
-    expect(template).toContain("'1: :->subcommand'");
+    // Prefix-agnostic: bug 101 (4.9) put a `(-)` in front of this spec so that a
+    // flag typed after the subcommand is left to that subcommand's own
+    // _arguments. The invariant this test guards is the ->subcommand *state*,
+    // not the word in front of it.
+    expect(template).toContain(": :->subcommand'");
     expect(template).toContain("_describe 'command' subcommands");
 
     // Legacy pattern that split the subcommand spec into separate words in zsh.

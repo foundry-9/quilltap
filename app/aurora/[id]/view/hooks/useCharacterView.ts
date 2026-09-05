@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import {
   applyTemplateTransform,
@@ -50,6 +52,7 @@ interface UseCharacterViewReturn {
   savingTimestampConfig: boolean
   savingDefaultScenario: boolean
   savingDefaultSystemPrompt: boolean
+  rehydrating: boolean
   fetchCharacter: () => Promise<void>
   fetchTags: () => Promise<void>
   fetchProfiles: () => Promise<void>
@@ -77,6 +80,19 @@ interface UseCharacterViewReturn {
   handleToggleFavorite: () => Promise<void>
   handleToggleControlledBy: () => Promise<void>
   handleToggleCarina: () => Promise<void>
+  /**
+   * Archive the character. Re-fetches the row and invalidates the character
+   * lists on success; every outcome is toasted here. Resolves `true` when the
+   * archive went through, so the view can close its dialog and refresh what
+   * hangs off the character (header stats).
+   */
+  handleArchive: () => Promise<boolean>
+  /**
+   * Rehydrate an archived character. Same refresh + toasts as `handleArchive`;
+   * resolves the id of the ARCHIVE bundle left on the shelf (for the disposal
+   * prompt), `null` when the server reported none, or `undefined` on failure.
+   */
+  handleRehydrate: () => Promise<string | null | undefined>
 }
 
 export function useCharacterView(characterId: string): UseCharacterViewReturn {
@@ -107,6 +123,8 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
   const [savingTimestampConfig, setSavingTimestampConfig] = useState(false)
   const [savingDefaultScenario, setSavingDefaultScenario] = useState(false)
   const [savingDefaultSystemPrompt, setSavingDefaultSystemPrompt] = useState(false)
+  const [rehydrating, setRehydrating] = useState(false)
+  const queryClient = useQueryClient()
 
   // Get the default partner for template highlighting ({{user}} replacement)
   // This uses the new default conversation partner system instead of old personas
@@ -627,16 +645,28 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     }
   }
 
+  /**
+   * POST `/api/v1/characters/[id]?action=<action>` and return the parsed body.
+   * A non-2xx answer throws the server's `error`, or `failureMessage` when it
+   * sent none — the one skeleton behind every toggle, archive and rehydrate.
+   */
+  const postCharacterAction = useCallback(
+    async (action: string, failureMessage: string): Promise<Record<string, any>> => {
+      const res = await fetch(`/api/v1/characters/${characterId}?action=${action}`, { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || failureMessage)
+      }
+      return data
+    },
+    [characterId]
+  )
+
   const handleToggleFavorite = async () => {
     if (!character) return
     setTogglingFavorite(true)
     try {
-      const res = await fetch(`/api/v1/characters/${characterId}?action=favorite`, { method: 'POST' })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to toggle favorite')
-      }
-      const data = await res.json()
+      const data = await postCharacterAction('favorite', 'Failed to toggle favorite')
       setCharacter({ ...character, isFavorite: data.character.isFavorite })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle favorite')
@@ -650,12 +680,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     if (!character) return
     setTogglingControlledBy(true)
     try {
-      const res = await fetch(`/api/v1/characters/${characterId}?action=toggle-controlled-by`, { method: 'POST' })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to toggle controlled-by')
-      }
-      const data = await res.json()
+      const data = await postCharacterAction('toggle-controlled-by', 'Failed to toggle controlled-by')
       setCharacter({ ...character, controlledBy: data.character.controlledBy })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle controlled-by')
@@ -669,18 +694,60 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     if (!character) return
     setTogglingCarina(true)
     try {
-      const res = await fetch(`/api/v1/characters/${characterId}?action=toggle-carina`, { method: 'POST' })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || 'Failed to toggle Carina eligibility')
-      }
-      const data = await res.json()
+      const data = await postCharacterAction('toggle-carina', 'Failed to toggle Carina eligibility')
       setCharacter({ ...character, canBeCarina: data.character.canBeCarina })
     } catch (err) {
       showErrorToast(err instanceof Error ? err.message : 'Failed to toggle Carina eligibility')
       console.error('Failed to toggle Carina eligibility', { error: err instanceof Error ? err.message : String(err) })
     } finally {
       setTogglingCarina(false)
+    }
+  }
+
+  // Archive and rehydrate both change what the character lists show, so the
+  // row is re-fetched and every `characters` query invalidated afterwards.
+  const refreshAfterArchiveChange = async () => {
+    await fetchCharacter()
+    await queryClient.invalidateQueries({ queryKey: queryKeys.characters.all })
+  }
+
+  const handleArchive = async (): Promise<boolean> => {
+    try {
+      const data = await postCharacterAction('archive', 'Failed to archive character')
+      await refreshAfterArchiveChange()
+      showSuccessToast(
+        data.pruneComplete === false
+          ? `${character?.name || 'The character'} is archived, but some effects resisted packing — archive them again to finish the sweep.`
+          : `${character?.name || 'The character'} rests in the archive, bundle sealed and shelved.`
+      )
+      return true
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to archive character')
+      return false
+    }
+  }
+
+  const handleRehydrate = async (): Promise<string | null | undefined> => {
+    setRehydrating(true)
+    try {
+      const data = await postCharacterAction('rehydrate', 'Failed to rehydrate character')
+      await refreshAfterArchiveChange()
+      const restored = data.restored as
+        | { memories: number; documents: number; blobs: number }
+        | undefined
+      showSuccessToast(
+        restored
+          ? `${character?.name || 'The character'} is awake again — ${restored.memories} memories, ${restored.documents} papers and ${restored.blobs} photographs unpacked.`
+          : `${character?.name || 'The character'} is awake again.`
+      )
+      return typeof data.archiveBundleFileId === 'string' && data.archiveBundleFileId
+        ? data.archiveBundleFileId
+        : null
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to rehydrate character')
+      return undefined
+    } finally {
+      setRehydrating(false)
     }
   }
 
@@ -712,6 +779,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     savingTimestampConfig,
     savingDefaultScenario,
     savingDefaultSystemPrompt,
+    rehydrating,
     fetchCharacter,
     fetchTags,
     fetchProfiles,
@@ -739,5 +807,7 @@ export function useCharacterView(characterId: string): UseCharacterViewReturn {
     handleToggleFavorite,
     handleToggleControlledBy,
     handleToggleCarina,
+    handleArchive,
+    handleRehydrate,
   }
 }

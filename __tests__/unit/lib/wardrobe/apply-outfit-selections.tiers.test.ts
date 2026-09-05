@@ -36,6 +36,9 @@ jest.mock('@/lib/llm/cheap-llm', () => ({
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
   resolveEquippedOutfitForCharacter: jest.fn(),
 }))
+jest.mock('@/lib/wardrobe/wardrobe-instructions', () => ({
+  resolveWardrobeInstructions: jest.fn().mockResolvedValue(null),
+}))
 
 const mockChooseLLMOutfit = chooseLLMOutfit as jest.MockedFunction<typeof chooseLLMOutfit>
 const mockResolve = resolveEquippedOutfitForCharacter as jest.MockedFunction<
@@ -115,8 +118,8 @@ function equippedFor(setEquippedOutfit: jest.Mock, characterId = CHAR_ID) {
 }
 
 const EMPTY_RESOLVED = {
-  outfitValues: { top: [], bottom: [], footwear: [], accessories: [] },
-  leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [] },
+  outfitValues: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
+  leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
   itemsById: new Map(),
 }
 
@@ -148,6 +151,7 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       bottom: [],
       footwear: [],
       accessories: [],
+      hair: [],
     })
   })
 
@@ -195,6 +199,7 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
       bottom: [],
       footwear: [],
       accessories: [],
+      hair: [],
     })
   })
 
@@ -239,7 +244,7 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
     mockChooseLLMOutfit.mockResolvedValue({
       success: true,
       result: {
-        slots: { top: ['general-coat'], bottom: [], footwear: [], accessories: [] },
+        slots: { top: ['general-coat'], bottom: [], footwear: [], accessories: [], hair: [] },
         deliberatelyUnclothed: false,
       },
     } as Awaited<ReturnType<typeof chooseLLMOutfit>>)
@@ -266,7 +271,7 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
     mockChooseLLMOutfit.mockResolvedValue({
       success: true,
       result: {
-        slots: { top: [], bottom: [], footwear: [], accessories: [] },
+        slots: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
         deliberatelyUnclothed: false,
       },
     } as Awaited<ReturnType<typeof chooseLLMOutfit>>)
@@ -343,7 +348,7 @@ describe('applyOutfitSelections — shared wardrobe tiers', () => {
     mockChooseLLMOutfit.mockResolvedValue({
       success: true,
       result: {
-        slots: { top: ['project-coat'], bottom: [], footwear: [], accessories: [] },
+        slots: { top: ['project-coat'], bottom: [], footwear: [], accessories: [], hair: [] },
         deliberatelyUnclothed: false,
       },
     } as Awaited<ReturnType<typeof chooseLLMOutfit>>)

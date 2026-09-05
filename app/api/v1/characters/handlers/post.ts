@@ -15,7 +15,7 @@ import { importSTCharacter, parseSTCharacterPNG } from '@/lib/sillytavern/charac
 import { runCharacterWizard, runCharacterWizardStreaming, type WizardRequest, type WizardProgressEvent } from '@/lib/services/character-wizard.service';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { badRequest, serverError } from '@/lib/api/responses';
+import { badRequest, created, serverError } from '@/lib/api/responses';
 import { executeCascadeDelete } from '@/lib/cascade-delete';
 import { getSeedImports } from '@/first-startup';
 import { executeImport } from '@/lib/import/quilltap-import-service';
@@ -103,6 +103,12 @@ const wizardRequestSchema = z.object({
       scenarios: z.array(z.object({ id: z.string(), title: z.string(), content: z.string() })).optional(),
       exampleDialogues: z.string().optional(),
       systemPrompt: z.string().optional(),
+      firstMessage: z.string().optional(),
+      pronouns: z
+        .object({ subject: z.string(), object: z.string(), possessive: z.string() })
+        .nullable()
+        .optional(),
+      aliases: z.array(z.string()).optional(),
     })
     .optional(),
   background: z.string(),
@@ -116,8 +122,11 @@ const wizardRequestSchema = z.object({
       'personality',
       'scenarios',
       'exampleDialogues',
+      'firstMessage',
       'systemPrompt',
+      'properties',
       'physicalDescription',
+      'wardrobeItems',
     ])
   ),
   characterId: z.uuid().optional(),
@@ -347,7 +356,7 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     npc: character.npc,
   });
 
-  return NextResponse.json({ character }, { status: 201 });
+  return created({ character });
 }
 
 async function handleQuickCreate(req: NextRequest, context: RequestContext) {
@@ -385,7 +394,7 @@ async function handleQuickCreate(req: NextRequest, context: RequestContext) {
     name: character.name,
   });
 
-  return NextResponse.json({ character }, { status: 201 });
+  return created({ character });
 }
 
 async function handleImport(req: NextRequest, context: RequestContext) {
@@ -487,22 +496,19 @@ async function handleImport(req: NextRequest, context: RequestContext) {
       hasAvatar: defaultImageId !== null,
     });
 
-    return NextResponse.json(
-      {
-        character: {
-          id: character.id,
-          name: character.name,
-          description: character.description,
-          defaultImageId,
-          createdAt: character.createdAt,
-          updatedAt: character.updatedAt,
-          _count: {
-            chats: chats.length,
-          },
+    return created({
+      character: {
+        id: character.id,
+        name: character.name,
+        description: character.description,
+        defaultImageId,
+        createdAt: character.createdAt,
+        updatedAt: character.updatedAt,
+        _count: {
+          chats: chats.length,
         },
       },
-      { status: 201 }
-    );
+    });
   } catch (error) {
     logger.error('[Characters v1] Error importing character', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to import character');

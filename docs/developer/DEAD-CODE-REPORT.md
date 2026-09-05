@@ -1,8 +1,8 @@
 # Dead Code Analysis Report
 
-**Last Updated**: 2026-07-30
+**Last Updated**: 2026-09-04
 **Tool Used**: knip
-**Codebase**: Quilltap v4.8.0-dev.124
+**Codebase**: Quilltap v4.9.0-dev.121
 
 ---
 
@@ -12,12 +12,158 @@ Dead code analysis is performed periodically using knip. A knip configuration fi
 
 | Category | Status |
 |----------|--------|
-| Unused Files | 2 remaining as of 2026-07-30, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
-| Unused Dependencies | None flagged as of 2026-07-30 (`tar` false-positive added to `ignoreDependencies`; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
-| Unused Exports | 1169 (2026-07-30, from 1173); remainder are intentional barrel/plugin/registry/lifecycle/schema surface |
-| Unused Exported Types | 737 (2026-07-30, from 741); most are intentional plugin contracts and Zod `z.infer` data-model surface |
-| Unused Enum Members | 3 in ErrorCode (preserved for future use) |
-| Duplicate Exports | 54 (named + default pattern, low priority) |
+| Unused Files | 2 remaining as of 2026-09-04, both kept-with-reason (in-progress SVAR file-manager surface — see below). 2026-09-04 deleted three test-only modules knip could not see (`lib/database/meta.ts`, `lib/sillytavern/persona.ts`, `hooks/useNavbarCollapse.ts`). 2026-08-26 cleared two new false positives via `knip.json`. 2026-07-20 removed the superseded `QtapDocLink` Document-Mode chain. Prior cleanups: 2026-05-28 (clothing-records/physical-descriptions), 2026-05-17 (terminal/embedded-gallery/restore/search-replace/connection-profiles barrels + dead modals/sidebars) |
+| Unused Dependencies | None flagged as of 2026-09-04 (`tar` false-positive added to `ignoreDependencies` 2026-07-30; `@anthropic-ai/sdk` transitive-in-test added 2026-07-20). Prior removals: @lexical/clipboard, @lexical/history, @quilltap/theme-storybook, jsdom (2026-05-17); @aws-sdk/client-s3, svgo (2026-03-05); bcrypt, qrcode, ts-jest (2026-01-30) |
+| Unused Exports | 1061 (2026-09-04, on the tree after the checklist-3 refactor; the sweep itself took the pre-refactor tree from 1056 to 1053, and the refactor's new single-owner modules account for the rise). The 2026-09-04 round removed 34 more exports knip does not list at all (under `app/`, or referenced only by tests). Remainder is intentional barrel/plugin/registry/lifecycle/schema surface |
+| Unused Exported Types | 768 (2026-09-04; 753 on 2026-08-26 — growth is new `z.infer` surface from the realtime, LoRA, scenario and fallback work); all reviewed — intentional plugin contracts and Zod `z.infer` data-model surface |
+| Unused Enum Members | 4 in ErrorCode (preserved for future use; `UNAUTHORIZED` joined the list on 2026-09-04 when its only consumer, `requireAuth`, was removed) |
+| Duplicate Exports | 65 (named + default pattern, low priority) |
+
+---
+
+## 2026-09-04 — v4.9 release sweep, second pass (knip), scoped since the 4.8.4 merge-back
+
+Scope: the commits since `115539440` (merge of 4.8.4 back into main, 2026-08-13), which include the 2026-08-26 round below. The sweep was done against `15573c3a1` and then rebased onto the checklist-3 refactor (`0506517d3`); every removal was re-verified on the rebased tree (`tsc`, a whole-repo grep for each removed name, and the full unit suite), and the closing numbers below were re-taken there. knip 6.34.0 flagged **2 unused files** (the same kept-with-reason SVAR pair), **1056 unused exports**, **770 unused exported types**, 3 unused enum members and 64 duplicate exports; no unused or unlisted dependencies and no unlisted binaries. Note knip needs `node_modules` present — run without it, it reports every `package.json` dev dependency as unused and cannot load `jest.config.ts`.
+
+The whole-repo reference count from prior rounds was re-run over all 3,782 tracked source files, scoring each of the 1,829 flagged symbols by references **outside** its defining file: 332 had none, and after stripping comments only **3** had no in-file use either (`resolveLoraScaleBounds`, `IMAGE_PROFILE_LORAS_KEY`, `ImageLoraSpecStored`). That list is short because knip has two blind spots this round went after directly:
+
+1. **Exports under `app/` are never reported.** `knip.json` lists `app/**/*.{ts,tsx}` as entry files, and knip does not report unused exports of entry files. Two orphaned Zod schemas and a dead type had been sitting there.
+2. **Exports referenced only by tests are never reported.** The jest plugin treats every test as an entry point, so a function whose last production caller vanished stays "used" as long as its own unit test survives. Prior rounds could only find these by accident.
+
+So a second scan tokenised every tracked source file into an identifier index and, for each export in the 2,272 non-test `.ts`/`.tsx` files outside `packages/` and `plugins/`, split its references into test and non-test. That surfaced **78 exports with no reference anywhere** (almost all Next.js page default exports, jest manual mocks, `migrations/lib`, and `plugins/dist` internals — see the keep list) and **72 referenced only by tests**. Every one of the 72 was read by hand; 32 of them were dead and are removed below, and re-running the scan after the removals caught two more that had been held alive only by symbols in that list (`isCheapModel`, `getContextUsagePercent`), the rest are kept with a reason.
+
+Verified with `npx tsc` (exit 0), `eslint` on every changed file (clean), `npm run lint` (clean) and the full `npm run test:unit` suite — **756 suites / 11,581 tests** on the pre-refactor tree, **780 suites / 11,872 tests / 68 snapshots** after the rebase, 1 pre-existing skip. Re-running knip on the pre-refactor tree confirmed the reductions (unused exports 1056 → 1053, files and types unchanged); on the rebased tree it reports 2 files / 1061 exports / 768 types / 65 duplicates with no zero-reference candidate left, and `ErrorCode.UNAUTHORIZED` newly listed among the unused enum members (its only consumer was `requireAuth`). Net change: **56 files, +173 / −2,861 lines** including documentation and the version stamp.
+
+### Removed — whole modules
+
+| File | Why it was dead |
+|------|-----------------|
+| `lib/database/meta.ts` (+ `__tests__/unit/lib/database/migration/meta.test.ts`) | The Mongo-era "preferred backend" store. No production importer; the only thing that ever created or read the `quilltap_meta` table was this module, and `highest_app_version` (the one value the docs attribute to it) actually lives in `instance_settings` (`lib/startup/version-guard.ts`). It had been kept compiling by the `applySqlcipherKey` refactor, which is why it showed up in the since-set. `docs/developer/features/native-port-phase-0.md` used it as the worked example of the SQLCipher key path; that pointer now names `sqlcipher-key.ts`. |
+| `lib/sillytavern/persona.ts` (+ the persona `describe` in `__tests__/unit/sillytavern.test.ts`) | `importSTPersona` (already `@deprecated`), `importSTPersonaAsCharacter` (the thing it was deprecated in favour of) and `exportSTPersona` had no importer outside the test. Character and chat import/export in the same directory are live and untouched. |
+| `hooks/useNavbarCollapse.ts` (+ `__tests__/unit/hooks/useNavbarCollapse.test.ts`) | ResizeObserver overflow hook for a navbar that no longer exists; last touched 2026-01-23, referenced by nothing but its 357-line test. |
+
+### Removed — functions / consts / types
+
+| File | Removed |
+|------|---------|
+| `app/api/v1/chats/[id]/schemas.ts` | `queueMemoriesSchema` — `handleQueueMemories` ignores the request body |
+| `app/api/v1/projects/[id]/schemas.ts` | `setStateSchema` — the shared `createSetStateHandler` (`lib/api/state-handlers.ts`) carries its own `stateBodySchema` |
+| `app/salon/[id]/types.ts` | `ChatParticipantData` (type) |
+| `app/salon/[id]/hooks/documentModeApi.ts` | `fetchActiveDocumentRecord` (+ its private `ActiveDocumentResponse`) |
+| `lib/api/responses.ts` | `V1_MIGRATION_DEPRECATION` — "retained for reference" since the v2.8 route removal; `DeprecationInfo` stays, it is used by the response helpers |
+| `lib/backup/uuid-remapper.ts` | `createUuidRemapper` — restore constructs `new UuidRemapper()` directly |
+| `lib/chat/context-manager.ts` | `getContextStatus` |
+| `lib/tokens/token-counter.ts` | `getContextWarningLevel` — the same "for UI display" gauge one layer down; no UI ever read either — and `getContextUsagePercent`, which only it called |
+| `lib/chat/creation-progress.ts` | `publishCreationProgress`, `finishCreationProgress`, `failCreationProgress` (+ their now-orphaned `operation-progress` imports) — pure delegation wrappers left over from the Almanack refactor; `createCreationProgressEmitter` is the live path and `subscribeCreationProgress` stays for the SSE route. The two test suites that used them as scaffolding now call the `operation-progress` primitives directly |
+| `lib/chat/timestamp-utils.ts` | `formatTimestampForSystemPrompt` |
+| `lib/errors.ts` | `validateRequestBody`, `requireAuth` — pre-`@/lib/api/middleware` helpers |
+| `lib/image-gen/prompt-expansion.ts` | `calculateAvailableSpace` |
+| `lib/images-v2.ts` | `calculateSha256` — a one-line alias of `sha256OfBuffer`; the dedup regression suite now imports the real one |
+| `lib/llm/cheap-llm.ts` | `estimateModelCost`, `validateCheapLLMConfig`, and `isCheapModel`, whose only caller was `validateCheapLLMConfig` (the live selection ladder consults the plugin registry directly) |
+| `lib/llm/errors.ts` | `handleProviderError`, `getUserFriendlyError` — the error classes and `is*`/`parse*` detectors stay; provider plugins raise their own errors and the failover service reads the detectors |
+| `lib/llm/pricing.ts` | `getModelsUnderCost`, `calculateCostTier`, `calculateSavings` |
+| `lib/navigation/route-flags.ts` | `routeSupportsDebug` — its test now asserts `getRouteFlags(...).supportsDebug` |
+| `lib/paths.ts` | `hasShellCapability` (`getShellCapabilities` is live) |
+| `lib/repositories/factory.ts` | `getDataBackend`, `isMongoDBEnabled` (+ the "MongoDB or SQLite" header comment) |
+| `lib/schemas/profile.types.ts` | `IMAGE_PROFILE_LORAS_KEY` — a never-adopted name for the `loras` key; the readers use property access and `params-builder.ts` keeps the reserved-key set |
+| `lib/services/host-notifications/writer.ts` | `buildMultiCharacterRosterContent`, `buildMultiCharacterRosterOpaqueContent` — the content halves of `postHostRosterAnnouncement`, whose poster went in the 2026-06-03 sweep |
+| `lib/llm/message-formatter.ts` | `buildMultiCharacterContextSection` — orphaned by the roster removal above; the live system prompt builds its roster through `buildOtherParticipantsInfo` in `context-manager.ts` |
+| `lib/themes/registry-client.ts` | `toggleSource` — `addSource` / `removeSource` are wired to `/api/v1/themes`; enable/disable never was, and `help/themes.md` documents only add and remove |
+
+### Deduplicated rather than deleted — the LoRA scale bounds
+
+`DEFAULT_LORA_SCALE` and `resolveLoraScaleBounds` in `lib/image-gen/lora-support.ts` had no caller — because `components/image-profiles/LoraListEditor.tsx` carried a byte-identical private copy under a comment reading "Mirrors `DEFAULT_LORA_SCALE`". The editor could not import the original: `lora-support.ts` reads the in-process plugin registry and cannot ship to the browser. Same shape as the hair-guidance constants on 2026-08-26, so the same fix: both now live in a client-safe `lib/image-gen/lora-scale.ts` and the editor imports `resolveLoraScaleBounds`. The checklist-3 refactor landed the identical split independently, so that module is the refactor's; what this sweep removes on the rebased tree is the `export { DEFAULT_LORA_SCALE, resolveLoraScaleBounds }` re-export (and its unused import) that `lora-support.ts` kept "for the server-side callers" — there are none, and `lora-support.ts` never used either symbol.
+
+### Investigated but KEPT (intentional surface / false positives)
+
+From the two new scans:
+
+- **`app/**/page.tsx` default exports** (17) — Next.js route components; nothing imports them by name.
+- **`__mocks__/**`** — jest manual mocks (`jose`, `arctic`, `@google/generative-ai`), resolved by module name.
+- **`migrations/lib/**`** (`user-data-path.ts`, `json-store`, `secrets.ts`, `file-manager.ts`, `logger.ts`) — knip-ignored on purpose; files kept only for migrations belong there per CLAUDE.md.
+- **`plugins/dist/qtap-plugin-mcp/*` and `qtap-plugin-openrouter/pricing-fetcher.ts`** — plugin internals; checklist item 8 (plugin self-containment) owns that surface, not this one.
+- **Registry accessors** — the functional wrappers in `moderation-provider-registry.ts` (7), `search-provider-registry.ts` (12), `system-prompt-registry.ts` (3), and the stats/errors/initialized accessors on `provider-registry.ts` / `tool-registry.ts`. Every registry exposes the same shape over `abstract-provider-registry.ts`; the provider registry's are heavily used, the search ones are test-only, the moderation ones are referenced by nothing at all. Kept under the standing registry rule (2026-04-29) rather than breaking the symmetry — the registry *instances* (`moderationProviderRegistry`, hot-load, initialise) are all live. `createModerationProviderLogger` is kept with them as the sibling of the live `createProviderLogger` / `createSearchProviderLogger`.
+- **Theme public API** — `theme-registry.ts` (`getTheme`, `getDefaultTheme`, `getThemeTokens`, `getThemeCSS`, `hasTheme`), `default-tokens.ts` (`getDefault*`), `utils.ts` (`themeColorsToCSS`, `themeTokensToStyleObject`, `mergeWithDefaultTheme`, `themeTokensEqual`, `getThemeDifferences`), and `crypto.ts` (`generateKeyPair`, `signBundleDirectory`, `verifyBundleSignature`). Standing keep since 2026-06-03. **Worth a follow-up:** `verifyRegistryIndex` *is* wired (the registry index signature is checked on fetch), but `verifyBundleSignature` is not called on install, and no signing tool calls `signBundleDirectory` — bundle-level Ed25519 verification is half-built, not dead.
+- **`setupPepper` / `storePepperInVault`** (`lib/startup/pepper-vault.ts`) — the write side of the legacy pepper vault, which production no longer writes (`.dbkey` files replaced it; `drop-pepper-vault-v1` retires the table). Kept because the test suite uses `setupPepper` to seed vaults for the still-live legacy `unlockPepper` path in `/api/v1/system/unlock`. The whole module goes when that path does.
+- **`UNREPORTED_IF_BLANK_SLOT_TYPES`** (`lib/schemas/wardrobe.types.ts`) — referenced only by `unreported-if-blank-slots.test.ts`, but it is the schema-level statement of the invariant that regression net guards (a slot with `reportWhenEmpty: false` must vanish from every report). Kept under the `lib/schemas/*` rule.
+- **`ImageLoraSpecStored`** — `z.infer` of the live `ImageLoraSpecSchema`; standing schema rule.
+- **`normalizeVector`** (`lib/embedding/embedding-service.ts`) — flagged test-only because `jest.setup.ts` stubs it, but it is called in-file at two sites.
+- **`__reset*ForTests` / `_reset*ForTesting` / `resetHelpSearch` / `resetValidatorCache`** — explicit test hooks their suites use; same rule as `resetFrozenArchiveCacheForTests` on 2026-08-26.
+- **`applyWritesUnsafe`, `classifyWriteTarget`, `readLockFile`, `chatActivityTime`, `resolveStandingInstructions`, `renderStandingInstructionsSection`, the `lib/database/meta.ts`-adjacent `META_KEYS`** and the rest of the "referenced by tests and used in-file" group — exported for direct unit testing, live through their module's entry point.
+- The "exported helper used only inside its own module" group and the 770 `z.infer` / plugin-contract types are unchanged in character from prior rounds.
+
+### Follow-ups this round surfaced (not dead code)
+
+- **`quilltap_meta` is an orphaned table.** With `meta.ts` gone nothing creates it, and nothing read it before. `docs/developer/DDL.md` and the table list in `DEVELOPMENT.md` still describe it because instances that ran the Mongo migration carry it. Dropping it is a schema change (a migration plus DDL update), so it is left for a deliberate change rather than this sweep.
+- **Bundle signature verification** is unwired — see the theme-crypto note above.
+- **`ErrorCode.UNAUTHORIZED`** now has no consumer; it sits with the three members already "preserved for future use".
+
+---
+
+## 2026-08-26 — v4.9 release sweep (knip)
+
+knip flagged **4 unused files**, **1064 unused exports**, **753 unused exported types**, 3 unused enum members, and 62 duplicate exports. No unused or unlisted dependencies, and no unlisted binaries.
+
+Method as in the 2026-07-30 and 2026-06-03 rounds: a whole-repo identifier reference count over all 3,484 source files (`.ts/.tsx/.js/.jsx/.mjs/.cjs/.json/.md/.css/.mdx/.yml`, with `node_modules`, `.next`, `.claude` worktrees and build output excluded), scoring each of the 1,817 flagged symbols by references **outside** its defining file. That isolated **361 symbols with no external reference at all** and **4 referenced only by tests**.
+
+The 361 were then narrowed by in-file usage. A first pass counted raw identifier occurrences in the defining file and found 31 candidates; that undercounted, because JSDoc `{@link Foo}` mentions read as uses. A second pass stripped comments before counting and surfaced **6 more** (`readJsonFileOptional`, `parseComponentItemsField`, `joinFolderPath`, `createApiLogger`, `createRepositoryLogger`, `HAIR_PHYSICAL_BOUNDARY`) — `HAIR_PHYSICAL_BOUNDARY` in particular was masked entirely by a `{@link}` in its sibling's doc comment. The comment-stripper has its own false positives (a `/*` inside a string literal), so all 37 were confirmed by hand with a whole-repo `grep` before any deletion; that check reprieved `parseComponentItemsField`, which is called in-file.
+
+Everything not listed below has a real consumer knip does not follow (a barrel, a test, `packages/`, `plugins/`), or falls under a standing keep-rule from a prior round.
+
+Verified with `npx tsc` (exit 0), `npm run lint` (clean), and the full `npm run test:unit` suite (**724 suites / 11,213 tests / 68 snapshots passing**). Re-running knip confirms the reductions: unused files 4 → 2, unused exports 1064 → 1051 (−13, exactly the 11 removals plus the 2 constants now wired up).
+
+### Removed — functions / consts
+
+| File | Removed |
+|------|---------|
+| `components/providers/avatar-display-provider.tsx` | `useAvatarDisplayContextOptional` |
+| `lib/backup/restore/json-stream.ts` | `readJsonFileOptional` |
+| `lib/documents/open-document-in-chat.ts` | `standaloneTabPayload` (+ the now-orphaned `DocumentStandaloneTabPayload` type import) |
+| `lib/files/folder-utils.ts` | `joinFolderPath` |
+| `lib/logging/create-logger.ts` | `createApiLogger`, `createRepositoryLogger` |
+| `lib/mount-index/database-store.ts` | `databaseFolderHasContents` (+ its 5 stale `jest.mock` stubs) |
+| `lib/mount-index/group-wardrobe.ts` | `GROUP_WARDROBE_FOLDER` (+ orphaned `SHARED_WARDROBE_FOLDER` import) |
+| `lib/mount-index/project-wardrobe.ts` | `PROJECT_WARDROBE_FOLDER` (+ orphaned `SHARED_WARDROBE_FOLDER` import) |
+| `lib/wardrobe/shared-tiers.ts` | `resolveSharedWardrobeTiersForProject`, `noSharedWardrobeTiers` (+ the private `EMPTY` const and the orphaned `resolveProjectMountPointIds` import) |
+
+Notes:
+
+- **`useAvatarDisplayContextOptional`** is the last of the `use*Optional` context-hook family; `useSessionOptional`, `useSidebarOptional`, and `useAvatarDisplayOptional` all went in the 2026-06-03 sweep for the same reason. The throwing `useAvatarDisplayContext` is the live one.
+- **`readJsonFileOptional`** had no caller; `readJsonFile`, `readJsonArrayFile`, and `readJsonArrayFileOptional` are all live in `lib/backup/restore/archive.ts`. Its doc comment was the only thing naming it, from the sibling below it — that comment now points at `readJsonArrayFile`.
+- **`standaloneTabPayload`** existed, per its own doc comment, "so both halves of the 'open a document' decision read from one place". Nothing ever called it: all three sites that build a `DocumentStandaloneTabPayload` (`lib/hooks/use-open-document-from-search.ts:128`, `components/layout/left-sidebar/sidebar-footer.tsx:178`, `components/workspace/WorkspaceIntent.tsx:123`) construct the object inline. **Worth a follow-up:** that three-way duplication is real and is what the helper was meant to prevent; consolidating it is a refactor, not a deletion, so it is left for checklist item 3.
+- **`joinFolderPath`** joins `lib/files/folder-utils.ts`'s `buildFolderTree` / `isInFolder` / `isInFolderRecursive`, removed from the same file on 2026-06-03. `normalizeFolderPath`, which it wrapped, is live across the `/api/v1/files` routes.
+- **`createApiLogger`** and **`createRepositoryLogger`** are the two never-adopted members of the `create*Logger` family. The other three are heavily used — `createServiceLogger` (254 references), `createPluginLogger` (76), `createLogger` (43) — so the file keeps its purpose; these two had zero.
+- **`databaseFolderHasContents`** had no production caller anywhere. Its only references were five `jest.mock` factory stubs in the `doc-edit-handler-*` suites, which merely enumerate the mocked module's shape and do not prove use; those stale keys were removed with it. The `folderHasContents` helper it dynamic-imported from `lib/mount-index/folder-paths` is untouched, as are its live siblings `databaseFileExists` / `databaseFolderExists`.
+- **`GROUP_WARDROBE_FOLDER` / `PROJECT_WARDROBE_FOLDER`** were one-line re-export aliases of `SHARED_WARDROBE_FOLDER` with no consumer and no in-file use. The parallel `GENERAL_WARDROBE_FOLDER` in `general-wardrobe.ts` is **kept** — it is used in-file at line 42. The live surface of both modules (`ensure*WardrobeFolder`, `read*Wardrobe`) is untouched and still imported by the group/project wardrobe routes.
+- **`resolveSharedWardrobeTiersForProject`** was superseded rather than merely unused. Its doc comment names "chat creation, the outfit composer" as its callers, but both (`app/api/v1/chats/route.ts:1131`, `app/api/v1/chats/[id]/actions/participants.ts:220`) resolve the project tier once and then call `sharedWardrobeTiersForCharacter` per character inside the loop — the pattern that module documents for exactly that case. This was checked specifically against the module's stated raison d'être (a call site that threads only `projectMountPointIds` is the bug it exists to prevent): **those call sites are correct**, because the per-character loop supplies the group tier. `resolveSharedWardrobeTiersForChat` and `sharedWardrobeTiersForCharacter` remain live.
+
+### Deduplicated rather than deleted — the hair guidance constants
+
+`lib/wardrobe/slot-guidance.ts` exists, per its module docblock, so that "the wardrobe tools, the outfit-choosing prompt, the character generators, and the image analyser all draw the wardrobe/physical line the same way — a model that reads two different versions of this rule files hair colour as a garment." Two of its three constants were flagged as unused:
+
+- `HAIR_PHYSICAL_BOUNDARY` — the prose-paragraph phrasing, for the character generators and optimizer
+- `HAIR_PHYSICAL_DESCRIPTION_NOTE` — its complement, for physical-description prompts
+
+Both turned out to be duplicated **verbatim** — byte-for-byte, verified programmatically — as inline string literals inside `lib/services/character-field-semantics.ts` (`WARDROBE_SEMANTICS` and `PHYSICAL_DESCRIPTION_SEMANTICS` respectively). So they were not dead intent but a live single-source-of-truth violation of precisely the kind the module was written to prevent.
+
+Deleting them would have entrenched the duplication, so instead `character-field-semantics.ts` now interpolates the two constants. Because the strings are byte-identical, the rendered prompt text is unchanged: the patched file was expanded back to literals and compared against `HEAD`, and it matches exactly. That means no `IDENTITY_STACK_BUILDER_VERSION` bump and no golden regeneration are owed, and the 68 snapshots still pass. `slot-guidance.ts` has no imports of its own, so no cycle is introduced. The third constant, `HAIR_SLOT_GUIDANCE`, was already live in the four `wardrobe_*` tools.
+
+### knip.json — silenced two verified false positives
+
+- **`jest.integration.config.ts`** added to `entry`. knip reported it as an unused file, but it is invoked by two `package.json` scripts (`test:all`, `test:integration`) via `--config`, which knip's jest plugin does not parse. Listing it as an entry rather than an ignore also lets knip follow its `globalSetup` chain (the `armSparkplugGuard()` wiring from bug 83).
+- **`__tests__/helpers/lexicalPluginHarness.tsx`** added to `ignore`. It is imported by four live suites (`TextReplacementPlugin`, `SmartTypographyPlugin`, `CharTypeaheadPlugin.emoji`, `CharTypeaheadPlugin.unicode`). The sibling `__tests__/helpers/renderWithQuery.tsx` is *not* flagged; the difference is that the harness is imported only through deep relative paths (`../../../../../helpers/…`) while `renderWithQuery` is also imported via the `@/` alias. This is a knip resolution quirk, not a code fact — the code is correct as written and was left alone.
+
+### Investigated but KEPT (intentional surface / false positives)
+
+All 753 flagged types and the remaining flagged exports fall under standing keep-rules from prior rounds (Zod `z.infer` schema surface, `*ToolInputSchema` types, plugin SDK contracts, registry accessors, theme validation API, lifecycle `start`/`stop` pairs, barrel re-exports, and exported helpers used only inside their own module). Specifically cleared this round:
+
+- **The `lib/schemas/*` `z.infer` types** — `FileStatus`, `HelpDocChunkInput`, `MemoryKind`, `RealtimeClientMessage`, `RpFontKey`, `TerminalSessionCreate`, `TextReplacementRulePatch`, the four `plugin-manifest.ts` config types (`AuthProviderConfig`, `ThemeFontDefinition`, `SubsystemOverridesType`, `ToolConfig`, `SystemPromptConfig`), and the five `settings.types.ts` types (`AutoHousekeepingCapOverride`, `AutoHousekeepingSettings`, `AutonomousRoomVisibilityDefault`, `AutonomousRoomDestructiveToolPolicy`, `AutoLockSettings`). Standing rule since 2026-06-03: every `lib/schemas/*` schema and its inferred type is data-model surface.
+- **The theme validation family** — `validateThemeTokens`, `validateThemeManifest`, `safeValidateThemeManifest`, `validateQtapThemeManifest`, `validateThemePreference`, plus the `ThemeCompatibility` / `RegistryPreviewColors` `z.infer` types (whose schemas are used in-file at `lib/themes/types.ts:345`, `:476`, `:481`). Documented public theme API; kept since 2026-06-03.
+- **`parseComponentItemsField`** (`lib/database/repositories/vault-overlay/parsers.ts`) — flagged as an unused export, but called in-file at line 333. The "exported helper used only inside its own module" category; un-exporting is pure churn.
+- **`clearCompressionCache` / `getCompressionCacheStats`** (`lib/services/chat-message/compression-cache.service.ts`) — referenced only by their own test suite. Kept under the lifecycle-pair rule: they are the invalidation and introspection halves of a live cache, and unlike the `_clearHousekeepingOutcomesForTest` removed on 2026-06-03, a test does exercise them.
+- **`resetFrozenArchiveCacheForTests`** (`lib/memory/frozen-archive-cache.ts`) — an explicit test helper that its own suite uses. Kept for the same reason. Note the standing follow-up on its neighbour `invalidateFrozenArchive` from 2026-07-30 still applies.
+- **`components/files/svar/index.ts` and `components/files/svar/SvarFilePicker.tsx`** — unchanged from 2026-07-20 and 2026-07-30. Still the in-progress SVAR file-manager surface (`docs/developer/features/svar-file-manager-implementation-plan.md`): the barrel is the documented runtime-free public API, `SvarFilePicker` is the Phase 4 costume awaiting page wiring, and the Phase 3 `SvarFileManager` sibling **is** wired behind the "New file manager (beta)" toggle.
+- **The 3 `ErrorCode` enum members and 62 duplicate exports** — unchanged in character from prior rounds; the duplicates are the named + default export pattern, still low priority.
 
 ---
 
@@ -91,7 +237,7 @@ knip flagged **3 unused files**, **1 unlisted dependency**, and **3 unlisted bin
 ### knip.json — silenced legitimate false positives
 
 - **`@anthropic-ai/sdk`** added to `ignoreDependencies`. It's a transitive dependency (pulled in by the bundled Anthropic plugin) imported only by `__tests__/unit/plugins/anthropic-model-family-params.test.ts`; there is no direct root-`package.json` entry to flag. Same rationale as the existing `better-sqlite3-multiple-ciphers` entry.
-- **`ps`, `tasklist`, `du`** added to `ignoreBinaries`. These are legitimate OS binaries invoked at runtime: `ps`/`tasklist` for cross-platform liveness checks in `lib/database/backends/sqlite/instance-lock.ts`, `du` for size reporting in `scripts/build-standalone-tarball.ts`.
+- **`ps`, `tasklist`, `du`** added to `ignoreBinaries`. These are legitimate OS binaries invoked at runtime: `ps`/`tasklist` for cross-platform liveness checks in `lib/database/backends/sqlite/instance-lock.ts`, `du` for size reporting in `scripts/build-standalone-tarball.mjs`.
 
 ### Investigated but KEPT — in-progress SVAR file-manager surface
 

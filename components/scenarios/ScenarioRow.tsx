@@ -10,9 +10,10 @@
  * The row is **container-query adaptive** (Tailwind v4, no plugin). It renders
  * both control affordances and lets CSS pick one by the row's actual width:
  *
- *   - Wide container (`@lg` and up): inline `Edit / Rename / Delete` buttons.
+ *   - Wide container (`@lg` and up): inline `Edit / Rename / Archive / Delete`
+ *     buttons.
  *   - Narrow container (below `@lg`, e.g. the project ScenariosCard at `xl`):
- *     a single `⋮` kebab menu, so the three actions never wrap.
+ *     a single `⋮` kebab menu, so the four actions never wrap.
  *
  * The kebab open-state mechanics (outside-`mousedown` + capture-phase `Escape`)
  * mirror `components/wardrobe/wardrobe-item-row.tsx`, the house pattern; the menu
@@ -32,6 +33,8 @@ interface ScenarioRowProps {
   onEdit: (scenario: Scenario) => void
   onRename: (scenario: Scenario) => void
   onDelete: (scenario: Scenario) => void
+  /** Archive an active scenario, or restore an archived one. */
+  onToggleArchived: (scenario: Scenario) => void
 }
 
 export function ScenarioRow({
@@ -41,9 +44,12 @@ export function ScenarioRow({
   onEdit,
   onRename,
   onDelete,
+  onToggleArchived,
 }: ScenarioRowProps) {
   const [kebabOpen, setKebabOpen] = useState(false)
   const kebabRef = useRef<HTMLDivElement>(null)
+
+  const archiveLabel = scenario.archived ? 'Restore' : 'Archive'
 
   // Close on outside pointer press while open.
   useEffect(() => {
@@ -76,8 +82,17 @@ export function ScenarioRow({
         type="radio"
         checked={scenario.isDefault}
         onChange={() => onSetDefault(scenario)}
+        // An archived scenario is barred from default resolution server-side;
+        // offering the radio would just be a control that quietly does nothing.
+        disabled={scenario.archived}
         className="qt-radio mt-1"
-        title={scenario.isDefault ? `${scopeLabel} default` : `Set as ${scopeLabel} default`}
+        title={
+          scenario.archived
+            ? 'Archived scenarios cannot be the default'
+            : scenario.isDefault
+              ? `${scopeLabel} default`
+              : `Set as ${scopeLabel} default`
+        }
         aria-label={`Set ${scenario.name} as ${scopeLabel} default`}
       />
 
@@ -94,6 +109,9 @@ export function ScenarioRow({
             // foreground and goes illegible on bold-accent themes (e.g. amber
             // text on the amber primary fill in Madman's Box).
             <span className="qt-badge qt-badge-primary">Default</span>
+          )}
+          {scenario.archived && (
+            <span className="qt-badge qt-badge-secondary">Archived</span>
           )}
         </div>
         {scenario.description && (
@@ -118,6 +136,17 @@ export function ScenarioRow({
           Rename
         </button>
         <button
+          onClick={() => onToggleArchived(scenario)}
+          className="qt-button qt-button-ghost qt-button-sm"
+          title={
+            scenario.archived
+              ? 'Restore this scenario to the pickers'
+              : 'Hide this scenario from the pickers'
+          }
+        >
+          {archiveLabel}
+        </button>
+        <button
           onClick={() => onDelete(scenario)}
           className="qt-button qt-button-ghost qt-button-sm qt-text-destructive"
           title="Delete scenario"
@@ -126,7 +155,7 @@ export function ScenarioRow({
         </button>
       </div>
 
-      {/* Narrow container: kebab menu holding the same three actions. */}
+      {/* Narrow container: kebab menu holding the same four actions. */}
       <div className="relative @lg:hidden shrink-0" ref={kebabRef}>
         <button
           type="button"
@@ -162,6 +191,17 @@ export function ScenarioRow({
               className="qt-dropdown-item w-full text-left"
             >
               Rename
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setKebabOpen(false)
+                onToggleArchived(scenario)
+              }}
+              className="qt-dropdown-item w-full text-left"
+            >
+              {archiveLabel}
             </button>
             <button
               type="button"

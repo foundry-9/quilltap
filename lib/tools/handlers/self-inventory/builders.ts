@@ -15,16 +15,18 @@ import { logger } from '@/lib/logger';
 import { getRepositories } from '@/lib/repositories/factory';
 import { isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { buildSystemPrompt, buildOtherParticipantsInfo, type OtherParticipantInfo } from '@/lib/chat/context/system-prompt-builder';
+import { resolveStandingInstructionsSection } from '@/lib/chat/context/standing-instructions';
 import { resolveConnectionProfile } from '@/lib/chat/connection-resolver';
-import { getModelContextLimit } from '@/lib/llm/model-context-data';
+import { getModelContextLimit, resolveContextWindow } from '@/lib/llm/model-context-data';
 import { isParticipantPresent } from '@/lib/schemas/chat.types';
 import type { Character, ChatParticipantBase } from '@/lib/schemas/types';
 import type { LoadedMemoriesContext } from '@/lib/chat/tool-executor';
 import { formatSelfUri, formatScopedUri, formatDocStoreUri } from '@/lib/doc-edit/qtap-uri';
-import { isDockerEnvironment, isElectronShell, isLimaEnvironment, getElectronShellVersion } from '@/lib/paths';
+import { isDockerEnvironment, isElectronShell, getElectronShellVersion } from '@/lib/paths';
 import { isDevelopment } from '@/lib/env';
 import type { SelfInventoryVaultSection, SelfInventoryVaultCharacterSection, SelfInventoryVaultGroupsSection, SelfInventoryVaultGroup, SelfInventoryVaultIncludedParts, SelfInventoryVaultAccessSection, SelfInventoryVaultAccessCharacterSection, SelfInventoryVaultAccessGroupsSection, SelfInventoryGroupVaultAccess, SelfInventoryGroupVaultMember, SelfInventoryVaultAccessParticipant, SelfInventoryVaultAccessLevel, SelfInventoryMemorySection, SelfInventoryLoadedMemoriesSection, SelfInventoryChatSection, SelfInventoryPromptSection, SelfInventoryLastTurnSection, SelfInventoryCarinaSection, SelfInventoryQuilltapSection, SelfInventoryQuilltapIncludedParts, SelfInventoryRuntimeMode, SelfInventoryClientShell, SelfInventoryContextSection, SelfInventoryContextIncludedParts, SelfInventoryContextChat, SelfInventoryContextProject, SelfInventoryContextGroups, SelfInventoryContextGroup, SelfInventoryContextCharacters, SelfInventoryContextCharacter, SelfInventoryContextFiles, SelfInventoryContextFile, SelfInventoryContextMount, SelfInventorySection } from '../../self-inventory-tool';
 import { getErrorMessage, roundPercent, mapVaultFiles, HIGH_IMPORTANCE_THRESHOLD, type SelfInventoryToolContext } from './helpers';
+import { chatActivityAt } from '@/lib/chat/chat-activity';
 
 async function buildVaultCharacterSection(
   character: Character,
@@ -378,8 +380,7 @@ export async function buildChatsSection(
       earliestIso = chat.createdAt;
     }
 
-    const activityIso =
-      chat.lastMessageAt ?? chat.updatedAt ?? chat.createdAt;
+    const activityIso = chatActivityAt(chat);
     const activityMs = Date.parse(activityIso);
     if (Number.isFinite(activityMs) && activityMs > latestMs) {
       latestMs = activityMs;
@@ -512,6 +513,16 @@ export async function buildPromptSection(
   // and the async instance-settings read isn't worth threading through for a
   // reporting path. The reconstructed prompt is therefore missing the Taboo
   // section a real turn would carry — a known, accepted fidelity gap.
+  //
+  // Standing instructions (project + group `instructions`) ARE included:
+  // they are substantive conduct guidance a character should be able to
+  // introspect, and the repos are already in hand. Fails soft like the live
+  // path.
+  const standingInstructions = await resolveStandingInstructionsSection({
+    projectId: chat.projectId ?? null,
+    characterId: character.id,
+  });
+
   const systemPrompt = buildSystemPrompt({
     character,
     userCharacter,
@@ -520,6 +531,7 @@ export async function buildPromptSection(
     timestampConfig: chat.timestampConfig ?? null,
     isInitialMessage: false,
     scenarioText: chat.scenarioText ?? null,
+    standingInstructions,
   });
 
   const characterCount = systemPrompt.length;
@@ -632,8 +644,7 @@ export async function buildLastTurnSection(
       };
     }
 
-    const contextWindow =
-      profile.maxContext ?? getModelContextLimit(profile.provider, profile.modelName);
+    const contextWindow = resolveContextWindow(profile.provider, profile.modelName, profile);
 
     return {
       available: true,
@@ -693,12 +704,9 @@ export async function buildCarinaSection(
 function resolveRuntimeMode(): SelfInventoryRuntimeMode {
   const shell = isElectronShell();
   const docker = isDockerEnvironment();
-  const vm = isLimaEnvironment();
 
-  if (shell && vm) return 'electron-vm';
   if (shell && docker) return 'electron-docker';
   if (shell) return 'electron';
-  if (vm) return 'vm';
   if (docker) return 'docker';
   if (isDevelopment) return 'local-dev';
   return 'local-production';

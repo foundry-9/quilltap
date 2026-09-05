@@ -25,13 +25,11 @@ import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 import { removeFromSlot } from '@/lib/wardrobe/outfit-displacement';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import {
-  buildWardrobeCoverageSummaryFromState,
+  buildWardrobeMutationFailure,
   describeWardrobeEffect,
-  emptyEquippedState,
+  finalizeWardrobeMutation,
   formatWardrobeMutationResults,
-  loadCurrentWardrobeState,
   normalizeNoItemSentinel,
-  notifyWardrobeChanged,
   resolveWardrobeItemAcrossTiers,
   wardrobeItemNotFoundMessage,
 } from './wardrobe-handler-shared';
@@ -45,16 +43,6 @@ export interface WardrobeTakeOffToolContext {
 }
 
 class WardrobeTakeOffError extends Error {}
-
-function buildFailureResponse(error: string): WardrobeTakeOffToolOutput {
-  return {
-    success: false,
-    operations: [],
-    current_state: emptyEquippedState(),
-    coverage_summary: '',
-    error,
-  };
-}
 
 export async function executeWardrobeTakeOffTool(
   input: unknown,
@@ -72,7 +60,7 @@ export async function executeWardrobeTakeOffTool(
       characterId: context.characterId,
       input,
     });
-    return buildFailureResponse(
+    return buildWardrobeMutationFailure(
       'Invalid input: provide a non-empty "operations" array. mode=remove needs an ' +
         'item_id or item_title; mode=clear_slot needs a slot.',
     );
@@ -172,34 +160,12 @@ export async function executeWardrobeTakeOffTool(
     }
   }
 
-  if (appliedCount > 0) {
-    await notifyWardrobeChanged(
-      repos,
-      {
-        userId: context.userId,
-        chatId: context.chatId,
-        characterId: context.characterId,
-        pendingWardrobeAnnouncements: context.pendingWardrobeAnnouncements,
-      },
-      'wardrobe-take-off-handler',
-    );
-  }
-
-  const currentState = await loadCurrentWardrobeState(repos, context.chatId, context.characterId);
-  const coverageSummary = await buildWardrobeCoverageSummaryFromState(
-    repos,
-    context.characterId,
-    currentState,
+  return finalizeWardrobeMutation(repos, context, 'wardrobe-take-off-handler', {
+    appliedCount,
+    results,
+    failedError,
     tiers,
-  );
-
-  return {
-    success: failedError === undefined,
-    operations: results,
-    current_state: currentState,
-    coverage_summary: coverageSummary,
-    ...(failedError ? { error: failedError } : {}),
-  };
+  });
 }
 
 /**

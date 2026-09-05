@@ -30,17 +30,16 @@ import {
   searchVaultConversationSummaries,
   renderRelevantConversationsBlock,
   READ_CONVERSATION_CALL_NOTE,
+  RELEVANT_CONVERSATIONS_MIN,
+  RELEVANT_CONVERSATIONS_MAX,
+  RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS,
+  RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS,
 } from '@/lib/memory/conversation-summary-search';
 import {
   buildCommonplacePersonaWhisper,
   buildCommonplaceLLMContext,
   postCommonplaceWhisper,
 } from './writer';
-
-const RELEVANT_CONVERSATIONS_MIN = 3;
-const RELEVANT_CONVERSATIONS_MAX = 10;
-const RELEVANT_CONVERSATIONS_RAMP_MIN_TOKENS = 4000;
-const RELEVANT_CONVERSATIONS_RAMP_MAX_TOKENS = 32000;
 
 export interface RefreshRelevantConversationsInput {
   chatId: string;

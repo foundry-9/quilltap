@@ -362,10 +362,3 @@ export async function getImageById(fileId: string): Promise<FileEntry | null> {
 export async function readImageBuffer(fileId: string): Promise<Buffer> {
   return await readFile(fileId);
 }
-
-/**
- * Calculate SHA256 hash of buffer
- */
-export function calculateSha256(buffer: Buffer): string {
-  return sha256OfBuffer(buffer);
-}

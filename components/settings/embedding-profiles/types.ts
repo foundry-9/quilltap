@@ -2,7 +2,7 @@
  * Type definitions for embedding profiles
  */
 
-export type EmbeddingProvider = 'OPENAI' | 'OLLAMA' | 'OPENROUTER' | 'BUILTIN'
+export type EmbeddingProvider = 'OPENAI' | 'OLLAMA' | 'OPENROUTER' | 'NANOGPT' | 'BUILTIN'
 
 export interface ApiKey {
   id: string
@@ -79,6 +79,7 @@ export const PROVIDER_BADGE_CLASSES: Record<string, string> = {
   OPENAI: 'qt-badge-provider-openai',
   OLLAMA: 'qt-badge-provider-ollama',
   OPENROUTER: 'qt-badge-provider-openrouter',
+  NANOGPT: 'qt-badge-provider-nanogpt',
   BUILTIN: 'qt-badge-provider-builtin',
 }
 

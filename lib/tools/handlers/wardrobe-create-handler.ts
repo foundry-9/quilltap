@@ -22,13 +22,13 @@ import type {
 } from '../wardrobe-create-tool';
 import { validateWardrobeCreateInput } from '../wardrobe-create-tool';
 import type { WardrobeItem, WardrobeItemType, EquippedSlots } from '@/lib/schemas/wardrobe.types';
-import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types';
+import { WARDROBE_SLOT_TYPES, makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types';
 import { equipItem } from '@/lib/wardrobe/outfit-displacement';
 import { triggerAvatarGenerationIfEnabled } from '@/lib/wardrobe/avatar-generation';
 import { unionTypes } from '@/lib/wardrobe/composite-types';
 import { resolveSharedWardrobeTiersForChat } from '@/lib/wardrobe/shared-tiers';
 import type { SharedWardrobeTiers } from '@/lib/wardrobe/shared-tiers';
-import { describeWardrobeEffect } from './wardrobe-handler-shared';
+import { describeWardrobeEffect, formatEquippedSlotLines } from './wardrobe-handler-shared';
 
 export interface WardrobeCreateToolContext {
   userId: string;
@@ -273,11 +273,11 @@ export async function executeWardrobeCreateTool(
       equipped = true;
       effect = newItem.replace ? 'replaced' : 'layered';
 
-      const chat = await repos.chats.findById(context.chatId);
-      if (chat) {
-        const equippedOutfit = (chat as Record<string, unknown>).equippedOutfit as Record<string, EquippedSlots> | undefined;
-        currentState = equippedOutfit?.[targetCharacterId] || { ...EMPTY_EQUIPPED_SLOTS };
-      }
+      // Read through the repository so the stored bag is normalized to all
+      // five slots — a chat row written before a slot existed omits its key.
+      currentState =
+        (await repos.chats.getEquippedOutfitForCharacter(context.chatId, targetCharacterId)) ??
+        makeEmptyEquippedSlots();
 
       await triggerAvatarGenerationIfEnabled(repos, {
         userId: context.userId,
@@ -378,13 +378,7 @@ export function formatWardrobeCreateResults(output: WardrobeCreateToolOutput): s
     parts.push(`- Equipped immediately${recipientNote ? ` on ${output.recipient_name}` : ''}`);
 
     if (output.current_state) {
-      const slotSummary = WARDROBE_SLOT_TYPES
-        .map((slot) => {
-          const ids = output.current_state![slot];
-          const label = !ids || ids.length === 0 ? '(empty)' : ids.join(', ');
-          return `  ${slot}: ${label}`;
-        })
-        .join('\n');
+      const slotSummary = formatEquippedSlotLines(output.current_state).join('\n');
       parts.push(`- Current outfit:\n${slotSummary}`);
     }
   } else {

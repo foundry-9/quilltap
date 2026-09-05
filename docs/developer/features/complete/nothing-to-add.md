@@ -2,6 +2,19 @@
 
 All paths relative to `/Users/csebold/source/quilltap-server`.
 
+> **Amended 2026-08-20:** `recentlyAddressed` no longer fires on *any* name
+> mention (`findMentionedCharacterIds` over the corpus, as specified below). In
+> chorus-prone group scenes every turn's roll-call recap named most of the
+> cast, so everyone was permanently "addressed", the answer-rather-than-pass
+> caution fired every turn, and nobody ever passed. The check now requires a
+> direct address: a vocative-position name/alias (`buildDirectAddressRegex` in
+> `lib/chat/turn-manager/skip-signal.ts`), an `@`-mention, or a targeted
+> whisper. The caution text now says "directly addressed", and the base turn
+> note adds that a reply which mostly restates or endorses what has already
+> been said is not substantive and should be a pass. See also the group-scene
+> discipline block (`GROUP_SCENE_DISCIPLINE`,
+> `lib/services/chat-message/context-builder.service.ts`) added the same day.
+
 ## Context
 
 In multi-character Salon chats, every selected speaker currently *must* produce a reply, which forces filler when a character genuinely has nothing to contribute. This feature gives every LLM character — on every turn except the very first character turn of the chat — a per-turn prompt option to pass by replying with a sentinel. A pass is announced by the Host ("{name} has nothing to add"), and the rotation continues to the next speaker. The prompt also warns a character who has been directly addressed since they last spoke that they should answer rather than pass.

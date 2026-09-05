@@ -11,6 +11,7 @@
 import { logger } from '@/lib/logger';
 import { providerRegistry, getConfigRequirements, getProvider } from './provider-registry';
 import { getErrorMessage } from '@/lib/error-utils';
+import { providerAcceptsApiKey, providerRequiresApiKey } from '@/lib/llm/api-key-support';
 
 // ============================================================================
 // TYPES
@@ -107,7 +108,23 @@ export function requiresBaseUrl(provider: string): boolean {
  */
 export function requiresApiKey(provider: string): boolean {
   const requirements = getConfigRequirements(provider);
-  return requirements?.requiresApiKey ?? true; // Default to true for safety
+  return providerRequiresApiKey(requirements); // Default to true for safety
+}
+
+/**
+ * Check whether a provider *may* hold an API key at all.
+ *
+ * The companion question to {@link requiresApiKey}: OpenAI-Compatible requires
+ * no key (a local llama.cpp has nowhere to put one) but accepts one (a hosted
+ * endpoint demands a bearer token). Ask this before deciding whether a stored
+ * key may reach the wire; ask {@link requiresApiKey} before refusing to send
+ * without one. See Bug 81.
+ *
+ * @param provider The provider name
+ * @returns true if an API key may be attached and forwarded
+ */
+export function acceptsApiKey(provider: string): boolean {
+  return providerAcceptsApiKey(getConfigRequirements(provider));
 }
 
 /**

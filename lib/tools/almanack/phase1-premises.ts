@@ -22,7 +22,6 @@ import {
   getSQLiteDatabasePath,
   isDockerEnvironment,
   isElectronShell,
-  isLimaEnvironment,
 } from '@/lib/paths';
 import { getHasUserPassphrase } from '@/lib/startup/dbkey';
 import {
@@ -49,8 +48,6 @@ export function collectRuntimeEnvironment(): RuntimeEnvironmentInfo {
   let runtimeType: RuntimeEnvironmentInfo['runtimeType'] = 'node';
   if (isDockerEnvironment()) {
     runtimeType = 'docker';
-  } else if (isLimaEnvironment()) {
-    runtimeType = 'lima';
   } else if (isElectronShell()) {
     runtimeType = 'electron';
   }
@@ -81,6 +78,11 @@ async function statSize(label: string, filePath: string): Promise<DatabaseSizeIn
     // whose first access hasn't happened).
     return { label, sizeBytes: 0, present: false };
   }
+}
+
+/** Security info with nothing known — no passphrase, no databases found. */
+export function emptyDatabaseSecurity(): DatabaseSecurityInfo {
+  return { passphraseProtected: false, databases: [], highestAppVersion: null };
 }
 
 /**
@@ -180,6 +182,16 @@ export async function collectBackupStatus(): Promise<BackupInfo[]> {
       totalSizeBytes: bucket.bytes,
     };
   });
+}
+
+/** Migration state with nothing recorded. */
+export function emptyMigrationState(): MigrationStateInfo {
+  return {
+    appliedCount: 0,
+    lastMigrationId: null,
+    lastMigrationAt: null,
+    lastMigrationVersion: null,
+  };
 }
 
 /** How far up the migration ladder this database has climbed. */

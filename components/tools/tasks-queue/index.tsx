@@ -6,6 +6,7 @@ import { TaskItem } from './TaskItem'
 import { TaskDetails } from './TaskDetails'
 import { useTasksQueue } from './hooks/useTasksQueue'
 import { formatRelativeDate } from '@/lib/format-time'
+import { useNow } from '@/hooks/useNow'
 import { Icon } from '@/components/ui/icon'
 
 const DEFAULT_CONCURRENCY = 4
@@ -57,7 +58,11 @@ export function TasksQueueCard() {
     return tokens.toString()
   }
 
-  const formatDate = formatRelativeDate
+  // One shared minute tick drives every relative timestamp in the card,
+  // including the ones TaskDetails renders through this same callback.
+  const nowMs = useNow(60_000)
+  const formatDate = (dateString: string | null | undefined) =>
+    formatRelativeDate(dateString, nowMs)
 
   return (
     <div className="qt-card p-6">
@@ -76,7 +81,7 @@ export function TasksQueueCard() {
 
       {/* Simultaneous Labours — global background-job concurrency cap */}
       <div className="qt-card p-4 mb-6">
-        <label htmlFor="maxConcurrentJobs" className="qt-text-body text-foreground font-medium">
+        <label htmlFor="maxConcurrentJobs" className="qt-body text-foreground font-medium">
           Simultaneous Labours — {displayConcurrency}
         </label>
         <input
@@ -91,7 +96,7 @@ export function TasksQueueCard() {
           onChange={(e) => setDragConcurrency(parseInt(e.target.value, 10))}
           onMouseUp={handleConcurrencyCommit}
           onTouchEnd={handleConcurrencyCommit}
-          className="w-full cursor-pointer mt-2"
+          className="qt-range w-full mt-2"
         />
         <p className="qt-text-small qt-text-muted mt-1">
           How many background errands the engine may undertake at once. Four suits most

@@ -14,7 +14,7 @@ This directory contains a refactored version of the tasks queue management card 
 - **hooks/useTasksQueue.ts** - Custom hook for queue management
   - Handles all API calls for fetching and managing jobs
   - Manages loading, error, and job action states
-  - Provides auto-refresh functionality
+  - Governs the **fallback** poll (see "Staying current" below)
 
 - **TaskItem.tsx** - Individual task list item component
   - Displays job status, metadata, and action buttons
@@ -24,7 +24,7 @@ This directory contains a refactored version of the tasks queue management card 
 - **TaskFilters.tsx** - Filter and control components
   - Refresh button
   - Queue start/stop controls
-  - Auto-refresh toggle
+  - Fallback-polling toggle
   - Processor status indicator
 
 - **TaskDetails.tsx** - Job details modal dialog
@@ -63,13 +63,25 @@ TasksQueueCard (index.tsx)
     └── Payload Display
 ```
 
+## Staying current
+
+The queue is **pushed**, not polled. Every job-lifecycle chokepoint on the server publishes a `jobs`
+hint over the realtime socket (`docs/developer/features/complete/realtime-updates.md`), and
+`RealtimeProvider` invalidates `queryKeys.system.tasksQueue` when one arrives — normally within a
+frame of the change committing.
+
+The 5 s interval survives only as the fallback for a dropped socket, which is what the user-facing
+**Fallback polling (5s)** switch governs. `useRealtimeRefetchInterval` returns `false` while the
+socket is healthy, so with the wire up the switch does nothing at all. Its old label was
+"Auto-refresh (5s)", which stopped being true once the push path landed.
+
 ## State Management
 
 All state is managed in the `useTasksQueue` hook:
 - Queue data and stats
 - Loading and error states
 - Job selection and dialog state
-- Auto-refresh settings
+- Fallback-polling preference
 - Action loading states
 
 ## API Integration

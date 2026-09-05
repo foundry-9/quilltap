@@ -10,8 +10,8 @@
  * Key difference from OpenAI plugin: baseUrl is REQUIRED for configuration
  */
 
-import type { TextProviderPlugin } from './types';
-import { OpenAICompatibleProvider } from './provider';
+import type { ProviderOptionsSchema, TextProviderPlugin } from './types';
+import { OpenAICompatibleEndpointProvider } from './provider';
 import {
   createPluginLogger,
   parseOpenAIToolCalls,
@@ -40,9 +40,17 @@ const metadata = {
 /**
  * Configuration requirements
  * Note: baseUrl is REQUIRED for this provider
+ *
+ * `requiresApiKey` and `acceptsApiKey` disagree here on purpose, and this is
+ * the only provider where they do. The same plugin serves an unauthenticated
+ * llama.cpp on localhost and a hosted endpoint behind a bearer token, so a key
+ * must never be demanded — and must always be offerable. Collapsing the two
+ * back into one flag removes OpenAI-Compatible from the Add-New-API-Key list
+ * and from the profile form's key field, which is Bug 81.
  */
 const config = {
   requiresApiKey: false,
+  acceptsApiKey: true,
   requiresBaseUrl: true,
   apiKeyLabel: 'API Key (optional)',
   baseUrlLabel: 'Base URL',
@@ -58,6 +66,12 @@ const capabilities = {
   imageGeneration: false,
   embeddings: false,
   webSearch: false,
+  // Deliberately false: this provider points at an arbitrary user-supplied
+  // endpoint, and assuming tool support would break every endpoint that lacks
+  // it. The capability seeds a NEW profile's "Allow tool use" checkbox and
+  // nothing more — a user whose endpoint does support tools (llama-server
+  // --jinja, vLLM, LM Studio) can tick it, and the provider then sends `tools`
+  // and parses `tool_calls` back. It is a default, not a ceiling.
   toolUse: false,
 } as const;
 
@@ -87,6 +101,99 @@ const messageFormat = {
 const cheapModels = {
   defaultModel: 'gpt-4o-mini',
   recommendedModels: ['gpt-4o-mini', 'gpt-3.5-turbo'],
+};
+
+/**
+ * Connection-profile options schema rendered by the Quilltap host.
+ *
+ * Every key here is stored in the profile's `parameters` blob and read back off
+ * `LLMParams.profileParameters` at call time through the provider's
+ * `OPENAI_COMPATIBLE_PROFILE_PARAM_ALLOWLIST` — the two lists must stay in
+ * step, or a field the editor draws goes nowhere.
+ *
+ * These are the settings a local runtime's model publisher specifies (Qwen3.8
+ * asks for `top_k` and `min_p`; most instruct models name a repeat penalty),
+ * none of which were reachable before Bug 71.
+ */
+const optionsSchema: ProviderOptionsSchema = {
+  groups: [
+    {
+      title: 'Endpoint Options',
+      helpText:
+        'These are sent only when you fill them in. An endpoint that does not recognise a ' +
+        'setting generally ignores it, so leave anything your server does not support blank.',
+      fields: [
+        {
+          key: 'reasoning_effort',
+          label: 'Reasoning Effort',
+          type: 'enum',
+          default: '',
+          enumValues: [
+            { value: '', label: 'Model default', description: 'Send nothing; the model decides' },
+            { value: 'none', label: 'None', description: 'Answer without reasoning' },
+            { value: 'low', label: 'Low' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' },
+            { value: 'xhigh', label: 'Extra high', description: 'Longest reasoning, slowest replies' },
+          ],
+          helpText:
+            'How long a reasoning model may think before answering. On a machine where every token ' +
+            'costs wall-clock time this is the largest speed control you have. Only models whose ' +
+            'chat template understands reasoning levels will act on it.',
+        },
+        {
+          key: 'top_k',
+          label: 'Top K',
+          type: 'number',
+          helpText:
+            'Keep only the K most likely next tokens. Qwen3 and kin ask for 20. Leave blank for the model default.',
+        },
+        {
+          key: 'min_p',
+          label: 'Min P',
+          type: 'number',
+          helpText:
+            'Drop tokens less likely than this fraction of the best one. Qwen3 and kin ask for 0. Leave blank for the model default.',
+        },
+        {
+          key: 'repeat_penalty',
+          label: 'Repeat Penalty',
+          type: 'number',
+          helpText:
+            'Penalty applied to tokens already used. Above 1 discourages repetition; 1 disables it.',
+        },
+        {
+          key: 'presence_penalty',
+          label: 'Presence Penalty',
+          type: 'number',
+          helpText:
+            'Discourages tokens that have appeared at all. Some publishers recommend a value here for ' +
+            'non-thinking mode (Qwen3.8 asks for 1.5).',
+        },
+        {
+          key: 'frequency_penalty',
+          label: 'Frequency Penalty',
+          type: 'number',
+          helpText: 'Discourages tokens in proportion to how often they have already appeared.',
+        },
+        {
+          key: 'seed',
+          label: 'Seed',
+          type: 'number',
+          helpText:
+            'Fixes the sampler so the same prompt gives the same answer. Leave blank for a fresh roll each turn.',
+        },
+        {
+          key: 'cache_prompt',
+          label: 'Reuse Cached Prompt',
+          type: 'boolean',
+          helpText:
+            'Let the server reuse the part of the prompt it has already processed. llama-server does this ' +
+            'by default — this is an escape hatch for servers that do not, and you can leave it alone.',
+        },
+      ],
+    },
+  ],
 };
 
 /**
@@ -120,6 +227,11 @@ export const plugin: TextProviderPlugin = {
   defaultContextWindow: 8192, // Conservative default for unknown implementations
 
   /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
+
+  /**
    * Factory method to create an OpenAI-compatible LLM provider instance
    * IMPORTANT: baseUrl is REQUIRED for this provider
    */
@@ -133,7 +245,7 @@ export const plugin: TextProviderPlugin = {
     }
 
     const url = baseUrl || 'http://localhost:8080/v1';
-    return new OpenAICompatibleProvider(url);
+    return new OpenAICompatibleEndpointProvider(url);
   },
 
   /**
@@ -143,7 +255,7 @@ export const plugin: TextProviderPlugin = {
   getAvailableModels: async (apiKey: string, baseUrl?: string) => {
     try {
       const url = baseUrl || 'http://localhost:8080/v1';
-      const provider = new OpenAICompatibleProvider(url);
+      const provider = new OpenAICompatibleEndpointProvider(url);
       const models = await provider.getAvailableModels(apiKey);
       return models;
     } catch (error) {
@@ -162,7 +274,7 @@ export const plugin: TextProviderPlugin = {
   validateApiKey: async (apiKey: string, baseUrl?: string) => {
     try {
       const url = baseUrl || 'http://localhost:8080/v1';
-      const provider = new OpenAICompatibleProvider(url);
+      const provider = new OpenAICompatibleEndpointProvider(url);
       const isValid = await provider.validateApiKey(apiKey);
       return isValid;
     } catch (error) {

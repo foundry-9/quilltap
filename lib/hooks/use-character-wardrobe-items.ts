@@ -24,6 +24,11 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
+import {
+  GENERAL_CONTAINER,
+  wardrobeCollectionUrl,
+  withWardrobeArchivedParam,
+} from '@/lib/wardrobe/wardrobe-container'
 
 export interface UseCharacterWardrobeItemsResult {
   items: WardrobeItem[]
@@ -53,6 +58,12 @@ export interface UseCharacterWardrobeItemsOptions {
    * (the in-chat wardrobe dialog has a chat id but not the project id).
    */
   chatId?: string | null
+  /**
+   * Fold archived garments into the result, flagged rather than hidden. Every
+   * tier honours it; flipping it re-fetches all four. Default false, so a
+   * caller that doesn't ask can't accidentally surface archived items.
+   */
+  includeArchived?: boolean
 }
 
 export function useCharacterWardrobeItems(
@@ -61,6 +72,7 @@ export function useCharacterWardrobeItems(
 ): UseCharacterWardrobeItemsResult {
   const projectId = opts?.projectId ?? null
   const chatId = opts?.chatId ?? null
+  const includeArchived = opts?.includeArchived === true
   const [items, setItems] = useState<WardrobeItem[]>([])
   const [loading, setLoading] = useState(false)
   const [fetched, setFetched] = useState(false)
@@ -90,13 +102,14 @@ export function useCharacterWardrobeItems(
       }
       setResolvedProjectId(projectTierId)
 
+      const personalUrl = wardrobeCollectionUrl({ scope: 'character', id: characterId })
       const [personalRes, groupRes, projectRes, archetypeRes] = await Promise.all([
-        fetch(`/api/v1/characters/${characterId}/wardrobe`),
-        fetch(`/api/v1/characters/${characterId}/wardrobe?scope=group`),
+        fetch(withWardrobeArchivedParam(personalUrl, includeArchived)),
+        fetch(withWardrobeArchivedParam(`${personalUrl}?scope=group`, includeArchived)),
         projectTierId
-          ? fetch(`/api/v1/projects/${projectTierId}/wardrobe`)
+          ? fetch(wardrobeCollectionUrl({ scope: 'project', id: projectTierId }, { includeArchived }))
           : Promise.resolve(null),
-        fetch('/api/v1/wardrobe'),
+        fetch(wardrobeCollectionUrl(GENERAL_CONTAINER, { includeArchived })),
       ])
 
       // Merge with precedence: personal > group > project > general.
@@ -130,7 +143,7 @@ export function useCharacterWardrobeItems(
       setLoading(false)
       setFetched(true)
     }
-  }, [characterId, projectId, chatId])
+  }, [characterId, projectId, chatId, includeArchived])
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reload wraps an async fetch; the setState lands well after this effect tick

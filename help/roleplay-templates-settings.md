@@ -165,6 +165,7 @@ To create a brand new custom template:
 
 - **What it is** — The actual formatting instructions (required)
 - **Used for** — Guides the AI on how to format responses
+- **How to phrase it** — Plain formatting directives, stated as instructions. Written as: *Wrap narration in asterisks; keep replies to three paragraphs or fewer.*
 - **Should include** —
   - Clear formatting rules
   - Examples of correctly formatted text

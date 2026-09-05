@@ -158,6 +158,7 @@ export class ChatSettingsRepository extends AbstractBaseRepository<ChatSettings>
             cheapLLMSettings: {
               strategy: 'PROVIDER_CHEAPEST',
               fallbackToLocal: true,
+              allowCheapFallback: false,
               embeddingProvider: 'OPENAI',
             },
             themePreference: {

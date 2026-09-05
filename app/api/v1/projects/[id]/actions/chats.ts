@@ -12,6 +12,8 @@ import { logger } from '@/lib/logger';
 import { notFound, serverError, successResponse } from '@/lib/api/responses';
 import { addChatSchema, removeChatSchema } from '../schemas';
 import type { RequestContext } from '@/lib/api/middleware';
+import { byChatActivityDesc } from '@/lib/chat/chat-activity';
+import { getConciergeState } from '@/lib/services/dangerous-content/chat-override';
 
 /**
  * List chats associated with project (paginated)
@@ -35,12 +37,8 @@ export async function handleListChats(
     const allChats = await repos.chats.findAll();
     const projectChats = allChats.filter(c => c.projectId === projectId);
 
-    // Sort by lastMessageAt descending, falling back to updatedAt for chats without messages
-    projectChats.sort((a, b) => {
-      const aTime = a.lastMessageAt ? new Date(a.lastMessageAt).getTime() : new Date(a.updatedAt).getTime();
-      const bTime = b.lastMessageAt ? new Date(b.lastMessageAt).getTime() : new Date(b.updatedAt).getTime();
-      return bTime - aTime;
-    });
+    // Newest conversational activity first — see `lib/chat/chat-activity.ts`.
+    projectChats.sort(byChatActivityDesc);
 
     // Get total count before pagination
     const total = projectChats.length;
@@ -102,7 +100,8 @@ export async function handleListChats(
           participants: participants.filter(Boolean),
           tags: chatTags,
           storyBackground,
-          isDangerousChat: chat.isDangerousChat === true,
+          conciergeState: getConciergeState(chat),
+          dangerCategories: chat.dangerCategories ?? [],
           lastMessageAt: chat.lastMessageAt ?? null,
           updatedAt: chat.updatedAt,
           createdAt: chat.createdAt,

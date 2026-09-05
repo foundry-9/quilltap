@@ -4,14 +4,20 @@ import { useCallback } from 'react'
 import { useFormState } from '@/hooks/useFormState'
 import { useAsyncOperation } from '@/hooks/useAsyncOperation'
 import { fetchJson } from '@/lib/fetch-helpers'
-import type { ProfileFormData, ConnectionProfile, ProviderConfig } from '../types'
+import { defaultMultiCharacterPrefill } from '@/lib/llm/multi-character-prefill'
+import { providerAcceptsApiKey, providerRequiresApiKey } from '@/lib/llm/api-key-support'
+import type { ApiKey, ProfileFormData, ConnectionProfile, ProviderConfig } from '../types'
 import { initialFormState } from '../types'
 
 /**
  * Hook for managing profile form state and operations
  * Handles form submission, connection testing, model fetching, and testing
+ *
+ * `apiKeys` is the same list the modal's API Key select renders from; the form
+ * needs it to tell a key it could currently *show* from one it merely still
+ * holds (Bug 76). An empty list means "not loaded", never "no keys exist".
  */
-export function useProfileForm(providers: ProviderConfig[]) {
+export function useProfileForm(providers: ProviderConfig[], apiKeys: ApiKey[] = []) {
   const form = useFormState<ProfileFormData>(initialFormState)
 
   const saveOp = useAsyncOperation<any>()
@@ -25,7 +31,8 @@ export function useProfileForm(providers: ProviderConfig[]) {
     (providerName: string) => {
       const provider = providers.find((p) => p.name === providerName)
       return {
-        requiresApiKey: provider?.configRequirements?.requiresApiKey ?? true,
+        requiresApiKey: providerRequiresApiKey(provider?.configRequirements),
+        acceptsApiKey: providerAcceptsApiKey(provider?.configRequirements),
         requiresBaseUrl: provider?.configRequirements?.requiresBaseUrl ?? false,
         supportsWebSearch: provider?.capabilities?.webSearch ?? false,
         supportsToolUse: provider?.capabilities?.toolUse ?? false,
@@ -33,6 +40,69 @@ export function useProfileForm(providers: ProviderConfig[]) {
     },
     [providers]
   )
+
+  /**
+   * The base URL as it is allowed to leave the form.
+   *
+   * A provider that does not require one hides the field (`ProfileModal`'s
+   * `showBaseUrl` gate), so whatever is still sitting in form state belongs to
+   * a provider the user has since moved off — most often the `localhost:11434`
+   * that selecting Ollama auto-filled. Sending it points every probe, and the
+   * saved row, at the wrong endpoint with nothing on screen to explain it, and
+   * no gesture that clears it (Bug 73). The value stays in form state so
+   * switching back restores it; it simply never reaches the wire.
+   *
+   * A provider missing from `providers` is not evidence of anything —
+   * the list has not loaded, or its fetch failed — so the stored value is left
+   * alone there rather than clearing a working profile on a failed fetch.
+   */
+  const outboundBaseUrl = useCallback((): string => {
+    const known = providers.find((p) => p.name === form.formData.provider)
+    if (known && !known.configRequirements?.requiresBaseUrl) return ''
+    return form.formData.baseUrl || ''
+  }, [providers, form.formData.provider, form.formData.baseUrl])
+
+  /**
+   * The api key as it is allowed to leave the form. The exact twin of
+   * `outboundBaseUrl`, one field over (Bug 76).
+   *
+   * `handleProviderChange` deliberately never clears `apiKeyId` — the value
+   * stays in form state so switching back restores it — but the select cannot
+   * express what is stored once the provider moves. On a keyless provider it is
+   * not rendered at all; on a different hosted provider its options are
+   * filtered to that provider, so the stored id matches nothing and the control
+   * reads blank. Sending it anyway had the dialog saying no key was selected
+   * while the wire carried one, and the save refused with
+   * `API key provider does not match profile provider` — naming a field the
+   * dialog does not show, with no gesture on a keyless provider that clears it.
+   *
+   * So: send only what the select could currently display. Absence is not
+   * evidence in either list — a provider list that has not loaded is no reason
+   * to judge the provider keyless, and an api-key list that has not loaded is
+   * no reason to call a stored id undisplayable.
+   *
+   * "Keyless" here is `providerAcceptsApiKey`, not `requiresApiKey`: an
+   * OpenAI-Compatible profile pointed at a hosted endpoint holds an optional
+   * key, and the stricter reading silently dropped it on the way to the wire
+   * (Bug 81).
+   */
+  const outboundApiKeyId = useCallback((): string => {
+    const stored = form.formData.apiKeyId || ''
+    if (!stored) return ''
+
+    const known = providers.find((p) => p.name === form.formData.provider)
+    if (known && !providerAcceptsApiKey(known.configRequirements)) return ''
+
+    // The select's own option filter, asked as a question.
+    if (apiKeys.length > 0) {
+      const displayable = apiKeys.some(
+        (key) => key.id === stored && key.provider === form.formData.provider
+      )
+      if (!displayable) return ''
+    }
+
+    return stored
+  }, [providers, apiKeys, form.formData.provider, form.formData.apiKeyId])
 
   const resetForm = useCallback(() => {
     form.resetForm()
@@ -71,10 +141,20 @@ export function useProfileForm(providers: ProviderConfig[]) {
         isDangerousCompatible: profile.isDangerousCompatible ?? false,
         allowToolUse: profile.allowToolUse ?? true,
         pseudoToolMode: profile.pseudoToolMode ?? 'auto',
+        // Null means the profile predates the field (or arrived by import);
+        // show the provider default the server would resolve to, so the box
+        // reflects actual behaviour. The provider rule is all that is knowable
+        // here — the thinking half needs the plugin's rule and the model's
+        // facts, neither of which this hook is given. ProfileModal corrects a
+        // null row once the model list lands (bug 85).
+        multiCharacterPrefill:
+          profile.multiCharacterPrefill ?? defaultMultiCharacterPrefill(profile.provider),
         supportsImageUpload: profile.supportsImageUpload ?? false,
         allowWebSearch: profile.allowWebSearch ?? false,
         useNativeWebSearch: profile.useNativeWebSearch ?? false,
         modelClass: profile.modelClass ?? '',
+        fallbackProfileId: profile.fallbackProfileId ?? '',
+        allowTierFallback: profile.allowTierFallback ?? false,
         maxContext: profile.maxContext ? String(profile.maxContext) : '',
         parameters: rawParams,
       })
@@ -101,10 +181,18 @@ export function useProfileForm(providers: ProviderConfig[]) {
         isCheap: form.formData.isCheap,
         isDangerousCompatible: false,
         allowToolUse: false,
+        // Not a tool flag — the Courier renders the same assembled context for
+        // the user to carry by hand, so the turn anchor still applies.
+        multiCharacterPrefill: form.formData.multiCharacterPrefill,
         supportsImageUpload: false,
         allowWebSearch: false,
         useNativeWebSearch: false,
         modelClass: null,
+        // A Courier request is carried by hand. Nothing about that route can
+        // fail over automatically, so it neither names an understudy nor
+        // accepts a drafted one.
+        fallbackProfileId: null,
+        allowTierFallback: false,
         maxContext: null,
         parameters: {},
       }
@@ -130,29 +218,33 @@ export function useProfileForm(providers: ProviderConfig[]) {
       isDangerousCompatible: form.formData.isDangerousCompatible,
       allowToolUse: form.formData.allowToolUse,
       pseudoToolMode: form.formData.pseudoToolMode,
+      multiCharacterPrefill: form.formData.multiCharacterPrefill,
       supportsImageUpload: form.formData.supportsImageUpload,
       allowWebSearch: form.formData.allowWebSearch,
       useNativeWebSearch: form.formData.useNativeWebSearch,
       modelClass: form.formData.modelClass || null,
+      fallbackProfileId: form.formData.fallbackProfileId || null,
+      allowTierFallback: form.formData.allowTierFallback,
       maxContext: form.formData.maxContext ? parseInt(form.formData.maxContext, 10) : null,
       parameters,
     }
 
-    // Always include apiKeyId when editing (to support changes)
-    // Only include when truthy for new profiles
-    if (form.formData.apiKeyId) {
-      requestBody.apiKeyId = form.formData.apiKeyId
-    } else {
-      requestBody.apiKeyId = null
-    }
+    // Always sent, never conditionally: `null` is how the row is *cleared* of a
+    // key the current provider cannot use, so a profile that carried one across
+    // a provider change — or arrived that way by import — heals on its next
+    // save rather than being refused forever (Bug 76). Both handlers map a
+    // null/absent value to a cleared column.
+    requestBody.apiKeyId = outboundApiKeyId() || null
 
-    // Only include baseUrl if set
-    if (form.formData.baseUrl) {
-      requestBody.baseUrl = form.formData.baseUrl
-    }
+    // Always sent, never conditionally: an empty string is how the row is
+    // *cleared* of a base URL the current provider does not take, so a profile
+    // that picked one up from an earlier provider heals on its next save
+    // rather than staying broken and invisible (Bug 73). Both the create and
+    // the update handler map a falsy value to NULL.
+    requestBody.baseUrl = outboundBaseUrl()
 
     return requestBody
-  }, [form.formData])
+  }, [form.formData, outboundBaseUrl, outboundApiKeyId])
 
   const handleConnect = useCallback(
     async (onSuccess?: (data: any) => void) => {
@@ -168,7 +260,11 @@ export function useProfileForm(providers: ProviderConfig[]) {
           throw new Error('Base URL is required for this provider')
         }
 
-        if (requirements.requiresApiKey && !form.formData.apiKeyId) {
+        // Judged on what may leave, not on what is held: a key the select
+        // cannot show is not a key the user chose for this provider, and
+        // "API Key is required" is the honest thing to say about a blank
+        // control (Bug 76).
+        if (requirements.requiresApiKey && !outboundApiKeyId()) {
           throw new Error('API Key is required for this provider')
         }
 
@@ -178,8 +274,8 @@ export function useProfileForm(providers: ProviderConfig[]) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             provider: form.formData.provider,
-            apiKeyId: form.formData.apiKeyId || undefined,
-            baseUrl: form.formData.baseUrl || undefined,
+            apiKeyId: outboundApiKeyId() || undefined,
+            baseUrl: outboundBaseUrl() || undefined,
           }),
         })
 
@@ -196,7 +292,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
 
       return result
     },
-    [form.formData, connectOp, getProviderRequirements]
+    [form.formData, connectOp, getProviderRequirements, outboundBaseUrl, outboundApiKeyId]
   )
 
   const handleFetchModels = useCallback(
@@ -213,8 +309,8 @@ export function useProfileForm(providers: ProviderConfig[]) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             provider: form.formData.provider,
-            apiKeyId: form.formData.apiKeyId || undefined,
-            baseUrl: form.formData.baseUrl || undefined,
+            apiKeyId: outboundApiKeyId() || undefined,
+            baseUrl: outboundBaseUrl() || undefined,
           }),
         })
 
@@ -231,7 +327,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
 
       return result
     },
-    [form.formData, fetchModelsOp, getProviderRequirements]
+    [form.formData, fetchModelsOp, getProviderRequirements, outboundBaseUrl, outboundApiKeyId]
   )
 
   const handleTestMessage = useCallback(
@@ -247,8 +343,8 @@ export function useProfileForm(providers: ProviderConfig[]) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             provider: form.formData.provider,
-            apiKeyId: form.formData.apiKeyId || undefined,
-            baseUrl: form.formData.baseUrl || undefined,
+            apiKeyId: outboundApiKeyId() || undefined,
+            baseUrl: outboundBaseUrl() || undefined,
             modelName: form.formData.modelName,
             parameters: {
               temperature: parseFloat(String(form.formData.temperature)),
@@ -271,7 +367,7 @@ export function useProfileForm(providers: ProviderConfig[]) {
 
       return result
     },
-    [form.formData, testMessageOp]
+    [form.formData, testMessageOp, outboundBaseUrl, outboundApiKeyId]
   )
 
   const handleAutoConfigure = useCallback(

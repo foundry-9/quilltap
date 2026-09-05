@@ -20,6 +20,7 @@
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
+import { applySqlcipherKey } from './sqlcipher-key';
 
 let readonlyDatabase: DatabaseType | null = null;
 
@@ -41,8 +42,8 @@ export function getReadonlyChildSQLiteClient(config: SQLiteConfig): DatabaseType
 
   const db = new Database(config.path, { readonly: true });
 
-  const keyHex = Buffer.from(process.env.ENCRYPTION_MASTER_PEPPER, 'base64').toString('hex');
-  db.pragma(`key = "x'${keyHex}'"`);
+  // The pepper is guaranteed present by the guard above.
+  applySqlcipherKey(db);
 
   if (config.foreignKeys) {
     db.pragma('foreign_keys = ON');

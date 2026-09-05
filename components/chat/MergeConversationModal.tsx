@@ -24,9 +24,11 @@ import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { formatRelativeDate } from '@/lib/format-time'
+import { useNow } from '@/hooks/useNow'
 import { Icon } from '@/components/ui/icon'
 import { OutfitSelector } from '@/components/wardrobe'
 import type { OutfitSelection, PreviousOutfitSummary } from '@/components/wardrobe'
+import { chatActivityAt } from '@/lib/chat/chat-activity'
 
 interface MergeChatParticipant {
   id: string
@@ -39,6 +41,7 @@ interface MergeChatParticipant {
 interface MergeChatRow {
   id: string
   title: string
+  createdAt: string
   updatedAt: string
   lastMessageAt: string | null
   participants: MergeChatParticipant[]
@@ -81,6 +84,9 @@ export function MergeConversationModal({
   onMerged,
 }: MergeConversationModalProps) {
   const queryClient = useQueryClient()
+  // The picker can sit open for a while; without the shared clock its
+  // "12m ago" column freezes at whatever it read when the list arrived.
+  const nowMs = useNow(60_000)
   const [step, setStep] = useState<'pick' | 'configure'>('pick')
   const [selectedSource, setSelectedSource] = useState<MergeChatRow | null>(null)
   const [outfitSelections, setOutfitSelections] = useState<OutfitSelection[]>([])
@@ -247,7 +253,7 @@ export function MergeConversationModal({
                 <div className="space-y-2">
                   {candidateChats.map((chat) => {
                     const company = presentCharacters(chat)
-                    const when = chat.lastMessageAt ?? chat.updatedAt
+                    const when = chatActivityAt(chat)
                     return (
                       <button
                         key={chat.id}
@@ -260,7 +266,7 @@ export function MergeConversationModal({
                             {chat.title || 'Untitled conversation'}
                           </span>
                           <span className="text-xs qt-text-secondary shrink-0">
-                            {formatRelativeDate(when)}
+                            {formatRelativeDate(when, nowMs)}
                           </span>
                         </div>
                         <div className="mt-1 text-xs qt-text-secondary truncate">

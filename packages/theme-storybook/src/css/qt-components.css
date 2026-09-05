@@ -83,6 +83,12 @@
   --qt-radio-accent: var(--color-primary);
   --qt-radio-focus-ring: var(--color-ring);
 
+  /* Range slider variables. Sliders stay natively rendered: accent-color paints
+     the filled track and the thumb, which `appearance: none` would discard in
+     Chrome and Safari. */
+  --qt-range-accent: var(--color-primary);
+  --qt-range-focus-ring: var(--color-ring);
+
   /* Navbar variables */
   --qt-navbar-height: 3.5rem;
   --qt-navbar-bg: var(--color-background);
@@ -160,6 +166,12 @@
   --qt-status-danger-fg: var(--color-destructive-foreground);
   --qt-status-danger-border: var(--color-destructive);
 
+  /* Badge palette tokens - referenced by the provider badges */
+  --qt-badge-primary-bg: var(--color-primary);
+  --qt-badge-primary-fg: var(--color-primary-foreground);
+  --qt-badge-secondary-bg: var(--color-secondary);
+  --qt-badge-secondary-fg: var(--color-secondary-foreground);
+
   /* Alert tokens - semi-transparent backgrounds with readable text */
   --qt-alert-success-bg: hsl(142 76% 36% / 0.1);
   --qt-alert-success-fg: hsl(142 76% 30%);
@@ -192,6 +204,20 @@
   --qt-badge-message-fg: hsl(45 70% 35%);
   --qt-badge-project-bg: hsl(185 80% 40% / 0.15);
   --qt-badge-project-fg: hsl(185 80% 30%);
+
+  /* Wardrobe slot badge colors */
+  --qt-badge-wardrobe-top-bg: hsl(220 60% 55% / 0.12);
+  --qt-badge-wardrobe-top-fg: hsl(220 60% 42%);
+  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 38% / 0.12);
+  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 30%);
+  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 48% / 0.12);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 38%);
+  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 55% / 0.12);
+  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 42%);
+  --qt-badge-wardrobe-hair-bg: hsl(345 55% 55% / 0.12);
+  --qt-badge-wardrobe-hair-fg: hsl(345 55% 42%);
+  --qt-badge-wardrobe-shared-bg: hsl(240 50% 55% / 0.12);
+  --qt-badge-wardrobe-shared-fg: hsl(240 50% 42%);
 
   /* Status badge colors */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.15);
@@ -308,6 +334,8 @@
   --qt-queue-badge-group-radius: var(--radius-md);
   --qt-queue-badge-memory-bg: hsl(225 55% 48%);
   --qt-queue-badge-memory-fg: hsl(0 0% 100%);
+  --qt-queue-badge-embedding-bg: hsl(270 50% 48%);
+  --qt-queue-badge-embedding-fg: hsl(0 0% 100%);
   --qt-queue-badge-summary-bg: hsl(152 55% 38%);
   --qt-queue-badge-summary-fg: hsl(0 0% 100%);
   --qt-queue-badge-danger-bg: hsl(0 60% 48%);
@@ -852,6 +880,31 @@
 }
 
 /* ==========================================================================
+   RANGE (SLIDER) COMPONENT
+   Natively rendered on purpose — accent-color paints the filled portion of the
+   track and the thumb. Do not reimplement with appearance:none plus custom
+   ::-webkit-slider-thumb / ::-moz-range-thumb rules: that discards the filled
+   bar in Chrome and Safari. Call sites own width/layout.
+   ========================================================================== */
+
+.qt-range {
+  cursor: pointer;
+  accent-color: var(--qt-range-accent);
+}
+
+.qt-range:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--qt-range-focus-ring) 35%, transparent);
+}
+
+/* No disabled opacity on purpose: browsers already drop the accent on a
+   disabled range, and app call sites nest these inside dimmed wrappers where a
+   second 50% would compound to 25%. */
+.qt-range:disabled {
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
    BADGE COMPONENTS
    ========================================================================== */
 
@@ -903,6 +956,212 @@
   background-color: transparent;
   color: var(--color-foreground);
   border: 1px solid var(--color-border);
+}
+
+/* ==========================================================================
+   PROVIDER BADGES
+   ========================================================================== */
+
+/**
+ * Shared geometry for the provider badges (embedding-profile provider chips).
+ * These do NOT build on .qt-badge in the app — they carry their own box, so
+ * the rule below is self-contained (and, mirroring the app, sets no
+ * line-height).
+ */
+.qt-badge-provider-openai,
+.qt-badge-provider-ollama,
+.qt-badge-provider-openrouter,
+.qt-badge-provider-nanogpt,
+.qt-badge-provider-builtin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
+  border-radius: var(--qt-badge-radius);
+  font-size: var(--qt-badge-font-size);
+  font-weight: var(--qt-badge-font-weight);
+}
+
+/**
+ * OpenAI provider badge (green/success semantic)
+ */
+.qt-badge-provider-openai {
+  background: var(--qt-status-success-bg);
+  color: var(--qt-status-success-fg);
+  border: 1px solid var(--qt-status-success-border);
+}
+
+/**
+ * Ollama provider badge (secondary/muted)
+ * Mirrors the app, quirk included: --qt-badge-secondary-border has no default
+ * definition, so the border only renders in themes that define it.
+ */
+.qt-badge-provider-ollama {
+  background: var(--qt-badge-secondary-bg);
+  color: var(--qt-badge-secondary-fg);
+  border: 1px solid var(--qt-badge-secondary-border);
+}
+
+/**
+ * OpenRouter provider badge (warning/orange semantic)
+ */
+.qt-badge-provider-openrouter {
+  background: var(--qt-status-warning-bg);
+  color: var(--qt-status-warning-fg);
+  border: 1px solid var(--qt-status-warning-border);
+}
+
+/**
+ * NanoGPT provider badge (primary/accent semantic)
+ * Same border quirk as the ollama badge: --qt-badge-primary-border has no
+ * default definition.
+ */
+.qt-badge-provider-nanogpt {
+  background: var(--qt-badge-primary-bg);
+  color: var(--qt-badge-primary-fg);
+  border: 1px solid var(--qt-badge-primary-border);
+}
+
+/**
+ * Built-in provider badge (info/blue semantic)
+ */
+.qt-badge-provider-builtin {
+  background: var(--qt-status-info-bg);
+  color: var(--qt-status-info-fg);
+  border: 1px solid var(--qt-status-info-border);
+}
+
+/* ==========================================================================
+   CONCIERGE BADGE (Salon breadcrumb header)
+   ========================================================================== */
+
+/**
+ * Concierge badge for the Salon breadcrumb header. Parameterized over one
+ * CSS var so the four-state family is a recolor, not four rules: the base
+ * is the red Flagged pill; the modifiers below recolor it for the two
+ * operator states (Monitored renders no badge at all).
+ */
+.qt-danger-badge {
+  --qt-concierge-badge-color: var(--color-destructive, #dc2626);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--qt-concierge-badge-color) 15%, transparent);
+  color: var(--qt-concierge-badge-color);
+  border: 1px solid color-mix(in srgb, var(--qt-concierge-badge-color) 40%, transparent);
+}
+
+/* Vouched Safe — no colour: the Concierge isn't in the room. */
+.qt-danger-badge-muted {
+  --qt-concierge-badge-color: var(--color-muted-foreground, #6b7280);
+}
+
+/* Uncensored — the eye you closed yourself. */
+.qt-danger-badge-info {
+  --qt-concierge-badge-color: var(--color-info, #2563eb);
+}
+
+/**
+ * Concierge mark — the list-view asterisk, on chat cards and the homepage's
+ * Recent Chats. Same three tones as the badge above and the same colour
+ * tokens, so a theme that retints one retints both. Monitored draws no mark,
+ * so there is no third modifier.
+ */
+.qt-concierge-mark {
+  --qt-concierge-mark-color: var(--color-destructive, #dc2626);
+  display: inline-block;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--qt-concierge-mark-color);
+}
+
+/* Vouched Safe — no colour: the Concierge isn't in the room. */
+.qt-concierge-mark-muted {
+  --qt-concierge-mark-color: var(--color-muted-foreground, #6b7280);
+}
+
+/* Uncensored — the eye you closed yourself. */
+.qt-concierge-mark-info {
+  --qt-concierge-mark-color: var(--color-info, #2563eb);
+}
+
+/* ==========================================================================
+   WARDROBE SLOT BADGES
+   ========================================================================== */
+
+/**
+ * Shared geometry for the wardrobe slot chips. These do NOT build on
+ * .qt-badge in the app — they carry their own box, so the rule below is
+ * self-contained (and, mirroring the app, sets no line-height).
+ */
+.qt-badge-wardrobe-top,
+.qt-badge-wardrobe-bottom,
+.qt-badge-wardrobe-footwear,
+.qt-badge-wardrobe-accessories,
+.qt-badge-wardrobe-hair,
+.qt-badge-wardrobe-shared {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: var(--qt-badge-padding-y) var(--qt-badge-padding-x);
+  border-radius: var(--qt-badge-radius);
+  font-size: var(--qt-badge-font-size);
+  font-weight: var(--qt-badge-font-weight);
+}
+
+/**
+ * Wardrobe top badge (blue)
+ */
+.qt-badge-wardrobe-top {
+  background-color: var(--qt-badge-wardrobe-top-bg);
+  color: var(--qt-badge-wardrobe-top-fg);
+}
+
+/**
+ * Wardrobe bottom badge (green)
+ */
+.qt-badge-wardrobe-bottom {
+  background-color: var(--qt-badge-wardrobe-bottom-bg);
+  color: var(--qt-badge-wardrobe-bottom-fg);
+}
+
+/**
+ * Wardrobe footwear badge (amber)
+ */
+.qt-badge-wardrobe-footwear {
+  background-color: var(--qt-badge-wardrobe-footwear-bg);
+  color: var(--qt-badge-wardrobe-footwear-fg);
+}
+
+/**
+ * Wardrobe accessories badge (purple)
+ */
+.qt-badge-wardrobe-accessories {
+  background-color: var(--qt-badge-wardrobe-accessories-bg);
+  color: var(--qt-badge-wardrobe-accessories-fg);
+}
+
+/**
+ * Wardrobe hair badge (rose)
+ */
+.qt-badge-wardrobe-hair {
+  background-color: var(--qt-badge-wardrobe-hair-bg);
+  color: var(--qt-badge-wardrobe-hair-fg);
+}
+
+/**
+ * Wardrobe shared/archetype badge (indigo)
+ */
+.qt-badge-wardrobe-shared {
+  background-color: var(--qt-badge-wardrobe-shared-bg);
+  color: var(--qt-badge-wardrobe-shared-fg);
 }
 
 /* ==========================================================================
@@ -1212,6 +1471,73 @@
 
 .qt-pascal-result--info {
   border-left-color: var(--qt-alert-info-border);
+}
+
+/* --------------------------------------------------------------------------
+   ANSWER-CONFIRMATION BADGE
+   A quiet per-message verdict marker (Vouched / Amended / Stood by /
+   Unvetted). The glyph carries the state; a tooltip holds the discrepancy
+   notes. Metadata, not an alarm.
+   -------------------------------------------------------------------------- */
+
+.qt-confirmation-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.375rem;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  background: transparent;
+  font: inherit;
+  line-height: 1.4;
+  cursor: help;
+  color: var(--qt-text-secondary-fg, var(--qt-text-secondary));
+  opacity: 0.8;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 150ms, background-color 150ms, border-color 150ms, opacity 150ms;
+}
+
+/* The badge sits among the message action icons and answers the pointer the
+   same way they do. */
+.qt-confirmation-badge:hover,
+.qt-confirmation-badge:focus-visible {
+  opacity: 1;
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+  background: color-mix(in srgb, var(--color-muted) 50%, transparent);
+}
+
+/* The tinted states (stood-by, amended) keep their own colour on hover; the
+   quiet ones brighten to the foreground the way the action icons do. */
+.qt-confirmation-badge[data-confirmation-state="vouched"]:hover,
+.qt-confirmation-badge[data-confirmation-state="vouched"]:focus-visible,
+.qt-confirmation-badge[data-confirmation-state="unvetted"]:hover,
+.qt-confirmation-badge[data-confirmation-state="unvetted"]:focus-visible {
+  color: var(--color-foreground);
+}
+
+.qt-confirmation-badge:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-foreground) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.qt-chat-message-user .qt-confirmation-badge:hover,
+.qt-chat-message-user .qt-confirmation-badge:focus-visible {
+  color: var(--qt-chat-user-fg);
+  background: color-mix(in srgb, var(--qt-chat-user-fg) 15%, transparent);
+}
+
+.qt-confirmation-badge-glyph {
+  font-weight: 600;
+}
+
+.qt-confirmation-badge[data-confirmation-state="stood-by"] {
+  color: var(--qt-warning-box-fg, var(--qt-text-secondary-fg));
+  opacity: 1;
+}
+
+.qt-confirmation-badge[data-confirmation-state="amended"] {
+  opacity: 1;
 }
 
 /* ==========================================================================
@@ -1933,6 +2259,81 @@
 }
 
 /* ==========================================================================
+   TOOLTIP
+   ==========================================================================
+   Quilltap draws its own tooltips rather than leaning on the native `title`
+   attribute, which the Electron shell renders unreliably. The bubble is
+   portalled to `document.body` and positioned from script, so it escapes every
+   stacking context and sits above dialogs (z-index 60). */
+
+.qt-tooltip {
+  position: fixed;
+  z-index: 70;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  max-width: min(24rem, calc(100vw - 1rem));
+  border-radius: var(--qt-popover-radius);
+  background: var(--color-foreground);
+  color: var(--color-background);
+  border: 1px solid color-mix(in srgb, var(--color-background) 20%, transparent);
+  box-shadow: var(--qt-popover-shadow);
+  text-align: left;
+  white-space: pre-line;
+  /* Transparent to the pointer, so hovering never chases the bubble away —
+     until the bubble is interactive (scrollable or pinned). */
+  pointer-events: none;
+}
+
+.qt-tooltip[data-interactive="true"] {
+  pointer-events: auto;
+}
+
+.qt-tooltip[data-pinned="true"] {
+  border-color: color-mix(in srgb, var(--color-background) 45%, transparent);
+}
+
+/* Layout-neutral wrapper carrying the hover/focus listeners. */
+.qt-tooltip-anchor {
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Structured tooltip contents — a heading, labelled sections, a closing hint. */
+.qt-tooltip-body {
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.qt-tooltip-title {
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+}
+
+.qt-tooltip-section {
+  margin-top: 0.5rem;
+}
+
+.qt-tooltip-section-label {
+  text-transform: uppercase;
+  font-size: 0.625rem;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+}
+
+.qt-tooltip-quote {
+  white-space: pre-wrap;
+  opacity: 0.92;
+}
+
+.qt-tooltip-hint {
+  margin-top: 0.5rem;
+  font-size: 0.625rem;
+  opacity: 0.65;
+}
+
+/* ==========================================================================
    TYPEAHEAD MENU
    ==========================================================================
    The composer's inline typeahead popover — emoji today (`:name`), and the
@@ -2187,8 +2588,214 @@
   background-color: var(--color-muted-foreground);
 }
 
+/* Foregrounds intended for use ON a filled surface — the paired counterparts of
+   the accent/primary/success/destructive fills. Each maps to the token a theme
+   defines for text sitting on that fill, so a badge or a solid button keeps its
+   contrast on every theme instead of inheriting whatever colour the surrounding
+   page happens to be using.
+
+     <span class="qt-bg-accent qt-text-on-accent">…</span>
+     <button class="qt-bg-destructive qt-text-on-destructive">…</button>
+
+   Mind the naming: these are `-on-<fill>`, never `-<fill>-foreground`. */
 .qt-text-on-accent {
   color: var(--color-accent-foreground);
+}
+
+.qt-text-on-primary {
+  color: var(--color-primary-foreground);
+}
+
+.qt-text-on-success {
+  color: var(--color-success-foreground);
+}
+
+.qt-text-on-destructive {
+  color: var(--color-destructive-foreground);
+}
+
+/* The remaining opacity steps and surface colours of the utility families. A
+   theme that overrides --color-muted or --color-border gets all of these for
+   free; they exist so that the app never has to reach for a raw Tailwind
+   colour on a themed surface. */
+.qt-bg-card\/50 {
+  background-color: color-mix(in srgb, var(--color-card) 50%, transparent);
+}
+
+.qt-bg-card\/60 {
+  background-color: color-mix(in srgb, var(--color-card) 60%, transparent);
+}
+
+.qt-bg-card\/80 {
+  background-color: color-mix(in srgb, var(--color-card) 80%, transparent);
+}
+
+.qt-bg-card\/90 {
+  background-color: color-mix(in srgb, var(--color-card) 90%, transparent);
+}
+
+.qt-bg-default {
+  background-color: var(--color-background);
+}
+
+.qt-bg-destructive\/15 {
+  background-color: color-mix(in srgb, var(--color-destructive) 15%, transparent);
+}
+
+.qt-bg-destructive\/80 {
+  background-color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
+}
+
+.qt-bg-info\/15 {
+  background-color: color-mix(in srgb, var(--color-info) 15%, transparent);
+}
+
+.qt-bg-input {
+  background-color: var(--color-input);
+}
+
+.qt-bg-muted-foreground\/20 {
+  background-color: color-mix(in srgb, var(--color-muted-foreground) 20%, transparent);
+}
+
+.qt-bg-muted\/20 {
+  background-color: color-mix(in srgb, var(--color-muted) 20%, transparent);
+}
+
+.qt-bg-muted\/30 {
+  background-color: color-mix(in srgb, var(--color-muted) 30%, transparent);
+}
+
+.qt-bg-muted\/40 {
+  background-color: color-mix(in srgb, var(--color-muted) 40%, transparent);
+}
+
+.qt-bg-muted\/50 {
+  background-color: color-mix(in srgb, var(--color-muted) 50%, transparent);
+}
+
+.qt-bg-muted\/60 {
+  background-color: color-mix(in srgb, var(--color-muted) 60%, transparent);
+}
+
+.qt-bg-muted\/70 {
+  background-color: color-mix(in srgb, var(--color-muted) 70%, transparent);
+}
+
+.qt-bg-muted\/80 {
+  background-color: color-mix(in srgb, var(--color-muted) 80%, transparent);
+}
+
+.qt-bg-primary\/15 {
+  background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.qt-bg-primary\/30 {
+  background-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.qt-bg-secondary\/50 {
+  background-color: color-mix(in srgb, var(--color-secondary) 50%, transparent);
+}
+
+.qt-bg-success\/15 {
+  background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
+}
+
+.qt-bg-warning\/15 {
+  background-color: color-mix(in srgb, var(--color-warning) 15%, transparent);
+}
+
+.qt-border-accent {
+  border-color: var(--color-accent);
+}
+
+.qt-border-default\/50 {
+  border-color: color-mix(in srgb, var(--color-border) 50%, transparent);
+}
+
+.qt-border-default\/60 {
+  border-color: color-mix(in srgb, var(--color-border) 60%, transparent);
+}
+
+.qt-border-default\/70 {
+  border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+}
+
+.qt-border-destructive\/20 {
+  border-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+}
+
+.qt-border-destructive\/40 {
+  border-color: color-mix(in srgb, var(--color-destructive) 40%, transparent);
+}
+
+.qt-border-destructive\/50 {
+  border-color: color-mix(in srgb, var(--color-destructive) 50%, transparent);
+}
+
+.qt-border-primary-foreground {
+  border-color: var(--color-primary-foreground);
+}
+
+.qt-border-primary\/20 {
+  border-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.qt-border-primary\/30 {
+  border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.qt-border-primary\/40 {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+}
+
+.qt-border-primary\/50 {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+
+.qt-border-primary\/60 {
+  border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+}
+
+.qt-border-success\/50 {
+  border-color: color-mix(in srgb, var(--color-success) 50%, transparent);
+}
+
+.qt-border-warning\/50 {
+  border-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
+}
+
+.qt-text-destructive\/80 {
+  color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
+}
+
+.qt-text-info\/80 {
+  color: color-mix(in srgb, var(--color-info) 80%, transparent);
+}
+
+.qt-text-secondary\/50 {
+  color: color-mix(in srgb, var(--color-muted-foreground) 50%, transparent);
+}
+
+.qt-text-secondary\/60 {
+  color: color-mix(in srgb, var(--color-muted-foreground) 60%, transparent);
+}
+
+.qt-text-secondary\/70 {
+  color: color-mix(in srgb, var(--color-muted-foreground) 70%, transparent);
+}
+
+.qt-text-secondary\/80 {
+  color: color-mix(in srgb, var(--color-muted-foreground) 80%, transparent);
+}
+
+.qt-text-success\/80 {
+  color: color-mix(in srgb, var(--color-success) 80%, transparent);
+}
+
+.qt-text-warning\/80 {
+  color: color-mix(in srgb, var(--color-warning) 80%, transparent);
 }
 
 /* Hoverable accent surface — list rows, menu items, and option cards that
@@ -2380,6 +2987,175 @@
 
 .hover\:qt-bg-primary\/10:hover {
   background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+/* Hover foregrounds for filled surfaces — the hover partners of the
+   qt-text-on-* family, for controls that sit quiet at rest and take a filled
+   background on hover (`qt-text-secondary hover:qt-bg-success
+   hover:qt-text-on-success`). */
+.hover\:qt-text-on-accent:hover {
+  color: var(--color-accent-foreground);
+}
+
+.hover\:qt-text-on-primary:hover {
+  color: var(--color-primary-foreground);
+}
+
+.hover\:qt-text-on-success:hover {
+  color: var(--color-success-foreground);
+}
+
+.hover\:qt-text-on-destructive:hover {
+  color: var(--color-destructive-foreground);
+}
+
+/* State forms of the utilities above. Tailwind generates variants only for
+   utilities it knows about, and a class declared in @layer utilities is
+   invisible to it — so in the app every one of these is hand-written, escaped,
+   with its own pseudo-selector, and an unwritten one is inert. Mirrored here so
+   a theme author previewing hover states sees what the app actually ships. */
+.hover\:qt-bg-surface-hover:hover {
+  background-color: var(--color-muted);
+}
+
+.hover\:qt-bg-muted:hover {
+  background-color: var(--color-muted);
+}
+
+.hover\:qt-bg-muted\/30:hover {
+  background-color: color-mix(in srgb, var(--color-muted) 30%, transparent);
+}
+
+.hover\:qt-bg-muted\/40:hover {
+  background-color: color-mix(in srgb, var(--color-muted) 40%, transparent);
+}
+
+.hover\:qt-bg-muted\/50:hover {
+  background-color: color-mix(in srgb, var(--color-muted) 50%, transparent);
+}
+
+.hover\:qt-bg-muted\/80:hover {
+  background-color: color-mix(in srgb, var(--color-muted) 80%, transparent);
+}
+
+.hover\:qt-bg-primary:hover {
+  background-color: var(--color-primary);
+}
+
+.hover\:qt-bg-primary\/5:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
+}
+
+.hover\:qt-bg-primary\/15:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
+}
+
+.hover\:qt-bg-primary\/20:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.hover\:qt-bg-primary\/90:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 90%, transparent);
+}
+
+.hover\:qt-bg-destructive:hover {
+  background-color: var(--color-destructive);
+}
+
+.hover\:qt-bg-destructive\/20:hover {
+  background-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+}
+
+.hover\:qt-bg-destructive\/90:hover {
+  background-color: color-mix(in srgb, var(--color-destructive) 90%, transparent);
+}
+
+.hover\:qt-bg-success:hover {
+  background-color: var(--color-success);
+}
+
+.hover\:qt-bg-success\/20:hover {
+  background-color: color-mix(in srgb, var(--color-success) 20%, transparent);
+}
+
+.hover\:qt-bg-success\/90:hover {
+  background-color: color-mix(in srgb, var(--color-success) 90%, transparent);
+}
+
+.hover\:qt-bg-warning\/20:hover {
+  background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+}
+
+.hover\:qt-bg-info\/20:hover {
+  background-color: color-mix(in srgb, var(--color-info) 20%, transparent);
+}
+
+.hover\:qt-text-destructive:hover {
+  color: var(--color-destructive);
+}
+
+.hover\:qt-text-destructive\/80:hover {
+  color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
+}
+
+.hover\:qt-text-warning\/80:hover {
+  color: color-mix(in srgb, var(--color-warning) 80%, transparent);
+}
+
+.hover\:qt-text-info\/80:hover {
+  color: color-mix(in srgb, var(--color-info) 80%, transparent);
+}
+
+.hover\:qt-text-primary:hover {
+  color: var(--qt-text-primary-fg, var(--color-foreground));
+}
+
+.hover\:qt-border-primary:hover {
+  border-color: var(--color-primary);
+}
+
+.hover\:qt-border-primary\/50:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+}
+
+.hover\:qt-border-primary\/60:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+}
+
+.hover\:qt-border-accent:hover {
+  border-color: var(--color-accent);
+}
+
+.focus\:qt-border-primary:focus {
+  border-color: var(--color-primary);
+}
+
+.disabled\:qt-bg-muted:disabled {
+  background-color: var(--color-muted);
+}
+
+.disabled\:qt-text-secondary:disabled {
+  color: var(--color-muted-foreground);
+}
+
+.placeholder\:qt-text-secondary::placeholder {
+  color: var(--color-muted-foreground);
+}
+
+.file\:qt-bg-primary\/20::file-selector-button {
+  background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+.hover\:file\:qt-bg-primary\/30:hover::file-selector-button {
+  background-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+
+.hover\:qt-shadow-md:hover {
+  box-shadow: var(--qt-card-shadow-hover, 0 4px 12px hsl(225 18% 10% / 0.1), 0 2px 4px hsl(225 18% 10% / 0.05));
+}
+
+.group\/thumb:hover .group-hover\/thumb\:qt-bg-overlay-light {
+  background-color: var(--qt-overlay-light-bg, rgb(0 0 0 / 0.2));
 }
 
 /* ==========================================================================
@@ -2994,6 +3770,13 @@
    Adjusted colors for dark backgrounds with better contrast
    ========================================================================== */
 .dark {
+  /* Queue status badges — dark mode */
+  --qt-queue-badge-memory-bg: hsl(225 55% 55%);
+  --qt-queue-badge-embedding-bg: hsl(270 50% 55%);
+  --qt-queue-badge-summary-bg: hsl(152 50% 42%);
+  --qt-queue-badge-danger-bg: hsl(0 60% 52%);
+  --qt-queue-badge-story-bg: hsl(225 12% 44%);
+
   /* Chat: Whisper messages — dark mode */
   --qt-chat-whisper-bg: color-mix(in srgb, var(--qt-chat-assistant-bg) 60%, #6b5b95 40%);
   --qt-chat-whisper-border: #6b5b95;
@@ -3052,6 +3835,20 @@
   --qt-badge-message-fg: hsl(45 70% 68%);
   --qt-badge-project-bg: hsl(185 80% 40% / 0.3);
   --qt-badge-project-fg: hsl(185 80% 70%);
+
+  /* Wardrobe slot badge tokens - brighter for dark backgrounds */
+  --qt-badge-wardrobe-top-bg: hsl(220 60% 58% / 0.25);
+  --qt-badge-wardrobe-top-fg: hsl(220 60% 72%);
+  --qt-badge-wardrobe-bottom-bg: hsl(152 50% 40% / 0.25);
+  --qt-badge-wardrobe-bottom-fg: hsl(152 50% 62%);
+  --qt-badge-wardrobe-footwear-bg: hsl(38 70% 50% / 0.25);
+  --qt-badge-wardrobe-footwear-fg: hsl(38 70% 68%);
+  --qt-badge-wardrobe-accessories-bg: hsl(270 45% 58% / 0.25);
+  --qt-badge-wardrobe-accessories-fg: hsl(270 45% 72%);
+  --qt-badge-wardrobe-hair-bg: hsl(345 55% 58% / 0.25);
+  --qt-badge-wardrobe-hair-fg: hsl(345 55% 72%);
+  --qt-badge-wardrobe-shared-bg: hsl(240 50% 58% / 0.25);
+  --qt-badge-wardrobe-shared-fg: hsl(240 50% 72%);
 
   /* Status badge tokens */
   --qt-badge-enabled-bg: hsl(142 76% 36% / 0.3);
@@ -3387,6 +4184,80 @@
   border-radius: 0.25rem;
   background-color: var(--qt-terminal-closed-badge-bg);
   color: var(--qt-terminal-closed-badge-fg);
+}
+
+/* ==========================================================================
+   QUEUE STATUS BADGE GROUP
+   The compact chip group in the page toolbar reporting in-flight background
+   activity per kind (memory, embedding, summarization, the Concierge, images).
+   ========================================================================== */
+.qt-queue-badge-group {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  gap: var(--qt-queue-badge-group-gap);
+  border-radius: var(--qt-queue-badge-group-radius);
+}
+
+.qt-queue-badge,
+.qt-queue-badge-memory,
+.qt-queue-badge-embedding,
+.qt-queue-badge-summary,
+.qt-queue-badge-danger,
+.qt-queue-badge-story {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+  white-space: nowrap;
+  padding: var(--qt-queue-badge-padding-y) var(--qt-queue-badge-padding-x);
+  font-size: var(--qt-queue-badge-font-size);
+  font-weight: var(--qt-queue-badge-font-weight);
+  transition: opacity 200ms ease;
+}
+
+/* Idle state (count is 0). */
+.qt-queue-badge-idle {
+  opacity: var(--qt-queue-badge-idle-opacity);
+}
+
+/* Blip — work that started and finished between two polls of the activity
+   snapshot never shows up as a count, so the badge pulses to mark that it
+   happened. */
+.qt-queue-badge-pulse {
+  animation: qt-queue-badge-blip 600ms ease-in-out 2;
+}
+
+@keyframes qt-queue-badge-blip {
+  0%, 100% { opacity: var(--qt-queue-badge-idle-opacity); }
+  50% { opacity: 1; }
+}
+
+.qt-queue-badge-memory {
+  background: var(--qt-queue-badge-memory-bg);
+  color: var(--qt-queue-badge-memory-fg);
+}
+
+.qt-queue-badge-embedding {
+  background: var(--qt-queue-badge-embedding-bg);
+  color: var(--qt-queue-badge-embedding-fg);
+}
+
+.qt-queue-badge-summary {
+  background: var(--qt-queue-badge-summary-bg);
+  color: var(--qt-queue-badge-summary-fg);
+}
+
+.qt-queue-badge-danger {
+  background: var(--qt-queue-badge-danger-bg);
+  color: var(--qt-queue-badge-danger-fg);
+}
+
+.qt-queue-badge-story {
+  background: var(--qt-queue-badge-story-bg);
+  color: var(--qt-queue-badge-story-fg);
 }
 
 /* ==========================================================================

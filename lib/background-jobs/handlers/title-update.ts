@@ -13,18 +13,19 @@
  */
 
 import { BackgroundJob, ChatSettings } from '@/lib/schemas/types';
-import { isHelpLikeChatType, type ChatMetadata } from '@/lib/schemas/chat.types';
+import { isHelpLikeChatType, isParticipantPresent, type ChatMetadata } from '@/lib/schemas/chat.types';
 import { getRepositories } from '@/lib/repositories/factory';
 import {
   considerTitleUpdate,
   considerHelpChatTitleUpdate,
   extractVisibleConversation,
+  throwIfLostToTimeout,
 } from '@/lib/memory/cheap-llm-tasks';
 import { getCheapLLMProvider, CheapLLMConfig, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { logger } from '@/lib/logger';
 import { resolveImageProfileForChat } from '@/lib/image-gen/profile-resolution';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { createTitleGenerationEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import type { TitleUpdatePayload } from '../queue-service';
@@ -104,7 +105,7 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   // For dangerous chats, use uncensored provider to avoid content refusals.
   // Off-duty chats are explicitly opted out of uncensored routing.
   const { settings: dangerSettings } = resolveDangerousContentSettings(chatSettings, chat);
-  if (isChatActiveDangerous(chat)) {
+  if (shouldUseUncensoredRoute(chat)) {
     cheapLLMSelection = resolveUncensoredCheapLLMSelection(
       cheapLLMSelection,
       true,
@@ -150,6 +151,10 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
 
   if (!result.success) {
     logger.warn(`[Title Update] Failed for chat ${payload.chatId}: ${result.error}`);
+    // Before the cursor is burned: a timeout means the check never ran, and
+    // burning the checkpoint over it would skip the rename entirely rather
+    // than defer it (bug 107).
+    throwIfLostToTimeout(result, 'title-update');
     // Advance the cursor so a persistently-failing cheap LLM (e.g., an
     // exhausted OpenAI quota) doesn't re-fire this same job every following
     // turn — `shouldCheckTitleAtInterchange` keeps crossing checkpoint 2 as
@@ -187,6 +192,20 @@ export async function handleTitleUpdate(job: BackgroundJob): Promise<void> {
   }
 
   if (!result.result || !result.result.needsNewTitle || !result.result.suggestedTitle) {
+    // Distinguish a genuine "no" from a verdict we could not read. The cheap
+    // LLM asking for a rename and handing us nothing usable is a defect, not a
+    // decision (bug 96), and burning the checkpoint on it silently is how the
+    // chat kept its generic title — and never got a story background, since
+    // that queues off a successful rename below.
+    if (result.result?.needsNewTitle && !result.result.suggestedTitle) {
+      logger.warn('[Title Update] Rename requested with no usable title — checkpoint burned', {
+        context: 'background-jobs.title-update',
+        chatId: payload.chatId,
+        currentInterchange: payload.currentInterchange,
+        reason: result.result.reason,
+      });
+    }
+
     // No rename needed — but still advance the checkpoint so we don't
     // re-evaluate at the same interchange on every following turn.
     await repos.chats.update(payload.chatId, {
@@ -257,9 +276,13 @@ export async function queueStoryBackgroundIfEnabled(
     return;
   }
 
-  // Get character IDs from participants
+  // Get character IDs from participants who are actually in the scene. Absent
+  // and (soft-)removed participants must never be painted into the background —
+  // the crafter is told to place every enumerated character as a figure in the
+  // frame, so a stale enumeration puts someone in the room who walked out of it.
+  // 'silent' counts as present: they are standing there, just not speaking.
   const characterIds = chat.participants
-    .filter(p => p.characterId)
+    .filter(p => isParticipantPresent(p.status) && p.characterId)
     .map(p => p.characterId!);
 
   if (characterIds.length === 0) {

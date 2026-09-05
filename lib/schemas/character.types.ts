@@ -41,6 +41,17 @@ export const CharacterScenarioSchema = z.object({
   title: z.string().min(1).max(200),
   content: z.string().min(1),
   description: z.string().max(500).optional(),
+  /**
+   * Hidden from every picker unless the surface asked for archived entries.
+   * Backed by `archived: true` in the vault file's frontmatter; the key is
+   * omitted entirely when the scenario is active.
+   *
+   * Vault reads deliberately KEEP archived scenarios in `character.scenarios`
+   * — the write overlay projects that array back over `Scenarios/`, sweeping
+   * any file it doesn't contain, so dropping them here would delete them.
+   * Filtering belongs at the API/UI boundary, never at the vault read.
+   */
+  archived: z.boolean().optional(),
   createdAt: TimestampSchema,
   updatedAt: TimestampSchema,
 });

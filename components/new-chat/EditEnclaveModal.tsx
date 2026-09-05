@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { BaseModal } from '@/components/ui/BaseModal'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import { AutonomousRoomCard } from './AutonomousRoomCard'
+import { toAutonomousSettingsHint, type AutonomousSettingsHint } from './autonomous-settings-hint'
 import type { NewChatAutonomousState } from './types'
 
 const MS_PER_HOUR = 60 * 60 * 1000
@@ -17,12 +18,6 @@ interface EditEnclaveModalProps {
   currentTitle: string
   /** Fired after a successful save with the (trimmed) new title. */
   onSaved?: (newTitle: string) => void
-}
-
-interface SettingsHint {
-  visibilityDefault?: 'owner_only' | 'household' | 'open'
-  destructiveToolPolicy?: 'always_refuse' | 'opt_in_per_room'
-  defaultFreshnessHours?: number
 }
 
 /** The room settings as they arrive from the autonomous-room status endpoint (milliseconds). */
@@ -91,7 +86,7 @@ export function EditEnclaveModal({
 }: EditEnclaveModalProps) {
   const [title, setTitle] = useState(currentTitle)
   const [auto, setAuto] = useState<NewChatAutonomousState>(EMPTY_STATE)
-  const [settingsHint, setSettingsHint] = useState<SettingsHint | undefined>(undefined)
+  const [settingsHint, setSettingsHint] = useState<AutonomousSettingsHint | undefined>(undefined)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -120,15 +115,7 @@ export function EditEnclaveModal({
 
         if (settingsRes.ok) {
           const settings = await settingsRes.json()
-          const ar = settings?.autonomousRoomSettings ?? {}
-          setSettingsHint({
-            visibilityDefault: ar.visibilityDefault,
-            destructiveToolPolicy: ar.destructiveToolPolicy,
-            defaultFreshnessHours:
-              typeof ar.defaultFreshnessWindowMs === 'number' && ar.defaultFreshnessWindowMs > 0
-                ? Math.round(ar.defaultFreshnessWindowMs / MS_PER_HOUR)
-                : undefined,
-          })
+          setSettingsHint(toAutonomousSettingsHint(settings))
         }
       } catch (err) {
         if (cancelled) return

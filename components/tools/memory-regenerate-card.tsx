@@ -1,109 +1,69 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useJobFanOutStatus } from './hooks/useJobFanOutStatus'
+import { writeErrorText } from './hooks/api-error-text'
 
 interface RegenerateStatus {
-  inFlightFanOut: number
-  inFlightWipes: number
-  inFlightExtractions: number
-  inFlight: number
+  inFlightFanOut?: number
+  inFlightWipes?: number
+  inFlightExtractions?: number
+  inFlight?: number
 }
 
+const STATUS_URL = '/api/v1/memories?action=regenerate-all'
+/** Fallback poll cadence, used only while the realtime socket is down. */
 const POLL_INTERVAL_MS = 5000
 
 export function MemoryRegenerateCard() {
   const [confirming, setConfirming] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [status, setStatus] = useState<RegenerateStatus | null>(null)
+  const queryClient = useQueryClient()
 
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const statusRes = await fetch('/api/v1/memories?action=regenerate-all')
-        if (!cancelled && statusRes.ok) {
-          const data = await statusRes.json()
-          setStatus({
-            inFlightFanOut: data.inFlightFanOut ?? 0,
-            inFlightWipes: data.inFlightWipes ?? 0,
-            inFlightExtractions: data.inFlightExtractions ?? 0,
-            inFlight: data.inFlight ?? 0,
-          })
-        }
-      } catch {
-        // Initial load failures aren't fatal — UI still works without status.
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // The sweep is a fan-out of background jobs, so it drains visibly on the
+  // `jobs` topic. Only while something is actually in flight, matching what the
+  // old poll did — an idle card has no reason to re-read on every unrelated job.
+  const { data: status } = useJobFanOutStatus<RegenerateStatus>({
+    queryKey: queryKeys.memories.regenerateStatus,
+    url: STATUS_URL,
+    pollMs: POLL_INTERVAL_MS,
+    inFlightOf: s => s.inFlight ?? 0,
+  })
+  const inFlight = status?.inFlight ?? 0
+  const inFlightFanOut = status?.inFlightFanOut ?? 0
+  const inFlightWipes = status?.inFlightWipes ?? 0
+  const inFlightExtractions = status?.inFlightExtractions ?? 0
 
-  // Poll status while a sweep is in flight so the user sees it drain.
-  useEffect(() => {
-    if (!status || status.inFlight === 0) return
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch('/api/v1/memories?action=regenerate-all')
-        if (res.ok) {
-          const data = await res.json()
-          setStatus({
-            inFlightFanOut: data.inFlightFanOut ?? 0,
-            inFlightWipes: data.inFlightWipes ?? 0,
-            inFlightExtractions: data.inFlightExtractions ?? 0,
-            inFlight: data.inFlight ?? 0,
-          })
-        }
-      } catch {
-        // Polling errors are non-fatal.
-      }
-    }, POLL_INTERVAL_MS)
-    return () => clearInterval(interval)
-  }, [status])
-
-  const handleConfirm = async () => {
-    setSubmitting(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/v1/memories?action=regenerate-all', {
+  const regenerate = useMutation({
+    mutationFn: () =>
+      apiFetch<{ message?: string }>(STATUS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to start regeneration')
-      }
-      const data = await res.json()
+      }),
+    onSuccess: async data => {
       showSuccessToast(data.message || 'Regeneration enqueued — chats will rebuild in the background')
       notifyQueueChange()
       // Refresh status so the badge in this card lights up immediately.
-      try {
-        const statusRes = await fetch('/api/v1/memories?action=regenerate-all')
-        if (statusRes.ok) {
-          const statusData = await statusRes.json()
-          setStatus({
-            inFlightFanOut: statusData.inFlightFanOut ?? 0,
-            inFlightWipes: statusData.inFlightWipes ?? 0,
-            inFlightExtractions: statusData.inFlightExtractions ?? 0,
-            inFlight: statusData.inFlight ?? 0,
-          })
-        }
-      } catch {
-        // Non-fatal.
-      }
+      await queryClient.invalidateQueries({ queryKey: queryKeys.memories.regenerateStatus })
       setConfirming(false)
-    } catch (err) {
-      const msg = getErrorMessage(err, 'Failed to start regeneration')
+    },
+    onError: err => {
+      const msg = writeErrorText(err, 'Failed to start regeneration')
       setError(msg)
       showErrorToast(msg)
-    } finally {
-      setSubmitting(false)
-    }
+    },
+  })
+  const submitting = regenerate.isPending
+
+  const handleConfirm = () => {
+    setError(null)
+    regenerate.mutate()
   }
 
   return (
@@ -114,16 +74,16 @@ export function MemoryRegenerateCard() {
         been deleted are removed too. The work runs in the background; close this tab and come back whenever.
       </p>
 
-      {status && status.inFlight > 0 && (
+      {status && inFlight > 0 && (
         <p className="qt-text-small qt-text-muted">
           In flight:{' '}
-          {status.inFlightFanOut > 0 && (
+          {inFlightFanOut > 0 && (
             <>
-              {status.inFlightFanOut} fan-out{status.inFlightFanOut === 1 ? '' : 's'} (building chat list),{' '}
+              {inFlightFanOut} fan-out{inFlightFanOut === 1 ? '' : 's'} (building chat list),{' '}
             </>
           )}
-          {status.inFlightWipes} chat wipe{status.inFlightWipes === 1 ? '' : 's'},{' '}
-          {status.inFlightExtractions} extraction{status.inFlightExtractions === 1 ? '' : 's'}.
+          {inFlightWipes} chat wipe{inFlightWipes === 1 ? '' : 's'},{' '}
+          {inFlightExtractions} extraction{inFlightExtractions === 1 ? '' : 's'}.
         </p>
       )}
 
@@ -141,7 +101,7 @@ export function MemoryRegenerateCard() {
         </div>
       ) : (
         <div className="flex items-center gap-3">
-          <span className="qt-text-body">
+          <span className="qt-body">
             This will delete and rebuild every chat-linked memory. Continue?
           </span>
           <button
@@ -163,7 +123,7 @@ export function MemoryRegenerateCard() {
         </div>
       )}
 
-      {error && <p className="qt-text-small qt-text-error">{error}</p>}
+      {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
     </div>
   )
 }

@@ -13,15 +13,16 @@ import path from 'path';
 import { logger } from '@/lib/logger';
 import { getUserRepositories } from '@/lib/repositories/user-scoped';
 import { getRepositories } from '@/lib/repositories/factory';
-import { fileStorageManager } from '@/lib/file-storage/manager';
-import { writeUserUploadToMountStore } from '@/lib/file-storage/user-uploads-bridge';
+import { writeLibraryFileBytes } from '@/lib/file-storage/library-file-writer';
 import { makeCarriedStoreRowsResolver } from './carried-store-rows';
+import { parseMountBlobStorageKey } from '@/lib/file-storage/project-store-bridge';
 import { getNpmPluginsDir, getThemesDir } from '@/lib/paths';
 import { isLLMLogsDegraded } from '@/lib/database/backends/sqlite/llm-logs-client';
 import { rawQuery } from '@/lib/database/manager';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '@/lib/database/backends/sqlite/mount-index-client';
 import { TextReplacementRuleConflictError } from '@/lib/database/repositories';
 import { normalizeProfileName, makeUniqueProfileName } from '@/lib/llm/connection-profile-names';
+import { seedLegacyConnectionProfileFields } from '@/lib/llm/connection-profile-legacy-fields';
 import { reconcileEmbeddingDimensions } from '@/lib/startup/reconcile-embedding-dimensions';
 import { enqueueEmbeddingReindexAll } from '@/lib/background-jobs/queue-service';
 import { getDefaultEmbeddingProfile } from '@/lib/embedding/embedding-service';
@@ -31,8 +32,26 @@ import { parseBackupZip, getFileFromExtractedBackup, cleanupDir } from './archiv
 import { deleteUserData } from './delete-service';
 import { remapBackupData } from './uuid-remap';
 import { coerceDocMountPointRow, coerceDocMountFileLinkRow } from './mount-index-coercion';
+import { isUniqueConstraintError } from '@/lib/database/sqlite-errors';
 
 const moduleLogger = logger.child({ module: 'backup:restore-service' });
+
+/**
+ * Strip the columns a backup's `files` row must not hand to `files.create`:
+ * the auto-generated ones (`userId`, `createdAt`, `updatedAt`), the
+ * `storageKey` (every restore path rewrites it — from the bridge that stored
+ * the bytes, or from the carried-store resolver), and the legacy S3 /
+ * mount-point fields older backups still carry.
+ */
+function stripLegacyFileRowFields<T extends object>(
+  file: T
+): Omit<T, 'userId' | 'createdAt' | 'updatedAt' | 'storageKey'> {
+  const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as T & Record<string, unknown>;
+  delete (fileData as Record<string, unknown>).s3Key;
+  delete (fileData as Record<string, unknown>).s3Bucket;
+  delete (fileData as Record<string, unknown>).mountPointId;
+  return fileData;
+}
 
 /**
  * Restores data from a backup ZIP file on disk
@@ -94,8 +113,22 @@ export async function restore(
     const takenConnectionNames = new Set(existingConnectionProfiles.map((p) => normalizeProfileName(p.name)));
     for (const profile of data.connectionProfiles) {
       try {
-        const { userId, createdAt, updatedAt, apiKeyId, ...profileData } = profile;
+        const { userId, createdAt, updatedAt, apiKeyId, ...rawProfileData } = profile;
         // Note: apiKeyId is not restored as API keys are encrypted and can't be restored
+        // Columns the archive predates would otherwise be decided by the table
+        // DEFAULT rather than by the profile's owner — see the module docs.
+        const profileData = seedLegacyConnectionProfileFields(rawProfileData);
+        if (
+          rawProfileData.multiCharacterPrefill === undefined ||
+          rawProfileData.supportsImageUpload === undefined
+        ) {
+          moduleLogger.debug('Seeded connection-profile columns the archive predates', {
+            profileId: profile.id,
+            provider: profileData.provider,
+            seededMultiCharacterPrefill: rawProfileData.multiCharacterPrefill === undefined,
+            seededSupportsImageUpload: rawProfileData.supportsImageUpload === undefined,
+          });
+        }
         const uniqueName = makeUniqueProfileName(profileData.name, takenConnectionNames);
         if (uniqueName !== profileData.name) {
           moduleLogger.debug('Renamed connection profile on restore to avoid name collision', {
@@ -172,6 +205,21 @@ export async function restore(
           } catch (msgError) {
             warnings.push(`Failed to restore message in chat "${chat.title}": ${msgError instanceof Error ? msgError.message : String(msgError)}`);
           }
+        }
+
+        // `addMessage` stamps `lastMessageAt` with the wall clock, so replaying
+        // a transcript dates every restored chat to the instant of the restore
+        // — which is the timestamp every list sorts and displays by, so the
+        // whole history would land in one flat heap. Re-derive it from the
+        // transcript we just wrote, under the one predicate that defines it
+        // (`lib/chat/chat-activity.ts`). Null when no character ever posted,
+        // where readers fall back to `createdAt`.
+        try {
+          await repos.chats.update(createdChat.id, {
+            lastMessageAt: await repos.chats.getLastPlayedMessageAt(createdChat.id),
+          });
+        } catch (stampError) {
+          warnings.push(`Failed to restore last-activity date for chat "${chat.title}": ${stampError instanceof Error ? stampError.message : String(stampError)}`);
         }
       } catch (error) {
         warnings.push(`Failed to restore chat "${chat.title}": ${error instanceof Error ? error.message : String(error)}`);
@@ -339,6 +387,17 @@ export async function restore(
         await globalRepos.folders.create({ ...folderData, userId: targetUserId }, { id: folder.id });
         foldersRestored++;
       } catch (error) {
+        // A backup taken before bug 114 was collapsed can carry many rows for
+        // one (userId, projectId, path). The unique index rejects the extras;
+        // the first one restored is the survivor and the rest are noise, so
+        // they're dropped quietly rather than filling the report with warnings.
+        if (isUniqueConstraintError(error)) {
+          moduleLogger.debug('Skipped duplicate folder row during restore', {
+            folderId: folder.id,
+            path: folder.path,
+          });
+          continue;
+        }
         warnings.push(`Failed to restore folder "${folder.name}": ${error instanceof Error ? error.message : String(error)}`);
         moduleLogger.warn('Failed to restore folder', { folderId: folder.id, error });
       }
@@ -431,6 +490,16 @@ export async function restore(
       data.docMountPoints || [],
     );
 
+    // The carried branch below skips the replay, so it never sees a bridge and
+    // cannot take its `sha256` from one. The archived blob rows restore
+    // verbatim and carry the hash of their own bytes, which is the same answer
+    // the bridge would have given — so index them by id and use that, rather
+    // than trusting a `files.sha256` a pre-4.9.0 source instance may have
+    // written from its pre-transcode input (bug 117).
+    const carriedBlobSha256ById = new Map<string, string>(
+      (data.docMountBlobs || []).map(b => [b.id, b.sha256] as const)
+    );
+
     for (let i = 0; i < data.files.length; i++) {
       const file = data.files[i];
       const originalFile = parsedData.files[i]; // original IDs for disk lookup
@@ -443,12 +512,15 @@ export async function restore(
           ? carriedStorageKeyFor(originalFile.storageKey)
           : null;
         if (carriedStorageKey) {
-          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
-          delete (fileData as Record<string, unknown>).s3Key;
-          delete (fileData as Record<string, unknown>).s3Bucket;
-          delete (fileData as Record<string, unknown>).mountPointId;
+          const fileData = stripLegacyFileRowFields(file);
+          const carriedBlobId = parseMountBlobStorageKey(carriedStorageKey)?.blobId;
+          const carriedSha256 = carriedBlobId ? carriedBlobSha256ById.get(carriedBlobId) : undefined;
           await repos.files.create(
-            { ...fileData, storageKey: carriedStorageKey },
+            {
+              ...fileData,
+              ...(carriedSha256 ? { sha256: carriedSha256 } : {}),
+              storageKey: carriedStorageKey,
+            },
             { id: file.id }
           );
           filesRestored++;
@@ -460,48 +532,34 @@ export async function restore(
           // Project-bound files restore into the project mount (via FSM →
           // project-store-bridge). Project-less files land in the Quilltap
           // Uploads mount under restored/, not the catch-all _general/.
-          let restoredStorageKey: string;
-          let restoredMimeType: string;
-          let restoredSize: number;
-          if (file.projectId) {
-            const uploadResult = await fileStorageManager.uploadFile({
-              filename: file.originalFilename,
-              content: fileBuffer,
-              contentType: file.mimeType,
-              projectId: file.projectId,
-              folderPath: file.folderPath || '/',
-            });
-            restoredStorageKey = uploadResult.storageKey;
-            restoredMimeType = uploadResult.storedMimeType;
-            restoredSize = uploadResult.sizeBytes;
-          } else {
-            const written = await writeUserUploadToMountStore({
-              filename: file.originalFilename,
-              content: fileBuffer,
-              contentType: file.mimeType,
-              subfolder: 'restored',
-            });
-            restoredStorageKey = written.storageKey;
-            restoredMimeType = written.storedMimeType;
-            restoredSize = written.sizeBytes;
-          }
+          const {
+            storageKey: restoredStorageKey,
+            storedMimeType: restoredMimeType,
+            sizeBytes: restoredSize,
+            sha256: restoredSha256,
+          } = await writeLibraryFileBytes({
+            filename: file.originalFilename,
+            content: fileBuffer,
+            contentType: file.mimeType,
+            projectId: file.projectId,
+            folderPath: file.folderPath,
+            subfolder: 'restored',
+          });
 
           // Create file metadata with storage key. The bridges may transcode
-          // bytes (bitmaps → WebP), so we record the post-bridge mime/size
-          // rather than what the backup row claimed — a backup made before
-          // this fix may carry the pre-transcode lie, and re-writing it would
-          // re-introduce the "media_type X but bytes are Y" error.
-          // Strip auto-generated and legacy fields from backup data
-          const { userId, createdAt, updatedAt, storageKey, ...fileData } = file as typeof file & Record<string, unknown>;
-          // Remove legacy fields that may exist in older backups
-          delete (fileData as Record<string, unknown>).s3Key;
-          delete (fileData as Record<string, unknown>).s3Bucket;
-          delete (fileData as Record<string, unknown>).mountPointId;
+          // bytes (bitmaps → WebP), so we record the post-bridge
+          // mime/size/sha256 rather than what the backup row claimed — a backup
+          // made before this fix may carry the pre-transcode lie, and
+          // re-writing it would re-introduce the "media_type X but bytes are Y"
+          // error, and (for sha256) a FileEntry that cannot be joined to the
+          // mount blob it points at (bug 117).
+          const fileData = stripLegacyFileRowFields(file);
           await repos.files.create(
             {
               ...fileData,
               mimeType: restoredMimeType,
               size: restoredSize,
+              sha256: restoredSha256,
               storageKey: restoredStorageKey,
             },
             { id: file.id }

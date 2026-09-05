@@ -45,6 +45,44 @@ describe('qtap-schema-validator', () => {
       expect(result.errors).toHaveLength(0);
     });
 
+    it('accepts a wardrobe item in the hair slot', () => {
+      const withHair = {
+        manifest: {
+          format: 'quilltap-export',
+          version: '1.0',
+          exportType: 'characters',
+          createdAt: '2026-02-18T00:00:00.000Z',
+          appVersion: '3.0.0',
+          settings: { includeMemories: false, scope: 'selected', selectedIds: [] },
+          counts: { characters: 1 },
+        },
+        data: {
+          characters: [
+            {
+              id: '550e8400-e29b-41d4-a716-446655440000',
+              userId: '550e8400-e29b-41d4-a716-446655440001',
+              name: 'Test Character',
+              createdAt: '2026-02-18T00:00:00.000Z',
+              updatedAt: '2026-02-18T00:00:00.000Z',
+              wardrobeItems: [
+                {
+                  id: '550e8400-e29b-41d4-a716-446655440002',
+                  title: 'Braided Crown',
+                  types: ['hair'],
+                  createdAt: '2026-02-18T00:00:00.000Z',
+                  updatedAt: '2026-02-18T00:00:00.000Z',
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      const result = validateQtapExport(withHair);
+      expect(result.errors).toHaveLength(0);
+      expect(result.valid).toBe(true);
+    });
+
     it('rejects data missing manifest', () => {
       const result = validateQtapExport({ data: {} });
       expect(result.valid).toBe(false);
@@ -145,6 +183,75 @@ describe('qtap-schema-validator', () => {
       };
 
       const result = validateQtapExport(exportWithMemories);
+      expect(result.valid).toBe(true);
+    });
+
+    // Standing rule: a new data-model field must survive export/import. Both
+    // archived flags previously rode along only via `additionalProperties: true`,
+    // which validates but documents nothing — so these pin that the schema now
+    // declares them and accepts a bundle carrying them.
+    it('validates a character export carrying archived scenarios and wardrobe items', () => {
+      const exportWithArchived = {
+        manifest: {
+          format: 'quilltap-export',
+          version: '1.0',
+          exportType: 'characters',
+          createdAt: '2026-02-18T00:00:00.000Z',
+          appVersion: '4.9.0',
+          settings: {
+            includeMemories: false,
+            scope: 'selected',
+            selectedIds: ['550e8400-e29b-41d4-a716-446655440000'],
+          },
+          counts: { characters: 1 },
+        },
+        data: {
+          characters: [
+            {
+              id: '550e8400-e29b-41d4-a716-446655440000',
+              userId: '550e8400-e29b-41d4-a716-446655440001',
+              name: 'Test Character',
+              scenarios: [
+                {
+                  id: '550e8400-e29b-41d4-a716-4466554400a1',
+                  title: 'A Shelved Scene',
+                  content: 'Put away for now.',
+                  description: 'Out of season.',
+                  archived: true,
+                },
+                {
+                  id: '550e8400-e29b-41d4-a716-4466554400a2',
+                  title: 'A Live Scene',
+                  content: 'Still in circulation.',
+                },
+              ],
+              wardrobeItems: [
+                {
+                  id: '550e8400-e29b-41d4-a716-4466554400b1',
+                  title: 'Shelved hat',
+                  types: ['accessories'],
+                  archivedAt: '2026-02-01T00:00:00.000Z',
+                  createdAt: '2026-02-18T00:00:00.000Z',
+                  updatedAt: '2026-02-18T00:00:00.000Z',
+                },
+                {
+                  id: '550e8400-e29b-41d4-a716-4466554400b2',
+                  title: 'Travelling coat',
+                  types: ['top'],
+                  archivedAt: null,
+                  createdAt: '2026-02-18T00:00:00.000Z',
+                  updatedAt: '2026-02-18T00:00:00.000Z',
+                },
+              ],
+              createdAt: '2026-02-18T00:00:00.000Z',
+              updatedAt: '2026-02-18T00:00:00.000Z',
+            },
+          ],
+        },
+      };
+
+      const result = validateQtapExport(exportWithArchived);
+      expect(result.errors).toHaveLength(0);
       expect(result.valid).toBe(true);
     });
   });

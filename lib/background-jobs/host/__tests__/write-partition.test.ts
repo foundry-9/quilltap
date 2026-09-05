@@ -33,6 +33,7 @@ describe('classifyWriteTarget', () => {
     expect(classifyWriteTarget('chats.addMessage')).toBe('main');
     expect(classifyWriteTarget('memories.create')).toBe('main');
     expect(classifyWriteTarget('folders.create')).toBe('main'); // main-DB project folders, NOT docMountFolders
+    expect(classifyWriteTarget('folders.ensureByPath')).toBe('main');
     expect(classifyWriteTarget('files.create')).toBe('main');
     expect(classifyWriteTarget('embeddingStatus.markAsEmbedded')).toBe('main');
     expect(classifyWriteTarget('backgroundJobs.create')).toBe('main');

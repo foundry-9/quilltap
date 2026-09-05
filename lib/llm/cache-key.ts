@@ -33,7 +33,10 @@
 // 3 — Taboo section added to the universal portion of the system prompt
 //     (between the math note and tool instructions); see
 //     docs/developer/features/complete/taboo.md.
-export const PROMPT_CACHE_STRUCTURE_VERSION = 3
+// 4 — Standing-instructions section (project + group `instructions`) added
+//     between the Taboo section and the tool instructions; see
+//     lib/chat/context/standing-instructions.ts.
+export const PROMPT_CACHE_STRUCTURE_VERSION = 4
 
 export function buildCharacterCacheKey(characterId: string | undefined): string | undefined {
   if (!characterId) return undefined

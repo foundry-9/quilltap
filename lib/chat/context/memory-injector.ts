@@ -107,6 +107,55 @@ export function formatMemoryMetadataTag(opts: {
 }
 
 /**
+ * Whose life a memory line describes, for the SELF-facing memory blocks.
+ *
+ * A character's memory store is keyed on `characterId` alone: the same store
+ * holds what they remember about themselves and what they remember about
+ * everyone else, and `aboutCharacterId` is the only thing that tells the two
+ * apart. Every self-facing block — `## Memory Anchors`, `## Relevant
+ * Memories`, `Most relevant memories for this turn:` — is delivered under a
+ * second-person heading ("You remember the following entries that bear on this
+ * moment"), so a line about someone else, printed bare, reads as
+ * autobiography.
+ *
+ * That is bug 122: Kumar's own-memory blocks handed him "struggles to become
+ * offered mother" and "reassured Marie about her wish" — both Marion's — with
+ * no subject, and he answered the turn as Marion, fluently. Only
+ * {@link formatInterCharacterMemoriesForContext} was attributing its lines.
+ *
+ * Both fields are required rather than optional so a new call site has to
+ * decide whose store it is printing; an unattributed self-facing block is
+ * exactly the defect.
+ */
+export interface MemorySubjectContext {
+  /** The character whose store this is. Their own memories go unprefixed. */
+  selfCharacterId: string
+  /** `aboutCharacterId` → display name. Ids absent from the map still get a prefix. */
+  characterNames: ReadonlyMap<string, string>
+}
+
+/**
+ * Build the subject prefix for one self-facing memory line.
+ *
+ * Returns `''` for the character's own memories and for untargeted ones (no
+ * `aboutCharacterId` — those are about nobody in particular and read correctly
+ * in the first person). Otherwise `About <Name>: `, falling back to
+ * `About another character: ` when the id resolves to no name: the job is to
+ * break the first-person reading, and a nameless subject does that as well as
+ * a named one. Losing the name is a degraded line; losing the prefix is the
+ * bug.
+ */
+export function formatMemorySubjectPrefix(
+  aboutCharacterId: string | null | undefined,
+  subject: MemorySubjectContext,
+): string {
+  if (!aboutCharacterId) return ''
+  if (aboutCharacterId === subject.selfCharacterId) return ''
+  const name = subject.characterNames.get(aboutCharacterId)?.trim()
+  return name ? `About ${name}: ` : 'About another character: '
+}
+
+/**
  * Debug info for included memories
  */
 export interface DebugMemoryInfo {
@@ -257,12 +306,16 @@ export function formatCurrentSceneState(
 }
 
 /**
- * Format memories for injection into context
+ * Format memories for injection into context.
+ *
+ * Self-facing block: `subject` attributes any line the character holds about
+ * someone else (see {@link formatMemorySubjectPrefix}).
  */
 export function formatMemoriesForContext(
   memories: SemanticSearchResult[],
   maxTokens: number,
-  provider: Provider
+  provider: Provider,
+  subject: MemorySubjectContext
 ): FormattedMemoriesResult {
   if (memories.length === 0) {
     return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
@@ -300,7 +353,8 @@ export function formatMemoriesForContext(
       weight,
       keywords: memory.keywords,
     })
-    const memoryLine = `- [${narrative ? `${age} · ${narrative}` : age}] ${body}${meta}`
+    const prefix = formatMemorySubjectPrefix(memory.aboutCharacterId, subject)
+    const memoryLine = `- [${narrative ? `${age} · ${narrative}` : age}] ${prefix}${body}${meta}`
     const lineTokens = estimateTokens(memoryLine + '\n', provider)
 
     if (currentTokens + lineTokens > maxTokens) {
@@ -474,6 +528,7 @@ export function formatFrozenMemoryArchive(
   memories: Memory[],
   maxTokens: number,
   provider: Provider,
+  subject: MemorySubjectContext,
 ): FormattedMemoriesResult {
   if (memories.length === 0) {
     return { content: '', tokenCount: 0, memoriesUsed: 0, debugMemories: [] }
@@ -497,7 +552,11 @@ export function formatFrozenMemoryArchive(
       importance: memory.importance,
       keywords: memory.keywords,
     })
-    const memoryLine = `- ${summary}${meta}`
+    // The subject prefix is derived from `aboutCharacterId` and the name map,
+    // both of which are stable within a compaction generation — so it costs the
+    // archive none of its byte-stability.
+    const prefix = formatMemorySubjectPrefix(memory.aboutCharacterId, subject)
+    const memoryLine = `- ${prefix}${summary}${meta}`
     const lineTokens = estimateTokens(`${memoryLine}\n`, provider)
     if (currentTokens + lineTokens > maxTokens) {
       break
@@ -536,6 +595,7 @@ export function formatFrozenMemoryArchive(
 export function formatDynamicMemoryHead(
   memories: SemanticSearchResult[],
   provider: Provider,
+  subject: MemorySubjectContext,
   options: { maxTokens?: number; maxEntries?: number } = {},
 ): FormattedMemoriesResult {
   const maxTokens = options.maxTokens ?? DYNAMIC_HEAD_TOKEN_BUDGET
@@ -594,7 +654,8 @@ export function formatDynamicMemoryHead(
       keywords: memory.keywords,
       adjustments: recallAdjustment?.fired,
     })
-    const entry = `${idTag} ${whenTag} ${summary}${meta}`
+    const prefix = formatMemorySubjectPrefix(memory.aboutCharacterId, subject)
+    const entry = `${idTag} ${whenTag} ${prefix}${summary}${meta}`
     const candidateTokens = estimateTokens(`${entry}\n`, provider)
     if (currentTokens + candidateTokens > maxTokens) {
       break

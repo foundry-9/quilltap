@@ -18,14 +18,21 @@ import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { logger } from '@/lib/logger';
 import { rankMemoriesByWeight } from '@/lib/memory/memory-weighting';
-import { parseLLMJson, stripCodeFences } from '@/lib/services/ai-import.service';
-import { FIELD_SEMANTICS_PREAMBLE } from '@/lib/services/character-field-semantics';
+import { parseLLMJson, stripCodeFences } from '@/lib/llm/llm-json';
+import {
+  FIELD_SEMANTICS_PREAMBLE,
+  FULL_FIELD_SEMANTICS,
+  PROPERTIES_SEMANTICS,
+  WARDROBE_SEMANTICS,
+} from '@/lib/services/character-field-semantics';
+import { sanitizeGeneratedWardrobeItems, type GeneratedWardrobeItem } from '@/lib/wardrobe/generated-items';
 import { generateEmbeddingForUser } from '@/lib/embedding/embedding-service';
 import { getCharacterVectorStore } from '@/lib/embedding/vector-store';
 import { isEmbeddingAvailable } from '@/lib/embedding/embedding-service';
 import { writeDatabaseDocument } from '@/lib/mount-index/database-store';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { Character, CharacterScenario, CharacterSystemPrompt, Memory } from '@/lib/schemas/types';
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
 
 // ============================================================================
 // Types
@@ -33,22 +40,28 @@ import type { Character, CharacterScenario, CharacterSystemPrompt, Memory } from
 
 export interface OptimizerSuggestion {
   id: string;
-  field: 'identity' | 'description' | 'manifesto' | 'personality' | 'scenarios' | 'exampleDialogues' | 'systemPrompt' | 'physicalDescription' | 'talkativeness';
+  field: 'identity' | 'description' | 'manifesto' | 'personality' | 'scenarios' | 'exampleDialogues' | 'systemPrompt' | 'physicalDescription' | 'talkativeness' | 'wardrobeItems' | 'aliases';
   /**
-   * For an existing scenario or system prompt, the item's id. For a
-   * `physicalDescription` suggestion, the sub-field key being refined — one of
-   * `fullDescription | headAndShouldersPrompt | shortPrompt | mediumPrompt | longPrompt | completePrompt`.
+   * For an existing scenario, system prompt, or wardrobe item, the item's id.
+   * For a `physicalDescription` suggestion, the sub-field key being refined —
+   * one of `fullDescription | headAndShouldersPrompt | shortPrompt | mediumPrompt | longPrompt | completePrompt`.
    */
   subId?: string;
   subName?: string;
   title?: string;
-  /** Suggested name for a brand-new system prompt (only when no `subId`). */
+  /** Suggested name for a brand-new system prompt or wardrobe item (only when no `subId`). */
   name?: string;
   currentValue: string;
   proposedValue: string;
   rationale: string;
   significance: number;
   memoryExcerpts: string[];
+  /**
+   * Structured payload for a brand-new wardrobe item (field='wardrobeItems',
+   * no subId). `proposedValue` stays a human-readable summary for the review
+   * card; the apply step persists this object.
+   */
+  wardrobeItem?: GeneratedWardrobeItem;
 }
 
 export interface BehavioralPattern {
@@ -78,6 +91,8 @@ export type OptimizerSubStepKind =
   | 'scenario'
   | 'systemPrompt'
   | 'physicalDescription'
+  | 'wardrobe'
+  | 'properties'
   | 'newSystemPrompts';
 
 export interface OptimizerSubStep {
@@ -122,6 +137,8 @@ const SYSTEM_MESSAGE = `You are a character analysis assistant for Quilltap, a c
 Key concepts:
 - Characters can have MULTIPLE named scenarios. A scenario is a setting for a chat — it describes the environment, circumstances, and context in which an interaction takes place. Scenarios set the stage but do not fundamentally change the character's personality, voice, or behavior. Think of them as different locations or situations where the character might be encountered.
 - Characters can have MULTIPLE named system prompts. Each system prompt provides different instructions for how the AI should roleplay the character, potentially for different contexts or styles of interaction.
+- Characters have a WARDROBE of slot-typed clothing/accessory items (top, bottom, footwear, accessories, hair) that is separate from their physical description — the physical description covers only the person, nothing removable. The "hair" slot holds a hairstyle or hairdo (braided, permed, an updo, a wig) — the styling, not the hair itself; natural hair colour, length, and texture stay in the physical description.
+- Characters have structured PROPERTIES: pronouns (read-only for you) and aliases (nicknames others actually call the character).
 
 Always respond with ONLY valid JSON — no markdown code fences, no explanations, no extra text.`;
 
@@ -153,11 +170,43 @@ function coerceSuggestionText(value: unknown): string {
 }
 
 /**
- * Build character context string from character data
+ * Defensively coerce a sub-step's parsed JSON into an array of suggestions.
+ * The prompts ask for a bare JSON array, but a model periodically answers with
+ * a wrapper object (`{"suggestions": [...]}`) or, when it has exactly one
+ * amendment to offer, with a single bare suggestion object. Both parse
+ * cleanly, so the parse guard never fires — and the array operations that
+ * follow then threw a TypeError that aborted the whole optimization run,
+ * discarding every suggestion the earlier sub-steps had already produced
+ * (bug 119). Anything genuinely unusable becomes an empty array.
  */
-export function buildCharacterContext(character: Character): string {
+export function coerceSuggestionArray(value: unknown): OptimizerSuggestion[] {
+  if (Array.isArray(value)) return value as OptimizerSuggestion[];
+  if (!value || typeof value !== 'object') return [];
+  const record = value as Record<string, unknown>;
+  // A wrapper object: take the first plausibly-named array property.
+  for (const key of ['suggestions', 'items', 'results', 'data', 'amendments']) {
+    if (Array.isArray(record[key])) return record[key] as OptimizerSuggestion[];
+  }
+  // A lone suggestion object, un-arrayed. `field` is the shape's fingerprint.
+  if (typeof record.field === 'string') return [record as unknown as OptimizerSuggestion];
+  return [];
+}
+
+/**
+ * Build character context string from character data. `wardrobeItems` is the
+ * character's current wardrobe (optional — omitted in some tests); it is shown
+ * so suggestions can account for what the character already owns and wears.
+ */
+export function buildCharacterContext(character: Character, wardrobeItems?: WardrobeItem[]): string {
+  const pronounText = character.pronouns
+    ? `${character.pronouns.subject}/${character.pronouns.object}/${character.pronouns.possessive}`
+    : '(not set)';
   const parts: string[] = [
     `=== Character: ${character.name} ===`,
+    '',
+    `Title (private label; read-only): ${character.title || '(empty)'}`,
+    `Pronouns (read-only): ${pronounText}`,
+    `Aliases: ${character.aliases && character.aliases.length > 0 ? character.aliases.join(', ') : '(none)'}`,
     '',
     `Identity:`,
     character.identity || '(empty)',
@@ -175,6 +224,9 @@ export function buildCharacterContext(character: Character): string {
     character.scenarios && character.scenarios.length > 0
       ? character.scenarios.map(s => `  - ${s.title}: ${s.content}`).join('\n')
       : '(empty)',
+    '',
+    `First Message:`,
+    character.firstMessage || '(empty)',
     '',
     `Example Dialogues:`,
     character.exampleDialogues || '(empty)',
@@ -205,6 +257,24 @@ export function buildCharacterContext(character: Character): string {
     parts.push('');
   }
 
+  if (wardrobeItems && wardrobeItems.length > 0) {
+    parts.push('=== Wardrobe ===');
+    for (const item of wardrobeItems) {
+      if (item.archivedAt) continue;
+      const flags: string[] = [];
+      if (item.isDefault) flags.push('default');
+      if (item.componentItemIds && item.componentItemIds.length > 0) {
+        flags.push(`composite of ${item.componentItemIds.length} item(s)`);
+      }
+      const flagText = flags.length > 0 ? ` [${flags.join('; ')}]` : '';
+      parts.push(`[Wardrobe Item: "${item.title}" (ID: ${item.id})]${flagText}`);
+      parts.push(`  Slots: ${item.types.join(', ')}`);
+      if (item.appropriateness) parts.push(`  Appropriateness: ${item.appropriateness}`);
+      parts.push(`  Description: ${item.description || '(empty)'}`);
+    }
+    parts.push('');
+  }
+
   return parts.join('\n');
 }
 
@@ -228,7 +298,7 @@ export function buildMemoryContext(memories: Array<{ memory: Memory }>): string 
  * Get analysis prompt
  */
 export function getAnalysisPrompt(): string {
-  return `${FIELD_SEMANTICS_PREAMBLE}
+  return `${FULL_FIELD_SEMANTICS}
 
 Analyze this character's configuration alongside their most-reinforced memories. Identify 3-8 behavioral patterns that are established in the memories but not fully captured in the character's current configuration.
 
@@ -242,7 +312,9 @@ Look for:
 - Self-knowledge, motivations, beliefs the character privately holds (PERSONALITY)
 - Public-facing facts: station, occupation, reputation that strangers know on sight (IDENTITY)
 - Recurring settings or environments that might warrant refining an existing scenario (remember: a scenario describes the setting/environment of a chat, not a change in the character's personality)
-- Concrete physical/appearance details the memories establish — scars, hair, height, a habitual article of dress (these inform the physical description, not behaviour)
+- Concrete physical/appearance details the memories establish — scars, hair, height (these inform the physical description, not behaviour)
+- Habitual garments, outfits, or accessories the memories establish — a signature coat, a locket always worn (these inform the WARDROBE, never the physical description)
+- Nicknames or alternate names other characters repeatedly use for this character (these inform the ALIASES property)
 
 Respond with JSON:
 {
@@ -259,10 +331,10 @@ Respond with JSON:
 
 const SUGGESTION_SCHEMA_PREAMBLE = `Each suggestion object in the JSON array must follow this schema:
 {
-  "field": "identity|description|manifesto|personality|exampleDialogues|talkativeness|scenarios|systemPrompt|physicalDescription",
-  "subId": "ID of the existing scenario or system prompt being updated (only when refining an existing item); for a physicalDescription suggestion, the sub-field key being refined — one of fullDescription, headAndShouldersPrompt, shortPrompt, mediumPrompt, longPrompt, completePrompt",
+  "field": "identity|description|manifesto|personality|exampleDialogues|talkativeness|scenarios|systemPrompt|physicalDescription|wardrobeItems|aliases",
+  "subId": "ID of the existing scenario, system prompt, or wardrobe item being updated (only when refining an existing item); for a physicalDescription suggestion, the sub-field key being refined — one of fullDescription, headAndShouldersPrompt, shortPrompt, mediumPrompt, longPrompt, completePrompt",
   "subName": "Human-readable name of the existing sub-item, or the label of the physical sub-field (only when subId is set)",
-  "name": "Name for a NEW system prompt (only when field is 'systemPrompt' and no subId is provided)",
+  "name": "Name for a NEW system prompt or wardrobe item (only when no subId is provided)",
   "currentValue": "The current text of the field/item being changed",
   "proposedValue": "The complete new text for the field/item",
   "rationale": "Why this change is suggested, referencing specific behavioral patterns",
@@ -275,6 +347,7 @@ Rules that apply to every suggestion:
 - Include 1-3 memory excerpts that support the suggestion.
 - Only propose changes that are meaningfully different from the current value.
 - Preserve the character's existing voice and style while incorporating the behavioral patterns.
+- Keep each field's form of address exactly as its definition states, even when the current value gets it wrong elsewhere: manifesto, personality, and system prompts speak TO the character ("You keep your worry behind your teeth"); identity and description speak ABOUT the character from outside ("She finishes other people's sentences"); physical-description sub-fields are bare noun phrases ("auburn hair cut short; grey eyes"). Never flip a field from one form to another while rewording it.
 - Do NOT propose brand-new scenarios. Existing scenarios may be refined, but creating new scenarios is out of scope.
 - Scenarios describe "where and when" (setting, environment, circumstances). They should not alter the character's personality, voice, or core behavior unless the environment itself demands it.`;
 
@@ -302,7 +375,7 @@ The vantage-point rule is strict:
 - A suggestion for MANIFESTO should be rare and high-stakes — propose manifesto changes only when the memory contradicts a basic tenet, not for tonal or stylistic improvements. Manifesto edits reverberate across every other field.
 - A suggestion for PERSONALITY must reflect the character's own self-knowledge and inner drivers. Never put outward behavior someone else would observe here, and never put public-facing identity facts.
 - Do NOT propose the same content under two different fields. Pick the one whose vantage point matches.
-- Do NOT suggest edits to title, scenarios, system prompts, or the physical description in this response — those are out of scope for this pass (they are each handled by their own dedicated passes).
+- Do NOT suggest edits to title, scenarios, system prompts, the physical description, the wardrobe, or aliases in this response — those are out of scope for this pass (title is never editable here; the rest are each handled by their own dedicated passes).
 
 If you see nothing worth changing in the general fields, respond with an empty JSON array.
 
@@ -435,6 +508,76 @@ Additional rules specific to physical-description refinement:
 - proposedValue must be the complete new text for that sub-field.
 - Keep the image prompts (headAndShoulders/short/medium/long/complete) in the comma-or-phrase style image models expect; keep fullDescription in prose.
 - For headAndShouldersPrompt specifically: describe ONLY what a head-and-shoulders crop shows (face, hair, expression, neckline, visible upper attire). Never describe breasts, torso, waist, hips, legs, or any anatomy below the shoulders.
+
+Respond with a JSON array of suggestion objects (may be empty).`;
+}
+
+/**
+ * Suggestions prompt scoped to the character's wardrobe. Two kinds of
+ * suggestions: refining an existing item's description, and proposing a
+ * brand-new item the memories establish (a habitual garment, an acquired
+ * accessory). New items carry a structured `wardrobeItem` payload; the apply
+ * step persists it via the wardrobe API.
+ */
+export function getWardrobeSuggestionPrompt(
+  analysis: OptimizerAnalysis,
+  wardrobeItems: WardrobeItem[],
+): string {
+  const activeItems = wardrobeItems.filter((item) => !item.archivedAt);
+  return `${WARDROBE_SEMANTICS}
+
+Focus solely on the character's WARDROBE (shown in the character context above). Decide whether the memories establish anything about what the character habitually wears that the wardrobe does not yet capture. This is about removable things — clothing, outfits, accessories, and hairstyles. A bodily feature (scar, tattoo, fur) belongs to the physical description and must NEVER become a wardrobe item — with one deliberate exception: a hairSTYLE goes in the wardrobe's "hair" slot, while the hair's natural colour, length, and texture stay in the physical description.
+
+Two kinds of suggestions are allowed:
+
+1. REFINE an existing item's description. Set field="wardrobeItems" and subId to the item's ID (from the character context), subName to its title, currentValue to its existing description verbatim, and proposedValue to the complete new description.
+2. ADD a new item the memories genuinely establish — a signature garment or accessory that appears repeatedly. Set field="wardrobeItems", omit subId, set name to the item's title, currentValue to the empty string, proposedValue to a one-or-two-sentence human-readable summary of the item, and include a "wardrobeItem" object:
+   "wardrobeItem": {
+     "title": "Short descriptive name",
+     "description": "A sentence or two describing the item's appearance",
+     "imagePrompt": "Terse literal visual cue for image generation (optional)",
+     "types": ["top"],
+     "appropriateness": "casual, everyday",
+     "isDefault": false
+   }
+   Valid slot types: "top", "bottom", "footwear", "accessories", "hair"; a single garment may cover several slots (a dress is ["top","bottom"]; a braided updo is ["hair"]).
+
+The character currently has ${activeItems.length} wardrobe item(s). Only propose what the memories genuinely support; if they reveal nothing about the character's clothing or accessories, respond with an empty JSON array — this is the common case. Never propose deleting items.
+
+=== Behavioural Analysis ===
+${JSON.stringify(analysis, null, 2)}
+
+${SUGGESTION_SCHEMA_PREAMBLE}
+
+Respond with a JSON array of suggestion objects (may be empty).`;
+}
+
+/**
+ * Suggestions prompt scoped to the character's properties. Only alias
+ * ADDITIONS may be proposed; pronouns are read-only context for the optimizer.
+ */
+export function getPropertiesSuggestionPrompt(
+  analysis: OptimizerAnalysis,
+  character: Character,
+): string {
+  const aliases = character.aliases ?? [];
+  return `${PROPERTIES_SEMANTICS}
+
+Focus solely on the character's ALIASES. Current aliases: ${aliases.length > 0 ? aliases.join(', ') : '(none)'}.
+
+Decide whether the memories establish nicknames or alternate names that other characters repeatedly use for this character and that are missing from the alias list. Propose at most 3 additions — one suggestion per alias:
+- Set field="aliases".
+- currentValue is the current alias list joined with commas (or the empty string when there are none).
+- proposedValue is the single new alias to add, exactly as others use it.
+- Do NOT propose removing or renaming existing aliases, do NOT propose the character's primary name or their title/epithet, and do NOT propose one-off forms of address that only appeared once.
+- Pronouns are read-only context for you — never propose pronoun changes.
+
+If the memories establish no new aliases, respond with an empty JSON array — this is the common case.
+
+=== Behavioural Analysis ===
+${JSON.stringify(analysis, null, 2)}
+
+${SUGGESTION_SCHEMA_PREAMBLE}
 
 Respond with a JSON array of suggestion objects (may be empty).`;
 }
@@ -665,8 +808,10 @@ export async function runCharacterOptimizer(
     // Create LLM provider
     const provider = await createLLMProvider(profile.provider, profile.baseUrl || undefined);
 
-    // Build context strings
-    const characterContext = buildCharacterContext(character);
+    // Build context strings (wardrobe rides along so every pass can see what
+    // the character already owns and wears)
+    const wardrobeItems = await repos.wardrobe.findByCharacterId(characterId);
+    const characterContext = buildCharacterContext(character, wardrobeItems);
     const memoryContext = buildMemoryContext(qualifyingMemories);
 
     // Call LLM for analysis
@@ -751,13 +896,15 @@ export async function runCharacterOptimizer(
         label: `System prompt: ${p.name}`,
       })),
       { kind: 'physicalDescription', label: 'Physical description' },
+      { kind: 'wardrobe', label: 'Wardrobe' },
+      { kind: 'properties', label: 'Aliases' },
       { kind: 'newSystemPrompts', label: 'Proposed new system prompts' },
     ];
     const totalSubSteps = subSteps.length;
     let subStepIndex = 0;
     const allSuggestions: OptimizerSuggestion[] = [];
 
-    const runSubStep = async (
+    const runSubStepCore = async (
       kind: OptimizerSubStepKind,
       label: string,
       instruction: string,
@@ -794,7 +941,16 @@ export async function runCharacterOptimizer(
 
       let parsed: OptimizerSuggestion[] = [];
       try {
-        parsed = parseLLMJson<OptimizerSuggestion[]>(raw);
+        const rawParsed = parseLLMJson<unknown>(raw);
+        parsed = coerceSuggestionArray(rawParsed);
+        if (!Array.isArray(rawParsed)) {
+          logger.warn('[CharacterOptimizer] Sub-step answered with a non-array; coerced', {
+            characterId,
+            subStep: label,
+            parsedType: Array.isArray(rawParsed) ? 'array' : typeof rawParsed,
+            recovered: parsed.length,
+          });
+        }
       } catch (parseError) {
         logger.warn('[CharacterOptimizer] Sub-step produced unparseable JSON; skipping', {
           characterId,
@@ -822,7 +978,15 @@ export async function runCharacterOptimizer(
           memoryExcerpts: Array.isArray(s.memoryExcerpts)
             ? s.memoryExcerpts.map(coerceSuggestionText)
             : [],
-        }));
+          // A brand-new wardrobe item must carry a valid structured payload;
+          // sanitize it (slot types, coerced flags) and let the filter below
+          // drop the suggestion if nothing survives.
+          wardrobeItem:
+            s.field === 'wardrobeItems' && !s.subId && s.wardrobeItem
+              ? sanitizeGeneratedWardrobeItems([s.wardrobeItem])[0]
+              : undefined,
+        }))
+        .filter((s) => !(s.field === 'wardrobeItems' && !s.subId && !s.wardrobeItem));
 
       allSuggestions.push(...filtered);
 
@@ -861,6 +1025,30 @@ export async function runCharacterOptimizer(
       });
     };
 
+    /**
+     * One misbehaving sub-step must never cost the run. Every sub-step is a
+     * self-contained pass whose only output is appended to `allSuggestions`,
+     * so an unexpected throw is logged and skipped rather than aborting the
+     * whole optimization and discarding the suggestions already gathered
+     * (bug 119).
+     */
+    const runSubStep = async (
+      kind: OptimizerSubStepKind,
+      label: string,
+      instruction: string,
+    ): Promise<void> => {
+      try {
+        await runSubStepCore(kind, label, instruction);
+      } catch (subStepError) {
+        logger.error(
+          '[CharacterOptimizer] Sub-step failed unexpectedly; continuing',
+          { characterId, subStep: label },
+          subStepError instanceof Error ? subStepError : undefined,
+        );
+        onProgress({ type: 'substep_complete', step: 'generating', partialSuggestions: [] });
+      }
+    };
+
     await runSubStep(
       'general',
       'General fields',
@@ -887,6 +1075,18 @@ export async function runCharacterOptimizer(
       'physicalDescription',
       'Physical description',
       getPhysicalDescriptionSuggestionPrompt(analysis, character.physicalDescription ?? null),
+    );
+
+    await runSubStep(
+      'wardrobe',
+      'Wardrobe',
+      getWardrobeSuggestionPrompt(analysis, wardrobeItems),
+    );
+
+    await runSubStep(
+      'properties',
+      'Aliases',
+      getPropertiesSuggestionPrompt(analysis, character),
     );
 
     await runSubStep(
@@ -1107,6 +1307,8 @@ function groupSuggestionsForReport(suggestions: OptimizerSuggestion[]): Suggesti
   const promptUpdates: OptimizerSuggestion[] = [];
   const promptNew: OptimizerSuggestion[] = [];
   const physical: OptimizerSuggestion[] = [];
+  const wardrobe: OptimizerSuggestion[] = [];
+  const aliases: OptimizerSuggestion[] = [];
   const other: OptimizerSuggestion[] = [];
 
   for (const s of suggestions) {
@@ -1117,6 +1319,10 @@ function groupSuggestionsForReport(suggestions: OptimizerSuggestion[]): Suggesti
       (s.subId ? promptUpdates : promptNew).push(s);
     } else if (s.field === 'physicalDescription') {
       physical.push(s);
+    } else if (s.field === 'wardrobeItems') {
+      wardrobe.push(s);
+    } else if (s.field === 'aliases') {
+      aliases.push(s);
     } else if (
       s.field === 'identity' ||
       s.field === 'description' ||
@@ -1135,6 +1341,8 @@ function groupSuggestionsForReport(suggestions: OptimizerSuggestion[]): Suggesti
   if (general.length > 0) groups.push({ heading: 'General Fields', items: general });
   if (scenarioUpdates.length > 0) groups.push({ heading: 'Scenario Refinements', items: scenarioUpdates });
   if (physical.length > 0) groups.push({ heading: 'Physical Description', items: physical });
+  if (wardrobe.length > 0) groups.push({ heading: 'Wardrobe', items: wardrobe });
+  if (aliases.length > 0) groups.push({ heading: 'Aliases', items: aliases });
   if (promptUpdates.length > 0) groups.push({ heading: 'System Prompt Refinements', items: promptUpdates });
   if (promptNew.length > 0) groups.push({ heading: 'Proposed New System Prompts', items: promptNew });
   if (other.length > 0) groups.push({ heading: 'Other', items: other });
@@ -1151,6 +1359,13 @@ function describeSuggestion(s: OptimizerSuggestion): string {
   }
   if (s.field === 'physicalDescription') {
     return `Physical description${s.subName ? `: ${s.subName}` : ''}`;
+  }
+  if (s.field === 'wardrobeItems') {
+    if (s.subId) return `Wardrobe item: ${s.subName ?? s.subId}`;
+    return `New wardrobe item${s.name ? `: ${s.name}` : ''}`;
+  }
+  if (s.field === 'aliases') {
+    return `New alias${s.proposedValue ? `: ${s.proposedValue}` : ''}`;
   }
   switch (s.field) {
     case 'identity':

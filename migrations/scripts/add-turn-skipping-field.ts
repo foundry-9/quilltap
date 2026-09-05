@@ -15,9 +15,9 @@ import type { Migration, MigrationResult } from '../types';
 import { logger } from '../lib/logger';
 import {
   isSQLiteBackend,
-  getSQLiteDatabase,
   sqliteTableExists,
-  getSQLiteTableColumns,
+  sqliteColumnExists,
+  addColumnIfMissing,
 } from '../lib/database-utils';
 
 export const addTurnSkippingFieldMigration: Migration = {
@@ -35,8 +35,7 @@ export const addTurnSkippingFieldMigration: Migration = {
       return false;
     }
 
-    const chatCols = getSQLiteTableColumns('chats').map((c) => c.name);
-    return !chatCols.includes('turnSkippingEnabled');
+    return !sqliteColumnExists('chats', 'turnSkippingEnabled');
   },
 
   async run(): Promise<MigrationResult> {
@@ -44,11 +43,7 @@ export const addTurnSkippingFieldMigration: Migration = {
     let columnsAdded = 0;
 
     try {
-      const db = getSQLiteDatabase();
-
-      const chatCols = getSQLiteTableColumns('chats').map((c) => c.name);
-      if (!chatCols.includes('turnSkippingEnabled')) {
-        db.exec(`ALTER TABLE "chats" ADD COLUMN "turnSkippingEnabled" INTEGER DEFAULT NULL`);
+      if (addColumnIfMissing('chats', 'turnSkippingEnabled', 'INTEGER DEFAULT NULL')) {
         columnsAdded++;
       }
 

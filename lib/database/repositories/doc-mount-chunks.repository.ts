@@ -14,13 +14,35 @@
  */
 
 import { logger } from '@/lib/logger';
-import { DocMountChunk, DocMountChunkSchema } from '@/lib/schemas/mount-index.types';
+import {
+  DocMountChunk,
+  DocMountChunkSchema,
+  EDITABLE_TEXT_FILE_TYPES,
+} from '@/lib/schemas/mount-index.types';
 import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { DatabaseCollection, TypedQueryFilter } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawMountIndexDatabase, isMountIndexDegraded } from '../backends/sqlite/mount-index-client';
-import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { requireMountIndexDb } from '../backends/sqlite/mount-index-guard';
+import { generateDDL, classifySchemaColumns } from '../schema-translator';
 import { invalidateMountPoint } from '@/lib/mount-index/mount-chunk-cache';
+import { LIKE_ESCAPE_CHAR, likeContainsPattern } from './like-escape';
+
+/**
+ * A chunk matched by {@link DocMountChunksRepository.searchContent}, already
+ * joined to its link row so the caller can render the document's location
+ * without a second lookup. One row per document, not per chunk.
+ */
+export interface DocMountChunkTextMatch {
+  linkId: string;
+  mountPointId: string;
+  relativePath: string;
+  fileName: string;
+  updatedAt: string;
+  chunkIndex: number;
+  content: string;
+  headingContext: string | null;
+}
 
 export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChunk> {
   private mountIndexCollectionInitialized = false;
@@ -30,14 +52,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
   }
 
   protected async getCollection(): Promise<DatabaseCollection<DocMountChunk>> {
-    if (isMountIndexDegraded()) {
-      throw new Error('Mount index database is in degraded mode');
-    }
-
-    const db = getRawMountIndexDatabase();
-    if (!db) {
-      throw new Error('Mount index database not initialized');
-    }
+    const db = requireMountIndexDb();
 
     if (!this.mountIndexCollectionInitialized) {
       try {
@@ -64,16 +79,7 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
       }
     }
 
-    const metadata = extractSchemaMetadata(this.collectionName, this.schema);
-    const jsonColumns = metadata.fields
-      .filter(f => f.type === 'array' || f.type === 'object')
-      .map(f => f.name);
-    const arrayColumns = metadata.fields
-      .filter(f => f.type === 'array')
-      .map(f => f.name);
-    const booleanColumns = metadata.fields
-      .filter(f => f.type === 'boolean')
-      .map(f => f.name);
+    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
 
     // Float32 BLOBs in the embedding column need explicit blob-column
     // handling so they're deserialized to Float32Array instead of being
@@ -170,6 +176,73 @@ export class DocMountChunksRepository extends AbstractBaseRepository<DocMountChu
       'Error counting embedded chunks by mount point IDs',
       { mountPointIdCount: mountPointIds.length },
       result
+    );
+  }
+
+  /**
+   * Substring-search chunk text across a set of mount points, returning one
+   * row per matching document (the lowest-index matching chunk). Powers the
+   * content half of the global search bar's Documents chip
+   * ({@link ../../mount-index/document-text-search}).
+   *
+   * The `GROUP BY c.linkId` with `MIN(c.chunkIndex)` relies on SQLite's
+   * documented bare-column rule: when a query has a single `min()`/`max()`
+   * aggregate, the bare columns come from the row that produced it — so
+   * `content` and `headingContext` belong to the earliest matching chunk, not
+   * an arbitrary one. `l.*` columns are constant within a group (the join is
+   * 1:1 on linkId).
+   *
+   * Scoped to {@link EDITABLE_TEXT_FILE_TYPES} to match
+   * `searchByNameOrPath`; `%`/`_` in the user's query are escaped so they
+   * match literally, and `LIMIT` caps the scan.
+   */
+  async searchContent(
+    query: string,
+    mountPointIds: string[],
+    limit: number
+  ): Promise<DocMountChunkTextMatch[]> {
+    if (mountPointIds.length === 0 || query.length === 0) return [];
+    return this.safeQuery(
+      async () => {
+        if (isMountIndexDegraded()) return [];
+        const db = getRawMountIndexDatabase();
+        if (!db) return [];
+        await this.getCollection();
+
+        const placeholders = mountPointIds.map(() => '?').join(',');
+        const typePlaceholders = EDITABLE_TEXT_FILE_TYPES.map(() => '?').join(',');
+        const pattern = likeContainsPattern(query);
+
+        const rows = db.prepare(
+          `SELECT c.linkId AS linkId,
+                  MIN(c.chunkIndex) AS chunkIndex,
+                  c.content AS content,
+                  c.headingContext AS headingContext,
+                  l.mountPointId AS mountPointId,
+                  l.relativePath AS relativePath,
+                  l.fileName AS fileName,
+                  l.updatedAt AS updatedAt
+             FROM doc_mount_chunks c
+             JOIN doc_mount_file_links l ON l.id = c.linkId
+             JOIN doc_mount_files f ON f.id = l.fileId
+            WHERE c.mountPointId IN (${placeholders})
+              AND f.fileType IN (${typePlaceholders})
+              AND LOWER(c.content) LIKE ? ESCAPE '${LIKE_ESCAPE_CHAR}'
+            GROUP BY c.linkId
+            ORDER BY l.updatedAt DESC
+            LIMIT ?`
+        ).all(
+          ...mountPointIds,
+          ...EDITABLE_TEXT_FILE_TYPES,
+          pattern,
+          limit
+        ) as DocMountChunkTextMatch[];
+
+        return rows;
+      },
+      'Error searching chunk content',
+      { mountPointIdCount: mountPointIds.length, queryLength: query.length },
+      []
     );
   }
 

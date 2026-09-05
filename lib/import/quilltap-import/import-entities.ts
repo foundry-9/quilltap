@@ -19,7 +19,7 @@ import type {
   Project,
   Group,
 } from '@/lib/schemas/types';
-import type { ImportOptions, IdMappingState, ImportCounts } from './types';
+import { type ImportOptions, type IdMappingState, type ImportCounts, getPreserveIdsCreateOptions } from './types';
 
 const moduleLogger = logger.child({ module: 'import:quilltap-import-service' });
 
@@ -28,7 +28,8 @@ export async function importTags(
   tags: Tag[],
   options: ImportOptions,
   idMaps: IdMappingState,
-  repos: ReturnType<typeof getUserRepositories>
+  repos: ReturnType<typeof getUserRepositories>,
+  warnings: string[]
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
@@ -63,13 +64,16 @@ export async function importTags(
 
       const { id: _, userId: __, createdAt, updatedAt, ...tagData } = tag;
       const createData = options.preserveIds ? { ...tagData, id: tag.id } : tagData;
-      const createOptions = options.preserveIds ? { id: tag.id } : undefined;
-      const newTag = options.preserveIds
-        ? await repos.tags.create(createData, createOptions)
-        : await repos.tags.create(createData);
+      const createOptions = getPreserveIdsCreateOptions(tag.id, options);
+      const newTag = await repos.tags.create(createData, createOptions);
       idMaps.tags.set(tag.id, newTag.id);
       imported++;
     } catch (error) {
+      warnings.push(
+        `Failed to import tag "${tag.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       moduleLogger.warn('Failed to import tag', {
         tagId: tag.id,
         error: error instanceof Error ? error.message : String(error),
@@ -85,7 +89,8 @@ export async function importRoleplayTemplates(
   templates: RoleplayTemplate[],
   options: ImportOptions,
   idMaps: IdMappingState,
-  globalRepos: ReturnType<typeof getRepositories>
+  globalRepos: ReturnType<typeof getRepositories>,
+  warnings: string[]
 ): Promise<ImportCounts> {
   let imported = 0;
   let skipped = 0;
@@ -154,19 +159,19 @@ export async function importRoleplayTemplates(
 
       const { id: _, createdAt, updatedAt, ...templateData } = template;
       const createData = options.preserveIds ? { ...templateData, id: template.id } : templateData;
-      const createOptions = options.preserveIds ? { id: template.id } : undefined;
-      const newTemplate = options.preserveIds
-        ? await globalRepos.roleplayTemplates.create({
-            ...createData,
-            userId,
-          }, createOptions)
-        : await globalRepos.roleplayTemplates.create({
-            ...createData,
-            userId,
-          });
+      const createOptions = getPreserveIdsCreateOptions(template.id, options);
+      const newTemplate = await globalRepos.roleplayTemplates.create(
+        { ...createData, userId },
+        createOptions
+      );
       idMaps.roleplayTemplates.set(template.id, newTemplate.id);
       imported++;
     } catch (error) {
+      warnings.push(
+        `Failed to import roleplay template "${template.name}": ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
       moduleLogger.warn('Failed to import roleplay template', {
         templateId: template.id,
         error: error instanceof Error ? error.message : String(error),
@@ -224,10 +229,8 @@ export async function importProjects(
       // fresh values and provisions a new store.
       const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...projectData } = project;
       const createData = options.preserveIds ? { ...projectData, id: project.id } : projectData;
-      const createOptions = options.preserveIds ? { id: project.id } : undefined;
-      const newProject = options.preserveIds
-        ? await repos.projects.create(createData, createOptions)
-        : await repos.projects.create(createData);
+      const createOptions = getPreserveIdsCreateOptions(project.id, options);
+      const newProject = await repos.projects.create(createData, createOptions);
       idMaps.projects.set(project.id, newProject.id);
       imported++;
     } catch (error) {
@@ -291,10 +294,8 @@ export async function importGroups(
       // generates fresh values and provisions a new store.
       const { id: _, createdAt, updatedAt, officialMountPointId: ___, ...groupData } = group;
       const createData = options.preserveIds ? { ...groupData, id: group.id } : groupData;
-      const createOptions = options.preserveIds ? { id: group.id } : undefined;
-      const newGroup = options.preserveIds
-        ? await repos.groups.create(createData, createOptions)
-        : await repos.groups.create(createData);
+      const createOptions = getPreserveIdsCreateOptions(group.id, options);
+      const newGroup = await repos.groups.create(createData, createOptions);
       idMaps.groups.set(group.id, newGroup.id);
       imported++;
     } catch (error) {
@@ -370,10 +371,8 @@ export async function importChats(
 
       const { id: _, userId: __, messages: _msgs, createdAt, updatedAt, ...chatData } = chat;
       const createData = options.preserveIds ? { ...chatData, id: chat.id } : chatData;
-      const createOptions = options.preserveIds ? { id: chat.id } : undefined;
-      const newChat = options.preserveIds
-        ? await repos.chats.create(createData, createOptions)
-        : await repos.chats.create(createData);
+      const createOptions = getPreserveIdsCreateOptions(chat.id, options);
+      const newChat = await repos.chats.create(createData, createOptions);
       idMaps.chats.set(chat.id, newChat.id);
 
       // Add messages
@@ -487,7 +486,7 @@ export async function importMemories(
       // The orchestrator enqueues an EMBEDDING_GENERATE per created row.
       const { id: _, createdAt, updatedAt, embedding: _embedding, ...memoryData } = memory;
       const createData = options.preserveIds ? { ...memoryData, id: memory.id } : memoryData;
-      const createOptions = options.preserveIds ? { id: memory.id } : undefined;
+      const createOptions = getPreserveIdsCreateOptions(memory.id, options);
       const payload = {
         ...createData,
         characterId: newCharacterId,
@@ -496,9 +495,7 @@ export async function importMemories(
         projectId: newProjectId,
         tags: newTags,
       };
-      const created = options.preserveIds
-        ? await repos.memories.create(payload, createOptions)
-        : await repos.memories.create(payload);
+      const created = await repos.memories.create(payload, createOptions);
       createdIds.push({ id: created.id, characterId: newCharacterId });
       imported++;
     } catch (error) {

@@ -23,11 +23,10 @@
 import { getErrorMessage } from '@/lib/error-utils';
 import { withTimeout } from '@/lib/promise-timeout';
 import { getRepositories } from '@/lib/repositories/factory';
-import { getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
-import { buildCheapLLMConfig } from '@/lib/wardrobe/apply-outfit-selections';
+import { buildCheapLLMConfig, getCheapLLMProvider, resolveUncensoredCheapLLMSelection } from '@/lib/llm/cheap-llm';
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { MAX_LLM_OUTPUT_LENGTH } from './custom-tool.types';
 import type { LlmInvokeOptions, LlmInvoker, LlmInvokeResult } from './custom-tools';
 
@@ -91,7 +90,7 @@ async function consult(
   let selection = getCheapLLMProvider(profiles[0], config, profiles);
 
   const resolvedDanger = resolveDangerousContentSettings(chatSettings, chat ?? undefined);
-  const dangerous = isChatActiveDangerous(chat);
+  const dangerous = shouldUseUncensoredRoute(chat);
   if (dangerous) {
     selection = resolveUncensoredCheapLLMSelection(selection, true, resolvedDanger.settings, profiles);
   }

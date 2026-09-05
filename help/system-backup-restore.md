@@ -22,7 +22,8 @@ A complete backup includes everything needed to recreate your Quilltap environme
 - All folder structures you've created
 - Projects and their settings
 - Character groups — the whole fellowship preserved intact: each group's roster of members, its description and instructions, its scenarios and linked knowledge stores. (Time was, a restored archive returned your characters as so many strangers, every association between them quietly mislaid; that oversight has been set right, and a group now travels with its membership and its stores entire.)
-- Wardrobe items and outfit presets
+- Wardrobe items — every garment, every composite outfit, and the dressing instructions a wardrobe may keep for a character who dresses themselves
+- Your document stores entire (the Scriptorium): the mount points, their folders and files, the text of every document, and the pictures and PDFs kept alongside. This is the trunk a great deal of your work travels in — a character's vault, a project's papers, its scenarios and its wardrobe are all documents in a store, and they are packed with it.
 
 **Profiles & Settings**
 - Connection profiles (API key references — keys need re-entry after restore)
@@ -58,6 +59,7 @@ Certain data is intentionally excluded from backups:
 - **Nothing about your search indexes, ordinarily** — a full backup carries every embedding and search index intact, so semantic search is working the moment a restore finishes. This is precisely why a backup is not the same article as a portable `.qtap` export, which leaves embeddings behind on purpose. Tick **Compact backup** and the indexes are the one thing left out; see below.
 - **Background jobs** — any in-flight or queued tasks (embedding generation, memory extraction, etc.) are not preserved. They will be re-triggered as needed.
 - **Built-in plugins** — these ship with Quilltap and do not need backing up.
+- **The help pages you are reading** — they ship with the application and are re-read from disk whenever a page changes, so an archived copy could only hold you to yesterday's wording. Their search index is rebuilt with them.
 - **Cached provider model lists** — while included in backups for convenience, these are refreshed automatically from your providers.
 
 ## Creating a Backup
@@ -182,6 +184,31 @@ Three outcomes, all reported in the restore summary:
 
 A compact backup always takes the second road, by design — it brought no indexes
 to inspect.
+
+## Restoring an Older Backup
+
+An archive is a photograph of an evening, and it can only show what was in the
+room at the time. A backup made before some setting existed carries no opinion
+about it, and Quilltap must decide what such a silence means.
+
+It now decides the way it decides on an upgrade: by asking what the profile
+*would* have been given, rather than by taking whatever value happens to sit at
+the head of the column. Two settings on your connection profiles are in this
+position, and both used to come back wrong.
+
+- **Announce the speaker in multi-character scenes.** An archive older than the
+  checkbox returns with the matter left open, so the provider's own good sense
+  settles it — unticked for Anthropic, which refuses the `[Name]` prefill
+  outright, ticked elsewhere. Previously such a profile came back with the box
+  ticked regardless, and an Anthropic profile so restored would decline every
+  turn in a crowded room until you found the box yourself.
+- **Supports image attachments.** An archive older than *that* checkbox returns
+  with the capability its provider had in those days, rather than with the
+  capability switched off across the board.
+
+A setting the archive *does* carry is never second-guessed, and this holds
+whether the data arrives as a backup or as a `.qtap` bundle — the two doors now
+open onto the same room.
 
 ## Restore Modes Explained
 

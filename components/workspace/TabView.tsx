@@ -13,11 +13,13 @@
  */
 
 import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type {
   WorkspaceTab,
   SalonTabPayload,
   SettingsTabPayload,
 } from '@/lib/workspace/types'
+import { tabActivationQueryKeys } from '@/lib/workspace/tab-refetch'
 import { HomeViewContainer } from '@/components/homepage/HomeViewContainer'
 import { SalonView } from '@/app/salon/[id]/SalonView'
 import { SalonListView } from '@/app/salon/SalonListView'
@@ -29,7 +31,11 @@ import { FilesView } from '@/app/files/FilesView'
 import { PhotosView } from '@/app/photos/PhotosView'
 import { ScenariosView } from '@/app/scenarios/ScenariosView'
 import { TerminalView, DocumentView } from '@/components/workspace/TerminalDocumentViews'
-import { WorkspaceTabProvider } from '@/components/workspace/workspace-tab-context'
+import {
+  WorkspaceTabProvider,
+  WorkspaceTabVisibilityProvider,
+  useOnTabActivated,
+} from '@/components/workspace/workspace-tab-context'
 import { TabToolbarProvider } from '@/components/workspace/tab-toolbar'
 import { BrahmaConsoleView } from '@/components/brahma-console/BrahmaConsoleView'
 import { WardrobeView } from '@/components/wardrobe/wardrobe-control-dialog'
@@ -133,7 +139,33 @@ function renderView(tab: WorkspaceTab) {
   }
 }
 
-export function TabView({ tab, active }: { tab: WorkspaceTab; active: boolean }) {
+/**
+ * Refreshes a tab's TanStack Query reads when the tab is navigated back to.
+ * The kind→key-prefixes map lives in `lib/workspace/tab-refetch.ts`; views
+ * that fetch outside TanStack Query re-run their own loads via
+ * `useOnTabActivated` instead.
+ */
+function TabActivationInvalidator({ tab }: { tab: WorkspaceTab }) {
+  const queryClient = useQueryClient()
+  useOnTabActivated(() => {
+    for (const queryKey of tabActivationQueryKeys(tab)) {
+      void queryClient.invalidateQueries({ queryKey })
+    }
+  })
+  return null
+}
+
+export function TabView({
+  tab,
+  active,
+  visible,
+}: {
+  tab: WorkspaceTab
+  active: boolean
+  /** The tab is its pane's active tab (actually on screen — `active` also
+   * covers a hidden Salon mounted only to portal into a child tab). */
+  visible: boolean
+}) {
   // Latch: mount on first activation, never unmount thereafter. Adjusting state
   // during render is React's sanctioned pattern for deriving from a prop
   // without an effect (re-renders immediately, nothing is committed in between).
@@ -145,7 +177,12 @@ export function TabView({ tab, active }: { tab: WorkspaceTab; active: boolean })
   if (!everActive) return null
   return (
     <WorkspaceTabProvider tabId={tab.id}>
-      <TabToolbarProvider tabId={tab.id}>{renderView(tab)}</TabToolbarProvider>
+      <WorkspaceTabVisibilityProvider visible={visible}>
+        <TabToolbarProvider tabId={tab.id}>
+          <TabActivationInvalidator tab={tab} />
+          {renderView(tab)}
+        </TabToolbarProvider>
+      </WorkspaceTabVisibilityProvider>
     </WorkspaceTabProvider>
   )
 }

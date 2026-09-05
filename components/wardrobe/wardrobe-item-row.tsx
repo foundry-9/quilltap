@@ -13,13 +13,17 @@
  *    targets the item's only slot directly; for multi-slot items it opens
  *    a small popover that lets the user pick.
  *  - `⋮` kebab menu with secondary actions: Edit, toggle the default-outfit
- *    flag, Duplicate, Move, Copy, and Delete.
+ *    flag, Duplicate, Move, Copy, and Delete. Which of these appear is
+ *    governed by the `canManage` predicate: items living in the container
+ *    being browsed get the full set, items merged in from another shared
+ *    tier keep only Move and Copy.
  *
  * Composite items keep a `▶/▼` expander on the left so the user can peek at
  * the components without entering the editor.
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 
 interface WardrobeItemRowProps {
@@ -28,6 +32,14 @@ interface WardrobeItemRowProps {
   allItems: WardrobeItem[]
   /** When set, equip controls are visible. */
   inChat: boolean
+  /**
+   * Whether an item can be managed (edited / starred / duplicated / deleted)
+   * from the current view — true when the item lives in the container being
+   * browsed, false when it was merged in from a shared tier elsewhere. Items
+   * failing this check keep only Move and Copy, and are badged `· shared`.
+   * Defaults to the character-view rule: manageable iff character-owned.
+   */
+  canManage?: (item: WardrobeItem) => boolean
   /** Label for the equip-replace button. Defaults to "Wear". */
   equipLabel?: string
   /**
@@ -42,30 +54,23 @@ interface WardrobeItemRowProps {
   onMove: (item: WardrobeItem) => void
   onCopy: (item: WardrobeItem) => void
   onDelete: (item: WardrobeItem) => void
+  /**
+   * Archive an active garment, or restore an archived one. Optional — a
+   * surface that can't archive (the outfit composer) simply omits it and the
+   * menu entry doesn't render.
+   */
+  onToggleArchived?: (item: WardrobeItem) => void
   onEquip?: (item: WardrobeItem) => void
   onAddToSlot?: (item: WardrobeItem, slot: WardrobeItemType) => void
   /** Nesting depth for composite components — used for indentation. */
   depth?: number
 }
 
-const TYPE_BADGE_CLASS: Record<WardrobeItemType, string> = {
-  top: 'qt-badge-wardrobe-top',
-  bottom: 'qt-badge-wardrobe-bottom',
-  footwear: 'qt-badge-wardrobe-footwear',
-  accessories: 'qt-badge-wardrobe-accessories',
-}
-
-const SLOT_LABEL: Record<WardrobeItemType, string> = {
-  top: 'Top',
-  bottom: 'Bottom',
-  footwear: 'Footwear',
-  accessories: 'Accessories',
-}
-
 export function WardrobeItemRow({
   item,
   allItems,
   inChat,
+  canManage,
   equipLabel = 'Wear',
   addAction = 'layer',
   isUpdatingDefault,
@@ -75,13 +80,16 @@ export function WardrobeItemRow({
   onMove,
   onCopy,
   onDelete,
+  onToggleArchived,
   onEquip,
   onAddToSlot,
   depth = 0,
 }: WardrobeItemRowProps) {
   const isComposite = item.componentItemIds.length > 0
   const [expanded, setExpanded] = useState(false)
-  const isShared = !item.characterId
+  // Without an explicit predicate, fall back to the character-view rule:
+  // personal items are manageable, shared-tier items are Move/Copy only.
+  const manageable = canManage ? canManage(item) : Boolean(item.characterId)
 
   const [slotPickerOpen, setSlotPickerOpen] = useState(false)
   const [kebabOpen, setKebabOpen] = useState(false)
@@ -151,7 +159,7 @@ export function WardrobeItemRow({
 
   const addTooltip =
     item.types.length === 1
-      ? `${addAction === 'layer' ? 'Layer onto' : 'Add to'} ${SLOT_LABEL[item.types[0]].toLowerCase()}`
+      ? `${addAction === 'layer' ? 'Layer onto' : 'Add to'} ${WARDROBE_SLOT_META[item.types[0]].label.toLowerCase()}`
       : addAction === 'layer'
         ? 'Layer onto a slot'
         : 'Add to a slot'
@@ -178,7 +186,7 @@ export function WardrobeItemRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span
-              className="qt-text-sm text-foreground"
+              className="text-sm text-foreground"
               style={{
                 display: '-webkit-box',
                 WebkitLineClamp: 2,
@@ -195,12 +203,15 @@ export function WardrobeItemRow({
             {isComposite && (
               <span className="qt-text-xs qt-text-secondary">· bundle</span>
             )}
-            {isShared && <span className="qt-text-xs qt-text-secondary">· shared</span>}
+            {!manageable && <span className="qt-text-xs qt-text-secondary">· shared</span>}
             {item.isDefault && (
               <span className="qt-text-xs qt-text-secondary">· default</span>
             )}
+            {item.archivedAt && (
+              <span className="qt-badge qt-badge-secondary">archived</span>
+            )}
             {item.types.map((t) => (
-              <span key={t} className={`qt-badge ${TYPE_BADGE_CLASS[t]}`}>
+              <span key={t} className={`qt-badge ${WARDROBE_SLOT_META[t].badgeClass}`}>
                 {t}
               </span>
             ))}
@@ -255,8 +266,8 @@ export function WardrobeItemRow({
                           }}
                           className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:qt-bg-muted"
                         >
-                          <span>{SLOT_LABEL[slot]}</span>
-                          <span className={`qt-badge ${TYPE_BADGE_CLASS[slot]}`}>
+                          <span>{WARDROBE_SLOT_META[slot].label}</span>
+                          <span className={`qt-badge ${WARDROBE_SLOT_META[slot].badgeClass}`}>
                             {slot}
                           </span>
                         </button>
@@ -287,7 +298,7 @@ export function WardrobeItemRow({
                   className="absolute right-0 top-full mt-1 z-30 min-w-[14rem] rounded border qt-border-default qt-bg-default shadow-md"
                 >
                   <ul className="divide-y qt-border-default">
-                    {!isShared && (
+                    {manageable && (
                       <>
                         <li>
                           <button
@@ -331,6 +342,21 @@ export function WardrobeItemRow({
                             Duplicate
                           </button>
                         </li>
+                        {onToggleArchived && (
+                          <li>
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                setKebabOpen(false)
+                                onToggleArchived(item)
+                              }}
+                              className="block w-full text-left px-3 py-2 text-sm hover:qt-bg-muted"
+                            >
+                              {item.archivedAt ? 'Restore from archive' : 'Archive'}
+                            </button>
+                          </li>
+                        )}
                       </>
                     )}
                     <li>
@@ -359,7 +385,7 @@ export function WardrobeItemRow({
                         Copy
                       </button>
                     </li>
-                    {!isShared && (
+                    {manageable && (
                       <li>
                         <button
                           type="button"
@@ -395,6 +421,7 @@ export function WardrobeItemRow({
                 item={c}
                 allItems={allItems}
                 inChat={false}
+                canManage={canManage}
                 onToggleDefault={onToggleDefault}
                 onEdit={onEdit}
                 onDuplicate={onDuplicate}

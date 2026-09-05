@@ -17,7 +17,7 @@ import { trackMessageTokenUsage } from '@/lib/services/token-tracking.service'
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service'
 import { calculateMaxAvailable, CONTEXT_HISTORY_BUDGET_RATIO } from '@/lib/llm/model-context-data'
 import { extractVisibleConversation } from '@/lib/memory/cheap-llm-tasks'
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override'
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override'
 import { executeRngTool, formatRngResults } from '@/lib/tools/handlers/rng-handler'
 
 import type { getRepositories } from '@/lib/repositories/factory'
@@ -25,16 +25,7 @@ import type { ChatMetadataBase, Character, ConnectionProfile, MessageEvent } fro
 import type { GeneratedImage, NextSpeakerInfo, ProcessMessageResult, StreamingState, CompressionContext, TriggerContext, ToolMessage, ReasoningSegment } from './types'
 import { saveToolMessages, type ToolWhisperContext } from './tool-execution.service'
 import { encodeDoneEvent, encodeCarinaAnswerEvent, encodeStatusEvent, encodeConfirmationResultEvent, safeEnqueue } from './streaming.service'
-import {
-  isAnswerConfirmationActive,
-  isUserDrivenTurn,
-  hasCheckableInputs,
-  gatherConfirmationInputs,
-  findLatestCommonplaceWhisper,
-  buildRecentConversationContext,
-  runAnswerConfirmation,
-  type AnswerConfirmationOverride,
-} from './answer-confirmation.service'
+import { maybeConfirmAnswer } from './answer-confirmation.service'
 import {
   triggerTurnMemoryExtraction,
   triggerContextSummaryCheck,
@@ -208,89 +199,56 @@ export async function finalizeMessageResponse({
   let confirmationNotes: string | null | undefined
   let confirmationOriginalContent: string | null | undefined
 
-  const isSilentTurn = characterParticipant.status === 'silent'
-  if (isUserDrivenTurn(chat, characterParticipant.id)) {
-    // A user-controlled/impersonated turn: the human may have sourced facts out
-    // of band, so the system can neither confirm nor deny. Explicit null (≠ the
-    // undefined "feature off" state).
-    confirmed = null
-    logger.debug('Answer confirmation: user-driven turn, marking unverifiable', { chatId })
-  } else if (!isSilentTurn) {
-    const globalEnabled = chatSettings?.answerConfirmationSettings?.enabled === true
-    const chatOverride = chat.answerConfirmationOverride as AnswerConfirmationOverride
-    let projectOverride: AnswerConfirmationOverride
-    if (!chatOverride && chat.projectId) {
-      const project = await repos.projects.findById(chat.projectId).catch(() => null)
-      projectOverride = (project?.answerConfirmationOverride as AnswerConfirmationOverride) ?? undefined
-    }
-    if (isAnswerConfirmationActive(chatOverride, projectOverride, globalEnabled)) {
-      const priorMessages = await repos.chats.getMessages(chatId)
-      const priorEvents = priorMessages.filter(
-        (m): m is typeof m & { type: 'message' } => m.type === 'message'
-      ) as unknown as MessageEvent[]
-      const whisper = findLatestCommonplaceWhisper(priorEvents, characterParticipant.id)
-      if (hasCheckableInputs(whisper, toolMessages)) {
-        const reference = gatherConfirmationInputs(whisper, toolMessages)
-        if (reference) {
-          // Recent live conversation, so any re-affirmation rewrite stays anchored
-          // to THIS scene instead of drifting into an old conversation the
-          // reference material may quote.
-          const conversationContext = buildRecentConversationContext(
-            priorEvents,
-            chat.participants ?? [],
-            participantCharacters,
-          )
-          safeEnqueue(controller, encodeStatusEvent(encoder, {
-            stage: 'confirming',
-            message: 'Confirming…',
-            characterName: character.name,
-            characterId: character.id,
-          }))
-          const outcome = await runAnswerConfirmation({
-            reply: cleanedResponse,
-            reference,
-            userId,
-            chatId,
-            messageId: assistantMessageId,
-            characterId: character.id,
-            characterName: character.name,
-            conversationContext,
-            cheapLLMSelection,
-            connectionProfile,
-            isDangerousChat: isChatActiveDangerous(chat),
-            uncensoredFallback: {
-              dangerSettings,
-              availableProfiles: allProfiles,
-              isDangerousChat: isChatActiveDangerous(chat),
-            },
-            onAffirming: () => safeEnqueue(controller, encodeStatusEvent(encoder, {
-              stage: 'affirming',
-              message: 'Requesting affirmation of questionable results…',
-              characterName: character.name,
-              characterId: character.id,
-            })),
-          })
-          confirmed = outcome.confirmed
-          confirmationRevised = outcome.revised
-          confirmationNotes = outcome.notes
-          if (outcome.revised && outcome.revisedContent) {
-            // Keep the original for the logs; show the revised reply. A rewrite
-            // invalidates tool-call/reasoning anchors computed against the old
-            // prose — mirror normalizeRewroteBody: drop tool anchors and
-            // collapse reasoning to a single offset-0 block (display only).
-            confirmationOriginalContent = cleanedResponse
-            cleanedResponse = outcome.revisedContent
-            for (const tm of toolMessages) {
-              tm.anchorOffset = undefined
-            }
-            if (rebasedReasoning && rebasedReasoning.length > 0) {
-              rebasedReasoning = [{
-                anchorOffset: 0,
-                content: rebasedReasoning.map(s => s.content).join(''),
-                seq: rebasedReasoning[0].seq,
-              }]
-            }
-          }
+  const confirmation = await maybeConfirmAnswer({
+    repos,
+    chatId,
+    userId,
+    chat,
+    character,
+    characterParticipant,
+    reply: cleanedResponse,
+    messageId: assistantMessageId,
+    toolMessages,
+    participantCharacters,
+    globalEnabled: chatSettings?.answerConfirmationSettings?.enabled === true,
+    cheapLLMSelection,
+    connectionProfile,
+    dangerSettings,
+    allProfiles,
+    onConfirming: () => safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage: 'confirming',
+      message: 'Confirming…',
+      characterName: character.name,
+      characterId: character.id,
+    })),
+    onAffirming: () => safeEnqueue(controller, encodeStatusEvent(encoder, {
+      stage: 'affirming',
+      message: 'Requesting affirmation of questionable results…',
+      characterName: character.name,
+      characterId: character.id,
+    })),
+  })
+  if (confirmation) {
+    confirmed = confirmation.confirmed
+    if ('revised' in confirmation) {
+      confirmationRevised = confirmation.revised
+      confirmationNotes = confirmation.notes
+      if (confirmation.revised && confirmation.revisedContent) {
+        // Keep the original for the logs; show the revised reply. A rewrite
+        // invalidates tool-call/reasoning anchors computed against the old
+        // prose — mirror normalizeRewroteBody: drop tool anchors and
+        // collapse reasoning to a single offset-0 block (display only).
+        confirmationOriginalContent = cleanedResponse
+        cleanedResponse = confirmation.revisedContent
+        for (const tm of toolMessages) {
+          tm.anchorOffset = undefined
+        }
+        if (rebasedReasoning && rebasedReasoning.length > 0) {
+          rebasedReasoning = [{
+            anchorOffset: 0,
+            content: rebasedReasoning.map(s => s.content).join(''),
+            seq: rebasedReasoning[0].seq,
+          }]
         }
       }
     }
@@ -511,7 +469,7 @@ export async function finalizeMessageResponse({
     const memoryChatSettings: MemoryChatSettings = {
       cheapLLMSettings: chatSettings.cheapLLMSettings,
       dangerSettings,
-      isDangerousChat: isChatActiveDangerous(chat),
+      isDangerousChat: shouldUseUncensoredRoute(chat),
     }
 
     // Per-turn memory extraction.
@@ -573,7 +531,7 @@ export async function finalizeMessageResponse({
       memoryChatSettings: {
         cheapLLMSettings: chatSettings.cheapLLMSettings,
         dangerSettings,
-        isDangerousChat: isChatActiveDangerous(chat),
+        isDangerousChat: shouldUseUncensoredRoute(chat),
       },
       characterIds: Array.from(participantCharacters.values()).map(c => c.id),
     } : undefined,

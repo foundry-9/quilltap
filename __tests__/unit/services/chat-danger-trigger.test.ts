@@ -136,6 +136,22 @@ describe('triggerChatDangerClassification', () => {
     expect(mockEnqueue).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['OFF' as const, 'vouched safe'],
+    ['UNCENSORED' as const, 'uncensored'],
+  ])('skips without enqueueing when the operator decided (%s / %s)', async (conciergeOverride) => {
+    // Both operator states take the classifier off the case, and the handler
+    // discards the job at its own guard — so the trigger must never enqueue
+    // one. The label underneath is `false`: the chat was scanned and found
+    // safe before the operator spoke, so no other guard would catch this.
+    const repos = buildRepos({ conciergeOverride, isDangerousChat: false });
+    await triggerChatDangerClassification(repos as any, baseOptions);
+
+    expect(mockEnqueue).not.toHaveBeenCalled();
+    // Bails before any setting lookup at all.
+    expect(repos.chatSettings.findByUserId).not.toHaveBeenCalled();
+  });
+
   it('skips when already classified at current message count', async () => {
     const repos = buildRepos({
       dangerClassifiedAt: '2026-01-01T00:00:00Z',

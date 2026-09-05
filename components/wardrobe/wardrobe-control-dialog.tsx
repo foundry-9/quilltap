@@ -6,8 +6,13 @@
  * The global wardrobe-management surface. Reachable from a button on the
  * left sidebar (and from any participant card in a chat). Lets the operator:
  *
- *  1. Pick any character (in or out of chat) and view their wardrobe.
- *  2. Create / edit / delete wardrobe items, including composites.
+ *  1. Pick any wardrobe container — a character (in or out of chat), the
+ *     Quilltap General library, a project, or a group — and browse it. The
+ *     character view merges every tier the character can reach; a shared
+ *     container shows exactly its own contents.
+ *  2. Create / edit / duplicate / delete wardrobe items, including
+ *     composites, in whichever container is being browsed. In the character
+ *     view, items merged in from a shared tier elsewhere are Move/Copy only.
  *  3. Toggle `isDefault` on each item via a star button.
  *  4. When invoked with a chat context: see the chat's "wearing now" outfit
  *     and equip / layer / clear items per slot using the existing
@@ -26,14 +31,19 @@ import { useWardrobeDialog } from '@/components/providers/wardrobe-dialog-provid
 import { BaseModal } from '@/components/ui/BaseModal'
 import { fetchJson } from '@/lib/fetch-helpers'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { triggerDownload } from '@/lib/download-utils'
 import { showConfirmation } from '@/lib/alert'
-import { WARDROBE_SLOT_TYPES, EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
+import {
+  WARDROBE_SLOT_TYPES,
+  EMPTY_EQUIPPED_SLOTS,
+  makeEmptyEquippedSlots,
+  cloneEquippedSlots,
+} from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots, WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.types'
 import { useOutfit } from '@/lib/hooks/use-outfit'
 import { type EquippedBundle } from '@/lib/wardrobe/group-equipped'
 import {
   breakApartBundleInSlots,
-  cloneSlots,
   takeOffBundleFromSlots,
 } from '@/lib/wardrobe/bundle-mutations'
 import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
@@ -45,7 +55,19 @@ import {
 } from '@/lib/wardrobe/staged-live-outfits'
 import { addItemToSlot, wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
 import { nextCopyTitle } from '@/lib/wardrobe/next-copy-title'
+import {
+  GENERAL_CONTAINER,
+  decodeWardrobeContainer,
+  encodeWardrobeContainer,
+  homeContainerForItem,
+  wardrobeCollectionUrl,
+  wardrobeItemUrl,
+  type WardrobeContainer,
+} from '@/lib/wardrobe/wardrobe-container'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
+import { useWardrobeContainerItems } from '@/lib/hooks/use-wardrobe-container-items'
+import { WardrobeInstructionsSection } from '@/components/wardrobe/WardrobeInstructionsSection'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { WardrobeItemEditor } from './wardrobe-item-editor'
 import { WardrobeItemRow } from './wardrobe-item-row'
 import { OutfitComposer } from './outfit-composer'
@@ -58,6 +80,12 @@ interface CharacterSummary {
   avatarUrl?: string | null
 }
 
+/** A project or group offered as a browsable shared wardrobe container. */
+interface ContainerSummary {
+  id: string
+  name: string
+}
+
 interface ImageProfileSummary {
   id: string
   name: string
@@ -67,7 +95,7 @@ interface ImageProfileSummary {
 }
 
 type SlotFilter = 'all' | WardrobeItemType
-const SLOT_FILTERS: SlotFilter[] = ['all', 'top', 'bottom', 'footwear', 'accessories']
+const SLOT_FILTERS: SlotFilter[] = ['all', ...WARDROBE_SLOT_TYPES]
 type ItemKind = 'items' | 'outfits'
 type RightTab = 'live' | 'builder'
 type EditorIntent = 'create-single' | 'create-bundle'
@@ -163,9 +191,44 @@ function WardrobeControlDialogInner({
   asTab = false,
 }: InnerProps) {
   const [characters, setCharacters] = useState<CharacterSummary[]>([])
-  const [selectedCharacterId, setSelectedCharacterId] = useState<string | null>(initialCharacterId)
+  const [projects, setProjects] = useState<ContainerSummary[]>([])
+  const [groups, setGroups] = useState<ContainerSummary[]>([])
+  // Which wardrobe is being browsed: a character's merged view, or one shared
+  // container (Quilltap General, a project, a group) edited in place.
+  const [selectedContainer, setSelectedContainer] = useState<WardrobeContainer | null>(
+    initialCharacterId ? { scope: 'character', id: initialCharacterId } : null,
+  )
+  const isCharacterScope = selectedContainer?.scope === 'character'
+  const selectedCharacterId = isCharacterScope ? selectedContainer.id : null
+  /**
+   * "Show archived". Flipping it re-fetches every tier with
+   * `?includeArchived=true` rather than filtering what's already loaded — the
+   * server owns the hiding, so this list can never disagree with the API.
+   */
+  const [showArchived, setShowArchived] = useState(false)
   const { items, loading: itemsLoading, reload: reloadItems, projectId: dialogProjectId } =
-    useCharacterWardrobeItems(selectedCharacterId, { chatId })
+    useCharacterWardrobeItems(selectedCharacterId, { chatId, includeArchived: showArchived })
+  const {
+    items: containerItems,
+    resolutionItems: containerResolutionItems,
+    loading: containerItemsLoading,
+    reload: reloadContainerItems,
+  } = useWardrobeContainerItems(isCharacterScope ? null : selectedContainer, {
+    includeArchived: showArchived,
+  })
+
+  /** Refresh whichever wardrobe view is on display. */
+  const reloadActiveItems = useCallback(async (): Promise<void> => {
+    if (isCharacterScope) await reloadItems()
+    else await reloadContainerItems()
+  }, [isCharacterScope, reloadItems, reloadContainerItems])
+
+  // As a rail-opened workspace tab, navigating back refreshes the garment
+  // list. Safe mid-edit: the fitting-room/live seeding is ref-gated, so a
+  // reload never blows away staged slots.
+  useOnTabActivated(() => {
+    void reloadActiveItems()
+  })
   const [editingItem, setEditingItem] = useState<WardrobeItem | null>(null)
   const [transferringItem, setTransferringItem] = useState<WardrobeItem | null>(null)
   const [transferIntent, setTransferIntent] = useState<TransferIntent | null>(null)
@@ -190,9 +253,9 @@ function WardrobeControlDialogInner({
   // Distinct from the chat's stored `equippedOutfit` (the "Wearing now" tab):
   // changes here never hit the equip API. Seeded from Wearing now (in chat)
   // or from the character's defaults (out of chat) when the character loads.
-  const [fittingSlots, setFittingSlots] = useState<EquippedSlots>(() => ({
-    ...EMPTY_EQUIPPED_SLOTS,
-  }))
+  const [fittingSlots, setFittingSlots] = useState<EquippedSlots>(() =>
+    makeEmptyEquippedSlots(),
+  )
   const isInChat = chatId !== null
   const [rightTab, setRightTab] = useState<RightTab>(
     isInChat ? 'live' : 'builder',
@@ -243,8 +306,22 @@ function WardrobeControlDialogInner({
   )
   const outfit = useOutfit(chatId, characterIdsForOutfit)
 
+  /**
+   * What every item mutation (edit / create / duplicate / delete / transfer)
+   * does afterwards: reload the list on display and, in chat, drop the outfit
+   * chain's cached wardrobe for this character and re-read what they wear.
+   */
+  const refreshAfterMutation = useCallback(async (): Promise<void> => {
+    await reloadActiveItems()
+    if (isInChat && selectedCharacterId) {
+      outfit.invalidateWardrobe(selectedCharacterId)
+      await outfit.refreshOutfit()
+    }
+  }, [reloadActiveItems, isInChat, selectedCharacterId, outfit])
+
   // ---------------------------------------------------------------------------
-  // Load characters once when the dialog opens
+  // Load the container catalogue (characters, projects, groups) once when the
+  // dialog opens — every place a wardrobe item can live gets a menu entry.
   // ---------------------------------------------------------------------------
   useEffect(() => {
     let cancelled = false
@@ -256,14 +333,45 @@ function WardrobeControlDialogInner({
         if (cancelled) return
         const sorted = [...(data.characters ?? [])].sort((a, b) => a.name.localeCompare(b.name))
         setCharacters(sorted)
-        // Auto-select if nothing was specified
-        setSelectedCharacterId((prev) => prev ?? sorted[0]?.id ?? null)
+        // Auto-select if nothing was specified: the first character, or the
+        // General library on a characterless instance.
+        setSelectedContainer((prev) =>
+          prev ?? (sorted[0] ? { scope: 'character', id: sorted[0].id } : GENERAL_CONTAINER),
+        )
       } catch (err) {
         console.warn('[WardrobeControlDialog] Failed to load characters', err)
         if (!cancelled) setCharacters([])
       }
     }
+    const loadShared = async (): Promise<void> => {
+      try {
+        const [projectsRes, groupsRes] = await Promise.all([
+          fetch('/api/v1/projects'),
+          fetch('/api/v1/groups'),
+        ])
+        if (cancelled) return
+        if (projectsRes.ok) {
+          const data = (await projectsRes.json()) as { projects?: ContainerSummary[] }
+          setProjects(
+            [...(data.projects ?? [])]
+              .map((p) => ({ id: p.id, name: p.name || 'Untitled project' }))
+              .sort((a, b) => a.name.localeCompare(b.name)),
+          )
+        }
+        if (groupsRes.ok) {
+          const data = (await groupsRes.json()) as { groups?: ContainerSummary[] }
+          setGroups(
+            [...(data.groups ?? [])]
+              .map((g) => ({ id: g.id, name: g.name || 'Untitled group' }))
+              .sort((a, b) => a.name.localeCompare(b.name)),
+          )
+        }
+      } catch (err) {
+        console.warn('[WardrobeControlDialog] Failed to load projects/groups', err)
+      }
+    }
     void load()
+    void loadShared()
     return () => {
       cancelled = true
     }
@@ -314,7 +422,7 @@ function WardrobeControlDialogInner({
     fittingSeedKeyRef.current = seedKey
 
     const seed = isInChat && wornSlots
-      ? cloneSlots(wornSlots)
+      ? cloneEquippedSlots(wornSlots)
       : buildDefaultOutfit(items)
     setFittingSlots(seed)
   }, [selectedCharacterId, chatId, isInChat, outfit.outfitState, items])
@@ -334,7 +442,7 @@ function WardrobeControlDialogInner({
     const seedKey = `${characterId}|${chatId ?? 'no-chat'}`
     if (liveSeededByCharRef.current.has(seedKey)) return
     liveSeededByCharRef.current.add(seedKey)
-    liveBaselineByCharRef.current[characterId] = cloneSlots(wornSlots)
+    liveBaselineByCharRef.current[characterId] = cloneEquippedSlots(wornSlots)
     const pending = pendingLiveMutatorsRef.current[characterId] ?? []
     delete pendingLiveMutatorsRef.current[characterId]
     const seed = rebaseStagedSlots(wornSlots, pending)
@@ -344,11 +452,32 @@ function WardrobeControlDialogInner({
   // ---------------------------------------------------------------------------
   // Filtered items for display
   // ---------------------------------------------------------------------------
+  // What the left column lists: the merged wearable pool in the character
+  // view, or exactly the browsed container's contents otherwise. The
+  // resolution pool additionally folds in General archetypes so a shared
+  // composite can still show its components.
+  const listItems = isCharacterScope ? items : containerItems
+  const resolutionPool = isCharacterScope ? items : containerResolutionItems
+  const listLoading = isCharacterScope ? itemsLoading : containerItemsLoading
+
+  // Full management (edit / star / duplicate / delete) is for items living in
+  // the viewed container; anything merged in from a shared tier elsewhere
+  // keeps only Move and Copy.
+  const canManageItem = useCallback(
+    (item: WardrobeItem): boolean => {
+      if (isCharacterScope) return Boolean(item.characterId)
+      return containerItems.some((c) => c.id === item.id)
+    },
+    [isCharacterScope, containerItems],
+  )
+
   const filteredItems = useMemo(() => {
-    const sorted = [...items].sort((a, b) => a.title.localeCompare(b.title))
+    const sorted = [...listItems].sort((a, b) => a.title.localeCompare(b.title))
     const term = titleFilter.trim().toLowerCase()
     return sorted.filter((i) => {
-      if (i.archivedAt) return false
+      // No archived filter here on purpose: the fetch already omitted them
+      // unless "Show archived" is ticked, and a second client-side pass would
+      // be a place for the two rules to drift apart.
       const isComposite = i.componentItemIds.length > 0
       if (kindFilter === 'items' && isComposite) return false
       if (kindFilter === 'outfits' && !isComposite) return false
@@ -356,17 +485,20 @@ function WardrobeControlDialogInner({
       if (term && !i.title.toLowerCase().includes(term)) return false
       return true
     })
-  }, [items, slotFilter, kindFilter, titleFilter])
+  }, [listItems, slotFilter, kindFilter, titleFilter])
 
   // ---------------------------------------------------------------------------
   // Item action handlers
   // ---------------------------------------------------------------------------
   const handleToggleDefault = useCallback(
     async (item: WardrobeItem) => {
-      if (!selectedCharacterId) return
-      const url = item.characterId
-        ? `/api/v1/characters/${item.characterId}/wardrobe/${item.id}`
-        : `/api/v1/wardrobe/${item.id}`
+      if (!selectedContainer) return
+      // Browsing a shared container, the item lives there; in the character
+      // view only character-owned items reach this handler (kebab gating).
+      const url = wardrobeItemUrl(
+        isCharacterScope ? homeContainerForItem(item) : selectedContainer,
+        item.id,
+      )
       setUpdatingDefaultId(item.id)
       try {
         const result = await fetchJson<{ wardrobeItem: WardrobeItem }>(url, {
@@ -378,60 +510,93 @@ function WardrobeControlDialogInner({
           showErrorToast(result.error || 'Failed to update item')
           return
         }
-        await reloadItems()
+        await reloadActiveItems()
       } finally {
         setUpdatingDefaultId(null)
       }
     },
-    [selectedCharacterId, reloadItems],
+    [selectedContainer, isCharacterScope, reloadActiveItems],
+  )
+
+  /**
+   * Archive or restore one garment. Archiving hides it from the pickers and
+   * bars it from the outfit-selection LLM's candidate list; it does NOT strip
+   * it off a character already wearing it, and does not forbid a human who has
+   * ticked "Show archived" from putting it back on.
+   */
+  const handleToggleArchived = useCallback(
+    async (item: WardrobeItem) => {
+      if (!selectedContainer) return
+      const url = wardrobeItemUrl(
+        isCharacterScope ? homeContainerForItem(item) : selectedContainer,
+        item.id,
+      )
+      const result = await fetchJson<{ wardrobeItem: WardrobeItem }>(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ archived: !item.archivedAt }),
+      })
+      if (!result.ok) {
+        showErrorToast(result.error || 'Failed to update item')
+        return
+      }
+      await reloadActiveItems()
+    },
+    [selectedContainer, isCharacterScope, reloadActiveItems],
   )
 
   const handleDelete = useCallback(
     async (item: WardrobeItem) => {
-      if (!selectedCharacterId) return
+      if (!selectedContainer) return
       if (!(await requestConfirmation(`Delete "${item.title}"? This cannot be undone.`))) return
-      const url = item.characterId
-        ? `/api/v1/characters/${item.characterId}/wardrobe/${item.id}`
-        : `/api/v1/wardrobe/${item.id}`
+      const url = wardrobeItemUrl(
+        isCharacterScope ? homeContainerForItem(item) : selectedContainer,
+        item.id,
+      )
       const result = await fetchJson(url, { method: 'DELETE' })
       if (!result.ok) {
         showErrorToast(result.error || 'Failed to delete item')
         return
       }
       showSuccessToast(`Deleted "${item.title}"`)
-      await reloadItems()
-      if (isInChat) {
-        outfit.invalidateWardrobe(selectedCharacterId)
-        await outfit.refreshOutfit()
-      }
+      await refreshAfterMutation()
     },
-    [selectedCharacterId, reloadItems, isInChat, outfit, requestConfirmation],
+    [selectedContainer, isCharacterScope, refreshAfterMutation, requestConfirmation],
   )
 
   const handleDuplicate = useCallback(
     async (item: WardrobeItem) => {
-      if (!selectedCharacterId) return
-      // Duplicate is only offered for character-owned items (the kebab is
-      // hidden for shared archetypes), so always POST to the character route.
+      if (!selectedContainer) return
+      // Duplicate is only offered for manageable items (kebab gating), so the
+      // copy stays where the original lives: the selected character's vault in
+      // the character view, or the browsed shared container itself.
+      const duplicateTarget: WardrobeContainer | null = isCharacterScope
+        ? selectedCharacterId
+          ? { scope: 'character', id: selectedCharacterId }
+          : null
+        : selectedContainer
+      if (!duplicateTarget) return
       const title = nextCopyTitle(
         item.title,
-        items.map((i) => i.title),
+        listItems.map((i) => i.title),
       )
       console.debug('[WardrobeControlDialog] Duplicating wardrobe item', {
         sourceId: item.id,
-        characterId: selectedCharacterId,
+        targetScope: duplicateTarget.scope,
+        targetId: duplicateTarget.id,
         newTitle: title,
         // Composite references are copied verbatim — member items are not cloned.
         componentItemIds: item.componentItemIds,
       })
       const result = await fetchJson<{ wardrobeItem: WardrobeItem }>(
-        `/api/v1/characters/${selectedCharacterId}/wardrobe`,
+        wardrobeCollectionUrl(duplicateTarget),
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             title,
             description: item.description ?? null,
+            imagePrompt: item.imagePrompt ?? null,
             types: item.types,
             appropriateness: item.appropriateness ?? null,
             isDefault: item.isDefault,
@@ -445,13 +610,9 @@ function WardrobeControlDialogInner({
         return
       }
       showSuccessToast(`Duplicated "${item.title}"`)
-      await reloadItems()
-      if (isInChat) {
-        outfit.invalidateWardrobe(selectedCharacterId)
-        await outfit.refreshOutfit()
-      }
+      await refreshAfterMutation()
     },
-    [selectedCharacterId, items, reloadItems, isInChat, outfit],
+    [selectedContainer, isCharacterScope, selectedCharacterId, listItems, refreshAfterMutation],
   )
 
   // Lookup map shared between Live-tab staging mutators and Builder-tab
@@ -479,7 +640,7 @@ function WardrobeControlDialogInner({
         const wornFallback = outfit.outfitState[characterId]?.slots
         const current =
           prev[characterId] ??
-          (wornFallback ? cloneSlots(wornFallback) : { ...EMPTY_EQUIPPED_SLOTS })
+          (wornFallback ? cloneEquippedSlots(wornFallback) : makeEmptyEquippedSlots())
         return { ...prev, [characterId]: mutator(current) }
       })
     },
@@ -564,7 +725,7 @@ function WardrobeControlDialogInner({
   const fittingResetToWorn = useCallback(async () => {
     if (!selectedCharacterId) return
     const wornSlots = outfit.outfitState[selectedCharacterId]?.slots
-    const target = wornSlots ? cloneSlots(wornSlots) : { ...EMPTY_EQUIPPED_SLOTS }
+    const target = wornSlots ? cloneEquippedSlots(wornSlots) : makeEmptyEquippedSlots()
     if (
       !equippedSlotsEqual(fittingSlots, target) &&
       !(await requestConfirmation(
@@ -596,7 +757,7 @@ function WardrobeControlDialogInner({
     ) {
       return
     }
-    setFittingSlots({ ...EMPTY_EQUIPPED_SLOTS })
+    setFittingSlots(makeEmptyEquippedSlots())
   }, [fittingSlots, requestConfirmation])
 
   /**
@@ -701,7 +862,7 @@ function WardrobeControlDialogInner({
         allOk = false
       } else {
         outfit.invalidateWardrobe(characterId)
-        liveBaselineByCharRef.current[characterId] = cloneSlots(slots)
+        liveBaselineByCharRef.current[characterId] = cloneEquippedSlots(slots)
       }
     }
     await outfit.refreshOutfit()
@@ -859,6 +1020,21 @@ function WardrobeControlDialogInner({
     [characters, selectedCharacterId],
   )
 
+  /** Display name of the browsed container, for the editor's pinned note. */
+  const selectedContainerLabel = useMemo(() => {
+    if (!selectedContainer) return ''
+    switch (selectedContainer.scope) {
+      case 'character':
+        return selectedCharacter?.name ?? ''
+      case 'general':
+        return 'Quilltap General'
+      case 'project':
+        return projects.find((p) => p.id === selectedContainer.id)?.name ?? 'This project'
+      case 'group':
+        return groups.find((g) => g.id === selectedContainer.id)?.name ?? 'This group'
+    }
+  }, [selectedContainer, selectedCharacter, projects, groups])
+
   // While the editor or import modal is up, don't let a click inside them
   // (rendered as siblings) close the outer dialog via BaseModal's
   // click-outside handler.
@@ -908,11 +1084,12 @@ function WardrobeControlDialogInner({
           </div>
         }
       >
-        {/* Character selector */}
+        {/* Container selector — every place a wardrobe item can live gets an
+            entry: characters, Quilltap General, projects, and groups. */}
         <div className="flex flex-col gap-3 mb-3">
           <div className="flex items-center gap-2">
-            <label htmlFor="wardrobe-char-select" className="qt-text-sm qt-text-secondary">
-              Character:
+            <label htmlFor="wardrobe-container-select" className="text-sm qt-text-secondary">
+              Wardrobe:
             </label>
             {selectedCharacter?.avatarUrl && (
               <img
@@ -922,24 +1099,71 @@ function WardrobeControlDialogInner({
               />
             )}
             <select
-              id="wardrobe-char-select"
+              id="wardrobe-container-select"
               className="qt-select flex-1 max-w-md"
-              value={selectedCharacterId ?? ''}
-              onChange={(e) => setSelectedCharacterId(e.target.value || null)}
+              value={selectedContainer ? encodeWardrobeContainer(selectedContainer) : ''}
+              onChange={(e) => setSelectedContainer(decodeWardrobeContainer(e.target.value))}
             >
-              {characters.length === 0 && (
+              {!selectedContainer && (
                 <option value="" disabled>
-                  No characters available
+                  Select a wardrobe
                 </option>
               )}
-              {characters.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
+              {characters.length > 0 && (
+                <optgroup label="Characters">
+                  {characters.map((c) => (
+                    <option
+                      key={c.id}
+                      value={encodeWardrobeContainer({ scope: 'character', id: c.id })}
+                    >
+                      {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="General">
+                <option value={encodeWardrobeContainer(GENERAL_CONTAINER)}>
+                  Quilltap General
                 </option>
-              ))}
+              </optgroup>
+              {projects.length > 0 && (
+                <optgroup label="Projects">
+                  {projects.map((p) => (
+                    <option
+                      key={p.id}
+                      value={encodeWardrobeContainer({ scope: 'project', id: p.id })}
+                    >
+                      {p.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {groups.length > 0 && (
+                <optgroup label="Groups">
+                  {groups.map((g) => (
+                    <option
+                      key={g.id}
+                      value={encodeWardrobeContainer({ scope: 'group', id: g.id })}
+                    >
+                      {g.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           </div>
+          {!isCharacterScope && selectedContainer && (
+            <p className="qt-text-xs qt-text-secondary px-1">
+              Browsing a shared wardrobe — items here can be worn by every character who can
+              reach this {selectedContainer.scope === 'general' ? 'library' : selectedContainer.scope}.
+              Edit, duplicate, or delete them freely; pick a character above to dress someone.
+            </p>
+          )}
         </div>
+
+        {/* Optional dressing instructions for this container — consulted when
+            a character chooses their own opening outfit; nearest tier wins. */}
+        <WardrobeInstructionsSection container={selectedContainer} />
 
         <div className="grid md:grid-cols-2 gap-4">
           {/* LEFT: Wardrobe list */}
@@ -987,17 +1211,26 @@ function WardrobeControlDialogInner({
                   </button>
                 ))}
               </div>
+              <label className="flex items-center gap-2 qt-text-xs qt-text-secondary">
+                <input
+                  type="checkbox"
+                  checked={showArchived}
+                  onChange={(e) => setShowArchived(e.target.checked)}
+                  className="qt-checkbox"
+                />
+                Show archived
+              </label>
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-1 max-h-[55vh] pb-12">
-              {!selectedCharacterId ? (
-                <div className="qt-text-sm qt-text-secondary px-3 py-4">
-                  Select a character to see their wardrobe.
+              {!selectedContainer ? (
+                <div className="text-sm qt-text-secondary px-3 py-4">
+                  Select a wardrobe to browse.
                 </div>
-              ) : itemsLoading ? (
-                <div className="qt-text-sm qt-text-secondary px-3 py-4">Loading…</div>
+              ) : listLoading ? (
+                <div className="text-sm qt-text-secondary px-3 py-4">Loading…</div>
               ) : filteredItems.length === 0 ? (
-                <div className="qt-text-sm qt-text-secondary px-3 py-4">
+                <div className="text-sm qt-text-secondary px-3 py-4">
                   No items match this filter.
                 </div>
               ) : (
@@ -1005,16 +1238,20 @@ function WardrobeControlDialogInner({
                   <WardrobeItemRow
                     key={item.id}
                     item={item}
-                    allItems={items}
+                    allItems={resolutionPool}
                     // `inChat` here gates the visibility of the row's
                     // Wear/+Layer buttons; we want them visible whenever
                     // the dialog is showing equip-able state — that's any
-                    // time (in chat → live or builder; out of chat → builder).
-                    inChat
+                    // time a character is selected (in chat → live or
+                    // builder; out of chat → builder). Browsing a shared
+                    // container, there is nobody to dress, so they hide.
+                    inChat={isCharacterScope}
+                    canManage={canManageItem}
                     equipLabel={useFittingActions ? 'Try on' : 'Wear'}
                     addAction={useFittingActions ? 'add' : 'layer'}
                     isUpdatingDefault={updatingDefaultId === item.id}
                     onToggleDefault={handleToggleDefault}
+                    onToggleArchived={handleToggleArchived}
                     onEdit={(it) => setEditingItem(it)}
                     onDuplicate={handleDuplicate}
                     onMove={(it) => {
@@ -1033,21 +1270,24 @@ function WardrobeControlDialogInner({
               )}
             </div>
 
-            {/* Sticky create / import controls */}
+            {/* Sticky create / import controls. Import-from-image analyzes a
+                reference photo against a character, so it stays character-only. */}
             <div className="sticky bottom-0 -mx-1 px-1 pt-2 pb-1 qt-bg-default border-t qt-border-default flex items-center gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setImportFromImageOpen(true)}
-                disabled={!selectedCharacterId}
-                className="qt-button-ghost qt-button-sm"
-                title="Import wardrobe items from a reference image"
-              >
-                Import from image
-              </button>
+              {isCharacterScope && (
+                <button
+                  type="button"
+                  onClick={() => setImportFromImageOpen(true)}
+                  disabled={!selectedCharacterId}
+                  className="qt-button-ghost qt-button-sm"
+                  title="Import wardrobe items from a reference image"
+                >
+                  Import from image
+                </button>
+              )}
               <button
                 type="button"
                 className="qt-button-primary qt-button-sm"
-                disabled={!selectedCharacterId}
+                disabled={!selectedContainer}
                 onClick={() => setCreatingNew('create-single')}
               >
                 + New Item
@@ -1234,12 +1474,14 @@ function WardrobeControlDialogInner({
       )}
 
       {/* Inline editor — stacked on top of the dialog */}
-      {(editingItem || creatingNew) && selectedCharacterId && (
+      {(editingItem || creatingNew) && selectedContainer && (
         <WardrobeItemEditor
           characterId={selectedCharacterId}
           item={editingItem}
           isShared={false}
           projectId={dialogProjectId}
+          container={selectedContainer}
+          containerLabel={selectedContainerLabel}
           initialMode={
             creatingNew === 'create-bundle'
               ? 'bundle'
@@ -1260,22 +1502,31 @@ function WardrobeControlDialogInner({
             setEditingItem(null)
             setCreatingNew(null)
             setCreateBundleComponents([])
-            await reloadItems()
-            if (isInChat) {
-              outfit.invalidateWardrobe(selectedCharacterId)
-              await outfit.refreshOutfit()
-            }
+            await refreshAfterMutation()
           }}
         />
       )}
 
-      {transferringItem && transferIntent && selectedCharacterId && (
+      {transferringItem && transferIntent && selectedContainer && (
         <WardrobeTransferDialog
           isOpen
           mode={transferIntent}
           item={transferringItem}
           sourceCharacterId={selectedCharacterId}
           sourceProjectId={dialogProjectId}
+          // Browsing a shared container, the item's home is known exactly —
+          // name it as the source and drop it from the destination list. In
+          // the character view the home tier of a merged shared item isn't
+          // tracked, so the server probes (and only a character-owned item's
+          // own vault can be safely excluded).
+          source={isCharacterScope ? null : selectedContainer}
+          excludeDestination={
+            isCharacterScope
+              ? transferringItem.characterId
+                ? { scope: 'character', id: transferringItem.characterId }
+                : null
+              : selectedContainer
+          }
           onClose={() => {
             setTransferringItem(null)
             setTransferIntent(null)
@@ -1283,11 +1534,7 @@ function WardrobeControlDialogInner({
           onTransferred={async () => {
             setTransferringItem(null)
             setTransferIntent(null)
-            await reloadItems()
-            if (isInChat) {
-              outfit.invalidateWardrobe(selectedCharacterId)
-              await outfit.refreshOutfit()
-            }
+            await refreshAfterMutation()
           }}
         />
       )}
@@ -1324,18 +1571,25 @@ function AvatarGenerationPane({
   previewFilename,
   onDiscardPreview,
 }: AvatarGenerationPaneProps) {
-  const downloadRef = useRef<HTMLAnchorElement>(null)
-
-  const handleDownload = useCallback(() => {
-    downloadRef.current?.click()
-  }, [])
+  const handleDownload = useCallback(async () => {
+    if (!previewUrl) return
+    try {
+      const res = await fetch(previewUrl)
+      if (!res.ok) throw new Error(`Failed to fetch preview (${res.status})`)
+      const blob = await res.blob()
+      await triggerDownload(blob, previewFilename ?? 'avatar-preview.webp')
+    } catch (error) {
+      console.error('Failed to download avatar preview:', { error: error instanceof Error ? error.message : String(error) })
+      showErrorToast('Failed to download avatar preview')
+    }
+  }, [previewUrl, previewFilename])
 
   return (
     <div className="qt-card py-3 px-3 qt-bg-muted/30">
       <div className="flex flex-wrap items-center gap-2">
         <label
           htmlFor="wardrobe-image-profile"
-          className="qt-text-sm qt-text-secondary"
+          className="text-sm qt-text-secondary"
         >
           Image model
         </label>
@@ -1392,14 +1646,6 @@ function AvatarGenerationPane({
             </button>
           </div>
           <div className="flex flex-col gap-2">
-            <a
-              ref={downloadRef}
-              href={previewUrl}
-              download={previewFilename ?? 'avatar-preview.webp'}
-              className="hidden"
-            >
-              download
-            </a>
             <button
               type="button"
               onClick={handleDownload}

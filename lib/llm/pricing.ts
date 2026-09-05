@@ -139,45 +139,6 @@ export function findCheapestModel(
 }
 
 /**
- * Get models cheaper than a threshold
- */
-export function getModelsUnderCost(
-  models: ModelPricing[],
-  maxAverageCostPer1M: number
-): ModelPricing[] {
-  return models.filter(m => getAverageCostPer1M(m) <= maxAverageCostPer1M)
-}
-
-/**
- * Calculate cost tier (1-5) based on actual pricing
- */
-export function calculateCostTier(pricing: ModelPricing): number {
-  const avgCost = getAverageCostPer1M(pricing)
-
-  // Tier thresholds (per 1M tokens average)
-  if (avgCost === 0) return 1 // Free (local/Ollama)
-  if (avgCost < 0.5) return 1 // Very cheap (Flash models)
-  if (avgCost < 2.0) return 2 // Cheap (Mini models, Haiku)
-  if (avgCost < 10.0) return 3 // Mid-tier (Sonnet, GPT-4o)
-  if (avgCost < 50.0) return 4 // Expensive (Opus, o1)
-  return 5 // Very expensive
-}
-
-/**
- * Compare two models and return cost savings percentage
- */
-export function calculateSavings(
-  expensiveModel: ModelPricing,
-  cheaperModel: ModelPricing
-): number {
-  const expensiveCost = getAverageCostPer1M(expensiveModel)
-  const cheaperCost = getAverageCostPer1M(cheaperModel)
-
-  if (expensiveCost === 0) return 0
-  return ((expensiveCost - cheaperCost) / expensiveCost) * 100
-}
-
-/**
  * Get model pricing from the provider registry
  * First checks plugin's getModelInfo(), then falls back to FALLBACK_PRICING
  *

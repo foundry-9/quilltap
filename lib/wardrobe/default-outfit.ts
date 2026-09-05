@@ -9,6 +9,7 @@
  */
 
 import { dissolveBundlesInSlots } from '@/lib/wardrobe/dissolve-bundles'
+import { makeEmptyEquippedSlots } from '@/lib/schemas/wardrobe.types'
 import type { EquippedSlots, WardrobeItem } from '@/lib/schemas/wardrobe.types'
 
 /**
@@ -28,7 +29,7 @@ export function sortForDefaultOutfit(items: WardrobeItem[]): WardrobeItem[] {
 }
 
 export function buildDefaultOutfit(items: WardrobeItem[]): EquippedSlots {
-  const next: EquippedSlots = { top: [], bottom: [], footwear: [], accessories: [] }
+  const next: EquippedSlots = makeEmptyEquippedSlots()
   for (const item of sortForDefaultOutfit(items)) {
     if (!item.isDefault || item.archivedAt) continue
     for (const slot of item.types) next[slot].push(item.id)

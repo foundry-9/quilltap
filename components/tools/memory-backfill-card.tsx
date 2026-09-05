@@ -1,80 +1,78 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
-import { getErrorMessage } from '@/lib/error-utils'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { useJobFanOutStatus } from './hooks/useJobFanOutStatus'
+import { readErrorText, writeErrorText } from './hooks/api-error-text'
 
 interface BackfillProgress {
   remaining: number
   inFlight: number
 }
 
+const BACKFILL_URL = '/api/v1/memories?action=backfill-embeddings'
+/** Fallback poll cadence, used only while the realtime socket is down. */
+const FALLBACK_POLL_INTERVAL_MS = 4_000
+
 export function MemoryBackfillCard() {
-  const [progress, setProgress] = useState<BackfillProgress | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [running, setRunning] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
-  const fetchProgress = useCallback(async () => {
-    try {
-      const response = await fetch('/api/v1/memories?action=backfill-embeddings')
-      if (!response.ok) {
-        throw new Error('Failed to load backfill progress')
-      }
-      const data = await response.json()
-      setProgress(data.progress)
-      setError(null)
-    } catch (err) {
-      setError(getErrorMessage(err, 'Failed to load backfill progress'))
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  // Live path: the backfill runs as background jobs, so every completion moves
+  // the `jobs` topic and re-reads progress the moment it changes. The
+  // repeating 4 s poll is the fallback for a dropped socket.
+  const {
+    data,
+    isLoading: loading,
+    error: loadError,
+    dataUpdatedAt,
+  } = useJobFanOutStatus<{ progress: BackfillProgress }>({
+    queryKey: queryKeys.memories.backfillProgress,
+    url: BACKFILL_URL,
+    pollMs: FALLBACK_POLL_INTERVAL_MS,
+  })
+  const progress = data?.progress ?? null
 
+  // A successful (re)read wipes a stale start error, as the old shared error
+  // state did on every progress tick.
   useEffect(() => {
-    // Poll every 4 s; the first tick fires almost immediately so the user
-    // doesn't wait four seconds to see the initial load.
-    const interval = setInterval(() => {
-      void fetchProgress()
-    }, 4_000)
-    const firstTick = setTimeout(() => {
-      void fetchProgress()
-    }, 0)
-    return () => {
-      clearInterval(interval)
-      clearTimeout(firstTick)
-    }
-  }, [fetchProgress])
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clear the action error once fresh progress lands
+    if (dataUpdatedAt) setActionError(null)
+  }, [dataUpdatedAt])
 
-  const handleStart = async () => {
-    setRunning(true)
-    setError(null)
-    try {
-      const response = await fetch('/api/v1/memories?action=backfill-embeddings', {
+  const start = useMutation({
+    mutationFn: () =>
+      apiFetch<{ message?: string; enqueued?: number }>(BACKFILL_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ batchSize: 500 }),
-      })
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to start backfill')
-      }
-      const data = await response.json()
+      }),
+    onSuccess: async data => {
       showSuccessToast(data.message || `Enqueued ${data.enqueued} embedding jobs`)
-      await fetchProgress()
-    } catch (err) {
-      const msg = getErrorMessage(err, 'Failed to start backfill')
-      setError(msg)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.memories.backfillProgress })
+    },
+    onError: err => {
+      const msg = writeErrorText(err, 'Failed to start backfill')
+      setActionError(msg)
       showErrorToast(msg)
-    } finally {
-      setRunning(false)
-    }
+    },
+  })
+  const running = start.isPending
+
+  const handleStart = () => {
+    setActionError(null)
+    start.mutate()
   }
 
   if (loading) {
     return <p className="qt-text-small qt-text-muted">Loading backfill status&hellip;</p>
   }
 
+  const error =
+    actionError ?? (loadError ? readErrorText(loadError, 'Failed to load backfill progress') : null)
   const remaining = progress?.remaining ?? 0
   const inFlight = progress?.inFlight ?? 0
 
@@ -84,7 +82,7 @@ export function MemoryBackfillCard() {
         Some older memories may not carry an embedding &mdash; usually because the pre-write gate fell back to a keyword check when the embedding provider was briefly unavailable, or because the memory was imported before the gate became embedding-aware. Such memories can&rsquo;t be found by semantic search and are invisible to the deduplication gate, which lets phrase-variants accumulate. Running the backfill enqueues an embedding job for each of them so they rejoin the fold.
       </p>
 
-      <div className="qt-text-body">
+      <div className="qt-body">
         <div className="flex items-center gap-4">
           <div>
             <span className="qt-text-muted">Memories missing an embedding: </span>
@@ -111,7 +109,7 @@ export function MemoryBackfillCard() {
         </span>
       </div>
 
-      {error && <p className="qt-text-small qt-text-error">{error}</p>}
+      {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
     </div>
   )
 }

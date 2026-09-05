@@ -30,7 +30,13 @@ export function isSQLiteBackend(): boolean {
 
 import Database, { Database as DatabaseType } from 'better-sqlite3';
 import fs from 'fs';
-import { getSQLiteDatabasePath, getDataDir, getInstanceLockPath } from '../../lib/paths';
+import {
+  getSQLiteDatabasePath,
+  getDataDir,
+  getInstanceLockPath,
+  getMountIndexDatabasePath,
+  getLLMLogsDatabasePath,
+} from '../../lib/paths';
 import {
   acquireInstanceLock,
   InstanceLockError,
@@ -105,9 +111,34 @@ export function getSQLiteDatabase(): DatabaseType {
     throw lockError;
   }
 
-  const dbPath = getSQLitePath();
-  const db = new Database(dbPath);
+  sqliteDb = openEncryptedSqlite(getSQLitePath(), { foreignKeys: true });
+  return sqliteDb;
+}
 
+// ============================================================================
+// Encrypted sidecar databases (mount-index, llm-logs)
+// ============================================================================
+
+export interface OpenEncryptedSqliteOptions {
+  /** Enable `PRAGMA foreign_keys = ON` (the main database always does). */
+  foreignKeys?: boolean;
+}
+
+/**
+ * Open a SQLCipher-encrypted database file with the key and pragmas every
+ * Quilltap connection uses: `ENCRYPTION_MASTER_PEPPER` as the key (first, as
+ * SQLCipher requires), WAL journaling, and a 5 s busy timeout. A connection
+ * that fails mid-setup is closed before the error propagates, so a retry
+ * starts from nothing.
+ *
+ * Takes no instance lock of its own: the sidecar databases live beside the
+ * main one, under the lock `getSQLiteDatabase()` already holds for the process.
+ */
+export function openEncryptedSqlite(
+  dbPath: string,
+  opts: OpenEncryptedSqliteOptions = {}
+): DatabaseType {
+  const db = new Database(dbPath);
   try {
     // SQLCipher key MUST be the first pragma before any other operations.
     const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
@@ -115,19 +146,59 @@ export function getSQLiteDatabase(): DatabaseType {
       const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
       db.pragma(`key = "x'${keyHex}'"`);
     }
-
-    // Configure pragmas
     db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
+    if (opts.foreignKeys) {
+      db.pragma('foreign_keys = ON');
+    }
     db.pragma('busy_timeout = 5000');
+    return db;
   } catch (error) {
     // Close the partially-initialized connection so retries start fresh
     try { db.close(); } catch { /* ignore close errors */ }
     throw error;
   }
+}
 
-  sqliteDb = db;
-  return sqliteDb;
+/**
+ * Open the mount-index database, or return null when the file does not exist
+ * yet (a fresh install creates it from the Zod-derived DDL on first access, so
+ * there is nothing to migrate). The caller owns the connection and closes it.
+ */
+export function openMountIndexDbIfPresent(
+  opts: OpenEncryptedSqliteOptions = {}
+): DatabaseType | null {
+  const dbPath = getMountIndexDatabasePath();
+  if (!fs.existsSync(dbPath)) return null;
+  logger.debug('Opening mount-index database for migration', {
+    context: 'migrations.database-utils',
+    dbPath,
+  });
+  return openEncryptedSqlite(dbPath, opts);
+}
+
+/**
+ * The LLM-logs database path, honouring the same `SQLITE_LLM_LOGS_PATH`
+ * override the runtime client uses (`lib/database/config.ts`).
+ */
+export function getLlmLogsDbPath(): string {
+  return process.env.SQLITE_LLM_LOGS_PATH || getLLMLogsDatabasePath();
+}
+
+/**
+ * Open the LLM-logs database, or return null when the file does not exist yet
+ * (created from the Zod-derived DDL on first access). The caller owns the
+ * connection and closes it.
+ */
+export function openLlmLogsDbIfPresent(
+  opts: OpenEncryptedSqliteOptions = {}
+): DatabaseType | null {
+  const dbPath = getLlmLogsDbPath();
+  if (!fs.existsSync(dbPath)) return null;
+  logger.debug('Opening LLM-logs database for migration', {
+    context: 'migrations.database-utils',
+    dbPath,
+  });
+  return openEncryptedSqlite(dbPath, opts);
 }
 
 /**
@@ -230,19 +301,58 @@ export async function waitForDatabaseReady(
 // SQLite Table Operations (for migrations)
 // ============================================================================
 
+/** Whether `table` exists on an explicit connection (main or sidecar). */
+export function tableExists(db: DatabaseType, table: string): boolean {
+  const result = db.prepare(`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table' AND name = ?
+  `).get(table) as { name: string } | undefined;
+
+  return !!result;
+}
+
+/** Whether `table` has a column named `column`, on an explicit connection. */
+export function columnExists(db: DatabaseType, table: string, column: string): boolean {
+  const cols = db.prepare(`PRAGMA table_info("${table}")`).all() as Array<{ name: string }>;
+  return cols.some((col) => col.name === column);
+}
+
 /**
  * Check if a table exists in SQLite
  */
 export function sqliteTableExists(tableName: string): boolean {
   assertSQLiteBackend('sqliteTableExists');
+  return tableExists(getSQLiteDatabase(), tableName);
+}
 
+/**
+ * Check if a column exists on a main-database table
+ */
+export function sqliteColumnExists(tableName: string, columnName: string): boolean {
+  assertSQLiteBackend('sqliteColumnExists');
+  return columnExists(getSQLiteDatabase(), tableName, columnName);
+}
+
+/**
+ * `ALTER TABLE … ADD COLUMN` on the main database, only when the column is not
+ * already there. `ddl` is everything after the column name (`TEXT DEFAULT
+ * NULL`, `INTEGER DEFAULT 1`, …). Returns true when a column was added, so a
+ * migration can count what it changed and log accordingly. The table must
+ * exist — callers gate on `sqliteTableExists` first, as `shouldRun` does.
+ */
+export function addColumnIfMissing(tableName: string, columnName: string, ddl: string): boolean {
+  assertSQLiteBackend('addColumnIfMissing');
   const db = getSQLiteDatabase();
-  const result = db.prepare(`
-    SELECT name FROM sqlite_master
-    WHERE type = 'table' AND name = ?
-  `).get(tableName) as { name: string } | undefined;
-
-  return !!result;
+  if (columnExists(db, tableName, columnName)) {
+    return false;
+  }
+  logger.debug('Adding column', {
+    context: 'migrations.database-utils',
+    table: tableName,
+    column: columnName,
+  });
+  db.exec(`ALTER TABLE "${tableName}" ADD COLUMN "${columnName}" ${ddl}`);
+  return true;
 }
 
 /**

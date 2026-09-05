@@ -2,11 +2,26 @@
 
 # Zsh completion for quilltap
 
+# Position is worked out by _arguments, never by counting words. A hard-coded
+# `CURRENT == 2` test means the verb only completes when it sits immediately
+# after the subcommand, so `quilltap docs --instance Friday <TAB>` offers
+# nothing at all. Every function below hands its option list *and* its
+# positional specs to one `_arguments -C` call and branches on $state, so flags
+# may appear anywhere the CLI itself accepts them.
+
 local ret=1
 
 _quilltap() {
   local -a subcommands
   local -a global_options
+
+  # The whole command line, kept before _arguments rebases `words` for the
+  # subcommand dispatch. The lookup helpers read it so that an --instance
+  # typed anywhere picks which database they query.
+  local -a _quilltap_line
+  local -i _quilltap_cword
+  _quilltap_line=("${words[@]}")
+  _quilltap_cword=$CURRENT
 
   global_options=(
     '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
@@ -34,10 +49,14 @@ _quilltap() {
     'completion:Generate shell completion scripts'
   )
 
+  # (-) on both positionals stops the top-level _arguments from swallowing a
+  # flag typed *after* the subcommand: without it `quilltap docs --instance
+  # Friday <TAB>` parses --instance as a global option, leaving the rest-arg
+  # array empty and the subcommand dispatch with nothing to dispatch on.
   _arguments -C \
-    '1: :->subcommand' \
     "${global_options[@]}" \
-    '*::arg:->args'
+    '(-): :->subcommand' \
+    '(-)*::arg:->args'
 
   case "$state" in
     subcommand)
@@ -74,7 +93,7 @@ _quilltap_subcommand() {
       _quilltap_memory_diff
       ;;
     recall-replay)
-      _arguments '--turn[interchange to replay]:turn:' '--char[character id]:char:' '--limit[rows per path]:limit:' '--port[server port]:port:' '--json[raw JSON output]' '--help[show help]'
+      _quilltap_recall_replay
       ;;
     logs)
       _quilltap_logs
@@ -86,7 +105,7 @@ _quilltap_subcommand() {
       _quilltap_maintenance
       ;;
     file-verify)
-      _arguments '--all[read every top-level file, not just dataless ones]' '--stall-ms[per-chunk stall threshold in ms]:ms:' '--json[machine-readable output]' '--help[show help]'
+      _quilltap_file_verify
       ;;
     completion)
       _quilltap_completion
@@ -95,7 +114,10 @@ _quilltap_subcommand() {
 }
 
 _quilltap_db() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
   local -a subverbs db_opts
+
   subverbs=(
     'schema:Show database schema'
     'find:Find entities by name'
@@ -147,46 +169,74 @@ _quilltap_db() {
     '(-h --help)'{-h,--help}'[Show help]'
   )
 
-  if (( CURRENT == 2 )); then
-    _describe 'db subcommand' subverbs
-    return
-  fi
+  # (-) again: a flag typed after the verb belongs to the verb's own
+  # _arguments call below, not to this one.
+  _arguments -C $db_opts \
+    '(-): :->verb' \
+    '(-)*::arg:->rest'
 
-  if [[ "$words[2]" == "characters" ]]; then
-    local -a char_verbs char_opts
-    char_verbs=(
-      'status:Per-character vault status report'
-      'archives:List archived characters and ARCHIVE bundles'
-      'archive:Archive a character (runs through the server)'
-      'rehydrate:Wake an archived character (runs through the server)'
-      'export:Write a plaintext .qtap for a character'
-    )
-    char_opts=(
-      '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
-      '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
-      '--passphrase[Database passphrase]:passphrase:'
-      '--json[JSON output]'
-      '--limit[Result limit]:limit:'
-      '--diverged[Only characters whose DB and vault differ]'
-      '--blocked[Only characters with vault issues]'
-      '--id[Single character by name or id]:character:'
-      '--write[Perform the archive/rehydrate write]'
-      '(-p --port)'{-p,--port}'[Server port]:port:'
-      '--out[Output .qtap path]:path:_files'
-      '(-h --help)'{-h,--help}'[Show help]'
-    )
-    if (( CURRENT == 3 )); then
-      _describe 'characters subcommand' char_verbs
-    fi
-    _arguments $char_opts
-    return
-  fi
+  case "$state" in
+    verb)
+      _describe -t commands 'db subcommand' subverbs
+      ;;
+    rest)
+      case "$line[1]" in
+        characters)
+          _quilltap_db_characters
+          ;;
+        *)
+          # Nothing to complete positionally, but the flags still apply.
+          _arguments $db_opts
+          ;;
+      esac
+      ;;
+  esac
+}
 
-  _arguments $db_opts
+_quilltap_db_characters() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+  local -a char_verbs char_opts
+
+  char_verbs=(
+    'status:Per-character vault status report'
+    'archives:List archived characters and ARCHIVE bundles'
+    'archive:Archive a character (runs through the server)'
+    'rehydrate:Wake an archived character (runs through the server)'
+    'export:Write a plaintext .qtap for a character'
+  )
+
+  char_opts=(
+    '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
+    '--passphrase[Database passphrase]:passphrase:'
+    '--json[JSON output]'
+    '--limit[Result limit]:limit:'
+    '--diverged[Only characters whose DB and vault differ]'
+    '--blocked[Only characters with vault issues]'
+    '--id[Single character by name or id]:character:'
+    '--write[Perform the archive/rehydrate write]'
+    '(-p --port)'{-p,--port}'[Server port]:port:'
+    '--out[Output .qtap path]:path:_files'
+    '(-h --help)'{-h,--help}'[Show help]'
+  )
+
+  _arguments -C $char_opts \
+    '1: :->cverb' \
+    '*: :'
+
+  case "$state" in
+    cverb)
+      _describe -t commands 'characters subcommand' char_verbs
+      ;;
+  esac
 }
 
 _quilltap_docs() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
   local -a subverbs docs_opts
+
   subverbs=(
     'list:List all mount points'
     'show:Details for one mount point'
@@ -219,10 +269,12 @@ _quilltap_docs() {
     '--passphrase[Database passphrase]:passphrase:'
     '(-p --port)'{-p,--port}'[Server port]:port:'
     '--json[JSON output]'
-    '--mount[Mount name or id]:mount:'
+    '--uri[Show canonical qtap:// URIs as the locator]'
+    '--mount[Mount name or id]:mount:_quilltap_mount_names'
     '--folder[Folder filter]:folder:'
     '--force[Force operation]'
     '--rendered[Render rich content]'
+    '--base64[Base64 transfer for binary files]'
     '--links[Include link details]'
     '--type[Filter by type]:type:(file folder)'
     '--ext[Extension filter]:ext:'
@@ -241,17 +293,65 @@ _quilltap_docs() {
     '--max-nodes[Maximum nodes in graph]:n:'
     '--long[Long-form output]'
     '--semantic[Use semantic search]'
+    '--format[For docker-mounts: output shape]:format:(args json)'
     '(-h --help)'{-h,--help}'[Show help]'
   )
 
-  if (( CURRENT == 2 )); then
-    _describe 'docs subcommand' subverbs
+  _arguments -C $docs_opts \
+    '1: :->verb' \
+    '2: :->pos2' \
+    '3: :->pos3' \
+    '4: :->pos4' \
+    '*: :'
+
+  case "$state" in
+    verb)
+      _describe -t commands 'docs subcommand' subverbs
+      ;;
+    pos2|pos3|pos4)
+      _quilltap_docs_positional ${state#pos}
+      ;;
+  esac
+}
+
+# Which docs positionals name a document store, and which name a local path.
+# `move`/`copy`/`link` take <srcMount> <srcPath> <dstMount> <dstPath>, so a
+# store is wanted at both 2 and 4; everything else that takes a store takes it
+# first. `$line` comes from the caller's _arguments -C.
+_quilltap_docs_positional() {
+  local -i n=$1
+  local verb="$line[1]"
+  local -a store_verbs
+  store_verbs=(
+    show files ls dir tree read export scan reindex embed
+    write delete mkdir rmdir mvdir move copy link
+  )
+
+  if (( n == 2 )) && (( ${store_verbs[(I)$verb]} )); then
+    _quilltap_mount_names
+    return
   fi
-  _arguments $docs_opts
+
+  case "$verb" in
+    move|copy|link)
+      (( n == 4 )) && _quilltap_mount_names
+      ;;
+    export)
+      # `docs export <mount> <outputDir>` — the second one is a local directory.
+      (( n == 3 )) && _directories
+      ;;
+    write)
+      # `docs write <mount> <path> [file]` — the optional source is local.
+      (( n == 4 )) && _files
+      ;;
+  esac
 }
 
 _quilltap_themes() {
-  local -a subverbs registry_verbs themes_opts registry_opts
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+  local -a subverbs themes_opts
+
   subverbs=(
     'list:List available themes'
     'install:Install a theme'
@@ -271,37 +371,70 @@ _quilltap_themes() {
     '(-h --help)'{-h,--help}'[Show help]'
   )
 
-  if (( CURRENT == 2 )); then
-    _describe 'themes subcommand' subverbs
-    return
-  fi
+  # (-) again: a flag typed after the verb belongs to the verb's own
+  # _arguments call below, not to this one.
+  _arguments -C $themes_opts \
+    '(-): :->verb' \
+    '(-)*::arg:->rest'
 
-  if [[ "$words[2]" == "registry" ]]; then
-    registry_verbs=(
-      'list:List registries'
-      'add:Add a registry'
-      'remove:Remove a registry'
-      'refresh:Refresh registries'
-      'keygen:Generate Ed25519 key'
-      'sign:Sign a registry or bundle'
-    )
-    registry_opts=(
-      '(-k --key)'{-k,--key}'[Signing key path]:path:_files'
-      '(-n --name)'{-n,--name}'[Registry name]:name:'
-      '(-o --output)'{-o,--output}'[Output path]:path:_files'
-    )
-    if (( CURRENT == 3 )); then
-      _describe 'registry subcommand' registry_verbs
-    fi
-    _arguments $registry_opts
-    return
-  fi
+  case "$state" in
+    verb)
+      _describe -t commands 'themes subcommand' subverbs
+      ;;
+    rest)
+      case "$line[1]" in
+        registry)
+          _quilltap_themes_registry
+          ;;
+        *)
+          _arguments $themes_opts
+          ;;
+      esac
+      ;;
+  esac
+}
 
-  _arguments $themes_opts
+_quilltap_themes_registry() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+  local -a registry_verbs registry_opts
+
+  registry_verbs=(
+    'list:List registries'
+    'add:Add a registry'
+    'remove:Remove a registry'
+    'refresh:Refresh registries'
+    'keygen:Generate Ed25519 key'
+    'sign:Sign a registry or bundle'
+  )
+
+  # themesCommand() parses -d/-i/-o/-h anywhere in the argv, including after
+  # `registry`, so they belong in this list too.
+  registry_opts=(
+    '(-k --key)'{-k,--key}'[Signing key path]:path:_files'
+    '(-n --name)'{-n,--name}'[Registry name]:name:'
+    '(-o --output)'{-o,--output}'[Output path]:path:_files'
+    '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
+    '(-h --help)'{-h,--help}'[Show help]'
+  )
+
+  _arguments -C $registry_opts \
+    '1: :->rverb' \
+    '*: :'
+
+  case "$state" in
+    rverb)
+      _describe -t commands 'registry subcommand' registry_verbs
+      ;;
+  esac
 }
 
 _quilltap_instances() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
   local -a subverbs inst_opts
+
   subverbs=(
     'list:List registered instances'
     'ls:List registered instances'
@@ -317,34 +450,46 @@ _quilltap_instances() {
     'passphrase:Set instance passphrase'
     'default:Set/show/clear the default instance'
     'rename:Rename an instance (preserves passphrase)'
+    'restore-key:Rebuild the .dbkey from the pepper'
+    'rebuild-key:Rebuild the .dbkey from the pepper'
   )
 
   inst_opts=(
     '--names-only[Print one name per line (for completion)]'
     '--json[JSON output]'
     '--clear[Clear value (for default)]'
+    '--passphrase[Passphrase for the rebuilt .dbkey]:passphrase:'
+    '--no-passphrase[Rebuild the .dbkey with no passphrase]'
+    '(-d --data-dir)'{-d,--data-dir}'[Instance root to rebuild in]:directory:_files -/'
+    '--force[Write even with no encrypted database to prove the pepper against]'
+    '(-y --yes)'{-y,--yes}'[Skip confirmation prompts]'
     '(-h --help)'{-h,--help}'[Show help]'
   )
 
-  if (( CURRENT == 2 )); then
-    _describe 'instances subcommand' subverbs
-    return
-  fi
+  _arguments -C $inst_opts \
+    '1: :->verb' \
+    '2: :->name' \
+    '*: :'
 
-  case "$words[2]" in
-    show|remove|rm|delete|set-passphrase|passphrase|default|rename)
-      if (( CURRENT == 3 )); then
-        _values 'instance' ${(f)"$(command quilltap instances list --names-only 2>/dev/null)"}
-        return
-      fi
+  case "$state" in
+    verb)
+      _describe -t commands 'instances subcommand' subverbs
+      ;;
+    name)
+      case "$line[1]" in
+        show|remove|rm|delete|set-passphrase|passphrase|default|rename|restore-key|rebuild-key)
+          _quilltap_instance_names
+          ;;
+      esac
       ;;
   esac
-
-  _arguments $inst_opts
 }
 
 _quilltap_memories() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
   local -a subverbs mem_opts
+
   subverbs=(
     'ls:List memories'
     'find:Substring search'
@@ -356,10 +501,10 @@ _quilltap_memories() {
   )
 
   mem_opts=(
-    '(-i --instance)'{-i,--instance}'[Registered instance name]:instance:_quilltap_instance_names'
+    '--instance[Registered instance name]:instance:_quilltap_instance_names'
     '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories'
     '--passphrase[Database passphrase]:passphrase:'
-    '(-p --port)'{-p,--port}'[Server port]:port:'
+    '--port[Server port]:port:'
     '--json[JSON output]'
     '--character[Character name or id]:character:'
     '--about[Subject of memory]:character:'
@@ -379,7 +524,7 @@ _quilltap_memories() {
     '--in[Restrict find-in field]:field:'
     '--no-related[Hide related neighbors]'
     '--list[List-only output]'
-    '(-i --ignore-case)'{-i,--ignore-case}'[Case-insensitive]'
+    '(-i --ignore-case)'{-i,--ignore-case}'[Case-insensitive (memories reserves -i for this, not --instance)]'
     '(-l --paths-only)'{-l,--paths-only}'[Paths only]'
     '--max[Maximum results]:n:'
     '--context[Context lines]:n:'
@@ -391,10 +536,15 @@ _quilltap_memories() {
     '(-h --help)'{-h,--help}'[Show help]'
   )
 
-  if (( CURRENT == 2 )); then
-    _describe 'memories subcommand' subverbs
-  fi
-  _arguments $mem_opts
+  _arguments -C $mem_opts \
+    '1: :->verb' \
+    '*: :'
+
+  case "$state" in
+    verb)
+      _describe -t commands 'memories subcommand' subverbs
+      ;;
+  esac
 }
 
 _quilltap_memory_diff() {
@@ -405,7 +555,22 @@ _quilltap_memory_diff() {
     '--passphrase[Database passphrase]:passphrase:' \
     '(-p --port)'{-p,--port}'[Server port]:port:' \
     '--concurrency[Concurrency limit]:n:' \
-    '--out[Output file]:path:_files'
+    '--out[Output file]:path:_files' \
+    '*: :'
+}
+
+_quilltap_recall_replay() {
+  _arguments \
+    '(-h --help)'{-h,--help}'[Show help]' \
+    '(-i --instance)'{-i,--instance}'[Use instance]:instance:_quilltap_instance_names' \
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories' \
+    '--passphrase[Database passphrase]:passphrase:' \
+    '--turn[interchange to replay]:turn:' \
+    '--char[character id]:char:' \
+    '--limit[rows per path]:limit:' \
+    '--port[server port]:port:' \
+    '--json[raw JSON output]' \
+    '*: :'
 }
 
 _quilltap_logs() {
@@ -417,11 +582,27 @@ _quilltap_logs() {
     '--stream[Which log stream]:stream:(combined error stdout stderr startup)' \
     '--tail[Last N lines (0=full)]:n:' \
     '(-f --follow)'{-f,--follow}'[Stream new lines]' \
-    '--grep[Regex filter]:pattern:'
+    '--grep[Regex filter]:pattern:' \
+    '*: :'
+}
+
+_quilltap_file_verify() {
+  _arguments \
+    '(-h --help)'{-h,--help}'[Show help]' \
+    '(-i --instance)'{-i,--instance}'[Use instance]:instance:_quilltap_instance_names' \
+    '(-d --data-dir)'{-d,--data-dir}'[Data directory]:directory:_directories' \
+    '--passphrase[Database passphrase]:passphrase:' \
+    '--all[read every top-level file, not just dataless ones]' \
+    '--stall-ms[per-chunk stall threshold in ms]:ms:' \
+    '--json[machine-readable output]' \
+    '*: :'
 }
 
 _quilltap_migrations() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
   local -a subverbs mig_opts
+
   subverbs=(
     'status:Migration status'
     'pending:List pending migrations'
@@ -437,14 +618,22 @@ _quilltap_migrations() {
     '(-h --help)'{-h,--help}'[Show help]'
   )
 
-  if (( CURRENT == 2 )); then
-    _describe 'migrations subcommand' subverbs
-  fi
-  _arguments $mig_opts
+  _arguments -C $mig_opts \
+    '1: :->verb' \
+    '*: :'
+
+  case "$state" in
+    verb)
+      _describe -t commands 'migrations subcommand' subverbs
+      ;;
+  esac
 }
 
 _quilltap_maintenance() {
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
   local -a subverbs maint_opts
+
   subverbs=(
     'status:Show dry-run retention counts'
     'run:Run retention/cleanup sweeps (lock-gated)'
@@ -458,20 +647,71 @@ _quilltap_maintenance() {
     '(-h --help)'{-h,--help}'[Show help]'
   )
 
-  if (( CURRENT == 2 )); then
-    _describe 'maintenance subcommand' subverbs
-  fi
-  _arguments $maint_opts
+  _arguments -C $maint_opts \
+    '1: :->verb' \
+    '*: :'
+
+  case "$state" in
+    verb)
+      _describe -t commands 'maintenance subcommand' subverbs
+      ;;
+  esac
 }
 
 _quilltap_completion() {
-  _values 'shell' bash zsh fish
+  local curcontext="$curcontext" state line
+  typeset -A opt_args
+
+  _arguments -C \
+    '(-h --help)'{-h,--help}'[Show help]' \
+    '1: :(bash zsh fish)' \
+    '*: :'
+}
+
+# ---------------------------------------------------------------------------
+# Lookup helpers
+#
+# These shell out to quilltap itself, so they have to be told which instance
+# the user is addressing — otherwise `--instance Friday` completes mount names
+# from the default instance. _quilltap_ctx_flags rebuilds the addressing flags
+# from the command line being typed and the helpers pass them straight through.
+# ---------------------------------------------------------------------------
+
+_quilltap_ctx_flags() {
+  ctx_flags=()
+  local -i i=2
+  while (( i <= $#_quilltap_line )); do
+    case "$_quilltap_line[i]" in
+      -i|--instance|-d|--data-dir|--passphrase)
+        # The word under the cursor is a half-typed value, not an answer.
+        if (( i + 1 <= $#_quilltap_line && i + 1 != _quilltap_cword )) \
+          && [[ -n "$_quilltap_line[i+1]" ]]; then
+          ctx_flags+=("$_quilltap_line[i]" "${(Q)_quilltap_line[i+1]}")
+        fi
+        (( i += 2 ))
+        ;;
+      *)
+        (( i += 1 ))
+        ;;
+    esac
+  done
 }
 
 _quilltap_instance_names() {
-  local instances
+  local -a instances expl
   instances=(${(f)"$(command quilltap instances list --names-only 2>/dev/null)"})
-  _values 'instance' $instances
+  (( $#instances )) || return 1
+  # compadd -a, not _values: instance and store names may contain spaces and
+  # colons, which _values would chop into value:description pairs.
+  _wanted instances expl 'instance' compadd -a instances
+}
+
+_quilltap_mount_names() {
+  local -a ctx_flags mounts expl
+  _quilltap_ctx_flags
+  mounts=(${(f)"$(command quilltap docs list --names-only $ctx_flags 2>/dev/null)"})
+  (( $#mounts )) || return 1
+  _wanted mounts expl 'document store' compadd -a mounts
 }
 
 _quilltap "$@"

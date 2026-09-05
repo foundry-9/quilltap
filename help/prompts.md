@@ -41,6 +41,16 @@ These are built-in, read-only templates provided by Quilltap:
 - **Copyable:** Can create new custom prompts based on samples
 - **Learning:** Helpful for understanding prompt structure
 
+#### What's in the sample cabinet
+
+The samples arrive in three drawers, and choosing the right drawer is half the trick:
+
+- **MODERN** — Written for the large-context models of the present day (128K and upward), and indifferent to which house made them. **MODERN General** takes no position on the relationship at all: your character definition and the story between you settle that question. **MODERN Romantic** leans frankly romantic, with a firm hand on pacing and a standing objection to love-bombing and purple excess. **MODERN Platonic** keeps the affection warm and the romance firmly off the table — and does so by writing that boundary into the character's own sense of self, which holds far better over a long evening than a list of forbidden acts.
+- **Model-specific** — One Companion and one Romantic apiece for Claude, GPT-5, GPT-4o, Gemini, Grok, DeepSeek, Mistral, and Ollama. Each is built around the particular way its family tends to wander off: assistant reflexes, tidy summaries, flattery, overwriting, runaway escalation, or flat economy. Reach for these when you know which model will be answering.
+- **GENERIC** — The elder pair, kept for the sake of prompts already built upon them. For anything new, MODERN is the better starting point.
+
+Whichever you choose, none of them will ever write words for you: every sample instructs the character to speak only for itself.
+
 ### My Prompts
 
 These are custom prompts you've created:

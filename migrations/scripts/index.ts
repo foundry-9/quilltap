@@ -298,6 +298,8 @@ import { repairFilesMimeAndSizeFromMountBlobMigration } from './repair-files-mim
 import { repairMountBlobSha256FromBytesMigration } from './repair-mount-blob-sha256-from-bytes';
 // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
 import { addChatConciergeOverrideMigration } from './add-chat-concierge-override';
+// Widen conciergeOverride to admit 'UNCENSORED' (four-state Concierge control)
+import { widenConciergeOverrideDomainMigration } from './widen-concierge-override-domain';
 // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
 import { addComposerSpellcheckFieldMigration } from './add-composer-spellcheck-field';
 // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
@@ -371,6 +373,17 @@ import { addLLMLogsProfileColumnsMigration } from './add-llm-logs-profile-column
 import { addComposerEmojiFieldMigration } from './add-composer-emoji-field';
 import { addComposerUnicodeFieldMigration } from './add-composer-unicode-field';
 import { addSmartTypographySettingsFieldMigration } from './add-smart-typography-settings-field';
+import { createHelpDocChunksTableMigration } from './create-help-doc-chunks-table';
+// Per-profile multi-character [Name] turn anchor: multiCharacterPrefill column on connection_profiles
+import { addProfileMultiCharacterPrefillFieldMigration } from './add-profile-multi-character-prefill-field';
+// Turn that anchor off on profiles that run a thinking turn (bugs 68, 85)
+import { retirePrefillOnThinkingProfilesMigration } from './retire-prefill-on-thinking-profiles';
+// Provider fallback chains: fallbackProfileId + allowTierFallback on connection_profiles
+import { addProfileFallbackFieldsMigration } from './add-profile-fallback-fields';
+import { recomputeChatLastMessageAtMigration } from './recompute-chat-last-message-at';
+import { collapseDuplicateFoldersMigration } from './collapse-duplicate-folders';
+// files.sha256 must name the bytes on disk, not the pre-transcode input (bug 117)
+import { realignFileEntrySha256Migration } from './realign-file-entry-sha256';
 
 /**
  * All available migrations.
@@ -665,6 +678,8 @@ export const migrations: Migration[] = [
   repairMountBlobSha256FromBytesMigration,
   // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
   addChatConciergeOverrideMigration,
+  // Widen conciergeOverride to admit 'UNCENSORED' (four-state Concierge control)
+  widenConciergeOverrideDomainMigration,
   // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
   addComposerSpellcheckFieldMigration,
   // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
@@ -741,6 +756,20 @@ export const migrations: Migration[] = [
   addComposerUnicodeFieldMigration,
   // Layer 1.6 smart typography: smartTypographySettings JSON column on chat_settings
   addSmartTypographySettingsFieldMigration,
+  // Section-level help search: help_doc_chunks table
+  createHelpDocChunksTableMigration,
+  // Per-profile multi-character [Name] turn anchor (replaces the Anthropic-only carve-out)
+  addProfileMultiCharacterPrefillFieldMigration,
+  // Turn that anchor off on profiles that run a thinking turn (bugs 68, 85)
+  retirePrefillOnThinkingProfilesMigration,
+  // Provider fallback chains: every profile can name an understudy
+  addProfileFallbackFieldsMigration,
+  // Chat activity: recompute lastMessageAt from character-authored messages only (bug 112)
+  recomputeChatLastMessageAtMigration,
+  // File tree: collapse duplicate folder rows + unique (userId, projectId, path) index (bug 114)
+  collapseDuplicateFoldersMigration,
+  // Realign files.sha256 with the stored bytes so FileEntries join to their mount blobs (bug 117)
+  realignFileEntrySha256Migration,
 ];
 
 export {
@@ -1018,6 +1047,8 @@ export {
   repairMountBlobSha256FromBytesMigration,
   // Per-chat Concierge override (Safe/Flagged/Off-duty tri-state)
   addChatConciergeOverrideMigration,
+  // Widen conciergeOverride to admit 'UNCENSORED' (four-state Concierge control)
+  widenConciergeOverrideDomainMigration,
   // Add composerSpellcheck column to chat_settings (Composer spellcheck toggle)
   addComposerSpellcheckFieldMigration,
   // Add text_replacement_rules table (Layer 1.5 composer text-replacement rules)
@@ -1090,5 +1121,19 @@ export {
   addComposerUnicodeFieldMigration,
   // Layer 1.6 smart typography: smartTypographySettings JSON column on chat_settings
   addSmartTypographySettingsFieldMigration,
+  // Section-level help search: help_doc_chunks table
+  createHelpDocChunksTableMigration,
+  // Per-profile multi-character [Name] turn anchor (replaces the Anthropic-only carve-out)
+  addProfileMultiCharacterPrefillFieldMigration,
+  // Turn that anchor off on profiles that run a thinking turn (bugs 68, 85)
+  retirePrefillOnThinkingProfilesMigration,
+  // Provider fallback chains: every profile can name an understudy
+  addProfileFallbackFieldsMigration,
+  // Chat activity: recompute lastMessageAt from character-authored messages only (bug 112)
+  recomputeChatLastMessageAtMigration,
+  // File tree: collapse duplicate folder rows + unique (userId, projectId, path) index (bug 114)
+  collapseDuplicateFoldersMigration,
+  // Realign files.sha256 with the stored bytes so FileEntries join to their mount blobs (bug 117)
+  realignFileEntrySha256Migration,
 };
 

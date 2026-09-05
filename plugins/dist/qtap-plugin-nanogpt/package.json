@@ -1,0 +1,22 @@
+{
+  "name": "qtap-plugin-nanogpt",
+  "version": "1.2.5",
+  "description": "NanoGPT provider plugin for Quilltap",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "author": "Foundry-9 LLC",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "node esbuild.config.mjs",
+    "clean": "rm -f index.js"
+  },
+  "dependencies": {
+    "@quilltap/plugin-types": "^2.6.0",
+    "@quilltap/plugin-utils": "^2.6.1",
+    "openai": "^7.10.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

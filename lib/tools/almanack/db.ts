@@ -138,3 +138,31 @@ export function num(value: unknown): number {
   }
   return 0;
 }
+
+/**
+ * A single-number aggregate against the MAIN database — the query must alias
+ * its one column `n` (`SELECT COUNT(*) AS n …`). 0 on any failure.
+ */
+export async function mainCount(
+  sql: string,
+  params: unknown[] = [],
+  context = 'main count',
+): Promise<number> {
+  const row = await mainRow<{ n: number }>(sql, params, context);
+  return num(row?.n);
+}
+
+/**
+ * A single-number aggregate against the MOUNT INDEX — the query must alias
+ * its one column `n`. 0 when the index is unreachable or the query fails.
+ */
+export function mountCount(sql: string, params: unknown[] = [], context = 'mount-index count'): number {
+  return num(mountRow<{ n: number }>(sql, params, context)?.n);
+}
+
+/** `IN (?, ?, …)` placeholder list; `'(NULL)'` when the set is empty. */
+export function inClause(ids: Iterable<string>): { sql: string; params: string[] } {
+  const params = [...ids];
+  if (params.length === 0) return { sql: '(NULL)', params: [] };
+  return { sql: `(${params.map(() => '?').join(', ')})`, params };
+}

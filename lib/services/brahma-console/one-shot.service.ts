@@ -30,7 +30,7 @@
  */
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
-import { requiresApiKey } from '@/lib/plugins/provider-validation'
+import { describeProfileApiKeyFailure, resolveConnectionProfileApiKey } from '@/lib/services/api-key.service'
 import type { getRepositories } from '@/lib/repositories/factory'
 import type { ToolExecutionContext } from '@/lib/chat/tool-executor'
 import {
@@ -100,13 +100,11 @@ export async function runBrahmaQuery(opts: RunBrahmaQueryOptions): Promise<Brahm
     return { ok: false, detail: 'no-profile' }
   }
 
-  let apiKey = ''
-  if (requiresApiKey(connectionProfile.provider)) {
-    if (!connectionProfile.apiKeyId) return { ok: false, detail: 'no API key configured for this connection profile' }
-    const apiKeyData = await repos.connections.findApiKeyById(connectionProfile.apiKeyId)
-    if (!apiKeyData) return { ok: false, detail: 'API key not found' }
-    apiKey = apiKeyData.key_value
+  const keyResolution = await resolveConnectionProfileApiKey(repos, connectionProfile)
+  if (!keyResolution.ok) {
+    return { ok: false, detail: describeProfileApiKeyFailure(keyResolution.reason) }
   }
+  const apiKey = keyResolution.apiKey
 
   // Tools — identical to the standalone console: agent mode, doc read/write, the
   // read-only run_sql tool, search-without-memories; NO ask_carina (recursion

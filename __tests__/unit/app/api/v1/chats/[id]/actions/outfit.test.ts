@@ -99,6 +99,7 @@ describe('chats [id] equip action — vault-overlay regression', () => {
       bottom: [vaultItem.id],
       footwear: [],
       accessories: [],
+      hair: [],
     })
 
     // The handler must use the overlay-aware lookup, not the raw one. It now
@@ -169,6 +170,7 @@ describe('chats [id] equip action — vault-overlay regression', () => {
       bottom: [],
       footwear: [],
       accessories: [],
+      hair: [],
     })
 
     const req = makeRequest({
@@ -193,6 +195,7 @@ describe('chats [id] equip action — vault-overlay regression', () => {
       bottom: ['jeans-1'],
       footwear: [],
       accessories: [],
+      hair: [],
     })
 
     const req = makeRequest({
@@ -210,6 +213,7 @@ describe('chats [id] equip action — vault-overlay regression', () => {
       bottom: ['jeans-1'],
       footwear: [],
       accessories: [],
+      hair: [],
     })
   })
 })

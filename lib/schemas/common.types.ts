@@ -32,7 +32,7 @@ export type Provider = z.infer<typeof ProviderEnum>;
 export const ImageProviderEnum = z.string().min(1, 'Image provider is required');
 export type ImageProvider = z.infer<typeof ImageProviderEnum>;
 
-export const EmbeddingProfileProviderEnum = z.enum(['OPENAI', 'OLLAMA', 'OPENROUTER', 'BUILTIN']);
+export const EmbeddingProfileProviderEnum = z.enum(['OPENAI', 'OLLAMA', 'OPENROUTER', 'NANOGPT', 'BUILTIN']);
 export type EmbeddingProfileProvider = z.infer<typeof EmbeddingProfileProviderEnum>;
 
 export const RoleEnum = z.enum(['SYSTEM', 'USER', 'ASSISTANT', 'TOOL']);

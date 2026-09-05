@@ -14,7 +14,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { showConfirmation } from '@/lib/alert';
+import { showErrorToast, showSuccessToast } from '@/lib/toast';
+import { downloadFetchedFile } from '@/lib/download-utils';
+import { copyImageToClipboard } from '@/lib/clipboard-utils';
+import { Icon } from '@/components/ui/icon';
 import { useSubsystemBackgroundStyle } from '@/components/providers/theme-provider';
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context';
 
 interface PhotoLinker {
   linkId: string;
@@ -78,35 +83,46 @@ export function PhotosView() {
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const bgStyle = useSubsystemBackgroundStyle('lantern');
 
+  // First-page fetch, shared by the on-search-change effect and the tab
+  // re-activation refresh. `silent` keeps the current grid on screen (no
+  // loading flip) while the fresh page loads.
+  const fetchFirstPage = useCallback(async (opts?: { silent?: boolean }) => {
+    const generation = ++fetchGenerationRef.current;
+    if (!opts?.silent) setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (appliedQuery.trim()) params.set('q', appliedQuery.trim());
+      params.set('limit', String(PAGE_SIZE));
+      params.set('offset', '0');
+      const res = await fetch(`/api/v1/photos?${params.toString()}`);
+      if (!res.ok) {
+        throw new Error(`Failed to load gallery (${res.status})`);
+      }
+      const json: ListResponse = await res.json();
+      if (generation !== fetchGenerationRef.current) return;
+      setEntries(json.entries ?? []);
+      setTotal(json.total ?? json.entries?.length ?? 0);
+      setHasMore(Boolean(json.hasMore));
+    } catch (err) {
+      if (generation !== fetchGenerationRef.current) return;
+      setError(err instanceof Error ? err.message : 'Failed to load gallery');
+    } finally {
+      if (generation === fetchGenerationRef.current) setLoading(false);
+    }
+  }, [appliedQuery]);
+
   // Initial / on-search-change fetch.
   useEffect(() => {
-    const generation = ++fetchGenerationRef.current;
-    const fetchInitial = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        if (appliedQuery.trim()) params.set('q', appliedQuery.trim());
-        params.set('limit', String(PAGE_SIZE));
-        params.set('offset', '0');
-        const res = await fetch(`/api/v1/photos?${params.toString()}`);
-        if (!res.ok) {
-          throw new Error(`Failed to load gallery (${res.status})`);
-        }
-        const json: ListResponse = await res.json();
-        if (generation !== fetchGenerationRef.current) return;
-        setEntries(json.entries ?? []);
-        setTotal(json.total ?? json.entries?.length ?? 0);
-        setHasMore(Boolean(json.hasMore));
-      } catch (err) {
-        if (generation !== fetchGenerationRef.current) return;
-        setError(err instanceof Error ? err.message : 'Failed to load gallery');
-      } finally {
-        if (generation === fetchGenerationRef.current) setLoading(false);
-      }
-    };
-    fetchInitial();
-  }, [appliedQuery]);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount/search change; the flags it flips are loading/error bookkeeping inside async fetchFirstPage()
+    void fetchFirstPage();
+  }, [fetchFirstPage]);
+
+  // Navigating back to this tab restarts the gallery from a fresh first page
+  // (silently — the current grid stays up while it loads).
+  useOnTabActivated(() => {
+    void fetchFirstPage({ silent: true });
+  });
 
   const loadMore = useCallback(async () => {
     if (loadingMore || loading || !hasMore) return;
@@ -391,6 +407,8 @@ function PhotoDetailModal({
   onClose: () => void;
   onDelete: () => void;
 }) {
+  const [downloading, setDownloading] = useState(false);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -398,6 +416,28 @@ function PhotoDetailModal({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
+
+  const handleDownload = useCallback(async () => {
+    setDownloading(true);
+    try {
+      await downloadFetchedFile(entry.blobUrl, entry.fileName);
+    } catch (err) {
+      console.error('Failed to download photo:', { error: err instanceof Error ? err.message : String(err) });
+      showErrorToast('Failed to download photo');
+    } finally {
+      setDownloading(false);
+    }
+  }, [entry.blobUrl, entry.fileName]);
+
+  const handleCopy = useCallback(async () => {
+    try {
+      await copyImageToClipboard(entry.blobUrl);
+      showSuccessToast('Image copied to clipboard');
+    } catch (err) {
+      console.error('Failed to copy photo to clipboard:', { error: err instanceof Error ? err.message : String(err) });
+      showErrorToast('Failed to copy image to clipboard');
+    }
+  }, [entry.blobUrl]);
 
   const primaryCaption = entry.caption || entry.fileName;
 
@@ -501,9 +541,29 @@ function PhotoDetailModal({
           >
             {deleting ? 'Removing…' : 'Remove from this album'}
           </button>
-          <button type="button" className="qt-button-secondary" onClick={onClose}>
-            Close
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="qt-button-secondary inline-flex items-center gap-2"
+              onClick={handleDownload}
+              disabled={downloading}
+            >
+              <Icon name="download" className="h-4 w-4" aria-hidden="true" />
+              {downloading ? 'Downloading…' : 'Download'}
+            </button>
+            <button
+              type="button"
+              className="qt-button-secondary inline-flex items-center gap-2"
+              onClick={handleCopy}
+              title="Copy image to clipboard"
+            >
+              <Icon name="copy" className="h-4 w-4" aria-hidden="true" />
+              Copy
+            </button>
+            <button type="button" className="qt-button-secondary" onClick={onClose}>
+              Close
+            </button>
+          </div>
         </footer>
       </div>
     </div>

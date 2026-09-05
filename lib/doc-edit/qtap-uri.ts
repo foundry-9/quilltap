@@ -311,11 +311,33 @@ export function qtapUriToResolverInput(parts: QtapUriParts): {
 // ---------------------------------------------------------------------------
 
 /**
- * Build a human-facing `qtap://` URI for a `document_store` document. Prefers
- * the store **name**; falls back to the **UUID** when the name is ambiguous
- * (`nameIsAmbiguous: true`, decided by the caller) OR when the name collides
- * with a reserved authority (`self`/`project`/`general`), since those are only
- * reachable by UUID.
+ * Pick the addressable reference for a document store: its **name** when that
+ * reads unambiguously, else its **UUID**. The UUID wins when the caller says
+ * the name is ambiguous (`nameIsAmbiguous: true` — two enabled stores share it)
+ * OR when the name collides with a reserved authority (`self`/`project`/
+ * `general`), since a store so named is only reachable by UUID.
+ *
+ * Every producer of a store reference goes through this — `qtap://` URIs via
+ * {@link formatDocStoreUri}, and the global search bar's document results via
+ * `buildDocStoreRefResolver` — so a name that's safe in one is safe in both.
+ * Both forms are accepted by the path resolver.
+ */
+export function docStoreAuthority(args: {
+  mountPointName: string;
+  mountPointId: string;
+  nameIsAmbiguous?: boolean;
+}): string {
+  const nameCollidesWithReserved = RESERVED_AUTHORITIES.has(
+    args.mountPointName.trim().toLowerCase()
+  );
+  const useId = args.nameIsAmbiguous === true || nameCollidesWithReserved;
+  return useId ? args.mountPointId : args.mountPointName;
+}
+
+/**
+ * Build a human-facing `qtap://` URI for a `document_store` document. The
+ * authority is chosen by {@link docStoreAuthority}: the store name, or its
+ * UUID when the name is ambiguous or reserved.
  */
 export function formatDocStoreUri(args: {
   mountPointName: string;
@@ -325,13 +347,9 @@ export function formatDocStoreUri(args: {
   heading?: string;
   level?: number;
 }): string {
-  const nameCollidesWithReserved = RESERVED_AUTHORITIES.has(
-    args.mountPointName.trim().toLowerCase()
-  );
-  const useId = args.nameIsAmbiguous === true || nameCollidesWithReserved;
   return formatQtapUri({
     scope: 'document_store',
-    mountPoint: useId ? args.mountPointId : args.mountPointName,
+    mountPoint: docStoreAuthority(args),
     path: args.path,
     heading: args.heading,
     level: args.level,

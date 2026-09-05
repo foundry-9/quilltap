@@ -67,9 +67,11 @@ export async function getHomeData(
   const recentChats: RecentChat[] = recentEnrichedChats.map((chat) => ({
     id: chat.id,
     title: chat.title,
+    createdAt: chat.createdAt,
     updatedAt: chat.updatedAt,
     lastMessageAt: chat.lastMessageAt,
-    isDangerousChat: chat.isDangerousChat,
+    conciergeState: chat.conciergeState,
+    dangerCategories: chat.dangerCategories,
     storyBackgroundUrl: chat.storyBackground?.filepath || null,
     participants: chat.participants.map((p) => ({
       id: p.id,

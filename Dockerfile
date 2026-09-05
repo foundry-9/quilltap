@@ -89,7 +89,7 @@ RUN SKIP_ENV_VALIDATION=true NODE_OPTIONS="--max-old-space-size=3072" npx next b
 # Overlay our custom server entry, terminal WS handler, child entry, and bootstrap
 # shim onto the Next.js standalone tree. Single source of truth lives in
 # scripts/build-standalone-overlay.mjs — the same script is invoked from
-# .github/workflows/release.yml and scripts/build-standalone-tarball.ts so the
+# .github/workflows/release.yml and scripts/build-standalone-tarball.mjs so the
 # esbuild flags and the child's externals list can't drift between call sites.
 RUN node scripts/build-standalone-overlay.mjs .next/standalone
 

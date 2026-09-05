@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import packageJson from '@/package.json';
 import { showSuccessToast } from '@/lib/toast';
 
-type BackendMode = 'local' | 'Docker' | 'VM' | 'Electron' | 'Electron+Docker' | 'Electron+VM';
+type BackendMode = 'local' | 'Docker' | 'Electron' | 'Electron+Docker';
 
 export default function FooterWrapper() {
   const pathname = usePathname();
@@ -18,9 +18,7 @@ export default function FooterWrapper() {
       .then((res) => res.json())
       .then((data) => {
         const isShell = data.isElectronShell;
-        if (data.isVM) {
-          setBackendMode(isShell ? 'Electron+VM' : 'VM');
-        } else if (data.isDocker) {
+        if (data.isDocker) {
           setBackendMode(isShell ? 'Electron+Docker' : 'Docker');
         } else if (isShell) {
           setBackendMode('Electron');

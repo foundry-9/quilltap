@@ -111,6 +111,44 @@ export async function enrichWithTags(
 }
 
 /**
+ * A tag as `components/tags/tag-editor.tsx` reads it — flat, not the
+ * `{ tagId, tag }` envelope `EnrichedTag` uses for entity payloads.
+ *
+ * `TagBadge` styles from `getStyleForTag(tag.id)`, so `id` and `name` are the
+ * load-bearing fields; `visualStyle` rides along for callers rendering a tag
+ * outside the style provider.
+ */
+export interface EditorTag {
+  id: string;
+  name: string;
+  visualStyle: Tag['visualStyle'];
+}
+
+/**
+ * Resolve an entity's tag ids for a `?action=get-tags` response.
+ *
+ * TagEditor is entity-agnostic: it swaps a base path and expects every
+ * `get-tags` route to answer with the same `{ tags: [...] }` body. That
+ * contract had no owner, so each route open-coded its own loop and they were
+ * free to drift — which is Bug 74's second layer. Any entity that grows a
+ * `get-tags` action resolves its tags here.
+ *
+ * Built on {@link enrichWithTags} so the batching and the "preserve the
+ * entity's own order" rule are stated once; this only unwraps the envelope.
+ */
+export async function resolveEditorTags(
+  tagIds: string[] | null | undefined,
+  repos: RepositoryContainer
+): Promise<EditorTag[]> {
+  const enriched = await enrichWithTags(tagIds ?? undefined, repos);
+  return enriched.map(({ tag }) => ({
+    id: tag.id,
+    name: tag.name,
+    visualStyle: tag.visualStyle,
+  }));
+}
+
+/**
  * Enriched default image info for responses
  */
 export interface EnrichedDefaultImage {
@@ -191,53 +229,3 @@ export async function enrichProfile<
   return { apiKey, tags };
 }
 
-/**
- * Enrich multiple entities in parallel
- *
- * Efficiently enriches an array of entities with their related data.
- *
- * @param entities - Array of entities to enrich
- * @param enrichFn - Function to enrich each entity
- * @returns Array of enriched entities
- *
- * @example
- * ```ts
- * const characters = await repos.characters.findByUserId(userId);
- * const enriched = await enrichMany(characters, async (char) => ({
- *   ...char,
- *   defaultImage: await enrichWithDefaultImage(char, repos.files.findById.bind(repos.files)),
- * }));
- * ```
- */
-export async function enrichMany<T, R>(
-  entities: T[],
-  enrichFn: (entity: T) => Promise<R>
-): Promise<R[]> {
-  return Promise.all(entities.map(enrichFn));
-}
-
-/**
- * Unset all default flags for a user's entities
- *
- * Common pattern for profile types that have an isDefault flag.
- * When setting a new default, all other defaults should be unset.
- *
- * This is typically handled by the repository's unsetAllDefaults method,
- * but this utility provides a standardized interface.
- *
- * @param userId - The user ID
- * @param unsetFn - The repository's unsetAllDefaults function
- *
- * @example
- * ```ts
- * if (isDefault) {
- *   await unsetAllDefaults(user.id, repos.embeddingProfiles.unsetAllDefaults);
- * }
- * ```
- */
-export async function unsetAllDefaults(
-  userId: string,
-  unsetFn: (userId: string) => Promise<void>
-): Promise<void> {
-  await unsetFn(userId);
-}

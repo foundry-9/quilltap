@@ -34,6 +34,7 @@ import {
 } from '@/lib/pascal/dice-notation'
 import {
   findParameterReferences,
+  nextDraftId,
   numericParamNames,
   parseNumberText,
   renameParameterEverywhere,
@@ -61,8 +62,6 @@ function coerceIdentifier(text: string): string {
     .replace(/^[^a-z]+/, '')
     .slice(0, 64)
 }
-
-let paramIdCounter = 0
 
 export function BuilderForm({ draft, issues, onChange, disabled = false }: Readonly<BuilderFormProps>) {
   /** While true, editing the title keeps regenerating the name slug (§4.1). */
@@ -111,12 +110,11 @@ export function BuilderForm({ draft, issues, onChange, disabled = false }: Reado
   }
 
   const addParam = () => {
-    paramIdCounter += 1
     update({
       parameters: [
         ...draft.parameters,
         {
-          id: `new-param-${paramIdCounter}`,
+          id: nextDraftId('new-param'),
           name: '',
           type: 'number',
           defaultValue: '0',

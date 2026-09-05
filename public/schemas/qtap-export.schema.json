@@ -411,6 +411,11 @@
               "id": { "type": "string" },
               "title": { "type": "string" },
               "content": { "type": "string" },
+              "description": { "type": "string" },
+              "archived": {
+                "type": "boolean",
+                "description": "When true, this scenario is hidden from the chat scenario pickers unless the surface asks for archived entries. Absent means active — the flag is omitted rather than written as false. Chats already using the scenario are unaffected."
+              },
               "createdAt": { "type": "string" },
               "updatedAt": { "type": "string" }
             },
@@ -560,7 +565,7 @@
         },
         "equippedOutfit": {
           "type": ["object", "null"],
-          "description": "Per-character equipped outfit state, keyed by characterId. Each character entry is { top, bottom, footwear, accessories } where each slot is an array of wardrobe-item UUIDs (post-rework). Legacy pre-rework exports may store each slot as a single UUID or null; importers upgrade those to single-element/empty arrays.",
+          "description": "Per-character equipped outfit state, keyed by characterId. Each character entry is { top, bottom, footwear, accessories, hair } where each slot is an array of wardrobe-item UUIDs (post-rework). Legacy pre-rework exports may store each slot as a single UUID or null; importers upgrade those to single-element/empty arrays.",
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -586,6 +591,13 @@
                 ]
               },
               "accessories": {
+                "oneOf": [
+                  { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
+                  { "type": "string" },
+                  { "type": "null" }
+                ]
+              },
+              "hair": {
                 "oneOf": [
                   { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
                   { "type": "string" },
@@ -643,8 +655,8 @@
           "description": "messageCount at classification time, used to detect changes for re-check."
         },
         "conciergeOverride": {
-          "enum": ["OFF", null],
-          "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = the Concierge is off-duty for this chat and no moderation effects apply."
+          "enum": ["OFF", "UNCENSORED", null],
+          "description": "Per-chat Concierge mode override. NULL = follow the global Concierge setting; 'OFF' = Vouched Safe (the operator vouches for the chat — no moderation, ordinary providers); 'UNCENSORED' = the operator asserts the chat spicy (uncensored routing with no classification or scanning)."
         },
         "answerConfirmationOverride": {
           "enum": ["ON", "OFF", null],
@@ -1083,6 +1095,18 @@
           "enum": ["auto", "native", "simple-json", "text-block"],
           "description": "How tool calls are framed on the wire. auto picks by model capability; simple-json is the modern <tool_call> JSON-in-XML format; text-block is the legacy [[TOOL ...]] format."
         },
+        "multiCharacterPrefill": {
+          "type": ["boolean", "null"],
+          "description": "How a multi-character chat anchors a reply to the character whose turn it is. true prefills an assistant message containing '[Character Name]'; false appends a prose instruction to the system prompt instead, leaving the request ending on a user message. null means never chosen, and resolves to the provider default whenever the profile is used (off for Anthropic, on elsewhere)."
+        },
+        "fallbackProfileId": {
+          "type": ["string", "null"],
+          "description": "The understudy: the id of another connection profile to try when a call through this one fails outright (auth, rate limit, network, missing model, 5xx, empty response, moderation refusal). null means none named. Chains never recurse, so the understudy's own understudy is not followed. On import the id is remapped through the bundle's profile id map; a reference that still cannot be resolved is skipped at call time."
+        },
+        "allowTierFallback": {
+          "type": "boolean",
+          "description": "Whether, once this profile and its named understudy have both failed, one further candidate of the same or better modelClass quality may be drafted automatically. Defaults to false."
+        },
         "sortIndex": { "type": "integer", "minimum": 0 },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
         "totalTokens": { "type": "integer", "minimum": 0 },
@@ -1126,7 +1150,10 @@
         "provider": { "type": "string", "minLength": 1 },
         "modelName": { "type": "string" },
         "baseUrl": { "type": ["string", "null"] },
-        "parameters": { "type": "object" },
+        "parameters": {
+          "type": "object",
+          "description": "Open bag of generation defaults. Host-owned keys (size, aspectRatio, quality, style, n, seed, guidanceScale, steps, negativePrompt) map onto named ImageGenParams fields; everything else is forwarded to the provider plugin verbatim as ImageGenParams.profileParameters. One key is reserved: `loras`, an array of { source, scale?, triggerPhrase?, label? } LoRA adapters. Deliberately unconstrained so a profile round-trips whatever its provider plugin understands."
+        },
         "isDefault": { "type": "boolean" },
         "isDangerousCompatible": { "type": "boolean" },
         "tags": { "type": "array", "items": { "$ref": "#/$defs/UUID" } },
@@ -1150,7 +1177,7 @@
         "userId": { "$ref": "#/$defs/UUID" },
         "name": { "type": "string" },
         "provider": {
-          "enum": ["OPENAI", "OLLAMA", "OPENROUTER", "BUILTIN"],
+          "enum": ["OPENAI", "OLLAMA", "OPENROUTER", "NANOGPT", "BUILTIN"],
           "description": "Embedding provider type"
         },
         "modelName": { "type": "string" },
@@ -1237,7 +1264,7 @@
           "minItems": 1,
           "items": {
             "type": "string",
-            "enum": ["top", "bottom", "footwear", "accessories"]
+            "enum": ["top", "bottom", "footwear", "accessories", "hair"]
           },
           "description": "Coverage slots this item covers"
         },
@@ -1265,6 +1292,13 @@
             { "type": "null" }
           ],
           "description": "Provenance tracking for items migrated from legacy clothingRecords"
+        },
+        "archivedAt": {
+          "oneOf": [
+            { "$ref": "#/$defs/Timestamp" },
+            { "type": "null" }
+          ],
+          "description": "When the item was archived; null or absent means active. An archived garment is hidden from every wardrobe list and picker unless the surface asks for archived entries, and is never offered to the outfit-selection LLM. It does not undress a character already wearing it."
         },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" }
@@ -1329,7 +1363,7 @@
         "storyBackgroundsEnabled": { "type": ["boolean", "null"] },
         "staticBackgroundImageId": { "type": ["string", "null"] },
         "storyBackgroundImageId": { "type": ["string", "null"] },
-        "backgroundDisplayMode": { "enum": ["latest_chat", "project", "static", "theme"] },
+        "backgroundDisplayMode": { "enum": ["latest_chat", "project", "static", "theme"], "description": "How the project displays a background. 'project' and 'static' were retired in 4.9 (neither ever produced an image) and remain valid here only so pre-4.9 exports still validate; importers normalize both to 'theme'." },
         "createdAt": { "$ref": "#/$defs/Timestamp" },
         "updatedAt": { "$ref": "#/$defs/Timestamp" },
         "_characterRosterNames": {
@@ -1524,7 +1558,7 @@
       "additionalProperties": true,
       "properties": {
         "id": { "$ref": "#/$defs/UUID" },
-        "sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64, "description": "SHA-256 of the bytes as stored, matching `mimeType` and `size` — not of whatever was originally uploaded. The importer recomputes all three from its own storage bridge, which transcodes bitmaps to WebP, so an archive written before 4.9.0 may carry a pre-transcode hash here and the importer's value wins." },
         "originalFilename": { "type": "string" },
         "mimeType": { "type": "string" },
         "size": { "type": "integer", "minimum": 0 },

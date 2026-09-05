@@ -13,14 +13,10 @@
  */
 
 import {
-  SHARED_WARDROBE_FOLDER,
   ensureSharedWardrobeFolder,
   readSharedWardrobe,
 } from '@/lib/mount-index/shared-wardrobe';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
-
-/** Project wardrobe lives under the same `Wardrobe/` folder name as vaults. */
-export const PROJECT_WARDROBE_FOLDER = SHARED_WARDROBE_FOLDER;
 
 /**
  * Idempotent: ensure the `Wardrobe/` folder exists in the given project mount.

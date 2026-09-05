@@ -303,6 +303,24 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
   }
 
   /**
+   * Message safeQuery logs when `_create` fails; subclasses that persist a
+   * narrower row name their entity here.
+   */
+  protected createErrorMessage(): string {
+    return 'Error creating entity';
+  }
+
+  /**
+   * Row transform applied to the validated entity just before INSERT.
+   * Subclasses whose table has fewer columns than the schema (vault- or
+   * store-resident fields) strip those keys here; `_create` still returns
+   * the full validated entity.
+   */
+  protected toPersistedRow(validated: T): T {
+    return validated;
+  }
+
+  /**
    * Create entity (default implementation)
    */
   protected async _create(
@@ -325,7 +343,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
 
       const validated = this.validate(entityInput);
       const collection = await this.getCollection();
-      await collection.insertOne(validated);
+      await collection.insertOne(this.toPersistedRow(validated));
 
       logger.info('Entity created', {
         collection: this.collectionName,
@@ -333,7 +351,7 @@ export abstract class AbstractBaseRepository<T extends BaseEntity> {
       });
 
       return validated;
-    }, 'Error creating entity');
+    }, this.createErrorMessage());
   }
 
   /**

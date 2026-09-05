@@ -134,18 +134,7 @@ export async function readJsonArrayFile<T>(basePath: string, relativePath: strin
 }
 
 /**
- * Reads and parses an optional JSON file, returning a fallback if missing.
- */
-export async function readJsonFileOptional<T>(basePath: string, relativePath: string, fallback: T): Promise<T> {
-  try {
-    return await readJsonFile<T>(basePath, relativePath);
-  } catch {
-    return fallback;
-  }
-}
-
-/**
- * Streaming variant of readJsonFileOptional for arrays. Returns the fallback if
+ * Streaming variant of {@link readJsonArrayFile} that returns the fallback if
  * the file is missing or unreadable; surfaces parse errors otherwise.
  */
 export async function readJsonArrayFileOptional<T>(

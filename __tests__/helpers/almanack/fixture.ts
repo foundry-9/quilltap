@@ -467,10 +467,10 @@ export function makeAlmanackFixture(
         userGalleryBytes: 150_000_000,
       },
       scenarios: [
-        { tier: 'character', count: 90 },
-        { tier: 'project', count: 14 },
-        { tier: 'group', count: 3 },
-        { tier: 'general', count: 22 },
+        { tier: 'character', count: 90, archived: 7 },
+        { tier: 'project', count: 14, archived: 0 },
+        { tier: 'group', count: 3, archived: 1 },
+        { tier: 'general', count: 22, archived: 0 },
       ],
       stateCascade: {
         chatsWithState: 31,

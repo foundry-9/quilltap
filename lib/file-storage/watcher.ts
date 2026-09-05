@@ -20,6 +20,7 @@ import { relative, join, extname, basename, dirname } from 'path';
 import { createLogger } from '@/lib/logging/create-logger';
 import { getFilesDir } from '@/lib/paths';
 import { computeSha256, detectMimeType } from './scanner';
+import { preservesContentDigest } from './digest-policy';
 import { deriveFolderPathFromStorageKey } from '@/lib/files/folder-utils';
 import { stat } from 'fs/promises';
 
@@ -214,9 +215,15 @@ async function handleFileChange(filesDir: string, relativePath: string): Promise
     const stats = await stat(absolutePath);
     const sha256 = await computeSha256(absolutePath);
 
-    if (sha256 !== existing.sha256 || stats.size !== existing.size) {
+    // Bug 69: an archived character's bundle records the PLAINTEXT digest
+    // while the disk bytes are encrypted, so re-deriving `sha256` here
+    // replaces the content digest with a ciphertext one and the next
+    // rehydrate refuses the bundle as corrupt. Size is still fair game.
+    const keepDigest = preservesContentDigest(existing.category);
+
+    if ((!keepDigest && sha256 !== existing.sha256) || stats.size !== existing.size) {
       await repos.files.update(existing.id, {
-        sha256,
+        ...(keepDigest ? {} : { sha256 }),
         size: stats.size,
       });
 
@@ -224,7 +231,7 @@ async function handleFileChange(filesDir: string, relativePath: string): Promise
         fileId: existing.id,
         storageKey: relativePath,
         oldSha256: existing.sha256?.slice(0, 12) + '...',
-        newSha256: sha256.slice(0, 12) + '...',
+        newSha256: keepDigest ? 'preserved (content digest)' : sha256.slice(0, 12) + '...',
       });
     }
   } catch (error) {
@@ -304,13 +311,10 @@ async function handleDirAdd(relativePath: string): Promise<void> {
     const folderName = parts[parts.length - 1];
     const folderPath = '/' + parts.slice(1).join('/') + '/';
 
-    // Check if folder record exists
-    const existingFolder = await repos.folders.findByPath(userId, folderPath, projectId);
-    if (existingFolder) {
-      return;
-    }
-
-    await repos.folders.create({
+    // Find-or-create through the repository chokepoint. chokidar can fire
+    // `addDir` for the same directory more than once, and a job may be creating
+    // the very same folder row concurrently (bug 114).
+    await repos.folders.ensureByPath({
       userId,
       path: folderPath,
       name: folderName,
@@ -318,7 +322,7 @@ async function handleDirAdd(relativePath: string): Promise<void> {
       projectId,
     });
 
-    logger.info('Created folder record for new directory on disk', {
+    logger.info('Ensured folder record for directory on disk', {
       folderPath,
       projectId,
     });

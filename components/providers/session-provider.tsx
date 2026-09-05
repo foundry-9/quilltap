@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { QueryProvider } from "@/lib/query/QueryProvider";
+import { RealtimeProvider } from "./realtime-provider";
 import { TagStyleProvider } from "./tag-style-provider";
 import { QuickHideProvider } from "./quick-hide-provider";
 
@@ -184,6 +185,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   // docs/developer/features/tanstack-query-migration.md).
   return (
     <QueryProvider>
+      {/* Inside QueryProvider: it needs the QueryClient to invalidate against. */}
+      <RealtimeProvider />
       <CustomSessionProvider
         refetchInterval={5 * 60}
         refetchOnWindowFocus={false}

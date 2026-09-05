@@ -15,6 +15,7 @@
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import { NewChatForm } from '../NewChatForm'
+import { CONCIERGE_STATE_PRESENTATION } from '@/lib/services/dangerous-content/concierge-state-presentation'
 import type {
   Character,
   GeneralScenarioOption,
@@ -80,6 +81,7 @@ jest.mock('@/hooks/usePersonaDisplayName', () => ({
 function makeState(overrides: Partial<NewChatFormState> = {}): NewChatFormState {
   return {
     imageProfileId: '',
+    conciergeState: 'monitored',
     roleplayTemplateId: null,
     roleplayTemplateTouched: false,
     scenario: '',
@@ -163,7 +165,9 @@ describe('NewChatForm scenario layering', () => {
       { generalScenarios: [GENERAL_SCENARIO] }
     )
 
-    const select = screen.getByRole('combobox')
+    // The form carries more than one <select> now (the Concierge picker sits
+    // just above), so reach for the scenario dropdown by its own id.
+    const select = document.getElementById('new-chat-scenario-select') as HTMLSelectElement
     fireEvent.change(select, { target: { value: `general:${GENERAL_SCENARIO.path}` } })
 
     // handleScenarioSelectChange calls setState with a functional updater.
@@ -380,5 +384,51 @@ describe('NewChatForm roleplay template picker', () => {
     const next = updater(makeState({ roleplayTemplateId: 'tpl-house' }))
     expect(next.roleplayTemplateId).toBeNull()
     expect(next.roleplayTemplateTouched).toBe(true)
+  })
+})
+
+// --- The Concierge picker --------------------------------------------------
+
+describe('NewChatForm Concierge picker', () => {
+  const conciergeSelect = () =>
+    screen.getByRole('combobox', { name: /The Concierge/i }) as HTMLSelectElement
+
+  it('offers the four states in the sidebar’s two optgroups', () => {
+    renderForm()
+    const select = conciergeSelect()
+
+    const groups = Array.from(select.querySelectorAll('optgroup')).map((g) => g.label)
+    expect(groups).toEqual(['The Concierge decides', 'You decide'])
+
+    const options = Array.from(select.querySelectorAll('option')).map((o) => o.value)
+    expect(options).toEqual(['monitored', 'flagged', 'vouched', 'uncensored'])
+  })
+
+  it('starts on Monitored and marks it the default', () => {
+    renderForm()
+    expect(conciergeSelect().value).toBe('monitored')
+    expect(screen.getByRole('option', { name: 'Monitored (default)' })).toBeInTheDocument()
+    // Only Monitored carries the suffix.
+    expect(screen.getByRole('option', { name: 'Uncensored' })).toBeInTheDocument()
+  })
+
+  it.each(['monitored', 'flagged', 'vouched', 'uncensored'] as const)(
+    'shows the shared presentation helper sentence for %s',
+    (state) => {
+      renderForm({ conciergeState: state })
+      expect(
+        screen.getByText(CONCIERGE_STATE_PRESENTATION[state].detail)
+      ).toBeInTheDocument()
+    }
+  )
+
+  it('records the chosen state on the form state', () => {
+    const { setState } = renderForm()
+
+    fireEvent.change(conciergeSelect(), { target: { value: 'uncensored' } })
+
+    expect(setState).toHaveBeenCalledTimes(1)
+    const updater = setState.mock.calls[0][0] as (prev: NewChatFormState) => NewChatFormState
+    expect(updater(makeState()).conciergeState).toBe('uncensored')
   })
 })

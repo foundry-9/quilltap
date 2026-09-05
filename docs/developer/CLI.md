@@ -140,6 +140,18 @@ Register an instance once with `npx quilltap instances add <name> <path>` (and o
 - `npx quilltap instances default <name>` — marks a registered instance as the fall-through target so flag-free `quilltap` invocations use it.
 - `instances default --clear` — reverts to the OS platform default.
 - `instances rename <old> <new>` — preserves the stored passphrase and updates the `*` marker.
+- `instances list --json` — the registry as JSON (name, path, `hasPassphrase`, `isDefault`) for scripts. (`--names-only` also exists, but it is plumbing for the shell completions rather than a documented output mode.)
+
+### Rebuilding a `.dbkey` — `instances restore-key`
+
+`npx quilltap instances restore-key <name|--data-dir <root>>` rebuilds `<dataDir>/quilltap.dbkey` from the pepper itself. The `.dbkey` file only *wraps* the pepper; the pepper is the actual SQLCipher key. So an operator who kept the pepper printed at first-run setup can rebuild a lost key file — or re-wrap an existing one when its passphrase is gone, which is the only offline way back into an instance stuck at the locked screen. (The server's `?action=store` covers the lost-file half, but only from the env var and only while it is running; a forgotten passphrase leaves it locked with no way in.)
+
+- **The pepper never arrives as a flag.** It is read from `ENCRYPTION_MASTER_PEPPER`, or prompted for hidden — a command line lands in shell history and in `ps`.
+- **It is proved against the databases before anything is written.** Every encrypted database in the data directory must open with the candidate pepper. A `.dbkey` holding the wrong pepper is worse than none: the server unwraps it, hands SQLCipher a key that decrypts nothing, and reports an intact instance as corrupt — or, with the env var also set, exits fatally on the hash mismatch. This proof cannot be waived while an encrypted database exists to check.
+- **Lock-gated**, like `maintenance run`: it refuses while the server holds the instance lock, because the running process caches the pepper *and* the effective passphrase in memory and would not see the new file.
+- An existing key file is backed up to `quilltap.dbkey.bak-<timestamp>` first, and fields the wrapping does not own (`minServerVersion`, the shell's version floor) are carried across.
+- Flags: `--passphrase <pass>` / `--no-passphrase` (the new wrapping), `-d, --data-dir <path>`, `--force` (proceed when there is no encrypted database to prove against — a fresh or still-plaintext instance), `-y, --yes` (skip prompts). A registered instance's stored passphrase is updated to match.
+- **It does not re-encrypt character ARCHIVE bundles.** Those are keyed on the *passphrase*, not the pepper; only the server's Change Passphrase card rewrites them. Bundles made under a passphrase you have just replaced still want the old one.
 
 **Resolution precedence:** `--data-dir` > `--instance` > registered default > `QUILLTAP_DATA_DIR` env > OS platform default. The default-instance hint only fires when truly falling back to the OS default (not when the registered default is honored).
 
@@ -168,6 +180,9 @@ The `db` command opens the database **read-only** unless you pass `--write`. So 
 
 - All subcommands accept `--json` for piping and `--limit N` (default 50). Names are case-insensitive; ambiguous matches print all candidates and exit non-zero.
 - `npx quilltap completion bash|zsh|fish` emits a completion script. Dynamic completions for `--instance` shell out to `quilltap instances list --names-only`; mount/character completions similarly use hidden `--names-only` flags. See `packages/quilltap/README.md` for per-shell install instructions.
+- **Completions parse the line, they never count words.** A flag may sit anywhere the CLI itself accepts one, so `quilltap docs --instance Friday <TAB>` still offers the `docs` verbs. zsh gets this from `_arguments` positional specs — `(-)` on the top-level `'(-): :->subcommand'` / `'(-)*::arg:->args'` pair is what stops the outer `_arguments` swallowing a flag typed *after* the subcommand — and bash from a scanner that knows which flags take a value. Two traps to respect when editing the templates: `-o` is the valueless global `--open` but themes' valued `--output`, and `memories` reserves `-i` for `--ignore-case` rather than `--instance`.
+- **Store names complete from the addressed instance.** Wherever a verb takes a `<mount>` (`docs ls`, `docs read`, both ends of `docs move`/`copy`/`link`, and `--mount`), bash and zsh offer live store names, re-using the `-i`/`-d`/`--passphrase` already on the line so the lookup reads the instance being addressed rather than the default one. fish completes `--mount` but not the positionals, and always reads the default instance.
+- `packages/quilltap/lib/__tests__/completion-behavior.test.js` drives the bash script for real (sourcing it and reading `COMPREPLY` back) and checks the zsh template structurally. `completion-coverage.test.js` guards the surface on three levels: every subcommand in `SUBCOMMANDS` reaches `--help` and all three templates, every subcommand has its own completion arm, and **every long flag a subcommand's `--help` advertises is offered by all three templates** — the help text is the contract, so adding a flag to it without teaching the templates fails the build. It also checks bash's `vf_*` value-flag lists against zsh's `:value:` specs, since bash alone cannot infer which flags swallow the next word.
 
 ## See also
 

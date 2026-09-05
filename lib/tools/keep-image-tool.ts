@@ -39,7 +39,7 @@ export const keepImageToolDefinition = {
   function: {
     name: 'keep_image',
     description:
-      "Save an image to your photo album (a `photos/` folder in your character vault) so it survives chat garbage collection and becomes searchable from your memory. Pass the UUID of an image that was generated in this chat, or the catalogue handle the Librarian announced when someone attached a photo from a gallery. Caption and tags are optional freeform labels for retrieval — they are not the platform's global Tag system. Returns the path the image now lives at in your vault. If you've already kept this image, the call fails — delete the existing copy first if you want to amend the caption or tags.",
+      "File an image away in your photo album (a `photos/` folder in your character vault) so it survives chat garbage collection and becomes searchable from your memory. This is filing, not looking — to find out what an image depicts, call describe_image instead. Pass the UUID of an image that was generated in this chat, or the catalogue handle the Librarian announced when someone attached a photo from a gallery. Caption and tags are optional freeform labels for retrieval — they are not the platform's global Tag system. Returns the path the image now lives at in your vault. If you've already kept this image, the call fails — delete the existing copy first if you want to amend the caption or tags.",
     parameters: zodToOpenAISchema(keepImageToolInputSchema),
   },
 };

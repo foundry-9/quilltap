@@ -181,6 +181,42 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   }
 
   /**
+   * Resolve character IDs to display names — **without the vault overlay**.
+   *
+   * `name` is a plain DB column, so the overlay has nothing to add here, and
+   * skipping it is the point: this runs on the per-turn context path, where a
+   * character whose vault is unreadable must cost the caller a *name*, not the
+   * whole turn (`findById` throws `CharacterVaultUnavailableError` on that
+   * shelf, by design — see the class docblock). IDs with no row, or with a
+   * blank name, are simply absent from the returned map; callers are expected
+   * to degrade rather than assume a hit.
+   *
+   * @param ids Character IDs to resolve (deduped internally; empty is fine)
+   * @returns Promise<Map<string, string>> id → name, for the IDs that resolved
+   */
+  async findNamesByIds(ids: string[]): Promise<Map<string, string>> {
+    const unique = Array.from(
+      new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))
+    );
+    if (unique.length === 0) return new Map();
+
+    return this.safeQuery(
+      async () => {
+        const rows = await super.findByIds(unique);
+        const names = new Map<string, string>();
+        for (const row of rows) {
+          const name = typeof row.name === 'string' ? row.name.trim() : '';
+          if (row.id && name.length > 0) names.set(row.id, name);
+        }
+        return names;
+      },
+      'Error resolving character names',
+      { count: unique.length },
+      new Map<string, string>()
+    );
+  }
+
+  /**
    * Find characters that use a specific image as their default
    * @param imageId The image file ID
    * @returns Promise<Character[]> Array of characters using this image as default
@@ -337,46 +373,22 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
     );
   }
 
+  protected createErrorMessage(): string {
+    return 'Error creating character entity';
+  }
+
   /**
-   * Vault-aware override of the base `_create`. Mirrors `_update`: strips
-   * vault-managed keys before INSERT so callers that pass e.g. `title` or
-   * `description` to `create()` don't blow up with "no such column" — those
-   * fields belong in the character vault, not the DB row.
+   * Vault-aware row transform for the base `_create`. Mirrors `_update`:
+   * strips vault-managed keys before INSERT so callers that pass e.g. `title`
+   * or `description` to `create()` don't blow up with "no such column" —
+   * those fields belong in the character vault, not the DB row.
    */
-  protected async _create(
-    data: Omit<Character, 'id' | 'createdAt' | 'updatedAt'>,
-    options?: CreateOptions
-  ): Promise<Character> {
-    return this.safeQuery(async () => {
-      const id = options?.id || crypto.randomUUID();
-      const now = this.getCurrentTimestamp();
-      const createdAt = options?.createdAt || now;
-      const updatedAt = options?.updatedAt || now;
-
-      const entityInput = {
-        ...data,
-        id,
-        createdAt,
-        updatedAt,
-      };
-
-      const validated = this.validate(entityInput);
-
-      const dbRow = { ...validated } as Record<string, unknown>;
-      for (const f of MANAGED_FIELDS) {
-        delete dbRow[f as string];
-      }
-
-      const collection = await this.getCollection();
-      await collection.insertOne(dbRow as Character);
-
-      logger.info('Entity created', {
-        collection: 'characters',
-        id,
-      });
-
-      return validated;
-    }, 'Error creating character entity');
+  protected toPersistedRow(validated: Character): Character {
+    const dbRow = { ...validated } as Record<string, unknown>;
+    for (const f of MANAGED_FIELDS) {
+      delete dbRow[f as string];
+    }
+    return dbRow as Character;
   }
 
   /**
@@ -834,12 +846,20 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
    */
   async addScenario(
     characterId: string,
-    data: { title: string; content: string }
+    data: { title: string; content: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
     return this.addToSubArray<CharacterScenario>(
       characterId,
       (c) => c.scenarios ?? [],
-      (id, now) => ({ id, title: data.title, content: data.content, createdAt: now, updatedAt: now }),
+      (id, now) => ({
+        id,
+        title: data.title,
+        content: data.content,
+        // Omission means active; never persist an explicit `archived: false`.
+        ...(data.archived === true && { archived: true }),
+        createdAt: now,
+        updatedAt: now,
+      }),
       (items) => ({ scenarios: items }),
       'Error adding scenario',
       { title: data.title }
@@ -856,13 +876,25 @@ export class CharactersRepository extends TaggableBaseRepository<Character> {
   async updateScenario(
     characterId: string,
     scenarioId: string,
-    data: { title?: string; content?: string }
+    data: { title?: string; content?: string; archived?: boolean }
   ): Promise<CharacterScenario | null> {
     return this.updateInSubArray<CharacterScenario>(
       characterId,
       scenarioId,
       (c) => c.scenarios ?? [],
-      (existing, now) => ({ ...existing, ...data, id: existing.id, createdAt: existing.createdAt, updatedAt: now }),
+      (existing, now) => {
+        const { archived: _dropped, ...rest } = existing;
+        const archived = data.archived ?? existing.archived;
+        return {
+          ...rest,
+          ...data,
+          // Omission means active; drop the key rather than writing `false`.
+          ...(archived === true ? { archived: true } : {}),
+          id: existing.id,
+          createdAt: existing.createdAt,
+          updatedAt: now,
+        };
+      },
       (items) => ({ scenarios: items }),
       'Error updating scenario',
       { scenarioId }

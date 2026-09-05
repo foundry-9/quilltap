@@ -77,8 +77,11 @@ Fish picks new completion files up automatically — no shell restart needed.
 
 - **Subcommands**: `quilltap d<TAB>` will suggest `db`, `docs`, and so on.
 - **Sub-verbs per namespace**: `quilltap db s<TAB>` will suggest `schema`, `show`.
+- **Flags for the verb at hand**: `quilltap docs docker-mounts --<TAB>` will suggest only the flags that verb actually entertains.
 - **Instance names**: `quilltap --instance Fr<TAB>` will suggest registered instances from `instances.json`.
-- **Mount names**: `quilltap docs ls --mount Qu<TAB>` will suggest mount points in the active instance's database.
+- **Mount names**: offered both after `--mount` and in the place the verb keeps for one — `quilltap docs ls Qu<TAB>`, and at either end of `docs move`, `docs copy`, and `docs link`.
+
+A flag typed early no longer throws the whole business off. The completions read the line as the CLI itself would, rather than counting words, so `quilltap docs --instance Friday <TAB>` still offers up the `docs` verbs. Better still, bash and zsh notice the `-i`, `-d`, or `--passphrase` you have already typed and consult *that* instance for store names — not whichever one happens to be the default. Fish, more modest in its ambitions, completes `--mount` but not the positional, and always asks the default instance.
 
 Dynamic completions (instance names, mount names, etc.) shell out to quilltap's own subcommands. If your instance is encrypted and quilltap can't open it without a passphrase, the completion will silently return no suggestions — this is by design, to avoid prompting in the middle of a tab press.
 

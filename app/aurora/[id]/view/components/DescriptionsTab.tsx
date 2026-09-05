@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
+import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import { charCountClass } from '@/lib/utils/char-count'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
 import type { CharacterPhysicalDescription } from '../types'
@@ -211,6 +213,10 @@ export function DescriptionsTab({ characterId }: DescriptionsTabProps) {
             Describes when this appearance is most appropriate.
           </p>
         </div>
+
+        {/* Shared form-of-address note for every prompt variant below —
+            attached once here rather than repeated per field. */}
+        <PromptFieldLabel hint={PROMPT_FIELD_HINTS.physicalDescription} />
 
         {/* Head & Shoulders Prompt — used for avatar generation */}
         <div>

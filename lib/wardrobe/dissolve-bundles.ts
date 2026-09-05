@@ -26,7 +26,11 @@
 
 import { logger } from '@/lib/logger';
 import { expandComposites } from '@/lib/wardrobe/expand-composites';
-import { WARDROBE_SLOT_TYPES } from '@/lib/schemas/wardrobe.types';
+import {
+  WARDROBE_SLOT_TYPES,
+  cloneEquippedSlots,
+  makeEmptyEquippedSlots,
+} from '@/lib/schemas/wardrobe.types';
 import type { EquippedSlots, WardrobeItemType } from '@/lib/schemas/wardrobe.types';
 
 /**
@@ -133,12 +137,7 @@ export function layLeavesIntoSlots(
   leaves: readonly DissolvedLeaf[],
   options: { clearCoveredSlots: boolean },
 ): EquippedSlots {
-  const slots: EquippedSlots = {
-    top: [...currentSlots.top],
-    bottom: [...currentSlots.bottom],
-    footwear: [...currentSlots.footwear],
-    accessories: [...currentSlots.accessories],
-  };
+  const slots: EquippedSlots = cloneEquippedSlots(currentSlots);
 
   if (options.clearCoveredSlots) {
     const covered = new Set<WardrobeItemType>(slotsCoveredBy(bundle));
@@ -185,7 +184,7 @@ export function dissolveBundlesInSlots(
 
   if (dissolved.size === 0) return currentSlots;
 
-  const next: EquippedSlots = { top: [], bottom: [], footwear: [], accessories: [] };
+  const next: EquippedSlots = makeEmptyEquippedSlots();
 
   // Substitute in place, so a bundle's parts inherit its position in the
   // layering order rather than jumping to the end of the slot.

@@ -48,13 +48,13 @@ function makeRepos(items: WardrobeItem[]) {
   } as unknown as Parameters<typeof resolveEquippedOutfitForCharacter>[0]
 }
 
-const emptySlots = (): EquippedSlots => ({ top: [], bottom: [], footwear: [], accessories: [] })
+const emptySlots = (): EquippedSlots => ({ top: [], bottom: [], footwear: [], accessories: [], hair: [] })
 
 describe('resolveEquippedOutfitForCharacter', () => {
   it('returns empty results when nothing is equipped', async () => {
     const repos = makeRepos([])
     const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, emptySlots())
-    expect(resolved.outfitValues).toEqual({ top: [], bottom: [], footwear: [], accessories: [] })
+    expect(resolved.outfitValues).toEqual({ top: [], bottom: [], footwear: [], accessories: [], hair: [] })
     expect(resolved.leafItemsBySlot.top).toEqual([])
     expect(resolved.leafItemsBySlot.bottom).toEqual([])
   })
@@ -245,5 +245,42 @@ describe('resolveEquippedOutfitForCharacter', () => {
     expect(resolved.outfitValues.top).toEqual([])
     // Equipped id, then one attempt at the missing component — no retry loop.
     expect(findByIdsForCharacter).toHaveBeenCalledTimes(2)
+  })
+
+  // Bug 78: `equippedOutfit` is unconstrained JSON, so a chat row written
+  // before a slot existed simply has no key for it. The loop must read the
+  // absent key as an empty slot, not hand `undefined` to `expandComposites`.
+  it('resolves a legacy slot bag written before the hair slot existed', async () => {
+    const shirt = makeItem('shirt-id', 'Linen shirt', ['top'])
+    const legacySlots = {
+      top: ['shirt-id'],
+      bottom: [],
+      footwear: [],
+      accessories: [],
+    } as unknown as EquippedSlots
+
+    const resolved = await resolveEquippedOutfitForCharacter(makeRepos([shirt]), CHAR_ID, legacySlots)
+
+    expect(resolved.outfitValues.top).toEqual(['Linen shirt'])
+    expect(resolved.outfitValues.hair).toEqual([])
+    expect(resolved.leafItemsBySlot.hair).toEqual([])
+  })
+
+  // Archiving hides a garment from the pickers and bars it from the LLM's
+  // candidate list. It does NOT undress anyone: a character wearing an item
+  // that is archived mid-chat keeps wearing it until someone takes it off, so
+  // this read asks for archived items on purpose.
+  it('still resolves a garment archived while it was being worn', async () => {
+    const coat = { ...makeItem('coat-id', 'Travelling coat', ['top']), archivedAt: NOW }
+    const repos = makeRepos([coat])
+
+    const resolved = await resolveEquippedOutfitForCharacter(repos, CHAR_ID, {
+      ...emptySlots(),
+      top: ['coat-id'],
+    })
+
+    expect(resolved.outfitValues.top).toEqual(['Travelling coat'])
+    // The read must opt into archived items, or the title resolves to nothing.
+    expect(repos.wardrobe.findByCharacterId).toHaveBeenCalledWith(CHAR_ID, true)
   })
 })

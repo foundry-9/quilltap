@@ -20,6 +20,7 @@ import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { sleepSync } from '@/lib/utils/sleep';
 import { SQLiteConfig } from '../../config';
 import { logger } from '@/lib/logger';
+import { applySqlcipherKey } from './sqlcipher-key';
 import { stopMountIndexPeriodicCheckpoints, runMountIndexShutdownCheckpoint } from './mount-index-protection';
 
 const moduleLogger = logger.child({ module: 'database:mount-index-client' });
@@ -50,11 +51,7 @@ function attemptOpenMountIndex(config: SQLiteConfig): DatabaseType {
   let configured = false;
   try {
     // SQLCipher key MUST be the first pragma before any other operations.
-    const sqlcipherKey = process.env.ENCRYPTION_MASTER_PEPPER;
-    if (sqlcipherKey) {
-      const keyHex = Buffer.from(sqlcipherKey, 'base64').toString('hex');
-      db.pragma(`key = "x'${keyHex}'"`);
-    }
+    applySqlcipherKey(db);
 
     // Verify probe — forces SQLCipher to decrypt page 1 and parse the
     // SQLite header. Failure here surfaces cleanly as `file is not a

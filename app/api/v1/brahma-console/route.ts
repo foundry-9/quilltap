@@ -15,6 +15,7 @@ import { createContextHandler, type RequestContext } from '@/lib/api/middleware'
 import { createServiceLogger } from '@/lib/logging/create-logger';
 import { z } from 'zod';
 import { badRequest, created, successResponse } from '@/lib/api/responses';
+import { byChatActivityDesc } from '@/lib/chat/chat-activity';
 
 const logger = createServiceLogger('BrahmaConsoleRoute');
 
@@ -40,7 +41,7 @@ async function handleList(_req: NextRequest, context: RequestContext) {
   const allChats = await repos.chats.findByUserId(user.id);
   const brahmaChats = allChats
     .filter((c) => c.chatType === 'brahma')
-    .sort((a, b) => new Date(b.lastMessageAt || b.updatedAt).getTime() - new Date(a.lastMessageAt || a.updatedAt).getTime());
+    .sort(byChatActivityDesc);
 
   const enrichedChats = await Promise.all(
     brahmaChats.map(async (chat) => {
@@ -48,6 +49,7 @@ async function handleList(_req: NextRequest, context: RequestContext) {
       return {
         id: chat.id,
         title: chat.title,
+        createdAt: chat.createdAt,
         updatedAt: chat.updatedAt,
         lastMessageAt: chat.lastMessageAt ?? null,
         messageCount: messages.length,

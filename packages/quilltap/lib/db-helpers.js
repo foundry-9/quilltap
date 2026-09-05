@@ -148,42 +148,19 @@ function promptPassphrase(prompt) {
 }
 
 async function loadDbKey(dataDir, passphrase) {
-  const crypto = require('crypto');
-  const dbkeyPath = path.join(dataDir, 'quilltap.dbkey');
-  if (!fs.existsSync(dbkeyPath)) {
+  const { INTERNAL_PASSPHRASE, readDbKeyFile, decryptDbKey, tryDecryptDbKey } = require('./dbkey');
+
+  const data = readDbKeyFile(dataDir);
+  if (!data) {
     return null;
   }
 
-  const data = JSON.parse(fs.readFileSync(dbkeyPath, 'utf8'));
-  const INTERNAL_PASSPHRASE = '__quilltap_no_passphrase__';
-
-  if ('hasPassphrase' in data) {
-    delete data.hasPassphrase;
-    fs.writeFileSync(dbkeyPath, JSON.stringify(data, null, 2), { mode: 0o600 });
+  const internal = tryDecryptDbKey(data, INTERNAL_PASSPHRASE);
+  if (internal !== null) {
+    return internal;
   }
 
-  function tryDecrypt(pass) {
-    const salt = Buffer.from(data.salt, 'hex');
-    const key = crypto.pbkdf2Sync(pass, new Uint8Array(salt), data.kdfIterations, 32, data.kdfDigest);
-    const iv = Buffer.from(data.iv, 'hex');
-    const decipher = crypto.createDecipheriv(data.algorithm, new Uint8Array(key), new Uint8Array(iv));
-    decipher.setAuthTag(new Uint8Array(Buffer.from(data.authTag, 'hex')));
-    let plaintext = decipher.update(data.ciphertext, 'hex', 'utf8');
-    plaintext += decipher.final('utf8');
-
-    const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
-    if (hash !== data.pepperHash) {
-      throw new Error('Pepper hash mismatch');
-    }
-    return plaintext;
-  }
-
-  try {
-    return tryDecrypt(INTERNAL_PASSPHRASE);
-  } catch {
-    // Internal passphrase failed — need user passphrase
-  }
-
+  // Internal passphrase failed — need a user passphrase.
   if (!passphrase && process.env.QUILLTAP_DB_PASSPHRASE) {
     passphrase = process.env.QUILLTAP_DB_PASSPHRASE;
   }
@@ -195,7 +172,7 @@ async function loadDbKey(dataDir, passphrase) {
     }
   }
 
-  return tryDecrypt(passphrase);
+  return decryptDbKey(data, passphrase);
 }
 
 function openEncryptedDb(dbPath, pepper, { readonly = true, friendlyName = 'database' } = {}) {

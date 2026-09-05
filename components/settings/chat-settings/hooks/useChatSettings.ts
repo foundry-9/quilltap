@@ -107,9 +107,9 @@ export function useChatSettings(): UseChatSettingsReturn {
     queryFn: ({ signal }) => apiFetch<{ profiles: ImageProfile[] }>('/api/v1/image-profiles', { signal }),
   })
 
-  // Shim preserving SWR's `mutate` signature so the ~30 handlers below stay
-  // unchanged. With a payload it writes optimistically without revalidating
-  // (the old `mutate(updated, false)`); with no args it revalidates (the old
+  // Shim preserving SWR's `mutate` signature for the handlers below. With a
+  // payload it writes optimistically without revalidating (the old
+  // `mutate(updated, false)`); with no args it revalidates (the old
   // `mutate()`).
   const mutateSettings = useCallback(
     async (updated?: ChatSettings, _revalidate?: boolean): Promise<void> => {
@@ -152,37 +152,62 @@ export function useChatSettings(): UseChatSettingsReturn {
   }, [])
 
   /**
-   * Update avatar display mode
+   * Shared core of the mutation handlers below: PUT a partial body, write the
+   * server's response into the cache without revalidating, flash the success
+   * indicator. `failureMessage` is the throw's fallback when the server sends
+   * no `error`; `logLabel` prefixes the `console.error` — several handlers
+   * differ between the two, so both are explicit. `afterSave` runs between the
+   * cache write and the success flash, for handlers with extra follow-up.
    */
-  const handleAvatarModeChange = useCallback(
-    async (mode: AvatarDisplayMode) => {
-      if (!settings) return
-
+  const patchChatSettings = useCallback(
+    async (
+      body: Record<string, unknown>,
+      failureMessage: string,
+      logLabel: string,
+      afterSave?: () => void | Promise<void>
+    ) => {
       try {
         setSaving(true)
 
         const res = await fetch('/api/v1/settings/chat', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ avatarDisplayMode: mode }),
+          body: JSON.stringify(body),
         })
 
         if (!res.ok) {
           const data = await res.json()
-          throw new Error(data.error || 'Failed to update chat settings')
+          throw new Error(data.error || failureMessage)
         }
 
         const updatedSettings = await res.json()
         await mutateSettings(updatedSettings, false)
+        await afterSave?.()
         await showSuccess()
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update avatar display mode', { error: errorMsg })
+        console.error(logLabel, { error: errorMsg })
       } finally {
         setSaving(false)
       }
     },
-    [settings, mutateSettings, showSuccess]
+    [mutateSettings, showSuccess]
+  )
+
+  /**
+   * Update avatar display mode
+   */
+  const handleAvatarModeChange = useCallback(
+    async (mode: AvatarDisplayMode) => {
+      if (!settings) return
+
+      await patchChatSettings(
+        { avatarDisplayMode: mode },
+        'Failed to update chat settings',
+        'Failed to update avatar display mode'
+      )
+    },
+    [settings, patchChatSettings]
   )
 
   /**
@@ -192,36 +217,16 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (style: AvatarDisplayStyle) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ avatarDisplayStyle: style }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update chat settings')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-
+      await patchChatSettings(
+        { avatarDisplayStyle: style },
+        'Failed to update chat settings',
+        'Failed to update avatar display style',
         // Sync the style to the global AvatarDisplayProvider context
         // This ensures all Avatar components re-render with the new style
-        syncAvatarDisplayStyle(style)
-
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update avatar display style', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+        () => syncAvatarDisplayStyle(style)
+      )
     },
-    [settings, mutateSettings, showSuccess, syncAvatarDisplayStyle]
+    [settings, patchChatSettings, syncAvatarDisplayStyle]
   )
 
   /**
@@ -231,31 +236,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (updates: Partial<CheapLLMSettings>) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cheapLLMSettings: { ...settings.cheapLLMSettings, ...updates } }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update cheap LLM settings')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update cheap LLM settings', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { cheapLLMSettings: { ...settings.cheapLLMSettings, ...updates } },
+        'Failed to update cheap LLM settings',
+        'Failed to update cheap LLM settings'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -263,27 +250,13 @@ export function useChatSettings(): UseChatSettingsReturn {
    */
   const handleImageDescriptionProfileChange = useCallback(
     async (profileId: string | null) => {
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageDescriptionProfileId: profileId }),
-        })
-
-        if (!res.ok) throw new Error('Failed to update settings')
-
-        await mutateSettings()
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to save'
-        console.error('Failed to update image description profile', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { imageDescriptionProfileId: profileId },
+        'Failed to update settings',
+        'Failed to update image description profile'
+      )
     },
-    [mutateSettings, showSuccess]
+    [patchChatSettings]
   )
 
   /**
@@ -291,27 +264,13 @@ export function useChatSettings(): UseChatSettingsReturn {
    */
   const handleUncensoredImageDescriptionProfileChange = useCallback(
     async (profileId: string | null) => {
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ uncensoredImageDescriptionProfileId: profileId }),
-        })
-
-        if (!res.ok) throw new Error('Failed to update settings')
-
-        await mutateSettings()
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'Failed to save'
-        console.error('Failed to update uncensored image description profile', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { uncensoredImageDescriptionProfileId: profileId },
+        'Failed to update settings',
+        'Failed to update uncensored image description profile'
+      )
     },
-    [mutateSettings, showSuccess]
+    [patchChatSettings]
   )
 
   /**
@@ -321,34 +280,14 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (updates: Partial<MemoryCascadePreferences>) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const currentPrefs = settings.memoryCascadePreferences || DEFAULT_MEMORY_CASCADE_PREFERENCES
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            memoryCascadePreferences: { ...currentPrefs, ...updates },
-          }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update memory cascade preferences')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update memory cascade preferences', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      const currentPrefs = settings.memoryCascadePreferences || DEFAULT_MEMORY_CASCADE_PREFERENCES
+      await patchChatSettings(
+        { memoryCascadePreferences: { ...currentPrefs, ...updates } },
+        'Failed to update memory cascade preferences',
+        'Failed to update memory cascade preferences'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -358,34 +297,14 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (key: keyof TokenDisplaySettings, value: boolean) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const currentSettings = settings.tokenDisplaySettings || DEFAULT_TOKEN_DISPLAY_SETTINGS
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tokenDisplaySettings: { ...currentSettings, [key]: value },
-          }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update token display settings')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update token display settings', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      const currentSettings = settings.tokenDisplaySettings || DEFAULT_TOKEN_DISPLAY_SETTINGS
+      await patchChatSettings(
+        { tokenDisplaySettings: { ...currentSettings, [key]: value } },
+        'Failed to update token display settings',
+        'Failed to update token display settings'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -395,34 +314,14 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (updates: Partial<ContextCompressionSettings>) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const currentSettings = settings.contextCompressionSettings || DEFAULT_CONTEXT_COMPRESSION_SETTINGS
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contextCompressionSettings: { ...currentSettings, ...updates },
-          }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update context compression settings')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update context compression settings', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      const currentSettings = settings.contextCompressionSettings || DEFAULT_CONTEXT_COMPRESSION_SETTINGS
+      await patchChatSettings(
+        { contextCompressionSettings: { ...currentSettings, ...updates } },
+        'Failed to update context compression settings',
+        'Failed to update context compression settings'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -432,34 +331,14 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (key: keyof LLMLoggingSettings, value: boolean | number) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const currentSettings = settings.llmLoggingSettings || DEFAULT_LLM_LOGGING_SETTINGS
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            llmLoggingSettings: { ...currentSettings, [key]: value },
-          }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update LLM logging settings')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update LLM logging settings', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      const currentSettings = settings.llmLoggingSettings || DEFAULT_LLM_LOGGING_SETTINGS
+      await patchChatSettings(
+        { llmLoggingSettings: { ...currentSettings, [key]: value } },
+        'Failed to update LLM logging settings',
+        'Failed to update LLM logging settings'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -469,31 +348,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (value: boolean) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ autoDetectRng: value }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update auto-detect RNG setting')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update auto-detect RNG setting', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { autoDetectRng: value },
+        'Failed to update auto-detect RNG setting',
+        'Failed to update auto-detect RNG setting'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -503,31 +364,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (value: boolean) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customTools: value }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update custom tools setting')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update custom tools setting', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { customTools: value },
+        'Failed to update custom tools setting',
+        'Failed to update custom tools setting'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -537,31 +380,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (value: boolean) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ compositionModeDefault: value }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update composition mode default')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update composition mode default', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { compositionModeDefault: value },
+        'Failed to update composition mode default',
+        'Failed to update composition mode default'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -571,31 +396,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (value: boolean) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ composerSpellcheck: value }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update composer spellcheck setting')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update composer spellcheck setting', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { composerSpellcheck: value },
+        'Failed to update composer spellcheck setting',
+        'Failed to update composer spellcheck setting'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -606,31 +413,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (value: boolean) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ composerEmoji: value }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update composer emoji setting')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update composer emoji setting', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { composerEmoji: value },
+        'Failed to update composer emoji setting',
+        'Failed to update composer emoji setting'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -641,31 +430,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (value: boolean) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ composerUnicode: value }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update composer unicode setting')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update composer unicode setting', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { composerUnicode: value },
+        'Failed to update composer unicode setting',
+        'Failed to update composer unicode setting'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -675,31 +446,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (value: boolean) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ autoScrollOnResponseComplete: value }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update auto-scroll setting')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update auto-scroll setting', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { autoScrollOnResponseComplete: value },
+        'Failed to update auto-scroll setting',
+        'Failed to update auto-scroll setting'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -709,31 +462,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (value: boolean) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ textReplacementsEnabled: value }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update text-replacements setting')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update text-replacements setting', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { textReplacementsEnabled: value },
+        'Failed to update text-replacements setting',
+        'Failed to update text-replacements setting'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -750,28 +485,13 @@ export function useChatSettings(): UseChatSettingsReturn {
         ...updates,
       }
 
-      try {
-        setSaving(true)
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ autonomousRoomSettings: merged }),
-        })
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update autonomous-room settings')
-        }
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update autonomous-room settings', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { autonomousRoomSettings: merged },
+        'Failed to update autonomous-room settings',
+        'Failed to update autonomous-room settings'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -788,28 +508,13 @@ export function useChatSettings(): UseChatSettingsReturn {
         ...updates,
       }
 
-      try {
-        setSaving(true)
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ thinkingDisplay: merged }),
-        })
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update thinking-display settings')
-        }
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update thinking-display settings', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { thinkingDisplay: merged },
+        'Failed to update thinking-display settings',
+        'Failed to update thinking-display settings'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   const handleAnswerConfirmationUpdate = useCallback(
@@ -822,28 +527,13 @@ export function useChatSettings(): UseChatSettingsReturn {
         ...updates,
       }
 
-      try {
-        setSaving(true)
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ answerConfirmationSettings: merged }),
-        })
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update answer-confirmation settings')
-        }
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update answer-confirmation settings', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { answerConfirmationSettings: merged },
+        'Failed to update answer-confirmation settings',
+        'Failed to update answer-confirmation settings'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -859,35 +549,20 @@ export function useChatSettings(): UseChatSettingsReturn {
         ...updates,
       }
 
-      try {
-        setSaving(true)
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ smartTypographySettings: merged }),
-        })
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update smart typography settings')
-        }
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
+      await patchChatSettings(
+        { smartTypographySettings: merged },
+        'Failed to update smart typography settings',
+        'Failed to update smart typography settings',
         // Persisted messages arrive with server-PRE-RENDERED HTML baked into the
         // chat payload (see app/api/v1/chats/[id]/handlers/get.ts), so a cached
         // conversation would keep its old quotes until something else happened
         // to refetch it. Toggling `displayQuotes` must be visible at once, which
         // means dropping those cached renders. Messages the client renders
         // itself pick the change up through the settings query directly.
-        await queryClient.invalidateQueries({ queryKey: queryKeys.chats.all })
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update smart typography settings', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+        () => queryClient.invalidateQueries({ queryKey: queryKeys.chats.all })
+      )
     },
-    [settings, mutateSettings, showSuccess, queryClient]
+    [settings, patchChatSettings, queryClient]
   )
 
   /**
@@ -897,34 +572,14 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (value: boolean) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const currentSettings = settings.agentModeSettings || DEFAULT_AGENT_MODE_SETTINGS
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agentModeSettings: { ...currentSettings, defaultEnabled: value },
-          }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update agent mode settings')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update agent mode default enabled', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      const currentSettings = settings.agentModeSettings || DEFAULT_AGENT_MODE_SETTINGS
+      await patchChatSettings(
+        { agentModeSettings: { ...currentSettings, defaultEnabled: value } },
+        'Failed to update agent mode settings',
+        'Failed to update agent mode default enabled'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -934,34 +589,14 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (value: number) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const currentSettings = settings.agentModeSettings || DEFAULT_AGENT_MODE_SETTINGS
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            agentModeSettings: { ...currentSettings, maxTurns: value },
-          }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update agent mode settings')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update agent mode max turns', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      const currentSettings = settings.agentModeSettings || DEFAULT_AGENT_MODE_SETTINGS
+      await patchChatSettings(
+        { agentModeSettings: { ...currentSettings, maxTurns: value } },
+        'Failed to update agent mode settings',
+        'Failed to update agent mode max turns'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   /**
@@ -974,34 +609,14 @@ export function useChatSettings(): UseChatSettingsReturn {
       const latestSettings = settingsRef.current
       if (!latestSettings) return
 
-      try {
-        setSaving(true)
-
-        const currentSettings = latestSettings.storyBackgroundsSettings || DEFAULT_STORY_BACKGROUNDS_SETTINGS
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            storyBackgroundsSettings: { ...currentSettings, enabled: value },
-          }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update story backgrounds settings')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update story backgrounds enabled', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      const currentSettings = latestSettings.storyBackgroundsSettings || DEFAULT_STORY_BACKGROUNDS_SETTINGS
+      await patchChatSettings(
+        { storyBackgroundsSettings: { ...currentSettings, enabled: value } },
+        'Failed to update story backgrounds settings',
+        'Failed to update story backgrounds enabled'
+      )
     },
-    [mutateSettings, showSuccess]
+    [patchChatSettings]
   )
 
   /**
@@ -1014,34 +629,14 @@ export function useChatSettings(): UseChatSettingsReturn {
       const latestSettings = settingsRef.current
       if (!latestSettings) return
 
-      try {
-        setSaving(true)
-
-        const currentSettings = latestSettings.storyBackgroundsSettings || DEFAULT_STORY_BACKGROUNDS_SETTINGS
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            storyBackgroundsSettings: { ...currentSettings, defaultImageProfileId: profileId },
-          }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update story backgrounds settings')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update story backgrounds profile', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      const currentSettings = latestSettings.storyBackgroundsSettings || DEFAULT_STORY_BACKGROUNDS_SETTINGS
+      await patchChatSettings(
+        { storyBackgroundsSettings: { ...currentSettings, defaultImageProfileId: profileId } },
+        'Failed to update story backgrounds settings',
+        'Failed to update story backgrounds profile'
+      )
     },
-    [mutateSettings, showSuccess]
+    [patchChatSettings]
   )
 
   /**
@@ -1054,34 +649,14 @@ export function useChatSettings(): UseChatSettingsReturn {
       const latestSettings = settingsRef.current
       if (!latestSettings) return
 
-      try {
-        setSaving(true)
-
-        const currentSettings = latestSettings.dangerousContentSettings || DEFAULT_DANGEROUS_CONTENT_SETTINGS
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            dangerousContentSettings: { ...currentSettings, ...updates },
-          }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update dangerous content settings')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update dangerous content settings', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      const currentSettings = latestSettings.dangerousContentSettings || DEFAULT_DANGEROUS_CONTENT_SETTINGS
+      await patchChatSettings(
+        { dangerousContentSettings: { ...currentSettings, ...updates } },
+        'Failed to update dangerous content settings',
+        'Failed to update dangerous content settings'
+      )
     },
-    [mutateSettings, showSuccess]
+    [patchChatSettings]
   )
 
   /**
@@ -1091,31 +666,13 @@ export function useChatSettings(): UseChatSettingsReturn {
     async (timezone: string | null) => {
       if (!settings) return
 
-      try {
-        setSaving(true)
-
-        const res = await fetch('/api/v1/settings/chat', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ timezone }),
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || 'Failed to update timezone')
-        }
-
-        const updatedSettings = await res.json()
-        await mutateSettings(updatedSettings, false)
-        await showSuccess()
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'An error occurred'
-        console.error('Failed to update timezone', { error: errorMsg })
-      } finally {
-        setSaving(false)
-      }
+      await patchChatSettings(
+        { timezone },
+        'Failed to update timezone',
+        'Failed to update timezone'
+      )
     },
-    [settings, mutateSettings, showSuccess]
+    [settings, patchChatSettings]
   )
 
   return {

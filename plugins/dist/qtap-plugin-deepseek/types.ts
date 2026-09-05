@@ -19,4 +19,5 @@ export type {
   AttachmentSupport,
   ModelInfo,
   ProviderOptionsSchema,
+  ThinkingTurnRule,
 } from '@quilltap/plugin-types';

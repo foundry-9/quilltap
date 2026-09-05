@@ -135,6 +135,26 @@ Overriding a message's danger flags marks all flags as user-overridden and remov
 
 When an image prompt is flagged as dangerous, the system can use a separate uncensored LLM for prompt expansion (the step where character placeholders are resolved into visual descriptions). Configure this in the **Chat** tab in Settings (`/settings?tab=chat&section=dangerous-content`) under **Cheap LLM Settings** > "Image Prompt Expansion LLM (Uncensored - Optional)." If not set, the standard cheap LLM is always used for prompt expansion.
 
+## Story Background Prompts
+
+The Lantern's story backgrounds hold a second, separate courtesy. By default the prompt crafter translates any undressed or intimate moment into cinematic concealment — drapery, silhouette, foreground occlusion — because ordinary image providers reject the alternative.
+
+That courtesy is now conditional. When a chat is marked dangerous **and** you have an uncensored image profile configured, the picture is already headed for a door that does not moderate, so the crafter describes the scene plainly instead. Previously the concealment applied regardless, and an uncensored provider received a scene needlessly draped for a provider it was never going to see.
+
+The same holds on a reroute: if a standard provider rejects a finished image for moderation and the Concierge sends it to your uncensored profile, the prompt is re-crafted candidly for that provider rather than forwarded unchanged.
+
+If no uncensored image profile is configured, concealment applies as before — the character appearance descriptions are additionally sanitized in that case, since there is nowhere else for the image to go.
+
+### Both conditions, and how they are commonly missed
+
+The candid draft requires **two** things at once, and a picture that comes back unexpectedly demure has almost always lost one of them.
+
+**The chat must actually be Flagged, not merely flaggable.** Auto-Route flags a chat when the classifier's score clears your **Detection Threshold**, and a chat can be thoroughly undressed while scoring well under it — the classifier weighs the whole compressed summary, not the state of anybody's wardrobe. A scene may therefore sit at a score of 0.3 against a threshold of 0.8, be marked Safe, and receive the concealed draft for as long as it likes. If a chat ought to be candid and the classifier disagrees, take the decision out of its hands with the per-chat Concierge switch described below — set the chat **Uncensored** (the operator's own assertion, no classifier involved) or, if you want the warning apparatus too, **Flagged**; either is sticky, and the classifier will not quietly overturn your hand later.
+
+**The adapter must sit on the profile the Concierge actually routes to.** The **Image Generation Profile** named under *Uncensored Providers* is a distinct setting from whichever profile a given chat happens to use. Configure a LoRA on one profile while the Concierge points at another and a reroute will hand your scene to the other profile — correctly, obediently, and without the adapter. When you retire an uncensored profile in favour of a new one, move this setting across with it.
+
+A useful way to tell the two failures apart after the fact: read the prompt on the finished image. If it drapes the scene ("modestly concealed", "silhouetted", "a sheet arranged just so") the crafter was working from the concealed instructions and the first condition failed. If it says plainly what the scene is and the picture is still demure, the prompt reached a provider or an adapter that declined it — see *The adapter seems to have made no difference* in [Image Generation Profiles](image-generation-profiles.md).
+
 ## Chat-Level Classification
 
 In addition to per-message scanning, Quilltap can classify entire chats as dangerous based on the compressed context summary. This happens automatically in the background after messages are exchanged and a context summary has been generated.
@@ -169,33 +189,80 @@ When a chat has been permanently classified as dangerous, Quilltap applies sever
 
 If a chat was incorrectly classified as dangerous, you can reset its classification. This can be done via the API (`POST /api/v1/chats/[id]?action=reclassify-danger`), which clears the classification and re-queues it for evaluation.
 
+## When a Provider Refuses Outright
+
+There is a distinction worth drawing between a model that *declines* and a model that *falters*, because the remedies are entirely different and one of them used to be offered for both.
+
+A provider with a moderation layer of its own — Z.AI, OpenAI, Azure, Google — may simply refuse a turn. When it does, it says so: it returns nothing at all and stamps the reply with a reason of its own choosing (`sensitive`, `content_filter`, `refusal`, `SAFETY`, and so on). This is testimony, not a hiccup, and Quilltap now reads it and repeats it to you plainly, naming the provider, the model, and the word it used.
+
+Formerly every empty reply was met with the same suggestion — *this is a known issue with some providers, please try resending your message* — which for a refusal is advice that cannot possibly work. The same content sent to the same moderation layer will be refused again, and again, as many times as you care to ask.
+
+What does work:
+
+- **Reroute the chat to an uncensored provider.** This is precisely what the Concierge's Auto-Route mode exists for; see *Modes* above.
+- **Change what is being asked for.** Occasionally the refusal is about a single phrase or a single image rather than the whole scene.
+
+Note that a refusal may concern an *image* you have attached quite as readily as anything written. If a vision model has been declining a picture, its reason will now say so rather than leaving you to guess at a blank reply.
+
+### When the Turn Is Carrying a Picture
+
+A reroute swaps the model but keeps the conversation already assembled — and if the profile you began the turn with reads pictures, that assembly has a picture *in* it, in the raw. Hand that bundle to a substitute that reads only words and the gateway will not even trouble the model with it: it returns a flat refusal of its own, the character says nothing at all, and the whole rescue is spent before it starts. This was, for a time, precisely what happened, and with a faultlessly configured pair of profiles on either side of the swap.
+
+The Concierge now asks the substitute what it can read before handing anything over.
+
+- **Choosing the understudy.** When no uncensored profile has been named and the Concierge is scanning your profiles for one, it now puts the profiles that can take the turn's attachments at the front of the queue. It does not strike the others out — a described picture is worth a great deal more than a silent character — but it will not reach past a capable model for an incapable one.
+- **Preparing the payload.** Whichever profile is called, uncensored or not, named by you or found by the scan, the attachment question is asked again on its behalf. A picture the substitute cannot see is replaced by a written description of it — the same courtesy Quilltap extends to any text-only model you attach a photograph to — and the retry proceeds with the words instead of the bytes. A substitute that *can* see receives the picture untouched, exactly as before.
+
+The practical upshot is that an image-bearing turn is no longer the one turn the Concierge's last line of defence cannot cover. You may still prefer to name a vision-capable profile as your uncensored fallback, and there is every reason to: a described picture is a summary, and the model that reads the original will always have more to go on.
+
 ## The Per-Chat Concierge Switch
 
-Every chat keeps a small brass switch in the sidebar — found under the **Chat** section of the Chat Sidebar — bearing three positions: **Safe**, **Flagged**, and **Off-duty**. It is the only place a chat's relationship with the Concierge may be set, adjusted, or — should the operator so insist — dispensed with entirely.
+Every chat keeps a small brass switch in the sidebar — found under the **Chat** section of the Chat Sidebar — bearing four positions arranged under two headings: **The Concierge decides** (Monitored, Flagged) and **You decide** (Vouched Safe, Uncensored). It is where a chat's relationship with the Concierge is adjusted, reconsidered, or — should the operator so insist — dispensed with entirely.
 
-### Safe
+The same four positions, in the same two companies, are also offered on the **new-chat form**, above **Starting Scenario**, for the conversations whose character is not in doubt before they begin. A posture chosen there is in force from the very first word: the Concierge posts his note at the top of the fresh history, and the opening greeting is composed under the arrangement rather than discovering it after a refusal. See [Chats Overview](chats.md) for the particulars. Everything below applies identically whichever of the two controls you reached for.
 
-The default footing. The global Concierge settings apply: the gatekeeper makes his quiet rounds before each dispatch, and if the conversation drifts into the sort of territory that draws his eye, he will throw the switch himself and announce, with all due discretion, that the chat is now Flagged. This is the position you want for ordinary use.
+Two questions, taken together, place a chat on the switch. *Who decided* — the Concierge's classifier, or you? And *which route does the chat take* — the ordinary providers, or the uncensored ones?
+
+|  | The Concierge decides | You decide |
+|---|---|---|
+| **Ordinary route** | Monitored | Vouched Safe |
+| **Uncensored route** | Flagged | Uncensored |
+
+The Concierge may move a chat between Monitored and Flagged as the conversation warrants; only your own hand can place a chat in the right-hand column, and nothing but your own hand moves it out again.
+
+### Monitored
+
+The default footing. The global Concierge settings apply: the gatekeeper makes his quiet rounds before each dispatch, and if the conversation drifts into the sort of territory that draws his eye, he will throw the switch himself and announce, with all due discretion, that the chat is now Flagged. This is the position you want for ordinary use. (In earlier editions this position was labelled *Safe*.)
 
 ### Flagged
 
-The chat is to be treated as dangerous. Subsequent text traffic is routed to the uncensored desk; background errands — memory extraction, title revisions, story backgrounds — likewise. The position arrives in one of two ways: the Concierge has flipped it himself after classification, or the operator has thrown the switch by hand. To throw it back to Safe, simply select Safe; the Concierge will stand down for the moment, and resume his customary watch on the next user message.
+The Concierge has this chat down as dangerous. Subsequent text traffic is routed to the uncensored desk; background errands — memory extraction, title revisions, story backgrounds — likewise. The position arrives in one of two ways: the Concierge has flipped it himself after classification, or the operator has thrown the switch by hand. To throw it back, simply select Monitored; the Concierge will stand down for the moment, and resume his customary watch on the next user message.
 
-### Off-duty
+### Vouched Safe
 
-Reserved for the operator who would prefer the Concierge take the afternoon off. In this position **no moderation occurs**. The gatekeeper does not classify, the prompts go to whichever censored provider the chat is configured to use, and image generators receive whatever the conversation produces, unaltered. Provider refusals — and the occasional sternly worded reply — are part of the bargain. The chat never auto-flips out of Off-duty; only the operator's hand returns it to Safe or Flagged.
+You have vouched for this chat, and the Concierge, satisfied, stops watching it. **No moderation occurs**: the gatekeeper does not classify, and no announcements are posted. The prompts still go to the *ordinary* providers the chat is configured to use — which may still refuse the conversation on their own account — and image prompts go out with their customary concealment. The chat never auto-flips out of Vouched Safe; only your hand returns it to the Concierge's care. (In earlier editions this position was labelled *Off-duty*.)
 
-Each transition between positions is announced in the chat history by the Concierge himself, in his customary voice, so the conversation's moderation provenance remains transparent on later re-readings.
+### Uncensored
+
+You have sent the Concierge away and opened the uncensored door yourself. The chat takes **every uncensored route the Flagged state takes** — text traffic to the uncensored desk, background errands likewise, story-background prompts drafted candidly — but with none of the apparatus: nothing is classified, nothing is scanned, no danger styling is painted, and no warning is issued. The risk, and the verdict, are yours. Notably, this position works even when the global Concierge mode is **Off** — asking for uncensored routing on one chat should not require throwing a global switch first. It does still require an uncensored provider to be configured under *Uncensored Providers* above.
+
+If the classifier keeps calling a spicy chat safe and you are tired of arguing with it, this — not Flagged — is usually the position you want: Flagged carries the Concierge's warning apparatus with it, where Uncensored simply takes the route.
+
+Each transition between positions is announced in the chat history by the Concierge himself, in his customary voice, so the conversation's moderation provenance remains transparent on later re-readings. The Salon's header wears a small pill for any position other than Monitored — red for Flagged, grey for Vouched Safe, blue for Uncensored — so a glance tells you whether anything other than the default is in force. The very same three shades mark a chat wherever it is merely *listed* — the homepage's Recent Chats, the Salon's roll of conversations, a character's Conversations, a project's chats — where the pill contracts to a modest asterisk beside the message count. Monitored, being the arrangement everyone already assumes, wears nothing at all anywhere; rest the pointer on a mark or a pill and you will get the same explanation from each, since both are reading from the Concierge's one sheet of notes.
 
 ## Quick-Hide Integration
 
-Chats classified as dangerous can be hidden from the sidebar using the quick-hide system.
+Chats that take the uncensored route can be hidden from the sidebar using the quick-hide system.
 
 ### Hiding Dangerous Chats
 
 1. Click the **eye icon** in the sidebar footer
 2. In the **Content Filters** section, toggle **"Dangerous Chats"** to hide them
-3. Dangerous chats will be hidden from the sidebar, projects section, and all-chats page
+3. Chats on the uncensored route will be hidden from the sidebar, projects section, and all-chats page
+
+What the toggle hides is a matter of the *route*, not of anyone's opinion: a chat wearing the red mark (**Flagged**, by the Concierge's own reckoning) and a chat wearing the blue one (**Uncensored**, by yours) both go behind the curtain, since both take the spicy road. A chat you have **Vouched Safe** does not, however old and lurid a classification it may still be carrying about in its pocket — you said it was fine, and the toggle takes you at your word. A **Monitored** chat, naturally, stays where it is.
+
+The eye icon itself appears in the sidebar footer only when there is in fact something for it to hide.
 
 The toggle is persisted in your browser's local storage, so your preference is remembered across sessions.
 

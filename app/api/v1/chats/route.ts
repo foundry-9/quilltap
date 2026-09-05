@@ -11,11 +11,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createContextHandler, type RequestContext } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { buildChatContext, type ChatContext } from '@/lib/chat/initialize';
-import { combineScenarioText } from '@/lib/chat/scenario-text';
+import { resolveScenarioSelection } from '@/lib/chat/scenario-selection';
+import { pickWeightedRandom } from '@/lib/chat/turn-manager/selection';
 import { resolveProjectMountPointIds } from '@/lib/mount-index/tiered-mount-pool';
 import { generateGreetingMessage } from '@/lib/chat/initial-greeting';
+import { profileParams } from '@/lib/llm/cheap-llm';
+import { resolveSamplingParams } from '@/lib/llm/sampling-params';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
 import { resolveProviderForDangerousContent } from '@/lib/services/dangerous-content/provider-routing.service';
+import { shouldUseUncensoredRoute, type ConciergeState } from '@/lib/services/dangerous-content/chat-override';
+import { applyConciergeFlip } from '@/lib/services/dangerous-content/manual-flip';
 import { buildFirstMessageContext } from '@/lib/chat/first-message-context';
 import { ensureFictionalBaseRealTime } from '@/lib/chat/timestamp-utils';
 import { buildRecentConversationsBlock, calculateRecentConversationsLimit } from '@/lib/memory/memory-recap';
@@ -23,21 +28,22 @@ import { getModelContextLimit } from '@/lib/llm/model-context-data';
 import { logger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/error-utils';
 import { z } from 'zod';
-import type { ChatEvent, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
+import type { ChatEvent, ChatMetadata, ChatParticipantBaseInput, TimestampConfig } from '@/lib/schemas/types';
 import { TimestampConfigSchema } from '@/lib/schemas/types';
-import { Cron } from 'croner';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import {
   OutfitSelectionSchema,
+  allEquippedItemIds,
   type OutfitSelection,
 } from '@/lib/schemas/wardrobe.types';
+import { buildOutfitSlotValues } from '@/lib/wardrobe/outfit-description';
 import {
   applyOutfitSelections,
-  buildCheapLLMConfig,
   type OutfitSelectionContext,
 } from '@/lib/wardrobe/apply-outfit-selections';
+import { buildCheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { sharedWardrobeTiersForCharacter } from '@/lib/wardrobe/shared-tiers';
-import { createCreationProgressEmitter } from '@/lib/chat/creation-progress';
+import { createCreationProgressEmitter, type CreationProgressEmitter } from '@/lib/chat/creation-progress';
 import { notFound, badRequest, serverError, successResponse, created } from '@/lib/api/responses';
 import {
   enrichParticipantSummary,
@@ -67,6 +73,7 @@ import {
 import { compileAllIdentityStacks } from '@/lib/services/system-prompt-compiler/compiler';
 import { applyChatContinuation } from '@/lib/chat/apply-chat-continuation';
 import { startAutonomousRoomManually } from '@/lib/services/chat-message/autonomous-room.service';
+import { computeNextRunFromCron } from '@/lib/services/chat-message/autonomous-room-cron';
 
 type Repos = RepositoryContainer;
 const CHAT_GET_ACTIONS = ['has-dangerous'] as const;
@@ -128,6 +135,16 @@ const createChatSchema = z.object({
    * Omit the key entirely to fall back to that default chain.
    */
   roleplayTemplateId: z.uuid().nullable().optional(),
+  /**
+   * Per-chat Concierge state to set at creation, using the same enum as the
+   * sidebar's PUT `conciergeState`. Omitted or 'monitored' → the chat is created
+   * Monitored exactly as today (no write, no announcement). Any other value is
+   * applied through `applyConciergeFlip` after the system-prompt message and
+   * before any staff announcement or greeting, so the Concierge's bubble sits
+   * where the history says the state was set and the opening greeting is
+   * generated under the chosen state.
+   */
+  conciergeState: z.enum(['monitored', 'flagged', 'vouched', 'uncensored']).optional(),
   outfitSelections: z.array(OutfitSelectionSchema).optional(), // Per-character outfit selections for chat start
   avatarGenerationEnabled: z.boolean().optional(), // Enable auto-generated character avatars on outfit changes
   /**
@@ -293,12 +310,12 @@ async function buildAllParticipants(
     return { error: 'At least one LLM-controlled CHARACTER participant is required' };
   }
 
-  // Pick the opening character by weighted-random on talkativeness, matching the
-  // algorithm used by selectNextSpeaker for subsequent turns. Without this the
-  // first character in the list always delivered the greeting, which biased
+  // Pick the opening character by weighted-random on talkativeness — the same
+  // draw selectNextSpeaker uses for subsequent turns. Without this the first
+  // character in the list always delivered the greeting, which biased
   // multi-character chats toward whichever participant the UI happened to list
   // first.
-  const chosen = pickWeightedByTalkativeness(llmCandidates);
+  const chosen = pickWeightedRandom(llmCandidates, (c) => c.talkativeness).item;
 
   const firstLLMCharacter = {
     characterId: chosen.characterId,
@@ -307,21 +324,6 @@ async function buildAllParticipants(
   };
 
   return { participants: builtParticipants, tags: allTagIds, firstCharacter: firstLLMCharacter, firstImageProfileId };
-}
-
-function pickWeightedByTalkativeness<T extends { talkativeness: number }>(candidates: T[]): T {
-  let totalWeight = 0;
-  for (const c of candidates) totalWeight += c.talkativeness;
-  if (totalWeight <= 0) {
-    return candidates[Math.floor(Math.random() * candidates.length)];
-  }
-  const r = Math.random() * totalWeight;
-  let cumulative = 0;
-  for (const c of candidates) {
-    cumulative += c.talkativeness;
-    if (r < cumulative) return c;
-  }
-  return candidates[candidates.length - 1];
 }
 
 /**
@@ -346,13 +348,46 @@ async function writeSystemPromptMessage(
   await repos.chats.addMessage(chatId, systemMessage);
 }
 
+/**
+ * Apply a Concierge state requested at creation. Runs after the system-prompt
+ * message and before any staff announcement or greeting, so the Concierge's
+ * bubble is the first thing in the history after the prompt and the greeting is
+ * generated under the chosen state. Monitored (or absence) is a no-op:
+ * `applyConciergeFlip` compares against the fresh row and does nothing.
+ *
+ * The route runs in the parent process, so the announcement's write lands
+ * immediately — every later reader (the greeting's own `findById`, the
+ * scheduled danger scan, memory extraction, story backgrounds) sees the pair.
+ */
+async function applyRequestedConciergeState(
+  chat: ChatMetadata,
+  requested: ConciergeState | undefined,
+  progress: CreationProgressEmitter,
+): Promise<void> {
+  if (!requested || requested === 'monitored') return;
+  progress.status('Briefing the Concierge…');
+  const result = await applyConciergeFlip(chat.id, requested, chat);
+  logger.debug('[Chats v1] Applied Concierge state at creation', {
+    chatId: chat.id,
+    requested,
+    changed: result.changed,
+  });
+}
+
 interface ScenarioAndStaffOptions {
   /**
    * Skip the auto-generated first character message. Set true on the
-   * continuation flow — a chat that's "picking up where the last one left
-   * off" should not open with a fresh "Hello, ${userName}!" greeting.
+   * continuation and autonomous flows — a chat that's "picking up where the
+   * last one left off" should not open with a fresh "Hello, ${userName}!"
+   * greeting, and an autonomous room has no user to greet.
    */
   skipFirstMessage?: boolean;
+  /**
+   * Project-tier shared wardrobe stores for the chat's project (see
+   * `resolveProjectMountPointIds`), resolved once by the caller and reused for
+   * every participant's equipped-item lookup.
+   */
+  projectMountPointIds: string[];
 }
 
 async function createInitialMessagesScenarioAndStaff(
@@ -361,9 +396,9 @@ async function createInitialMessagesScenarioAndStaff(
   participants: ChatParticipantBaseInput[],
   userId: string,
   repos: Repos,
-  projectId?: string | null,
-  scenarioText?: string | null,
-  options: ScenarioAndStaffOptions = {},
+  projectId: string | null,
+  scenarioText: string | null,
+  options: ScenarioAndStaffOptions,
 ): Promise<void> {
   // Phase E: emit Prospero project-and-general-context whisper at chat-start.
   // When a project is attached, the project's description / instructions /
@@ -461,7 +496,7 @@ async function createInitialMessagesScenarioAndStaff(
   );
   // Project tier for tri-tier wardrobe resolution — shared with every
   // participant's equipped-item lookup below.
-  const equippedProjectMountPointIds = await resolveProjectMountPointIds(projectId);
+  const equippedProjectMountPointIds = options.projectMountPointIds;
   for (const participant of allCharacterParticipants) {
     try {
       const characterId = participant.characterId as string;
@@ -471,14 +506,8 @@ async function createInitialMessagesScenarioAndStaff(
       const equippedSlots = await repos.chats.getEquippedOutfitForCharacter(chatId, characterId);
       if (!equippedSlots) continue;
 
-      const equippedItemIds = (
-        [
-          ...equippedSlots.top,
-          ...equippedSlots.bottom,
-          ...equippedSlots.footwear,
-          ...equippedSlots.accessories,
-        ] as string[]
-      ).filter((id) => typeof id === 'string' && id.length > 0);
+      const equippedItemIds = allEquippedItemIds(equippedSlots)
+        .filter((id) => typeof id === 'string' && id.length > 0);
       const equippedItemsData = equippedItemIds.length > 0
         ? await repos.wardrobe.findByIdsForCharacter(
             characterId,
@@ -499,12 +528,7 @@ async function createInitialMessagesScenarioAndStaff(
         return titles;
       };
 
-      const outfit = {
-        top: titlesFor('top'),
-        bottom: titlesFor('bottom'),
-        footwear: titlesFor('footwear'),
-        accessories: titlesFor('accessories'),
-      };
+      const outfit = buildOutfitSlotValues((slot) => titlesFor(slot));
 
       await postOpeningOutfitWhisper({
         chatId,
@@ -532,9 +556,14 @@ async function createInitialMessagesScenarioAndStaff(
   }
 
   let firstMessageContent = (context.firstMessage || '').trim();
+  // Reasoning is only ever captured for a *generated* greeting — a scripted
+  // one never touched a model. DISPLAY ONLY, like every other stored turn.
+  let firstMessageReasoning = '';
 
   if (!firstMessageContent) {
-    firstMessageContent = await autoGenerateFirstMessage(chatId, context, participants, userId, repos, projectId);
+    const generated = await autoGenerateFirstMessage(chatId, context, participants, userId, repos, projectId);
+    firstMessageContent = generated.content;
+    firstMessageReasoning = generated.reasoningContent;
   }
 
   if (!firstMessageContent) {
@@ -554,6 +583,7 @@ async function createInitialMessagesScenarioAndStaff(
     id: crypto.randomUUID(),
     role: 'ASSISTANT',
     content: firstMessageContent,
+    reasoningContent: firstMessageReasoning || null,
     participantId: firstCharacterParticipant?.id || undefined,
     attachments: [],
     createdAt: new Date().toISOString(),
@@ -562,29 +592,14 @@ async function createInitialMessagesScenarioAndStaff(
 }
 
 /**
- * Backwards-compatible wrapper for the legacy non-continuation call site.
- * Writes the system prompt and then runs the scenario-and-staff phase.
+ * A generated opening greeting. `reasoningContent` is the thinking a
+ * reasoning model produced while composing it — DISPLAY ONLY, persisted onto
+ * the greeting message so the Salon renders its thinking fold like any other
+ * turn. Empty for the give-up paths and for models that produced none.
  */
-async function createInitialMessages(
-  chatId: string,
-  context: ChatContext,
-  participants: ChatParticipantBaseInput[],
-  userId: string,
-  repos: Repos,
-  projectId?: string | null,
-  scenarioText?: string | null,
-): Promise<void> {
-  await writeSystemPromptMessage(chatId, context, repos);
-  await createInitialMessagesScenarioAndStaff(
-    chatId,
-    context,
-    participants,
-    userId,
-    repos,
-    projectId,
-    scenarioText,
-  );
-}
+type GeneratedGreeting = { content: string; reasoningContent: string };
+
+const NO_GREETING: GeneratedGreeting = { content: '', reasoningContent: '' };
 
 async function autoGenerateFirstMessage(
   chatId: string,
@@ -593,19 +608,19 @@ async function autoGenerateFirstMessage(
   userId: string,
   repos: Repos,
   projectId?: string | null
-): Promise<string> {
+): Promise<GeneratedGreeting> {
   const participant = participants
     .filter((p) => p.type === 'CHARACTER' && p.characterId === context.character.id)
     .sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))[0] ||
     participants.filter((p) => p.type === 'CHARACTER').sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))[0];
 
   if (!participant?.connectionProfileId) {
-    return '';
+    return NO_GREETING;
   }
 
   const connectionProfile = await repos.connections.findById(participant.connectionProfileId);
   if (!connectionProfile) {
-    return '';
+    return NO_GREETING;
   }
 
   let apiKey = '';
@@ -613,7 +628,7 @@ async function autoGenerateFirstMessage(
     const storedKey = await repos.connections.findApiKeyById(connectionProfile.apiKeyId);
     if (!storedKey) {
       logger.warn('[Chats v1] Connection profile is missing its API key', { context: 'autoGenerateFirstMessage' });
-      return '';
+      return NO_GREETING;
     }
 
     apiKey = storedKey.key_value;
@@ -669,14 +684,7 @@ async function autoGenerateFirstMessage(
     characterId: context.character.id,
   };
 
-  const extractNumber = (value: unknown): number | undefined => {
-    if (typeof value === 'number' && !Number.isNaN(value)) return value;
-    if (typeof value === 'string') {
-      const parsed = Number(value);
-      return Number.isNaN(parsed) ? undefined : parsed;
-    }
-    return undefined;
-  };
+  const sampling = resolveSamplingParams(parameters);
 
   const baseParams = {
     systemPrompt: context.systemPrompt,
@@ -685,15 +693,115 @@ async function autoGenerateFirstMessage(
     modelName: connectionProfile.modelName,
     baseUrl: connectionProfile.baseUrl,
     apiKey,
-    temperature: extractNumber(parameters.temperature),
-    maxTokens: extractNumber(parameters.maxTokens),
-    topP: extractNumber(parameters.topP),
+    ...sampling,
     // Forward the character's profile parameters so per-model settings like
     // DeepSeek thinking mode take effect on the greeting too.
-    profileParameters: connectionProfile.parameters && typeof connectionProfile.parameters === 'object'
-      ? (connectionProfile.parameters as Record<string, unknown>)
-      : undefined,
+    profileParameters: profileParams(connectionProfile),
   };
+
+  // The chat's own Concierge state decides which desk this greeting goes to.
+  // `applyRequestedConciergeState` has already written the pair by the time the
+  // scenario-and-staff phase reaches the greeting, so a chat created Uncensored
+  // asks the frank desk first instead of discovering it after a refusal.
+  const chatRow = await repos.chats.findById(chatId);
+
+  /**
+   * Generate the greeting on the Concierge's uncensored desk. Returns null when
+   * there is nothing to reroute to (the resolved mode isn't `AUTO_ROUTE`, no
+   * uncensored profile is configured, its key is unusable) or the attempt came
+   * back empty, so the caller falls through to the participant's own profile.
+   *
+   * The resolver is asked WITH the chat: a Vouched Safe chat collapses to
+   * `mode: 'OFF'` and never reroutes, and an Uncensored chat reroutes even when
+   * the global mode is `OFF`.
+   */
+  const generateViaUncensoredDesk = async (
+    trigger: 'chat-state' | 'content-filter',
+  ): Promise<GeneratedGreeting | null> => {
+    const chatSettings = await repos.chatSettings.findByUserId(userId);
+    const resolved = resolveDangerousContentSettings(chatSettings, chatRow);
+
+    if (resolved.settings.mode !== 'AUTO_ROUTE') {
+      return null;
+    }
+
+    const routeResult = await resolveProviderForDangerousContent(
+      connectionProfile,
+      apiKey,
+      resolved.settings,
+      userId
+    );
+
+    if (!routeResult.rerouted) {
+      return null;
+    }
+
+    logger.info('[Chats v1] Generating greeting on the Concierge uncensored provider', {
+      characterId: context.character.id,
+      trigger,
+      settingsSource: resolved.source,
+      uncensoredProfile: routeResult.connectionProfile.name,
+      uncensoredProvider: routeResult.connectionProfile.provider,
+      uncensoredModel: routeResult.connectionProfile.modelName,
+    });
+
+    const uncensoredParams = routeResult.connectionProfile.parameters as Record<string, unknown> | undefined;
+    // Each knob falls back to the character's own profile independently,
+    // so an uncensored profile that only sets a temperature still borrows
+    // the original's Max Tokens and Top P.
+    const uncensoredSampling = resolveSamplingParams(uncensoredParams ?? {});
+
+    const result = await generateGreetingMessage({
+      ...loggingFields,
+      systemPrompt: context.systemPrompt,
+      characterName: context.character.name,
+      provider: routeResult.connectionProfile.provider,
+      modelName: routeResult.connectionProfile.modelName,
+      baseUrl: routeResult.connectionProfile.baseUrl,
+      apiKey: routeResult.apiKey,
+      temperature: uncensoredSampling.temperature ?? sampling.temperature,
+      maxTokens: uncensoredSampling.maxTokens ?? sampling.maxTokens,
+      topP: uncensoredSampling.topP ?? sampling.topP,
+      participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
+      projectContext,
+      recentConversationsBlock: recentConversationsBlock || undefined,
+    });
+
+    if (!result.content) {
+      return null;
+    }
+
+    logger.info('[Chats v1] Greeting generation succeeded via Concierge uncensored provider', {
+      characterId: context.character.id,
+      trigger,
+      provider: routeResult.connectionProfile.provider,
+      model: routeResult.connectionProfile.modelName,
+    });
+    return { content: result.content, reasoningContent: result.reasoningContent };
+  };
+
+  // Attempt 0: a Flagged or Uncensored chat opens at the uncensored desk. The
+  // three-attempt ladder below (with memories → without → uncensored on a
+  // content filter) stays the path for Monitored and Vouched Safe chats.
+  let uncensoredDeskTried = false;
+  if (shouldUseUncensoredRoute(chatRow)) {
+    uncensoredDeskTried = true;
+    try {
+      const rerouted = await generateViaUncensoredDesk('chat-state');
+      if (rerouted) {
+        return rerouted;
+      }
+      logger.info('[Chats v1] Uncensored desk unavailable or empty for greeting — using the participant’s own profile', {
+        characterId: context.character.id,
+        chatId,
+      });
+    } catch (error) {
+      logger.warn('[Chats v1] Concierge uncensored greeting attempt failed', {
+        characterId: context.character.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   // Track whether any attempt hit a content filter so we can try the Concierge fallback
   let contentFilterHit = false;
@@ -709,7 +817,7 @@ async function autoGenerateFirstMessage(
     });
 
     if (result.content) {
-      return result.content;
+      return { content: result.content, reasoningContent: result.reasoningContent };
     }
     if (result.contentFilterDetected) {
       contentFilterHit = true;
@@ -741,7 +849,7 @@ async function autoGenerateFirstMessage(
         logger.info('[Chats v1] Greeting generation succeeded on retry without memories', {
           characterId: context.character.id,
         });
-        return result.content;
+        return { content: result.content, reasoningContent: result.reasoningContent };
       }
       if (result.contentFilterDetected) {
         contentFilterHit = true;
@@ -755,56 +863,18 @@ async function autoGenerateFirstMessage(
     }
   }
 
-  // Attempt 3: If content filter was detected, try the Concierge uncensored provider
-  if (contentFilterHit) {
+  // Attempt 3: If a content filter was detected, try the Concierge uncensored
+  // provider — unless the chat's own state already sent us there first, in which
+  // case there is nothing new to try. A Vouched Safe chat resolves to
+  // `mode: 'OFF'` inside the helper and never reroutes, whatever the globe says.
+  if (contentFilterHit && !uncensoredDeskTried) {
     try {
-      const chatSettings = await repos.chatSettings.findByUserId(userId);
-      const resolved = resolveDangerousContentSettings(chatSettings);
-
-      if (resolved.settings.mode === 'AUTO_ROUTE') {
-        const routeResult = await resolveProviderForDangerousContent(
-          connectionProfile,
-          apiKey,
-          resolved.settings,
-          userId
-        );
-
-        if (routeResult.rerouted) {
-          logger.info('[Chats v1] Content filter detected on greeting — falling back to Concierge uncensored provider', {
-            characterId: context.character.id,
-            uncensoredProfile: routeResult.connectionProfile.name,
-            uncensoredProvider: routeResult.connectionProfile.provider,
-            uncensoredModel: routeResult.connectionProfile.modelName,
-          });
-
-          const uncensoredParams = routeResult.connectionProfile.parameters as Record<string, unknown> | undefined;
-          const uncensoredParameters = uncensoredParams ?? {};
-
-          const result = await generateGreetingMessage({
-            ...loggingFields,
-            systemPrompt: context.systemPrompt,
-            characterName: context.character.name,
-            provider: routeResult.connectionProfile.provider,
-            modelName: routeResult.connectionProfile.modelName,
-            baseUrl: routeResult.connectionProfile.baseUrl,
-            apiKey: routeResult.apiKey,
-            temperature: extractNumber(uncensoredParameters.temperature) ?? extractNumber(parameters.temperature),
-            maxTokens: extractNumber(uncensoredParameters.maxTokens) ?? extractNumber(parameters.maxTokens),
-            topP: extractNumber(uncensoredParameters.topP) ?? extractNumber(parameters.topP),
-            participantMemories: participantMemories.length > 0 ? participantMemories : undefined,
-            projectContext,
-            recentConversationsBlock: recentConversationsBlock || undefined,
-          });
-
-          if (result.content) {
-            logger.info('[Chats v1] Greeting generation succeeded via Concierge uncensored provider', {
-              characterId: context.character.id,
-              provider: routeResult.connectionProfile.provider,
-              model: routeResult.connectionProfile.modelName,
-            });
-            return result.content;
-          }
-        }
+      logger.info('[Chats v1] Content filter detected on greeting — falling back to Concierge uncensored provider', {
+        characterId: context.character.id,
+      });
+      const rerouted = await generateViaUncensoredDesk('content-filter');
+      if (rerouted) {
+        return rerouted;
       }
     } catch (error) {
       logger.warn('[Chats v1] Concierge fallback for greeting generation failed', {
@@ -823,7 +893,7 @@ async function autoGenerateFirstMessage(
       logger.info('[Chats v1] Greeting generation succeeded on final retry', {
         characterId: context.character.id,
       });
-      return result.content;
+      return { content: result.content, reasoningContent: result.reasoningContent };
     }
   } catch (error) {
     logger.warn('[Chats v1] Final greeting generation retry failed', {
@@ -836,7 +906,7 @@ async function autoGenerateFirstMessage(
     characterId: context.character.id,
     contentFilterHit,
   });
-  return '';
+  return NO_GREETING;
 }
 
 // ============================================================================
@@ -887,19 +957,121 @@ async function handleList(req: NextRequest, context: RequestContext) {
 }
 
 /**
- * Check if any dangerous chats exist for the current user
+ * Does the user have anything for "Dangerous Chats" to hide?
+ *
+ * The toggle hides whatever takes the uncensored route — Flagged (the
+ * Concierge's verdict) and Uncensored (the operator's) — so the affordance
+ * appears on exactly that set, not on every chat carrying a preserved label.
  */
 async function handleHasDangerous(context: RequestContext) {
   const { user, repos } = context;
 
   try {
     const allChats = await repos.chats.findByUserId(user.id);
-    const hasDangerous = allChats.some((c: any) => c.isDangerousChat === true);
+    const hasDangerous = allChats.some((c) => shouldUseUncensoredRoute(c));
     return successResponse({ hasDangerous });
   } catch (error) {
     logger.error('[Chats v1] Error checking dangerous chats', {}, error instanceof Error ? error : undefined);
     return serverError('Failed to check dangerous chats');
   }
+}
+
+type CreateChatInput = z.infer<typeof createChatSchema>;
+
+/**
+ * Autonomous-room preconditions on a create request: no user-controlled seats,
+ * at least two LLM-controlled characters, and a parseable `scheduleCron` (an
+ * all-whitespace expression means "no schedule", i.e. manual-only). Yields the
+ * first scheduled run to stamp on the row, or the 400 to send back.
+ */
+function validateAutonomousRoomRequest(
+  validatedData: CreateChatInput,
+  userId: string,
+): { ok: true; nextRunAt: string | null } | { ok: false; response: NextResponse } {
+  const userParticipants = validatedData.participants.filter((p) => p.controlledBy === 'user');
+  if (userParticipants.length > 0) {
+    return { ok: false, response: badRequest('Autonomous rooms cannot include user-controlled participants') };
+  }
+  const llmCharacterParticipants = validatedData.participants.filter(
+    (p) => p.type === 'CHARACTER' && (!p.controlledBy || p.controlledBy === 'llm'),
+  );
+  if (llmCharacterParticipants.length < 2) {
+    return { ok: false, response: badRequest('Autonomous rooms require at least two LLM-controlled characters') };
+  }
+
+  const expr = validatedData.scheduleCron?.trim() ?? '';
+  if (expr.length === 0) {
+    return { ok: true, nextRunAt: null };
+  }
+  const nextRun = computeNextRunFromCron(expr);
+  if (!nextRun.ok) {
+    logger.warn('[Chats v1] Invalid cron expression on autonomous-room create', {
+      userId,
+      scheduleCron: expr,
+      error: nextRun.error,
+    });
+    return { ok: false, response: badRequest(nextRun.message) };
+  }
+  return { ok: true, nextRunAt: nextRun.nextRunAt };
+}
+
+interface ProjectChatDefaults {
+  toolDefaults: { disabledTools: string[]; disabledToolGroups: string[] };
+  avatarGenerationDefault: boolean | null;
+  defaultImageProfileId: string | null;
+  defaultRoleplayTemplateId: string | null;
+}
+
+/**
+ * The defaults a new chat inherits from its project — tool settings, avatar
+ * generation, image profile, roleplay template — and, as a side effect, the
+ * roster update: a project that does not `allowAnyCharacter` adopts every
+ * character participant it has not met before. Without a project every
+ * default is empty/null. A missing project is the caller's 404.
+ */
+async function resolveProjectDefaults(
+  repos: Repos,
+  projectId: string | undefined,
+  participants: ChatParticipantBaseInput[],
+): Promise<({ ok: true } & ProjectChatDefaults) | { ok: false; response: NextResponse }> {
+  if (!projectId) {
+    return {
+      ok: true,
+      toolDefaults: { disabledTools: [], disabledToolGroups: [] },
+      avatarGenerationDefault: null,
+      defaultImageProfileId: null,
+      defaultRoleplayTemplateId: null,
+    };
+  }
+
+  const project = await repos.projects.findById(projectId);
+  if (!project) {
+    return { ok: false, response: notFound('Project') };
+  }
+
+  if (!project.allowAnyCharacter) {
+    const characterIds = participants
+      .filter((p) => p.type === 'CHARACTER' && p.characterId)
+      .map((p) => p.characterId as string);
+
+    const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
+    if (newCharacterIds.length > 0) {
+      await repos.projects.update(projectId, {
+        characterRoster: [...project.characterRoster, ...newCharacterIds],
+      });
+    }
+  }
+
+  return {
+    ok: true,
+    toolDefaults: {
+      disabledTools: project.defaultDisabledTools || [],
+      disabledToolGroups: project.defaultDisabledToolGroups || [],
+    },
+    avatarGenerationDefault: project.defaultAvatarGenerationEnabled ?? null,
+    defaultImageProfileId: project.defaultImageProfileId ?? null,
+    defaultRoleplayTemplateId: project.defaultRoleplayTemplateId ?? null,
+  };
 }
 
 /**
@@ -936,35 +1108,11 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   // Autonomous-room preconditions (validated before participant-build to fail fast).
   let autonomousNextRunAt: string | null = null;
   if (isAutonomous) {
-    const userParticipants = validatedData.participants.filter((p) => p.controlledBy === 'user');
-    if (userParticipants.length > 0) {
-      return badRequest('Autonomous rooms cannot include user-controlled participants');
+    const autonomous = validateAutonomousRoomRequest(validatedData, user.id);
+    if (!autonomous.ok) {
+      return autonomous.response;
     }
-    const llmCharacterParticipants = validatedData.participants.filter(
-      (p) => p.type === 'CHARACTER' && (!p.controlledBy || p.controlledBy === 'llm'),
-    );
-    if (llmCharacterParticipants.length < 2) {
-      return badRequest('Autonomous rooms require at least two LLM-controlled characters');
-    }
-    if (validatedData.scheduleCron) {
-      const expr = validatedData.scheduleCron.trim();
-      if (expr.length === 0) {
-        // Treat all-whitespace as "no schedule" (manual-only).
-      } else {
-        try {
-          const job = new Cron(expr);
-          const next = job.nextRun(new Date());
-          autonomousNextRunAt = next ? next.toISOString() : null;
-        } catch (error) {
-          logger.warn('[Chats v1] Invalid cron expression on autonomous-room create', {
-            userId: user.id,
-            scheduleCron: expr,
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return badRequest(`Invalid cron expression: ${expr}`);
-        }
-      }
-    }
+    autonomousNextRunAt = autonomous.nextRunAt;
   }
 
   const buildResult = await buildAllParticipants(validatedData.participants, user.id, repos);
@@ -975,100 +1123,26 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   // Fetch the primary character for defaults resolution
   const primaryCharacter = await repos.characters.findById(buildResult.firstCharacter.characterId);
 
-  // Resolve the chosen preset scenario body (if any), by precedence:
-  // character scenarioId > project scenario path > group scenario path > general
-  // scenario path > nothing. The free-text `scenario` is NOT part of this chain —
-  // it is appended to whatever the chain resolves (see combineScenarioText below).
-  let resolvedScenario: string | undefined;
-  if (!resolvedScenario && validatedData.scenarioId) {
-    const matchingScenario = primaryCharacter?.scenarios?.find(s => s.id === validatedData.scenarioId);
-    if (matchingScenario) {
-      resolvedScenario = matchingScenario.content;
-    } else {
-      logger.warn('[Chats v1] scenarioId not found on character', {
-        characterId: buildResult.firstCharacter.characterId,
-        scenarioId: validatedData.scenarioId,
-      });
-    }
-  }
-  if (!resolvedScenario && validatedData.projectScenarioPath) {
-    if (!validatedData.projectId) {
-      logger.warn('[Chats v1] projectScenarioPath provided without projectId; ignoring', {
-        projectScenarioPath: validatedData.projectScenarioPath,
-      });
-    } else {
-      // Only the store pointer is needed here, which lives on the raw row — use
-      // findByIdRaw so scenario resolution doesn't throw on a degraded store.
-      const project = await repos.projects.findByIdRaw(validatedData.projectId);
-      if (!project?.officialMountPointId) {
-        logger.warn('[Chats v1] projectScenarioPath provided but project has no officialMountPointId', {
-          projectId: validatedData.projectId,
-          projectScenarioPath: validatedData.projectScenarioPath,
-        });
-      } else {
-        const { resolveProjectScenarioBody } = await import('@/lib/mount-index/project-scenarios');
-        const body = await resolveProjectScenarioBody(
-          project.officialMountPointId,
-          validatedData.projectScenarioPath,
-        );
-        if (body) {
-          resolvedScenario = body;
-        } else {
-          logger.warn('[Chats v1] projectScenarioPath did not resolve to a body', {
-            projectId: validatedData.projectId,
-            projectScenarioPath: validatedData.projectScenarioPath,
-          });
-        }
-      }
-    }
-  }
-  if (!resolvedScenario && validatedData.groupScenarioPath) {
-    if (!validatedData.groupScenarioGroupId) {
-      logger.warn('[Chats v1] groupScenarioPath provided without groupScenarioGroupId; ignoring', {
-        groupScenarioPath: validatedData.groupScenarioPath,
-      });
-    } else {
-      // Only the store pointer is needed — read the slim row so resolution
-      // doesn't throw on a degraded store.
-      const group = await repos.groups.findByIdRaw(validatedData.groupScenarioGroupId);
-      if (!group?.officialMountPointId) {
-        logger.warn('[Chats v1] groupScenarioPath provided but group has no officialMountPointId', {
-          groupScenarioGroupId: validatedData.groupScenarioGroupId,
-          groupScenarioPath: validatedData.groupScenarioPath,
-        });
-      } else {
-        const { resolveGroupScenarioBody } = await import('@/lib/mount-index/group-scenarios');
-        const body = await resolveGroupScenarioBody(
-          group.officialMountPointId,
-          validatedData.groupScenarioPath,
-        );
-        if (body) {
-          resolvedScenario = body;
-        } else {
-          logger.warn('[Chats v1] groupScenarioPath did not resolve to a body', {
-            groupScenarioGroupId: validatedData.groupScenarioGroupId,
-            groupScenarioPath: validatedData.groupScenarioPath,
-          });
-        }
-      }
-    }
-  }
-  if (!resolvedScenario && validatedData.generalScenarioPath) {
-    const { resolveGeneralScenarioBody } = await import('@/lib/mount-index/general-scenarios');
-    const body = await resolveGeneralScenarioBody(validatedData.generalScenarioPath);
-    if (body) {
-      resolvedScenario = body;
-    } else {
-      logger.warn('[Chats v1] generalScenarioPath did not resolve to a body', {
-        generalScenarioPath: validatedData.generalScenarioPath,
-      });
-    }
-  }
-
-  // Append the user's free-text scenario notes. When a preset resolved above, the
-  // notes are layered beneath it; when none did, the notes ARE the scenario.
-  const presetBody = resolvedScenario;
-  resolvedScenario = combineScenarioText(presetBody, validatedData.scenario);
+  // Resolve the chosen preset scenario body (if any) and layer the free-text
+  // notes beneath it. The precedence chain lives in `resolveScenarioSelection`
+  // so the in-chat scenario picker resolves a selection exactly the way the New
+  // Chat dialog does.
+  const resolvedScenario = await resolveScenarioSelection(
+    {
+      scenario: validatedData.scenario,
+      scenarioId: validatedData.scenarioId,
+      projectScenarioPath: validatedData.projectScenarioPath,
+      groupScenarioPath: validatedData.groupScenarioPath,
+      groupScenarioGroupId: validatedData.groupScenarioGroupId,
+      generalScenarioPath: validatedData.generalScenarioPath,
+    },
+    {
+      repos,
+      projectId: validatedData.projectId,
+      character: primaryCharacter,
+      logTag: '[Chats v1]',
+    },
+  );
   const chatContext = await buildChatContext(
     buildResult.firstCharacter.characterId,
     buildResult.firstCharacter.userCharacterId,
@@ -1086,42 +1160,16 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
   }));
 
   // Default tool settings and avatar generation from project (if creating chat within a project)
-  let projectToolDefaults = {
-    disabledTools: [] as string[],
-    disabledToolGroups: [] as string[],
-  };
-  let projectAvatarGenerationDefault: boolean | null = null;
-  let projectDefaultImageProfileId: string | null = null;
-  let projectDefaultRoleplayTemplateId: string | null = null;
-
-  if (validatedData.projectId) {
-    const project = await repos.projects.findById(validatedData.projectId);
-    if (!project) {
-      return notFound('Project');
-    }
-
-    // Extract default tool settings from project
-    projectToolDefaults = {
-      disabledTools: project.defaultDisabledTools || [],
-      disabledToolGroups: project.defaultDisabledToolGroups || [],
-    };
-    projectAvatarGenerationDefault = project.defaultAvatarGenerationEnabled ?? null;
-    projectDefaultImageProfileId = project.defaultImageProfileId ?? null;
-    projectDefaultRoleplayTemplateId = project.defaultRoleplayTemplateId ?? null;
-
-    if (!project.allowAnyCharacter) {
-      const characterIds = participantsWithTimestamps
-        .filter((p) => p.type === 'CHARACTER' && p.characterId)
-        .map((p) => p.characterId as string);
-
-      const newCharacterIds = characterIds.filter((id) => !project.characterRoster.includes(id));
-      if (newCharacterIds.length > 0) {
-        await repos.projects.update(validatedData.projectId, {
-          characterRoster: [...project.characterRoster, ...newCharacterIds],
-        });
-      }
-    }
+  const projectDefaults = await resolveProjectDefaults(repos, validatedData.projectId, participantsWithTimestamps);
+  if (!projectDefaults.ok) {
+    return projectDefaults.response;
   }
+  const {
+    toolDefaults: projectToolDefaults,
+    avatarGenerationDefault: projectAvatarGenerationDefault,
+    defaultImageProfileId: projectDefaultImageProfileId,
+    defaultRoleplayTemplateId: projectDefaultRoleplayTemplateId,
+  } = projectDefaults;
 
   // Resolve timestamp config with fallback chain: request > character default > global default.
   // Anchor a fictional clock to now as it lands on the chat — this is the moment the config stops
@@ -1197,11 +1245,13 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
 
   // Apply outfit selections to the newly created chat
   // If no selections provided, apply 'default' mode for all LLM-controlled participants
+  // Shared wardrobe tiers in scope for this chat's project — General is always
+  // folded in by the repository; these add the project stores. Resolved once
+  // for both the outfit selection here and the opening-outfit whispers below.
+  const projectMountPointIds = await resolveProjectMountPointIds(validatedData.projectId || null);
   const outfitContext: OutfitSelectionContext = {
     userId: user.id,
-    // Shared wardrobe tiers in scope for this chat's project — General is
-    // always folded in by the repository; these add the project stores.
-    projectMountPointIds: await resolveProjectMountPointIds(validatedData.projectId || null),
+    projectMountPointIds,
     scenarioText: resolvedScenario,
     cheapLLMConfig: buildCheapLLMConfig(chatSettings),
     sourceChatId: validatedData.continuationFromChatId ?? null,
@@ -1261,13 +1311,24 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
     });
   }
 
-  if (validatedData.continuationFromChatId) {
-    // Continuation flow: prelude (system prompt) → backfill from source +
-    // turn-state replication + cross-link bubbles → scenario/staff
-    // (Prospero, Host scenario, Host adds, Aurora outfits, avatar gen),
-    // skipping the auto first message.
+  // One opening sequence for every flavour of chat: system prompt → the
+  // Concierge's note (when a non-Monitored state was picked on the New Chat
+  // form) → [continuation only: backfill from source + turn-state replication
+  // + cross-link bubbles] → scenario/staff (Prospero, Host scenario, Host adds,
+  // Aurora outfits, avatar gen) and, for an ordinary chat, the greeting
+  // generated under the chosen state. A continuation is "picking up where the
+  // last one left off" and an autonomous room has no user to greet — neither
+  // gets the auto first message; the room's first turn comes from the per-room
+  // procedure when the run starts.
+  const isContinuation = Boolean(validatedData.continuationFromChatId);
+  if (isContinuation) {
     progress.status('Recalling the previous chapter…');
-    await writeSystemPromptMessage(chat.id, chatContext, repos);
+  } else if (!isAutonomous) {
+    progress.status('Setting the opening scene…');
+  }
+  await writeSystemPromptMessage(chat.id, chatContext, repos);
+  await applyRequestedConciergeState(chat, validatedData.conciergeState, progress);
+  if (validatedData.continuationFromChatId) {
     try {
       await applyChatContinuation({
         newChatId: chat.id,
@@ -1282,44 +1343,17 @@ async function handleCreate(req: NextRequest, context: RequestContext) {
         error: getErrorMessage(error),
       }, error instanceof Error ? error : undefined);
     }
-    await createInitialMessagesScenarioAndStaff(
-      chat.id,
-      chatContext,
-      participantsWithTimestamps,
-      user.id,
-      repos,
-      validatedData.projectId || null,
-      resolvedScenario || null,
-      { skipFirstMessage: true },
-    );
-  } else if (isAutonomous) {
-    // Autonomous rooms: seed system-prompt + scenario/Host whispers (so the
-    // participating characters know the scene), but skip the auto first
-    // "Hello!" message — there's no user to greet, and the first turn is
-    // produced by the per-room procedure when the run starts.
-    await writeSystemPromptMessage(chat.id, chatContext, repos);
-    await createInitialMessagesScenarioAndStaff(
-      chat.id,
-      chatContext,
-      participantsWithTimestamps,
-      user.id,
-      repos,
-      validatedData.projectId || null,
-      resolvedScenario || null,
-      { skipFirstMessage: true },
-    );
-  } else {
-    progress.status('Setting the opening scene…');
-    await createInitialMessages(
-      chat.id,
-      chatContext,
-      participantsWithTimestamps,
-      user.id,
-      repos,
-      validatedData.projectId || null,
-      resolvedScenario || null,
-    );
   }
+  await createInitialMessagesScenarioAndStaff(
+    chat.id,
+    chatContext,
+    participantsWithTimestamps,
+    user.id,
+    repos,
+    validatedData.projectId || null,
+    resolvedScenario || null,
+    { skipFirstMessage: isContinuation || isAutonomous, projectMountPointIds },
+  );
 
   const enrichedParticipants = await Promise.all(
     chat.participants.map((p) => enrichParticipantSummary(p, repos))

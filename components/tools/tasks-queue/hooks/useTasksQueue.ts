@@ -4,8 +4,12 @@ import { useState, useCallback, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/query/fetcher'
 import { queryKeys } from '@/lib/query/keys'
+import { useRealtimeRefetchInterval } from '@/hooks/useRealtime'
 import { getErrorMessage } from '@/lib/error-utils'
 import type { QueueData, FullJobDetail } from '../types'
+
+/** Fallback poll cadence, used only while the realtime socket is down. */
+const FALLBACK_POLL_INTERVAL_MS = 5000
 
 export function useTasksQueue() {
   const [autoRefresh, setAutoRefresh] = useState(false)
@@ -14,12 +18,20 @@ export function useTasksQueue() {
   const [jobActionLoading, setJobActionLoading] = useState<string | null>(null)
   const [showJobDialog, setShowJobDialog] = useState(false)
 
-  // Fetch queue status via TanStack Query with optional polling.
+  // Fetch queue status via TanStack Query.
+  //
+  // The queue is pushed: the server's `jobs` topic fires on every enqueue,
+  // claim, completion, failure and cancellation, and the realtime provider
+  // invalidates this key. `autoRefresh` is therefore no longer the thing that
+  // keeps the list current — it is the fallback-poll switch, and only does
+  // anything while the socket is down.
+  //
   // `mutateQueue` is the query's refetch — handlers call it to revalidate after writes.
+  const fallbackInterval = useRealtimeRefetchInterval(autoRefresh ? FALLBACK_POLL_INTERVAL_MS : false)
   const { data: swrData, isLoading: loading, error: loadError, refetch: mutateQueue } = useQuery({
     queryKey: queryKeys.system.tasksQueue,
     queryFn: ({ signal }) => apiFetch<QueueData>('/api/v1/system/tools?action=tasks-queue', { signal }),
-    refetchInterval: autoRefresh ? 5000 : false,
+    refetchInterval: fallbackInterval,
   })
 
   const data = swrData ?? null

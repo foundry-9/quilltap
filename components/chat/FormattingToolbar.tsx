@@ -28,8 +28,10 @@ import {
   outdentSourceLines,
 } from '@/components/chat/lexical/transformers/list-indentation'
 import { type HeadingTagType, $createQuoteNode } from '@lexical/rich-text'
-import { EmojiPickerPopover } from '@/components/chat/EmojiPickerPopover'
-import { UnicodePickerPopover } from '@/components/chat/UnicodePickerPopover'
+import { EMOJI_PROFILE } from '@/lib/char-insert/profiles/emoji'
+import { UNICODE_PROFILE } from '@/lib/char-insert/profiles/unicode'
+import type { CharProfile } from '@/lib/char-insert/types'
+import { CharPickerPanel } from '@/components/chat/char-insert/CharPickerPanel'
 
 interface RoleplayTemplateWithDelimiters {
   id: string
@@ -56,6 +58,69 @@ interface FormattingToolbarProps {
   narrationDelimiters?: NarrationDelimiters
 }
 
+interface CharPickerToolbarButtonProps {
+  /** Which dataset the popover serves — emoji or Unicode. */
+  profile: CharProfile
+  /** The button's label, e.g. `☺` or `Ω`. */
+  glyph: string
+  title: string
+  ariaLabel: string
+  /** Editor the pick is inserted into. */
+  editor: LexicalEditor
+  disabled: boolean
+  /** The toolbar-wide mousedown guard that keeps focus in the editor. */
+  onMouseDown: (e: React.MouseEvent) => void
+}
+
+/**
+ * One toolbar button plus its `CharPickerPanel` popover. Each instance is its
+ * own `qt-formatting-toolbar-section` so the popover anchors under its own
+ * button rather than under its sibling's. Both share
+ * `qt-formatting-button-emoji`: that class does nothing emoji-specific — it
+ * sizes a GLYPH label the way the arrow-glyph buttons are sized, which is
+ * exactly what Ω needs too. Renaming it to something neutral would be a `qt-*`
+ * change and its theme-storybook mirror, for no rendered difference.
+ */
+function CharPickerToolbarButton({
+  profile,
+  glyph,
+  title,
+  ariaLabel,
+  editor,
+  disabled,
+  onMouseDown,
+}: CharPickerToolbarButtonProps) {
+  const [open, setOpen] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  return (
+    <div className="qt-formatting-toolbar-section relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        onMouseDown={onMouseDown}
+        onClick={() => setOpen((o) => !o)}
+        disabled={disabled}
+        className={`qt-formatting-button qt-formatting-button-emoji${open ? ' qt-formatting-button-active' : ''}`}
+        title={title}
+        aria-label={ariaLabel}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+      >
+        {glyph}
+      </button>
+      {open && (
+        <CharPickerPanel
+          profile={profile}
+          onClose={() => setOpen(false)}
+          editor={editor}
+          toggleRef={buttonRef}
+        />
+      )}
+    </div>
+  )
+}
+
 /**
  * Formatting toolbar for document editing mode.
  *
@@ -76,10 +141,6 @@ export default function FormattingToolbar({
   const [template, setTemplate] = useState<RoleplayTemplateWithDelimiters | null>(null)
   const [loadingTemplate, setLoadingTemplate] = useState(false)
   const [inCodeBlock, setInCodeBlock] = useState(false)
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false)
-  const emojiButtonRef = useRef<HTMLButtonElement>(null)
-  const [unicodePickerOpen, setUnicodePickerOpen] = useState(false)
-  const unicodeButtonRef = useRef<HTMLButtonElement>(null)
 
   // Track whether the cursor is inside a code block
   useEffect(() => {
@@ -490,63 +551,29 @@ export default function FormattingToolbar({
         </>
       )}
 
-      {/* Emoji and symbol pickers — their own section, after the RP delimiters.
-          NEITHER is gated by its composer setting: those flags govern the
-          automatic `:` / `\` triggers, which are the part that can surprise. An
-          explicit button press never can. */}
+      {/* Emoji and symbol pickers — their own sections, after the RP
+          delimiters. NEITHER is gated by its composer setting: those flags
+          govern the automatic `:` / `\` triggers, which are the part that can
+          surprise. An explicit button press never can. */}
       <div className="qt-formatting-toolbar-divider" />
-      <div className="qt-formatting-toolbar-section relative">
-        <button
-          ref={emojiButtonRef}
-          type="button"
-          onMouseDown={preventFocusLoss}
-          onClick={() => setEmojiPickerOpen((open) => !open)}
-          disabled={disabled}
-          className={`qt-formatting-button qt-formatting-button-emoji${emojiPickerOpen ? ' qt-formatting-button-active' : ''}`}
-          title="Insert emoji (or type `:` and a name)"
-          aria-label="Insert emoji"
-          aria-haspopup="dialog"
-          aria-expanded={emojiPickerOpen}
-        >
-          {'☺'}
-        </button>
-        {emojiPickerOpen && (
-          <EmojiPickerPopover
-            onClose={() => setEmojiPickerOpen(false)}
-            editor={editor}
-            toggleRef={emojiButtonRef}
-          />
-        )}
-      </div>
-      {/* Its own section so the popover anchors under Ω rather than under ☺.
-          Shares `qt-formatting-button-emoji`: that class does nothing
-          emoji-specific — it sizes a GLYPH label the way the arrow-glyph buttons
-          are sized, which is exactly what Ω needs. Renaming it to something
-          neutral would be a `qt-*` change and its theme-storybook mirror, for no
-          rendered difference. */}
-      <div className="qt-formatting-toolbar-section relative">
-        <button
-          ref={unicodeButtonRef}
-          type="button"
-          onMouseDown={preventFocusLoss}
-          onClick={() => setUnicodePickerOpen((open) => !open)}
-          disabled={disabled}
-          className={`qt-formatting-button qt-formatting-button-emoji${unicodePickerOpen ? ' qt-formatting-button-active' : ''}`}
-          title="Insert a symbol (or type `\` and a name)"
-          aria-label="Insert a symbol"
-          aria-haspopup="dialog"
-          aria-expanded={unicodePickerOpen}
-        >
-          {'Ω'}
-        </button>
-        {unicodePickerOpen && (
-          <UnicodePickerPopover
-            onClose={() => setUnicodePickerOpen(false)}
-            editor={editor}
-            toggleRef={unicodeButtonRef}
-          />
-        )}
-      </div>
+      <CharPickerToolbarButton
+        profile={EMOJI_PROFILE}
+        glyph="☺"
+        title="Insert emoji (or type `:` and a name)"
+        ariaLabel="Insert emoji"
+        editor={editor}
+        disabled={disabled}
+        onMouseDown={preventFocusLoss}
+      />
+      <CharPickerToolbarButton
+        profile={UNICODE_PROFILE}
+        glyph="Ω"
+        title="Insert a symbol (or type `\` and a name)"
+        ariaLabel="Insert a symbol"
+        editor={editor}
+        disabled={disabled}
+        onMouseDown={preventFocusLoss}
+      />
 
       {/* Source mode toggle - always at the end */}
       {onToggleSource && (

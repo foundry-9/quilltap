@@ -1,15 +1,16 @@
 /**
  * Manual Concierge state transitions.
  *
- * The Salon sidebar exposes a tri-state per-chat Concierge control. This
+ * The Salon sidebar exposes a four-state per-chat Concierge control. This
  * module is the single chokepoint that translates the requested UI state
  * into the right combination of database writes and synthetic Concierge
  * announcements, so the PUT handler doesn't have to know the rules.
  *
  * State mapping (UI → storage):
- *   - 'safe'    → conciergeOverride = NULL, isDangerousChat = false
- *   - 'flagged' → conciergeOverride = NULL, isDangerousChat = true
- *   - 'off'     → conciergeOverride = 'OFF', isDangerousChat preserved
+ *   - 'monitored'  → conciergeOverride = NULL, isDangerousChat = false
+ *   - 'flagged'    → conciergeOverride = NULL, isDangerousChat = true
+ *   - 'vouched'    → conciergeOverride = 'OFF', isDangerousChat preserved
+ *   - 'uncensored' → conciergeOverride = 'UNCENSORED', isDangerousChat preserved
  *
  * Every transition posts a brief Concierge bubble into the chat so the
  * history remains honest about which mode was in effect when.
@@ -27,7 +28,7 @@ const logger = createServiceLogger('ConciergeManualFlip');
 export type ConciergeUIState = ConciergeState;
 
 /**
- * Compute the current UI tri-state from the stored fields. Thin alias over the
+ * Compute the current UI state from the stored fields. Thin alias over the
  * canonical {@link getConciergeState} so the derivation lives in exactly one
  * place; this writer module is allowed to also read the raw fields below.
  */
@@ -44,11 +45,11 @@ export interface ApplyConciergeFlipResult {
  * Apply a manual state change for a chat.
  *
  * - Persists the new combination of `conciergeOverride` and `isDangerousChat`.
- * - Resets classifier metadata when returning to Safe so the scheduled scanner
- *   can re-evaluate on the next user message.
+ * - Resets classifier metadata when returning to Monitored so the scheduled
+ *   scanner can re-evaluate on the next user message.
  * - Posts a synthetic Concierge announcement that reflects the actual
- *   transition (Safe → Flagged differs from Safe → Off-duty differs from
- *   Off-duty → Safe).
+ *   transition (returning to Monitored from an operator state announces the
+ *   Concierge's return; a plain Flagged → Monitored announces the all-clear).
  * - Is a no-op when the requested state already matches the stored one.
  */
 export async function applyConciergeFlip(
@@ -80,11 +81,11 @@ export async function applyConciergeFlip(
       await postConciergeManualAnnouncement({ chatId, kind: 'manual-flagged' });
       break;
     }
-    case 'safe': {
-      // Returning to Safe either from Flagged or from Off-duty. Clearing the
-      // classification metadata lets the scheduled scan re-evaluate on the
-      // next user message — the user wants future moderation to behave as if
-      // we'd never settled the question.
+    case 'monitored': {
+      // Returning to Monitored from Flagged or from an operator state.
+      // Clearing the classification metadata lets the scheduled scan
+      // re-evaluate on the next user message — the user wants future
+      // moderation to behave as if we'd never settled the question.
       await repos.chats.update(chatId, {
         conciergeOverride: null,
         isDangerousChat: false,
@@ -93,17 +94,28 @@ export async function applyConciergeFlip(
         dangerClassifiedAt: null,
         dangerClassifiedAtMessageCount: null,
       });
-      const kind = current === 'off' ? 'manual-on-duty' : 'manual-safe';
+      const kind = current === 'vouched' || current === 'uncensored'
+        ? 'manual-resumed'
+        : 'manual-safe';
       await postConciergeManualAnnouncement({ chatId, kind });
       break;
     }
-    case 'off': {
-      // Off-duty preserves the prior isDangerousChat so the operator can
-      // return to Safe or Flagged later and pick up where they were.
+    case 'vouched': {
+      // Vouched Safe preserves the prior isDangerousChat so the operator can
+      // return to Monitored or Flagged later and pick up where they were.
       await repos.chats.update(chatId, {
         conciergeOverride: 'OFF',
       });
-      await postConciergeManualAnnouncement({ chatId, kind: 'manual-off-duty' });
+      await postConciergeManualAnnouncement({ chatId, kind: 'manual-vouched' });
+      break;
+    }
+    case 'uncensored': {
+      // Uncensored likewise preserves isDangerousChat, so returning to
+      // Monitored re-enters the classifier cleanly.
+      await repos.chats.update(chatId, {
+        conciergeOverride: 'UNCENSORED',
+      });
+      await postConciergeManualAnnouncement({ chatId, kind: 'manual-uncensored' });
       break;
     }
   }

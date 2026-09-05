@@ -10,7 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { exists, enrichWithDefaultImage, getFilePath } from '@/lib/api/middleware';
+import { exists, enrichWithDefaultImage, getFilePath, resolveEditorTags } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { getCascadeDeletePreview } from '@/lib/cascade-delete';
 import { exportSTCharacter, createSTCharacterPNG } from '@/lib/sillytavern/character';
@@ -21,6 +21,8 @@ import { logger } from '@/lib/logger';
 import { badRequest, notFound, serverError, successResponse } from '@/lib/api/responses';
 import type { RequestContext } from '@/lib/api/middleware';
 import { readStoreFile, DEPICTION_GUIDELINES_FILENAME } from '@/lib/image-gen/aesthetic';
+import { chatActivityAt, byChatActivityDesc } from '@/lib/chat/chat-activity';
+import { getConciergeState } from '@/lib/services/dangerous-content/chat-override';
 
 const CHARACTER_GET_ACTIONS = ['export', 'chats', 'cascade-preview', 'default-partner', 'get-tags', 'stats', 'depiction-guidelines'] as const;
 type CharacterGetAction = typeof CHARACTER_GET_ACTIONS[number];
@@ -118,20 +120,18 @@ export async function handleGet(
         const allChats = await repos.chats.findByCharacterId(id);
         const userChats = allChats.filter((chat) => chat.userId === user.id);
 
+        // Activity is the stored `lastMessageAt` — when a character last posted
+        // — not "the newest row of any kind". This used to re-derive it from
+        // `msg.type === 'message'`, which counted every Staff announcement and
+        // floated dead conversations to the top. See `lib/chat/chat-activity.ts`.
         const chatsWithMessages = await Promise.all(
           userChats.map(async (chat) => {
             const allMessages = await repos.chats.getMessages(chat.id);
-            const messageTimestamps = allMessages
-              .filter((msg) => msg.type === 'message')
-              .map((msg) => new Date(msg.createdAt).getTime());
-            const lastMessageAt = messageTimestamps.length > 0
-              ? new Date(Math.max(...messageTimestamps)).toISOString()
-              : chat.updatedAt;
-            return { chat, messages: allMessages, lastMessageAt };
+            return { chat, messages: allMessages, lastMessageAt: chatActivityAt(chat) };
           })
         );
 
-        chatsWithMessages.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
+        chatsWithMessages.sort((a, b) => byChatActivityDesc(a.chat, b.chat));
 
         let filteredChats = chatsWithMessages;
         if (search) {
@@ -220,7 +220,8 @@ export async function handleGet(
               storyBackground,
               messages: recentMessages,
               tags: tagData.filter((tag): tag is { tag: { id: string; name: string } } => tag !== null),
-              isDangerousChat: chat.isDangerousChat === true,
+              conciergeState: getConciergeState(chat),
+              dangerCategories: chat.dangerCategories ?? [],
               _count: {
                 messages: messageCount,
                 memories: memoryCount,
@@ -281,14 +282,9 @@ export async function handleGet(
 
     'get-tags': async () => {
       try {
-        const tagDetails = await Promise.all(
-          (character.tags || []).map(async (tagId) => {
-            const tag = await repos.tags.findById(tagId);
-            return tag ? { id: tag.id, name: tag.name, visualStyle: tag.visualStyle } : null;
-          })
-        );
-
-        const validTags = tagDetails.filter(Boolean);
+        // Shared with the connection-profile route so the two answers TagEditor
+        // consumes cannot drift apart again (Bug 74).
+        const validTags = await resolveEditorTags(character.tags, repos);
         return NextResponse.json({ tags: validTags });
       } catch (error) {
         logger.error('[Characters v1] Error fetching character tags', { characterId: id }, error instanceof Error ? error : undefined);

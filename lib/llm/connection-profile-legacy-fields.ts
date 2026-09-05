@@ -1,0 +1,101 @@
+/**
+ * Seeding the connection-profile columns an *older* archive cannot carry.
+ *
+ * Backup/restore and `.qtap` import are both schema-driven: an entity is
+ * re-inserted by spreading whatever the archive held, so a column added to the
+ * Zod schema rides along for free. That is only true for a column the archive
+ * actually *has*. A key absent from the archive is absent from the INSERT, and
+ * SQLite then applies the table DEFAULT — which is the right answer for a
+ * brand-new row and the wrong one for a profile whose owner made a choice
+ * before the column existed.
+ *
+ * Two columns on `connection_profiles` are in that position, both of them
+ * decided by a migration on the upgrade path and by nothing at all on the
+ * restore/import path:
+ *
+ * - **`supportsImageUpload`** (4.3+) — `DEFAULT 0`. Restoring a pre-4.3 archive
+ *   stripped image upload from every profile that had it. Seeded here from the
+ *   historic per-provider capability map, which is what
+ *   `add-profile-supports-image-upload-field-v1` did to the same rows in place.
+ * - **`multiCharacterPrefill`** (4.9+) — `DEFAULT 1`. Restoring a pre-4.9
+ *   archive turned the `[Name]` assistant prefill ON, including for Anthropic
+ *   profiles, where 4.6+ rejects an assistant tail outright and every
+ *   multi-character turn then fails. Seeded here as an explicit `null` — the
+ *   documented "never chosen" state — so `profileUsesNamePrefill()` resolves
+ *   the provider default instead of a table default nobody picked.
+ *
+ * The 4.10 fallback-chain columns — **`fallbackProfileId`** and
+ * **`allowTierFallback`** — are named here too, but for a different reason.
+ * Their table DEFAULTs (NULL and 0) *are* the neutral answer: a profile from
+ * an archive that predates them simply has no understudy, which is exactly
+ * how it behaved before the columns existed. What they need instead is a
+ * sanity check, because `fallbackProfileId` is the module's first column
+ * holding a *reference*: a hand-edited bundle can name the profile itself,
+ * and a self-referential chain is the one shape config validation forbids.
+ *
+ * Both restore and import call this, so the two paths cannot drift: a `.qtap`
+ * bundle and a backup ZIP carrying the same profile land the same row.
+ *
+ * @module lib/llm/connection-profile-legacy-fields
+ */
+
+import type { ConnectionProfile } from '@/lib/schemas/types';
+
+/**
+ * The providers whose models could accept an image before the flag became
+ * per-profile. Frozen historic data, not a live capability map — a provider
+ * that gains vision today gets it from the profile editor, never from here.
+ *
+ * Matched case-insensitively. `ProviderEnum` is `z.string().min(1)` — a
+ * plugin-supplied id, not a closed enum — so nothing guarantees the stored
+ * casing, least of all in an archive old enough to be missing the column.
+ * `defaultMultiCharacterPrefill()` normalises for the same reason.
+ */
+const LEGACY_IMAGE_CAPABLE_PROVIDERS = new Set(['OPENAI', 'ANTHROPIC', 'GOOGLE', 'GROK']);
+
+/**
+ * Fill in the columns an archive older than them could not have carried.
+ *
+ * Returns a copy: a key the archive *did* carry is never touched, including a
+ * stored `false` and a stored `null`.
+ */
+export function seedLegacyConnectionProfileFields<T extends Partial<ConnectionProfile>>(
+  profile: T
+): T {
+  const seeded = { ...profile };
+
+  if (seeded.supportsImageUpload === undefined) {
+    // Total over junk: an archive is data, not a contract, and a hand-edited
+    // bundle can hold a number or an object here. `??` would guard only
+    // null/undefined and let everything else reach `.toUpperCase` — a throw
+    // from a *seeding* helper is the wrong shape of failure for one bad record
+    // (bug 105).
+    const provider = typeof seeded.provider === 'string' ? seeded.provider : '';
+    seeded.supportsImageUpload = LEGACY_IMAGE_CAPABLE_PROVIDERS.has(provider.toUpperCase());
+  }
+
+  // Absent is NOT the same as unset here: the column is a tri-state, and only
+  // an explicit null reads back as "never chosen".
+  if (seeded.multiCharacterPrefill === undefined) {
+    seeded.multiCharacterPrefill = null;
+  }
+
+  // Fallback chain (4.10). Absent means "no understudy named", which is both
+  // the table DEFAULT and the pre-column behaviour — stated explicitly so a
+  // later change to either DEFAULT can't quietly rewrite a restored profile.
+  if (seeded.fallbackProfileId === undefined) {
+    seeded.fallbackProfileId = null;
+  }
+  if (seeded.allowTierFallback === undefined) {
+    seeded.allowTierFallback = false;
+  }
+
+  // A profile can't understudy itself: the chain would be one attempt wearing
+  // two names. Config validation refuses it on the way in; an archive is data,
+  // not a contract, so it gets refused on the way back too.
+  if (seeded.fallbackProfileId && seeded.fallbackProfileId === seeded.id) {
+    seeded.fallbackProfileId = null;
+  }
+
+  return seeded;
+}

@@ -32,10 +32,10 @@ const { executeCheapLLMTask } = require('@/lib/memory/cheap-llm-tasks/core-execu
 
 const mockExecute = executeCheapLLMTask as jest.Mock;
 
-type Slots = { top: string[]; bottom: string[]; footwear: string[]; accessories: string[] };
+type Slots = { top: string[]; bottom: string[]; footwear: string[]; accessories: string[]; hair: string[] };
 type Choice = { slots: Slots; deliberatelyUnclothed: boolean };
 
-const EMPTY: Slots = { top: [], bottom: [], footwear: [], accessories: [] };
+const EMPTY: Slots = { top: [], bottom: [], footwear: [], accessories: [], hair: [] };
 
 function item(id: string, types: string[], overrides: Record<string, unknown> = {}) {
   return {
@@ -58,6 +58,7 @@ const POOL = [
   item('general-coat', ['top']),
   item('own-jeans', ['bottom'], { characterId: 'char-1' }),
   item('own-boots', ['footwear'], { characterId: 'char-1' }),
+  item('own-braids', ['hair'], { characterId: 'char-1' }),
 ];
 
 /** Run `chooseLLMOutfit` far enough to capture the parser, then drive it. */
@@ -70,6 +71,7 @@ async function parserFor(pool = POOL): Promise<(content: string) => Choice> {
     'm',
     pool,
     'a formal evening',
+    null,
     { profileId: 'cheap' },
     'user-1',
     'chat-1',
@@ -96,6 +98,29 @@ describe('chooseLLMOutfit — response parsing', () => {
     expect(
       parse('{"top":["hallucinated-cape"],"bottom":[],"footwear":[],"accessories":[]}').slots.top,
     ).toEqual([]);
+  });
+
+  it('drops an ARCHIVED id a model conjured out of nowhere', async () => {
+    // The pool handed to this task never contains archived garments, so an
+    // archived id can only arrive by hallucination — and pool membership is
+    // the gate that stops it. Archiving is the one rule the model gets no
+    // say in: no parameter, no override.
+    const parse = await parserFor();
+    expect(
+      parse('{"top":["shelved-cape"],"bottom":[],"footwear":[],"accessories":[]}').slots.top,
+    ).toEqual([]);
+  });
+
+  it('would not accept an archived garment even if one leaked into the pool', async () => {
+    // Belt-and-braces: pool membership is by id, so a leaked archived item
+    // WOULD be accepted here. This case documents that the pool is the only
+    // guard — which is why the filtering lives in `mergeWearablePool` and is
+    // pinned end-to-end in `__tests__/unit/lib/wardrobe/archived-never-auditions.test.ts`.
+    const leaked = [item('shelved-cape', ['top'], { archivedAt: '2026-02-01T00:00:00.000Z' })];
+    const parse = await parserFor(leaked);
+    expect(
+      parse('{"top":["shelved-cape"],"bottom":[],"footwear":[],"accessories":[]}').slots.top,
+    ).toEqual(['shelved-cape']);
   });
 
   it('drops an id whose types do not cover the slot it was placed in', async () => {
@@ -150,6 +175,28 @@ describe('chooseLLMOutfit — response parsing', () => {
     );
   });
 
+  // ─────────────────────────────────────────── the hair slot
+
+  it('accepts a hair-typed item placed in the hair slot', async () => {
+    const parse = await parserFor();
+    expect(parse('{"hair":["own-braids"]}').slots).toEqual({
+      ...EMPTY,
+      hair: ['own-braids'],
+    });
+  });
+
+  it('rejects a hair-typed item offered to a clothing slot', async () => {
+    const parse = await parserFor();
+    expect(parse('{"top":["own-braids"]}').slots).toEqual(EMPTY);
+  });
+
+  it('keeps a styled hairdo alongside a deliberate-nudity flag', async () => {
+    const parse = await parserFor();
+    const out = parse('{"deliberate":true,"top":[],"bottom":[],"footwear":[],"accessories":[],"hair":["own-braids"]}');
+    expect(out.deliberatelyUnclothed).toBe(true);
+    expect(out.slots).toEqual({ ...EMPTY, hair: ['own-braids'] });
+  });
+
   it('requires a real boolean — a stringy "true" is not a deliberate claim', async () => {
     const parse = await parserFor();
     expect(parse('{"deliberate":"true","top":[]}').deliberatelyUnclothed).toBe(false);
@@ -162,6 +209,50 @@ describe('chooseLLMOutfit — response parsing', () => {
     expect(out.deliberatelyUnclothed).toBe(true);
   });
 
+  it('includes a Dressing Instructions block when instructions are provided', async () => {
+    mockExecute.mockResolvedValue({ success: true, result: null });
+    await chooseLLMOutfit(
+      'Bertie',
+      null,
+      null,
+      null,
+      POOL,
+      null,
+      'You prefer tweeds for fieldwork.',
+      { profileId: 'cheap' },
+      'user-1',
+    );
+    const messages = mockExecute.mock.calls[0][1] as Array<{ role: string; content: string }>;
+    const userMessage = messages.find((m) => m.role === 'user')!;
+    expect(userMessage.content).toContain('Dressing Instructions');
+    expect(userMessage.content).toContain('You prefer tweeds for fieldwork.');
+    expect(userMessage.content).toContain('"you" is Bertie');
+  });
+
+  it('emits a byte-identical user message when instructions are null or blank', async () => {
+    const runWith = async (instructions: string | null) => {
+      mockExecute.mockClear();
+      mockExecute.mockResolvedValue({ success: true, result: null });
+      await chooseLLMOutfit(
+        'Bertie',
+        null,
+        null,
+        null,
+        POOL,
+        null,
+        instructions,
+        { profileId: 'cheap' },
+        'user-1',
+      );
+      const messages = mockExecute.mock.calls[0][1] as Array<{ role: string; content: string }>;
+      return messages.find((m) => m.role === 'user')!.content;
+    };
+    const withNull = await runWith(null);
+    const withBlank = await runWith('   \n  ');
+    expect(withBlank).toBe(withNull);
+    expect(withNull).not.toContain('Dressing Instructions');
+  });
+
   it('short-circuits to empty slots without calling the model for an empty pool', async () => {
     mockExecute.mockResolvedValue({ success: true, result: null });
     const result = await chooseLLMOutfit(
@@ -170,6 +261,7 @@ describe('chooseLLMOutfit — response parsing', () => {
       null,
       null,
       [],
+      null,
       null,
       { profileId: 'cheap' },
       'user-1',

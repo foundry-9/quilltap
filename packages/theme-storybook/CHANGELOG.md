@@ -2,6 +2,29 @@
 
 All notable changes to `@quilltap/theme-storybook` will be documented in this file.
 
+## [1.0.67] - 2026-08-30
+
+### Added
+- `.qt-range` and its two tokens (`--qt-range-accent`, `--qt-range-focus-ring`), mirroring the app's new slider class, plus a "Range Sliders" section in the `Inputs` story so a theme can be previewed against an enabled and a disabled slider.
+
+### Notes
+- Sliders stay natively rendered. `accent-color` is what paints the filled portion of the track *and* the thumb, so it is the whole default theming story; the class sets no disabled opacity, because browsers already drop the accent on a disabled range and app call sites nest sliders inside dimmed wrappers. A theme wanting a bespoke track can override `.qt-range` with `appearance: none`, at the cost of the filled bar in Chrome and Safari.
+
+## [1.0.63] - 2026-08-25
+
+### Added
+- The rest of the `qt-*` utility families the app actually ships, so a theme can be previewed against what it will really meet: the missing opacity steps for `qt-bg-muted` (20–80), `qt-bg-card` (50–90), `qt-bg-primary`, `qt-bg-destructive`, `qt-bg-success`, `qt-bg-warning`, `qt-bg-info` and `qt-bg-secondary`; `qt-border-default`, `qt-border-primary`, `qt-border-destructive`, `qt-border-warning` and `qt-border-success` at their used opacities; `qt-text-secondary/50–80` and the status colours at `/80`; and the surface colours `qt-bg-default`, `qt-bg-input`, `qt-bg-secondary`, `qt-border-accent`, `qt-border-primary-foreground`.
+- 34 state forms of those utilities — `hover:`, `focus:`, `disabled:`, `placeholder:`, `file:` and one named `group-hover/thumb:`. In the app every one of these is hand-written and escaped, because Tailwind generates no variants for a class declared inside `@layer utilities`; they are mirrored here so a theme author previewing hover states sees what the app actually ships rather than a resting state that never moves.
+
+### Notes
+- The typography-sizing classes (`qt-text-small`, `qt-text-xs`, `qt-text-label`, `qt-text-label-xs`, `qt-text-large`, `qt-text-lead`, `qt-text-section`) live in the app's `@layer components` sheet and have never been mirrored here. Still outstanding; the color-carrying `qt-text-*` utilities are complete.
+
+## [1.0.62] - 2026-08-25
+
+### Added
+- `qt-text-on-primary`, `qt-text-on-success`, and `qt-text-on-destructive`: the rest of the on-a-filled-surface foreground family that `qt-text-on-accent` started, each mapping to the theme's matching `*Foreground` token. Plus the hand-written hover partners `hover:qt-text-on-accent/-primary/-success/-destructive`, for controls that sit quiet at rest and take a filled background on hover. Mirrors the app-side definitions.
+- `Surfaces` story: a "Foregrounds on filled surfaces" section previewing all four fills with their foregrounds, and a hover row for the hover partners. It also spells out the naming trap — the classes are `-on-<fill>`, never `-<fill>-foreground`, which is the Tailwind spelling and no `qt-` class at all.
+
 ## [1.0.44] - 2026-06-14
 
 ### Added

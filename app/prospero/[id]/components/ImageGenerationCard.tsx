@@ -140,13 +140,9 @@ export function ImageGenerationCard({
             >
               <option value="theme">Use theme background (no image)</option>
               <option value="latest_chat">Latest chat background</option>
-              <option value="project">Project-generated background</option>
-              <option value="static">Static uploaded image</option>
             </select>
             <p className="qt-text-xs qt-text-secondary mt-2">
               {project.backgroundDisplayMode === 'latest_chat' && 'Shows the most recent background from any chat in this project.'}
-              {project.backgroundDisplayMode === 'project' && 'Uses a background generated specifically for this project.'}
-              {project.backgroundDisplayMode === 'static' && 'Uses a manually uploaded background image.'}
               {(!project.backgroundDisplayMode || project.backgroundDisplayMode === 'theme') && 'No background image, uses your theme colors.'}
             </p>
           </div>

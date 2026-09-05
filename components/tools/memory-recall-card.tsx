@@ -1,20 +1,28 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { readErrorText } from './hooks/api-error-text'
 
 type ScopePolicy = 'down-weight' | 'exclude'
 
 interface RecallConfig {
   scopePolicy: ScopePolicy
   expandRelated: boolean
+  perTurnConversationSummaries: boolean
 }
 
 const DEFAULT_CONFIG: RecallConfig = {
   scopePolicy: 'down-weight',
   expandRelated: false,
+  perTurnConversationSummaries: false,
 }
+
+const RECALL_CONFIG_URL = '/api/v1/memories?action=recall-config'
 
 const SCOPE_POLICY_OPTIONS: ReadonlyArray<{
   value: ScopePolicy
@@ -42,40 +50,35 @@ const SCOPE_POLICY_OPTIONS: ReadonlyArray<{
  */
 export function MemoryRecallCard() {
   const [config, setConfig] = useState<RecallConfig>(DEFAULT_CONFIG)
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const {
+    data: loaded,
+    isLoading: loading,
+    error: loadError,
+  } = useQuery({
+    queryKey: queryKeys.memories.recallConfig,
+    queryFn: ({ signal }) =>
+      apiFetch<{ settings?: Partial<RecallConfig> }>(RECALL_CONFIG_URL, { signal }),
+  })
+
+  // Seed the editable form from the server's settings whenever a fresh read lands.
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const response = await fetch('/api/v1/memories?action=recall-config')
-        if (!response.ok) {
-          throw new Error('Failed to load recall settings')
-        }
-        const data = await response.json()
-        if (!cancelled && data.settings) {
-          setConfig({ ...DEFAULT_CONFIG, ...data.settings })
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(getErrorMessage(err, 'Failed to load recall settings'))
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the form is local state seeded from the query
+    if (loaded?.settings) setConfig({ ...DEFAULT_CONFIG, ...loaded.settings })
+  }, [loaded])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- surface the read failure in the shared error line
+    if (loadError) setError(readErrorText(loadError, 'Failed to load recall settings'))
+  }, [loadError])
 
   const saveConfig = async (next: Partial<RecallConfig>) => {
     setSaving(true)
     setError(null)
     try {
-      const response = await fetch('/api/v1/memories?action=recall-config', {
+      const response = await fetch(RECALL_CONFIG_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(next),
@@ -104,6 +107,11 @@ export function MemoryRecallCard() {
   const handleExpandRelatedChange = (value: boolean) => {
     setConfig(c => ({ ...c, expandRelated: value }))
     void saveConfig({ expandRelated: value })
+  }
+
+  const handlePerTurnConversationsChange = (value: boolean) => {
+    setConfig(c => ({ ...c, perTurnConversationSummaries: value }))
+    void saveConfig({ perTurnConversationSummaries: value })
   }
 
   if (loading) {
@@ -143,7 +151,7 @@ export function MemoryRecallCard() {
           checked={config.expandRelated}
           onChange={e => handleExpandRelatedChange(e.target.checked)}
           disabled={saving}
-          className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-primary"
+          className="mt-1 qt-checkbox"
         />
         <div className="flex-1">
           <div className="font-medium text-foreground">Follow the threads between memories</div>
@@ -156,7 +164,29 @@ export function MemoryRecallCard() {
         </div>
       </label>
 
-      {error && <p className="qt-text-small qt-text-error">{error}</p>}
+      <label className="flex items-start gap-3 p-4 border qt-border-default rounded qt-hover-accent cursor-pointer">
+        <input
+          type="checkbox"
+          checked={config.perTurnConversationSummaries}
+          onChange={e => handlePerTurnConversationsChange(e.target.checked)}
+          disabled={saving}
+          className="mt-1 qt-checkbox"
+        />
+        <div className="flex-1">
+          <div className="font-medium text-foreground">Consult past conversations every turn</div>
+          <div className="qt-text-small mt-1">
+            Ordinarily the Book re-reads its shelf of past conversations only at the opening of a
+            chat, whenever it takes down a fresh summary, and when somebody speaks of days gone by.
+            Switch this on and it consults that shelf on <em>every</em> turn, so the list of
+            pertinent past dialogues never lags behind the talk at hand. It rides along on the
+            reckoning already made for the memory search, so it asks nothing further of your
+            embedding provider — merely a little more reading, and a few more lines in each
+            whisper. Off unless you ask for it, and it applies to every conversation alike.
+          </div>
+        </div>
+      </label>
+
+      {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
     </div>
   )
 }

@@ -24,6 +24,24 @@ import {
 } from '../help-search-tool'
 
 /**
+ * Character budgets for the context block handed to the model.
+ *
+ * `help_search` is the only way a character can read help text — there is no
+ * separate "read this doc" tool — so a result must carry enough of the
+ * document to answer with, while a handful of results must still fit in a
+ * turn. A matched section gets the larger share; the document excerpt beneath
+ * it is orientation, not the answer.
+ */
+const MATCHED_SECTION_CHARS = 1500
+const DOC_CONTEXT_CHARS = 600
+const DOC_EXCERPT_CHARS = 1000
+
+/** Truncate to a character budget, marking the cut. */
+function truncate(text: string, maxChars: number): string {
+  return text.length > maxChars ? `${text.substring(0, maxChars)}...` : text
+}
+
+/**
  * Context required for help search execution
  */
 export interface HelpSearchToolContext {
@@ -68,6 +86,14 @@ async function semanticSearch(
     url: result.document.url,
     score: result.score,
     content: result.document.content,
+    ...(result.matchedSection
+      ? {
+        matchedSection: {
+          heading: result.matchedSection.heading,
+          content: result.matchedSection.content,
+        },
+      }
+      : {}),
   }))
 }
 
@@ -202,17 +228,33 @@ export function formatHelpSearchResults(results: HelpSearchResult[]): string {
     const relevanceLabel = result.score >= 0.7 ? 'High' :
       result.score >= 0.4 ? 'Medium' : 'Low'
 
-    // Truncate content for context (first 1000 chars)
-    const truncatedContent = result.content.length > 1000
-      ? result.content.substring(0, 1000) + '...'
-      : result.content
-
-    return `[Help Document ${index + 1}] (Relevance: ${relevanceLabel})
+    const header = `[Help Document ${index + 1}] (Relevance: ${relevanceLabel})
 Title: ${result.title}
 Path: ${result.path}
-URL: ${result.url}
+URL: ${result.url}`
+
+    // When a specific section matched, lead with it. The document excerpt
+    // below is the first N characters of the file, which for a long settings
+    // page is a table of contents and a preamble — never the answer. Putting
+    // the matching section first is the whole point of embedding sections.
+    if (result.matchedSection) {
+      const sectionLabel = result.matchedSection.heading
+        ? `Matching section — "${result.matchedSection.heading}":`
+        : 'Matching section:'
+      const section = truncate(result.matchedSection.content, MATCHED_SECTION_CHARS)
+      const surrounding = truncate(result.content, DOC_CONTEXT_CHARS)
+
+      return `${header}
+${sectionLabel}
+${section}
+
+Document begins:
+${surrounding}`
+    }
+
+    return `${header}
 Content:
-${truncatedContent}`
+${truncate(result.content, DOC_EXCERPT_CHARS)}`
   })
 
   return `Found ${results.length} relevant help documents:\n\n${formatted.join('\n\n---\n\n')}`

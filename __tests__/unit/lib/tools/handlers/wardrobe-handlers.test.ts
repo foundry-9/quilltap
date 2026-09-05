@@ -81,7 +81,7 @@ const makeWardrobeItem = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 })
 
-const emptySlots = () => ({ top: [], bottom: [], footwear: [], accessories: [] })
+const emptySlots = () => ({ top: [], bottom: [], footwear: [], accessories: [], hair: [] })
 
 describe('wardrobe tool handlers', () => {
   const context = {

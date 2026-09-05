@@ -51,8 +51,6 @@ import {
   buildScenarioOpaqueContent,
   buildUserCharacterContent,
   buildUserCharacterOpaqueContent,
-  buildMultiCharacterRosterContent,
-  buildMultiCharacterRosterOpaqueContent,
   buildSilentModeEntryContent,
   buildSilentModeEntryOpaqueContent,
   buildSilentModeExitContent,
@@ -180,13 +178,6 @@ describe('Host opaque builders', () => {
     expectNoPersonaNames(opaque)
   })
 
-  it('roster (empty)', () => {
-    expect(buildMultiCharacterRosterContent('Beatrice', [])).toContain('The Host notes')
-    const opaque = buildMultiCharacterRosterOpaqueContent('Beatrice', [])
-    expect(opaque).toContain('Beatrice stands alone')
-    expectNoPersonaNames(opaque)
-  })
-
   it('silent mode entry/exit', () => {
     expect(buildSilentModeEntryContent('Beatrice')).toContain('The Host whispers')
     const enter = buildSilentModeEntryOpaqueContent('Beatrice')
@@ -233,6 +224,7 @@ describe('Aurora opaque builders', () => {
     bottom: ['a wool skirt'],
     footwear: ['low boots'],
     accessories: [],
+    hair: [],
   }
   const params = { characterName: 'Beatrice', outfit }
 

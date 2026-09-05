@@ -2,6 +2,37 @@
 
 All notable changes to @quilltap/plugin-utils will be documented in this file.
 
+## [2.6.0] - 2026-08-27
+
+### Removed
+
+- **Breaking (behavioral):** `rewriteLocalhostUrl` / `isVMEnvironment` no longer detect Lima or WSL2, and the gateway resolution no longer falls back to `/proc/net/route` or `/etc/hosts`. Quilltap has dropped its managed Lima (macOS) and WSL2 (Windows) VM modes; the supported sandbox is Docker, plus any virtual machine a user builds and manages themselves. Both of the removed fallbacks existed only to serve Lima: the `/proc/net/route` default gateway is the Docker bridge interface, which does *not* reach services on the host's loopback, and `/etc/hosts` can only report a `host.docker.internal` that strategy 2 already assumes.
+
+### Changed
+
+- `isVMEnvironment()` is now `isDockerEnvironment() || !!process.env.QUILLTAP_HOST_IP`. A hand-rolled VM cannot be auto-detected, so `QUILLTAP_HOST_IP` is what opts one in — it both enables rewriting and supplies the gateway address. Docker behavior is unchanged: `QUILLTAP_HOST_IP` first, else `host.docker.internal`.
+
+## [2.5.0] - 2026-08-26
+
+### Added
+
+- `OpenAICompatibleProvider` gained a `protected buildRequestBody(params, stream)` — the one Chat Completions body build both `sendMessage` and `streamMessage` now call, replacing two byte-identical copies of the message mapping and body literal. Behavior-preserving: the streaming keys (`stream`, `stream_options`) keep their historical position between `stop` and `user`, so the serialized body is unchanged. Subclasses that keep the base send/stream loops get a single override point for reshaping the body.
+
+## [2.4.0] - 2026-08-19
+
+### Added
+
+- `collapseLeadingSystemMessages(messages)` — folds a run of consecutive leading `system` messages into one, joining the contents with a blank line. Arrays with fewer than two leading system messages come back untouched (same reference).
+- `OpenAICompatibleProvider` gained `acceptsRepeatedSystemMessages` (default `true`, so every existing subclass is byte-identical on the wire) and applies it through `applySystemMessagePolicy` in both the streaming and non-streaming body builds. A subclass pointing at a local runtime sets it `false`: the model's own chat template is what runs there, and the Qwen family — plus several Llama- and Gemma-derived templates — `raise_exception` on any system message after index 0, rejecting the whole request. Quilltap emits up to three leading system blocks so its cache breakpoints survive, so every non-opening turn against such a model failed outright. (Quilltap bug 82.)
+
+## [2.3.0] - 2026-08-15
+
+### Added
+
+- `applyProfileParameters(body, params, allowlist, normalize?)` — the one mechanism providers use to forward a connection profile's free-form `parameters` blob onto a request body. Allow-listed (never spread, so `model` / `messages` / `stream` / `tools` stay unreachable from a profile); `undefined`, `null` and the empty string omit the key. Exported as a free function rather than a base-class method because only one plugin extends `OpenAICompatibleProvider` — Z.AI, OpenRouter and Ollama implement their providers directly and reach it by composition.
+- `OpenAICompatibleProvider` gained `profileParamAllowlist` (empty by default, so every existing subclass is byte-identical on the wire until it opts in) and an overridable `normalizeProfileParam`, applied in both the streaming and non-streaming body builds.
+- `OpenAICompatibleProvider` now sends `tools` / `tool_choice` when the caller supplies tools, and parses `tool_calls` back — from `choice.message.tool_calls` on the non-streaming path, and by accumulating index-keyed `delta.tool_calls` fragments while streaming. Previously it could never call a tool.
+
 ## [2.2.19] - 2026-08-03
 
 ### Fixed

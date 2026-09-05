@@ -566,6 +566,15 @@ export function canReceiveWhisper(status: ParticipantStatus): boolean {
 }
 
 /**
+ * Whether a message is a whisper — addressed to one or more specific
+ * participants (`targetParticipantIds` non-empty) rather than the whole room.
+ * Whispers never advance the turn rotation.
+ */
+export function hasWhisperTargets(message: Pick<MessageEvent, 'targetParticipantIds'>): boolean {
+  return Array.isArray(message.targetParticipantIds) && message.targetParticipantIds.length > 0;
+}
+
+/**
  * Convert legacy isActive/removedAt to the new status enum.
  * Used during migration and for backward compatibility.
  */
@@ -812,12 +821,17 @@ export const ChatMetadataSchema = z.object({
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
   /**
    * Per-chat Concierge mode override. NULL means follow the global Concierge
-   * setting and let `isDangerousChat` decide Safe vs Flagged. 'OFF' disables
-   * every Concierge effect for this chat: no classification, no scanning, no
-   * uncensored-provider reroute, no synthetic Concierge messages. Operators
-   * who flip this on accept the risk of provider refusals.
+   * setting and let `isDangerousChat` decide Monitored vs Flagged. 'OFF' is
+   * Vouched Safe: the operator vouches for the chat, disabling every
+   * Concierge effect (no classification, no scanning, no uncensored reroute,
+   * no synthetic Concierge messages) while the ordinary providers still
+   * apply. 'UNCENSORED' is the operator's own assertion that the chat is
+   * spicy: every uncensored route the Flagged state takes, with zero
+   * classification and zero danger styling. Both operator states preserve
+   * `isDangerousChat` underneath so returning to Monitored/Flagged picks up
+   * where the classifier left off.
    */
-  conciergeOverride: z.enum(['OFF']).nullable().optional(),
+  conciergeOverride: z.enum(['OFF', 'UNCENSORED']).nullable().optional(),
 
   /**
    * Per-chat answer-confirmation override. NULL means inherit (from the chat's
@@ -833,7 +847,7 @@ export const ChatMetadataSchema = z.object({
   /** Scriptorium: deterministic Markdown rendering of the full conversation */
   renderedMarkdown: z.string().nullable().optional(),
 
-  /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories } } */
+  /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories, hair } } */
   equippedOutfit: JsonSchema.nullable().optional(),
 
   /** Per-character generated avatars reflecting current outfit: { [characterId]: { imageId, generatedAt, afterMessageCount } } */
@@ -1166,12 +1180,17 @@ export const ChatMetadataBaseSchema = z.object({
   dangerClassifiedAtMessageCount: z.number().nullable().optional(),
   /**
    * Per-chat Concierge mode override. NULL means follow the global Concierge
-   * setting and let `isDangerousChat` decide Safe vs Flagged. 'OFF' disables
-   * every Concierge effect for this chat: no classification, no scanning, no
-   * uncensored-provider reroute, no synthetic Concierge messages. Operators
-   * who flip this on accept the risk of provider refusals.
+   * setting and let `isDangerousChat` decide Monitored vs Flagged. 'OFF' is
+   * Vouched Safe: the operator vouches for the chat, disabling every
+   * Concierge effect (no classification, no scanning, no uncensored reroute,
+   * no synthetic Concierge messages) while the ordinary providers still
+   * apply. 'UNCENSORED' is the operator's own assertion that the chat is
+   * spicy: every uncensored route the Flagged state takes, with zero
+   * classification and zero danger styling. Both operator states preserve
+   * `isDangerousChat` underneath so returning to Monitored/Flagged picks up
+   * where the classifier left off.
    */
-  conciergeOverride: z.enum(['OFF']).nullable().optional(),
+  conciergeOverride: z.enum(['OFF', 'UNCENSORED']).nullable().optional(),
 
   /**
    * Per-chat answer-confirmation override. NULL means inherit (from the chat's
@@ -1187,7 +1206,7 @@ export const ChatMetadataBaseSchema = z.object({
   /** Scriptorium: deterministic Markdown rendering of the full conversation */
   renderedMarkdown: z.string().nullable().optional(),
 
-  /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories } } */
+  /** Equipped outfit state per character: { [characterId]: { top, bottom, footwear, accessories, hair } } */
   equippedOutfit: JsonSchema.nullable().optional(),
 
   /** Per-character generated avatars reflecting current outfit: { [characterId]: { imageId, generatedAt, afterMessageCount } } */

@@ -29,6 +29,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { enqueueAutonomousRoomTurn } from '@/lib/background-jobs/queue-service';
 import { runStartPatch, postRunStartAnnouncement } from './autonomous-room-announce';
 import { logger } from '@/lib/logger';
+import { publishRealtime } from '@/lib/realtime/bus';
 import type { ChatMetadataBase } from '@/lib/schemas/types';
 
 const HANDLER = 'background-jobs.autonomous-run-start';
@@ -100,6 +101,11 @@ export async function beginAutonomousRun(
   if (input.scheduleLastRunAt !== undefined) patch.scheduleLastRunAt = input.scheduleLastRunAt;
   if ('scheduleNextRunAt' in input) patch.scheduleNextRunAt = input.scheduleNextRunAt;
   await repos.chats.update(chatId, patch as unknown as Partial<ChatMetadataBase>);
+  // Every run-state transition in this core announces itself, so the toolbar's
+  // room badges reflect the flip without waiting out their fallback poll. In
+  // the scheduled path this runs in the job child and is a no-op; the parent
+  // republishes when the tick job's writes commit.
+  publishRealtime('autonomousRooms');
 
   let jobId: string;
   try {
@@ -120,6 +126,7 @@ export async function beginAutonomousRun(
       runStateMessage,
       runEndedAt: new Date().toISOString(),
     } as unknown as Partial<ChatMetadataBase>);
+    publishRealtime('autonomousRooms');
     return { ok: false, reason: 'enqueue_failed', message: runStateMessage, cause: error };
   }
 

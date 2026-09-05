@@ -12,12 +12,10 @@ const mockResolve = jest.fn<
     characterId: string,
     equipped: EquippedSlots,
   ) => Promise<{
-    leafItemsBySlot: {
-      top: { title: string; description?: string | null }[]
-      bottom: { title: string; description?: string | null }[]
-      footwear: { title: string; description?: string | null }[]
-      accessories: { title: string; description?: string | null }[]
-    }
+    leafItemsBySlot: Record<
+      import('@/lib/schemas/wardrobe.types').WardrobeItemType,
+      { title: string; description?: string | null }[]
+    >
   }>
 >()
 jest.mock('@/lib/wardrobe/resolve-equipped', () => ({
@@ -45,6 +43,7 @@ const equipped: EquippedSlots = {
   bottom: ['pants-id'],
   footwear: ['shoes-id'],
   accessories: ['ring-id'],
+  hair: [],
 } as unknown as EquippedSlots
 
 describe('buildCharacterAvatarPrompt', () => {
@@ -56,6 +55,7 @@ describe('buildCharacterAvatarPrompt', () => {
         bottom: [{ title: 'black Dockers', description: 'Black Dockers-brand khakis' }],
         footwear: [{ title: 'black Nike sneakers', description: 'All-black, no decorations' }],
         accessories: [{ title: 'wedding ring', description: 'gold band, left ring finger' }],
+        hair: [],
       },
     })
   })
@@ -130,6 +130,7 @@ describe('buildCharacterAvatarPrompt', () => {
         bottom: [],
         footwear: [],
         accessories: [{ title: 'silver collar', description: 'thin choker' }],
+        hair: [],
       },
     })
     const { prompt } = await buildCharacterAvatarPrompt(repos, baseCharacter, { equippedSlots: equipped })
@@ -147,7 +148,7 @@ describe('buildCharacterAvatarPrompt', () => {
 
   it('omits the wardrobe block for a bare-topped character with no accessories (never says "naked")', async () => {
     mockResolve.mockResolvedValue({
-      leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [] },
+      leafItemsBySlot: { top: [], bottom: [], footwear: [], accessories: [], hair: [] },
     })
     const { prompt } = await buildCharacterAvatarPrompt(repos, baseCharacter, { equippedSlots: equipped })
     expect(prompt).toMatch(/cropped at the collarbone/)
@@ -155,5 +156,63 @@ describe('buildCharacterAvatarPrompt', () => {
     expect(prompt).not.toMatch(/naked/)
     // No markdown wardrobe list at all.
     expect(prompt).not.toMatch(/\n- \*\*/)
+  })
+
+  // A hairdo is the most visible element of a head-and-shoulders portrait, so
+  // it must survive BOTH branches — including the bare-top branch, whose guard
+  // used to key on accessories alone.
+  it('carries an equipped hairdo into a dressed character\'s prompt', async () => {
+    mockResolve.mockResolvedValue({
+      leafItemsBySlot: {
+        top: [{ title: 'Charcoal gray dress shirt' }],
+        bottom: [{ title: 'black Dockers' }],
+        footwear: [{ title: 'black Nike sneakers' }],
+        accessories: [{ title: 'wedding ring' }],
+        hair: [{ title: 'marcel waves' }],
+      },
+    })
+    const { prompt } = await buildCharacterAvatarPrompt(repos, baseCharacter, {
+      equippedSlots: equipped,
+    })
+    expect(prompt).toMatch(/marcel waves/)
+    expect(prompt).toMatch(/\*\*hair:\*\* marcel waves/)
+  })
+
+  it('carries the hairdo for a bare-topped character with NO accessories, still without nudity language', async () => {
+    mockResolve.mockResolvedValue({
+      leafItemsBySlot: {
+        top: [],
+        bottom: [],
+        footwear: [],
+        accessories: [],
+        hair: [{ title: 'a severe bun' }],
+      },
+    })
+    const { prompt } = await buildCharacterAvatarPrompt(repos, baseCharacter, {
+      equippedSlots: equipped,
+    })
+    expect(prompt).toMatch(/cropped at the collarbone/)
+    expect(prompt).toMatch(/a severe bun/)
+    // The reworked guard must not let the "completely naked and unadorned"
+    // fallback back in.
+    expect(prompt).not.toMatch(/topless/)
+    expect(prompt).not.toMatch(/naked/)
+    expect(prompt).not.toMatch(/unadorned/)
+  })
+
+  it('reports the hair slot in leafCounts', async () => {
+    mockResolve.mockResolvedValue({
+      leafItemsBySlot: {
+        top: [{ title: 'shirt' }],
+        bottom: [],
+        footwear: [],
+        accessories: [],
+        hair: [{ title: 'braided crown' }],
+      },
+    })
+    const { leafCounts } = await buildCharacterAvatarPrompt(repos, baseCharacter, {
+      equippedSlots: equipped,
+    })
+    expect(leafCounts.hair).toBe(1)
   })
 })

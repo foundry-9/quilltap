@@ -9,8 +9,6 @@ import {
   countMessagesTokens,
   formatTokenCount,
   truncateToTokenLimit,
-  getContextUsagePercent,
-  getContextWarningLevel,
 } from '@/lib/tokens/token-counter'
 
 import {
@@ -18,6 +16,8 @@ import {
   getSafeInputLimit,
   hasExtendedContext,
   getRecommendedContextAllocation,
+  resolveContextWindow,
+  computeSafeInputLimit,
   shouldSummarizeConversation,
   calculateRecentMessageCount,
 } from '@/lib/llm/model-context-data'
@@ -29,7 +29,6 @@ import {
   formatSummaryForContext,
   selectRecentMessages,
   willExceedContextLimit,
-  getContextStatus,
   filterMessagesByHistoryAccess,
   getParticipantName,
   attributeMessagesForCharacter,
@@ -155,33 +154,6 @@ describe('Token Counter', () => {
     })
   })
 
-  describe('getContextUsagePercent', () => {
-    it('should calculate percentage correctly', () => {
-      expect(getContextUsagePercent(50000, 100000)).toBe(50)
-    })
-
-    it('should handle zero limit', () => {
-      expect(getContextUsagePercent(100, 0)).toBe(100)
-    })
-
-    it('should cap at 100%', () => {
-      expect(getContextUsagePercent(150000, 100000)).toBe(100)
-    })
-  })
-
-  describe('getContextWarningLevel', () => {
-    it('should return ok for low usage', () => {
-      expect(getContextWarningLevel(50000, 100000)).toBe('ok')
-    })
-
-    it('should return warning for high usage', () => {
-      expect(getContextWarningLevel(85000, 100000)).toBe('warning')
-    })
-
-    it('should return critical for very high usage', () => {
-      expect(getContextWarningLevel(96000, 100000)).toBe('critical')
-    })
-  })
 })
 
 describe('Model Context Data', () => {
@@ -242,6 +214,49 @@ describe('Model Context Data', () => {
       const smallAlloc = getRecommendedContextAllocation('OLLAMA', 'llama3.2:3b')
       expect(smallAlloc.memories).toBeLessThan(largeAlloc.memories)
     })
+
+    it("should allocate from the profile's maxContext for an unrecognised model", () => {
+      // An Ollama tag no table knows falls back to the 8192 provider default
+      // without a profile. With one, the user's Max Context is authoritative.
+      const model = 'hf.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_XL'
+      expect(getRecommendedContextAllocation('OLLAMA', model).totalLimit).toBe(8192)
+      expect(
+        getRecommendedContextAllocation('OLLAMA', model, { maxContext: 65536 }).totalLimit
+      ).toBe(65536)
+    })
+  })
+
+  describe('computeSafeInputLimit', () => {
+    it('holds back the response reserve and a 10% margin', () => {
+      // 8192 − 2048 − ceil(819.2) = 5324, the figure the pre-send check has
+      // always used; it is now the figure the builder packs to as well.
+      expect(computeSafeInputLimit(8192, 2048)).toBe(5324)
+    })
+
+    it('floors at 1000 rather than going negative', () => {
+      expect(computeSafeInputLimit(4096, 8192)).toBe(1000)
+    })
+
+    it('is the same limit the allocation exposes', () => {
+      const allocation = getRecommendedContextAllocation('OLLAMA', 'llama3.2:3b')
+      expect(allocation.safeInputLimit).toBe(
+        computeSafeInputLimit(allocation.totalLimit, allocation.responseReserve)
+      )
+      expect(allocation.safetyMargin).toBe(Math.ceil(allocation.totalLimit * 0.10))
+    })
+  })
+
+  describe('resolveContextWindow', () => {
+    it('should prefer the profile maxContext over the table lookup', () => {
+      expect(resolveContextWindow('OLLAMA', 'llama3.2:3b', { maxContext: 16384 })).toBe(16384)
+    })
+
+    it('should fall back to the table when maxContext is absent or degenerate', () => {
+      expect(resolveContextWindow('OLLAMA', 'llama3.2:3b')).toBe(131072)
+      expect(resolveContextWindow('OLLAMA', 'llama3.2:3b', null)).toBe(131072)
+      expect(resolveContextWindow('OLLAMA', 'llama3.2:3b', { maxContext: null })).toBe(131072)
+      expect(resolveContextWindow('OLLAMA', 'llama3.2:3b', { maxContext: 0 })).toBe(131072)
+    })
   })
 
   describe('shouldSummarizeConversation', () => {
@@ -281,6 +296,32 @@ describe('Context Manager', () => {
       expect(budget.summaryBudget).toBeGreaterThan(0)
       expect(budget.recentMessagesBudget).toBeGreaterThan(0)
       expect(budget.responseReserve).toBeGreaterThan(0)
+    })
+
+    it('should budget against the profile window, not the provider default', () => {
+      // Regression: the budget used to come from a model-name lookup only, so a
+      // 64k Ollama profile on an unrecognised tag was budgeted as 8192 — and the
+      // recent-message trimmer silently dropped history to fit it, while the
+      // compression trigger (which does read the profile) saw the real window.
+      const model = 'hf.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_XL'
+      const budget = calculateContextBudget('OLLAMA', model, { maxContext: 65536 })
+
+      expect(budget.totalLimit).toBe(65536)
+      expect(budget.responseReserve).toBe(4096)
+      expect(budget.totalLimit - budget.responseReserve).toBeGreaterThan(
+        calculateContextBudget('OLLAMA', model).totalLimit
+      )
+    })
+
+    it('exposes the one ceiling the builder and the validator share', () => {
+      const budget = calculateContextBudget('OLLAMA', 'llama3.2:3b')
+
+      expect(budget.safeInputLimit).toBe(
+        budget.totalLimit - budget.responseReserve - budget.safetyMargin
+      )
+      // Strictly below the old builder-side ceiling: that gap is precisely what
+      // used to be packed with history and then reported as an overage.
+      expect(budget.safeInputLimit).toBeLessThan(budget.totalLimit - budget.responseReserve)
     })
   })
 
@@ -416,12 +457,17 @@ describe('Context Manager', () => {
       expect(idx).toBeGreaterThanOrEqual(0)
       expect(rpIdx).toBeGreaterThan(idx)
       expect(toolIdx).toBeGreaterThan(rpIdx)
-      // Tool reinforcement uses character pronouns (defaults to 'they').
-      expect(prompt).toContain('they CALLS them')
+      // Tool reinforcement addresses the character directly — no pronoun lookup,
+      // so no "they CALLS them" disagreement on the no-pronouns default path.
+      expect(prompt).toContain('When you use workspace tools, you CALL them')
+      expect(prompt).not.toContain('CALLS them')
     })
   })
 
   describe('formatMemoriesForContext', () => {
+    // These fixtures are the character's own memories (no aboutCharacterId),
+    // so no subject prefix is expected on any line.
+    const selfSubject = { selfCharacterId: 'char1', characterNames: new Map<string, string>() }
     const mockMemories = [
       {
         memory: {
@@ -458,7 +504,7 @@ describe('Context Manager', () => {
     ]
 
     it('should format memories with header', () => {
-      const { content } = formatMemoriesForContext(mockMemories, 1000, 'OPENAI')
+      const { content } = formatMemoriesForContext(mockMemories, 1000, 'OPENAI', selfSubject)
       expect(content).toContain('## Relevant Memories')
       // Whisper lines now carry the full memory.content (not summary), so we
       // assert against the content body — "User likes coffee" — rather than
@@ -467,13 +513,13 @@ describe('Context Manager', () => {
     })
 
     it('should return empty for no memories', () => {
-      const { content, memoriesUsed } = formatMemoriesForContext([], 1000, 'OPENAI')
+      const { content, memoriesUsed } = formatMemoriesForContext([], 1000, 'OPENAI', selfSubject)
       expect(content).toBe('')
       expect(memoriesUsed).toBe(0)
     })
 
     it('should respect token limit', () => {
-      const { tokenCount } = formatMemoriesForContext(mockMemories, 50, 'OPENAI')
+      const { tokenCount } = formatMemoriesForContext(mockMemories, 50, 'OPENAI', selfSubject)
       expect(tokenCount).toBeLessThanOrEqual(50)
     })
   })
@@ -565,28 +611,6 @@ describe('Context Manager', () => {
       const result = willExceedContextLimit(messages, 'Hi', 'OPENAI', 'gpt-4o')
       expect(result.percentUsed).toBeGreaterThan(0)
       expect(result.percentUsed).toBeLessThan(100)
-    })
-  })
-
-  describe('getContextStatus', () => {
-    it('should return ok status for low usage', () => {
-      const status = getContextStatus(50000, 200000)
-      expect(status.level).toBe('ok')
-    })
-
-    it('should return warning status for high usage', () => {
-      const status = getContextStatus(170000, 200000)
-      expect(status.level).toBe('warning')
-    })
-
-    it('should return critical status for near-full', () => {
-      const status = getContextStatus(195000, 200000)
-      expect(status.level).toBe('critical')
-    })
-
-    it('should include helpful message', () => {
-      const status = getContextStatus(100000, 200000)
-      expect(status.message).toBeTruthy()
     })
   })
 

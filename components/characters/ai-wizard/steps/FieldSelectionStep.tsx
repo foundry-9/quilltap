@@ -18,7 +18,7 @@ interface FieldSelectionStepProps {
   onFieldToggle: (field: GeneratableField) => void
   onSelectAll: () => void
   onClearAll: () => void
-  currentData: Record<string, string | Array<unknown> | undefined>
+  currentData: Record<string, unknown>
   canGeneratePhysicalDescription: boolean
 }
 
@@ -37,14 +37,17 @@ export function FieldSelectionStep({
   const allFields: GeneratableField[] = [
     'name',
     'title',
+    'properties',
     'identity',
     'description',
     'manifesto',
     'personality',
     'scenarios',
     'exampleDialogues',
+    'firstMessage',
     'systemPrompt',
     'physicalDescription',
+    'wardrobeItems',
   ]
 
   const isFieldAvailable = (field: GeneratableField) => availableFields.includes(field)
@@ -110,7 +113,7 @@ export function FieldSelectionStep({
             const fieldValue = currentData[field]
             const hasContent = Array.isArray(fieldValue)
               ? fieldValue.length > 0
-              : !!(fieldValue as string | undefined)?.trim()
+              : typeof fieldValue === 'string' && !!fieldValue.trim()
 
             // Special handling for physical description
             const isDisabled =

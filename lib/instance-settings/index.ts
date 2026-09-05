@@ -16,6 +16,7 @@
  * runs; they're a property of the instance, not of any user.
  */
 
+import type { z } from 'zod';
 import { rawQuery } from '@/lib/database/manager';
 import { logger } from '@/lib/logger';
 import {
@@ -84,6 +85,7 @@ const DEFAULT_MEMORY_EXTRACTION_LIMITS: MemoryExtractionLimits = {
 const DEFAULT_MEMORY_RECALL_SETTINGS: MemoryRecallSettings = {
   scopePolicy: 'down-weight',
   expandRelated: false,
+  perTurnConversationSummaries: false,
 };
 const DEFAULT_DATA_RETENTION_SETTINGS: DataRetentionSettings = {
   staleChatDays: 30,
@@ -117,6 +119,39 @@ async function writeSetting(key: string, value: string): Promise<void> {
       'ON CONFLICT("key") DO UPDATE SET "value" = excluded."value"',
     [key, value],
   );
+}
+
+/**
+ * Read a JSON-encoded setting and validate it against `schema`. Returns
+ * `defaults` when the row has never been written, and — with a warning —
+ * when the stored value fails to parse or validate, so a corrupted row
+ * degrades to the documented default rather than taking the caller down.
+ */
+async function readJsonSetting<T>(
+  key: string,
+  schema: z.ZodType<T>,
+  defaults: T,
+): Promise<T> {
+  const raw = await readSetting(key);
+  if (raw === null) return defaults;
+  try {
+    return schema.parse(JSON.parse(raw));
+  } catch (error) {
+    logger.warn(`[InstanceSettings] ${key} failed to parse — using defaults`, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return defaults;
+  }
+}
+
+/**
+ * Validate `value` against `schema` and persist it as JSON. Returns the
+ * validated value — what the row now holds — so setters can echo it back.
+ */
+async function writeJsonSetting<T>(key: string, schema: z.ZodType<T>, value: T): Promise<T> {
+  const validated = schema.parse(value);
+  await writeSetting(key, JSON.stringify(validated));
+  return validated;
 }
 
 /**
@@ -168,22 +203,15 @@ export async function setMemoryExtractionConcurrency(value: number): Promise<voi
  * when the setting hasn't been written yet.
  */
 export async function getMemoryExtractionLimits(): Promise<MemoryExtractionLimits> {
-  const raw = await readSetting(KEY_MEMORY_EXTRACTION_LIMITS);
-  if (raw === null) return DEFAULT_MEMORY_EXTRACTION_LIMITS;
-  try {
-    const parsed = JSON.parse(raw);
-    return MemoryExtractionLimitsSchema.parse(parsed);
-  } catch (error) {
-    logger.warn('[InstanceSettings] memoryExtractionLimits failed to parse — using defaults', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return DEFAULT_MEMORY_EXTRACTION_LIMITS;
-  }
+  return readJsonSetting(
+    KEY_MEMORY_EXTRACTION_LIMITS,
+    MemoryExtractionLimitsSchema,
+    DEFAULT_MEMORY_EXTRACTION_LIMITS,
+  );
 }
 
 export async function setMemoryExtractionLimits(value: MemoryExtractionLimits): Promise<void> {
-  const validated = MemoryExtractionLimitsSchema.parse(value);
-  await writeSetting(KEY_MEMORY_EXTRACTION_LIMITS, JSON.stringify(validated));
+  await writeJsonSetting(KEY_MEMORY_EXTRACTION_LIMITS, MemoryExtractionLimitsSchema, value);
 }
 
 /**
@@ -193,22 +221,11 @@ export async function setMemoryExtractionLimits(value: MemoryExtractionLimits): 
  * (`lib/chat/context-manager.ts`, `lib/services/chat-message/pre-compute.service.ts`).
  */
 export async function getMemoryRecallSettings(): Promise<MemoryRecallSettings> {
-  const raw = await readSetting(KEY_MEMORY_RECALL);
-  if (raw === null) return DEFAULT_MEMORY_RECALL_SETTINGS;
-  try {
-    const parsed = JSON.parse(raw);
-    return MemoryRecallSettingsSchema.parse(parsed);
-  } catch (error) {
-    logger.warn('[InstanceSettings] memoryRecall failed to parse — using defaults', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return DEFAULT_MEMORY_RECALL_SETTINGS;
-  }
+  return readJsonSetting(KEY_MEMORY_RECALL, MemoryRecallSettingsSchema, DEFAULT_MEMORY_RECALL_SETTINGS);
 }
 
 export async function setMemoryRecallSettings(value: MemoryRecallSettings): Promise<void> {
-  const validated = MemoryRecallSettingsSchema.parse(value);
-  await writeSetting(KEY_MEMORY_RECALL, JSON.stringify(validated));
+  await writeJsonSetting(KEY_MEMORY_RECALL, MemoryRecallSettingsSchema, value);
 }
 
 /**
@@ -218,22 +235,14 @@ export async function setMemoryRecallSettings(value: MemoryRecallSettings): Prom
  * when the setting hasn't been written yet.
  */
 export async function getDataRetentionSettings(): Promise<DataRetentionSettings> {
-  const raw = await readSetting(KEY_DATA_RETENTION);
-  if (raw === null) return DEFAULT_DATA_RETENTION_SETTINGS;
-  try {
-    const parsed = JSON.parse(raw);
-    return DataRetentionSettingsSchema.parse(parsed);
-  } catch (error) {
-    logger.warn('[InstanceSettings] dataRetention failed to parse — using defaults', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return DEFAULT_DATA_RETENTION_SETTINGS;
-  }
+  return readJsonSetting(KEY_DATA_RETENTION, DataRetentionSettingsSchema, DEFAULT_DATA_RETENTION_SETTINGS);
 }
 
-export async function setDataRetentionSettings(value: DataRetentionSettings): Promise<void> {
-  const validated = DataRetentionSettingsSchema.parse(value);
-  await writeSetting(KEY_DATA_RETENTION, JSON.stringify(validated));
+/** Persist the data-retention settings; returns exactly what was stored. */
+export async function setDataRetentionSettings(
+  value: DataRetentionSettings,
+): Promise<DataRetentionSettings> {
+  return writeJsonSetting(KEY_DATA_RETENTION, DataRetentionSettingsSchema, value);
 }
 
 /**
@@ -244,22 +253,14 @@ export async function setDataRetentionSettings(value: DataRetentionSettings): Pr
  * value and still short-circuits a stuck loop regardless.
  */
 export async function getBrahmaConsoleSettings(): Promise<BrahmaConsoleSettings> {
-  const raw = await readSetting(KEY_BRAHMA_CONSOLE);
-  if (raw === null) return DEFAULT_BRAHMA_CONSOLE_SETTINGS;
-  try {
-    const parsed = JSON.parse(raw);
-    return BrahmaConsoleSettingsSchema.parse(parsed);
-  } catch (error) {
-    logger.warn('[InstanceSettings] brahmaConsole failed to parse — using defaults', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return DEFAULT_BRAHMA_CONSOLE_SETTINGS;
-  }
+  return readJsonSetting(KEY_BRAHMA_CONSOLE, BrahmaConsoleSettingsSchema, DEFAULT_BRAHMA_CONSOLE_SETTINGS);
 }
 
-export async function setBrahmaConsoleSettings(value: BrahmaConsoleSettings): Promise<void> {
-  const validated = BrahmaConsoleSettingsSchema.parse(value);
-  await writeSetting(KEY_BRAHMA_CONSOLE, JSON.stringify(validated));
+/** Persist the Brahma Console settings; returns exactly what was stored. */
+export async function setBrahmaConsoleSettings(
+  value: BrahmaConsoleSettings,
+): Promise<BrahmaConsoleSettings> {
+  return writeJsonSetting(KEY_BRAHMA_CONSOLE, BrahmaConsoleSettingsSchema, value);
 }
 
 /**
@@ -294,21 +295,11 @@ export function normalizeTabooPhrases(phrases: readonly string[]): string[] {
  * per turn on the conversational path (`lib/chat/context-manager.ts`).
  */
 export async function getTabooSettings(): Promise<TabooSettings> {
-  const raw = await readSetting(KEY_TABOO);
-  if (raw === null) return DEFAULT_TABOO_SETTINGS;
-  try {
-    const parsed = JSON.parse(raw);
-    const settings = TabooSettingsSchema.parse(parsed);
-    logger.debug('[InstanceSettings] Read taboo settings', {
-      phraseCount: settings.phrases.length,
-    });
-    return settings;
-  } catch (error) {
-    logger.warn('[InstanceSettings] taboo failed to parse — using defaults', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return DEFAULT_TABOO_SETTINGS;
-  }
+  const settings = await readJsonSetting(KEY_TABOO, TabooSettingsSchema, DEFAULT_TABOO_SETTINGS);
+  logger.debug('[InstanceSettings] Read taboo settings', {
+    phraseCount: settings.phrases.length,
+  });
+  return settings;
 }
 
 /**
@@ -322,8 +313,7 @@ export async function setTabooSettings(value: TabooSettings): Promise<TabooSetti
     ...value,
     phrases: normalizeTabooPhrases(value.phrases ?? []),
   };
-  const validated = TabooSettingsSchema.parse(normalized);
-  await writeSetting(KEY_TABOO, JSON.stringify(validated));
+  const validated = await writeJsonSetting(KEY_TABOO, TabooSettingsSchema, normalized);
   logger.debug('[InstanceSettings] Wrote taboo settings', {
     phraseCount: validated.phrases.length,
   });

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useImageNavigation } from '@/hooks/useImageNavigation'
 import DeletedImagePlaceholder from '../DeletedImagePlaceholder'
 import { ImageActions } from './ImageActions'
@@ -77,12 +78,17 @@ export default function ImageDetailModal({
     onNext,
   })
 
-  if (!isOpen) return null
+  if (!isOpen || typeof document === 'undefined') return null
 
   const filepath = image.url || image.filepath
   const imageSrc = filepath.startsWith('/') ? filepath : `/${filepath}`
 
-  return (
+  // Portal to document.body. Rendered in place, the overlay lands inside
+  // `.qt-workspace`, whose `isolation: isolate` traps its `z-[60]` in the
+  // workspace's own stacking context — the sticky `.qt-page-toolbar` (z-30)
+  // then paints over the top-right Download/Copy/Close controls, leaving the
+  // gallery with no reachable way to save a picture (bug 99).
+  return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center qt-bg-overlay backdrop-blur-sm p-4"
       onClick={onClose}
@@ -140,6 +146,7 @@ export default function ImageDetailModal({
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 qt-text-overlay-muted text-sm qt-bg-overlay-caption px-3 py-1 rounded">
         {image.filename}
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

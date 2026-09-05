@@ -26,6 +26,7 @@ jest.mock('@/lib/logging/create-logger', () => ({
 
 jest.mock('@/lib/plugins/provider-validation', () => ({
   requiresApiKey: jest.fn().mockReturnValue(false), // false so we skip the API key lookup by default
+  acceptsApiKey: jest.fn().mockReturnValue(false), // ditto: a keyless local provider (Bug 81)
   validateProviderConfig: jest.fn().mockReturnValue({ valid: true, errors: [] }),
 }))
 

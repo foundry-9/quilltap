@@ -99,7 +99,10 @@ quilltap instances list                                  # Registered instances 
 quilltap instances default Friday                        # Make it the fall-through for flag-free runs
 quilltap instances rename Friday Weekday                 # Rename, preserving the stored passphrase
 quilltap instances remove Friday                         # Unregister
+quilltap instances restore-key Friday                    # Rebuild a lost or passphrase-locked .dbkey
 ```
+
+If an instance's `quilltap.dbkey` goes missing — or its passphrase does — `instances restore-key` rebuilds it. The file only *wraps* the pepper; the pepper itself is the database key, so an operator who kept the one printed at first-run setup can get back in. The pepper is read from `ENCRYPTION_MASTER_PEPPER` or prompted for hidden, never passed as a flag, and it is proved against the encrypted databases on disk before anything is written. Run it with the server down — the command refuses while the instance lock is held. Flags: `--passphrase <pass>` / `--no-passphrase` (the new wrapping), `-d, --data-dir <path>`, `--force`, `-y, --yes`.
 
 Every subcommand then accepts `--instance <name>` in place of `--data-dir`. The registry lives at `<app-support>/Quilltap/instances.json` (mode 0600; e.g. `~/Library/Application Support/Quilltap/instances.json` on macOS). **Resolution precedence:** `--data-dir` > `--instance` > registered default > `QUILLTAP_DATA_DIR` > the OS platform default. Pass the **instance root** (e.g. `~/iCloud/Quilltap/Friday`), not its `data/` subdirectory.
 
@@ -182,6 +185,7 @@ quilltap docs export <mount> <outputDir>        # Mount → directory
 quilltap docs find <pattern>                    # Substring match on file names (--mount, --ext, --type, --limit)
 quilltap docs grep <pattern>                    # Substring match on extracted text (--mount, --ignore-case, -l, --max, --context)
 quilltap docs status                            # Per-mount extraction + embedding rollup (--mount, --top)
+quilltap docs docker-mounts                     # Bind mounts filesystem stores need under Docker (--format args|json)
 
 # Server-required
 quilltap docs scan <mount>                                    # Trigger a rescan
@@ -391,8 +395,11 @@ Fish picks new completion files up automatically — no shell restart needed.
 
 - **Subcommands**: `quilltap d<TAB>` → `db docs`
 - **Sub-verbs per namespace**: `quilltap db s<TAB>` → `schema show`
+- **Flags per verb**: `quilltap docs docker-mounts --<TAB>` → the flags that verb accepts
 - **Instance names**: `quilltap --instance Fr<TAB>` → registered instances
-- **Mount names**: `quilltap docs ls --mount Qu<TAB>` → mount points in the active instance
+- **Mount names**: both `--mount` and the positional a verb takes — `quilltap docs ls Qu<TAB>`, and either end of `docs move`/`copy`/`link`
+
+Completions **parse the line rather than counting words**, so a flag typed anywhere the CLI itself accepts one does not derail them: `quilltap docs --instance Friday <TAB>` still offers the `docs` verbs. bash and zsh also reuse the `-i` / `-d` / `--passphrase` already on the line when looking store names up, so the names offered come from the instance you are addressing rather than the default one. fish completes `--mount` but not the positionals, and always reads the default instance.
 
 Dynamic completions shell out to `quilltap`'s own subcommands. If the active instance is encrypted and no passphrase is reachable, the completion silently returns nothing rather than prompting in the middle of a tab.
 

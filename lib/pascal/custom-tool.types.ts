@@ -29,6 +29,17 @@ import { MAX_EFFECT_EXPRESSION_LENGTH, parseExpression } from './expressions';
 
 export { MAX_EFFECT_EXPRESSION_LENGTH };
 
+// The `{{placeholder}}` classifier lives in its own dependency-free module so
+// `expressions.ts` can use it without importing the schema; it is re-exported
+// here because this is where readers of the format look for it.
+export {
+  PLACEHOLDER_PATTERN,
+  classifyPlaceholder,
+  scanPlaceholders,
+  type PlaceholderRef,
+  type ScannedPlaceholder,
+} from './placeholders';
+
 /** Well-known folder, at a store's root, holding custom-tool definitions. */
 export const TOOLS_FOLDER = 'Tools';
 
@@ -238,11 +249,14 @@ export type Roll = z.infer<typeof RollSchema>;
 /** The comparator keys, in the order tests are described to a reader. */
 export const COMPARATOR_KEYS = ['gt', 'gte', 'lt', 'lte', 'eq', 'neq', 'contains', 'ncontains'] as const;
 
+/** One comparator key. */
+export type ComparatorKey = (typeof COMPARATOR_KEYS)[number];
+
 /** The four keys that order two values, and so demand numbers on both sides. */
-const ORDERING_KEYS: ReadonlySet<string> = new Set(['gt', 'gte', 'lt', 'lte']);
+export const ORDERING_KEYS: ReadonlySet<ComparatorKey> = new Set<ComparatorKey>(['gt', 'gte', 'lt', 'lte']);
 
 /** The two keys that search one string inside another, and so demand strings. */
-const CONTAINMENT_KEYS: ReadonlySet<string> = new Set(['contains', 'ncontains']);
+export const CONTAINMENT_KEYS: ReadonlySet<ComparatorKey> = new Set<ComparatorKey>(['contains', 'ncontains']);
 
 /**
  * A comparator operand for an ordering test: a literal number, or a `$param`
@@ -428,6 +442,44 @@ export const ToolGateSchema = z.strictObject({
 export type ToolGate = z.infer<typeof ToolGateSchema>;
 
 /**
+ * The subjects an outcome row and an effect condition share — bare comparators
+ * on the value, plus `roll`, `params`, `metadata`, and `llm`. One shape, spread
+ * into both schemas, so the two can never disagree about a subject's type or
+ * its description.
+ */
+const WHEN_SUBJECTS_SHAPE = {
+  ...NUMERIC_COMPARATOR_SHAPE,
+  roll: NumericComparatorSchema.optional().describe('Test the raw pre-transform draw rather than the final value.'),
+  params: z
+    .record(IdentifierSchema, ParamComparatorSchema)
+    .optional()
+    .describe('Test the resolved parameters, keyed by parameter name.'),
+  metadata: z
+    .record(MetadataKeySchema, MetadataComparatorSchema)
+    .optional()
+    .describe("Test the invoking character's metadata.json, keyed by metadata key. A key the character lacks does not match."),
+  llm: LlmComparatorSchema.optional().describe(
+    "Test the LLM consult's answer (or, via `ok`, whether it succeeded). Only valid on a tool that declares an `llm` block."
+  ),
+};
+
+/** True when a `when` object tests at least one of the shared subjects. */
+function testsSomething(when: {
+  roll?: unknown;
+  llm?: unknown;
+  params?: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}): boolean {
+  return (
+    hasComparator(when as Record<string, unknown>) ||
+    when.roll !== undefined ||
+    when.llm !== undefined ||
+    (when.params !== undefined && Object.keys(when.params).length > 0) ||
+    (when.metadata !== undefined && Object.keys(when.metadata).length > 0)
+  );
+}
+
+/**
  * An outcome test. Either the literal `true` (catch-all) or an object naming
  * one or more subjects, ALL of which must hold.
  *
@@ -452,30 +504,10 @@ export type ToolGate = z.infer<typeof ToolGateSchema>;
  * OR unnecessary, and a flat AND of comparators keeps the evaluator eval-free.
  */
 export const WhenObjectSchema = z
-  .strictObject({
-    ...NUMERIC_COMPARATOR_SHAPE,
-    roll: NumericComparatorSchema.optional().describe('Test the raw pre-transform draw rather than the final value.'),
-    params: z
-      .record(IdentifierSchema, ParamComparatorSchema)
-      .optional()
-      .describe('Test the resolved parameters, keyed by parameter name.'),
-    metadata: z
-      .record(MetadataKeySchema, MetadataComparatorSchema)
-      .optional()
-      .describe("Test the invoking character's metadata.json, keyed by metadata key. A key the character lacks does not match."),
-    llm: LlmComparatorSchema.optional().describe(
-      "Test the LLM consult's answer (or, via `ok`, whether it succeeded). Only valid on a tool that declares an `llm` block."
-    ),
-  })
-  .refine(
-    (when) =>
-      hasComparator(when) ||
-      when.roll !== undefined ||
-      when.llm !== undefined ||
-      (when.params !== undefined && Object.keys(when.params).length > 0) ||
-      (when.metadata !== undefined && Object.keys(when.metadata).length > 0),
-    { message: 'must test something: a comparator on the value, `roll`, `llm`, a non-empty `params`, or a non-empty `metadata`' }
-  );
+  .strictObject(WHEN_SUBJECTS_SHAPE)
+  .refine(testsSomething, {
+    message: 'must test something: a comparator on the value, `roll`, `llm`, a non-empty `params`, or a non-empty `metadata`',
+  });
 
 export type WhenObject = z.infer<typeof WhenObjectSchema>;
 
@@ -515,19 +547,7 @@ export type CustomToolOutcome = z.infer<typeof CustomToolOutcomeSchema>;
  */
 export const EffectWhenSchema = z
   .strictObject({
-    ...NUMERIC_COMPARATOR_SHAPE,
-    roll: NumericComparatorSchema.optional().describe('Test the raw pre-transform draw rather than the final value.'),
-    params: z
-      .record(IdentifierSchema, ParamComparatorSchema)
-      .optional()
-      .describe('Test the resolved parameters, keyed by parameter name.'),
-    metadata: z
-      .record(MetadataKeySchema, MetadataComparatorSchema)
-      .optional()
-      .describe("Test the invoking character's metadata.json, keyed by metadata key. A key the character lacks does not match."),
-    llm: LlmComparatorSchema.optional().describe(
-      "Test the LLM consult's answer (or, via `ok`, whether it succeeded). Only valid on a tool that declares an `llm` block."
-    ),
+    ...WHEN_SUBJECTS_SHAPE,
     outcome: z
       .strictObject({
         eq: OutcomeStateSchema.optional().describe('The winning outcome carries this state.'),
@@ -539,19 +559,10 @@ export const EffectWhenSchema = z
       .optional()
       .describe("Test the WINNING outcome's semantic state — e.g. { \"eq\": \"success\" }."),
   })
-  .refine(
-    (when) =>
-      hasComparator(when) ||
-      when.roll !== undefined ||
-      when.llm !== undefined ||
-      when.outcome !== undefined ||
-      (when.params !== undefined && Object.keys(when.params).length > 0) ||
-      (when.metadata !== undefined && Object.keys(when.metadata).length > 0),
-    {
-      message:
-        'must test something: a comparator on the value, `roll`, `llm`, `outcome`, a non-empty `params`, or a non-empty `metadata`',
-    }
-  );
+  .refine((when) => testsSomething(when) || when.outcome !== undefined, {
+    message:
+      'must test something: a comparator on the value, `roll`, `llm`, `outcome`, a non-empty `params`, or a non-empty `metadata`',
+  });
 
 export type EffectWhen = z.infer<typeof EffectWhenSchema>;
 
@@ -855,10 +866,10 @@ function validateGates(
 }
 
 /** The value types a subject or an operand can carry, with `integer` folded in. */
-type ValueType = 'number' | 'string' | 'boolean';
+export type ValueType = 'number' | 'string' | 'boolean';
 
 /** Fold a declared parameter type down to the type its values actually have. */
-function valueTypeOf(type: ParameterType): ValueType {
+export function valueTypeOf(type: ParameterType): ValueType {
   return type === 'integer' ? 'number' : type;
 }
 
@@ -1215,24 +1226,15 @@ function flattenIssues(issues: readonly z.core.$ZodIssue[], prefix: Array<string
   });
 }
 
-/** Top-level keys the v1 format knows about. Anything else is reserved for v2. */
-const KNOWN_TOP_LEVEL_KEYS = new Set([
-  '$schema',
-  'name',
-  'title',
-  'chipLabel',
-  'description',
-  'disabled',
-  'availableWhen',
-  'withheldWhen',
-  'revealOdds',
-  'defaultVisibility',
-  'parameters',
-  'roll',
-  'llm',
-  'effects',
-  'outcomes',
-]);
+/**
+ * Top-level keys the v1 format knows about, in the schema's declaration order
+ * (`$schema` first). Read off the schema itself so a new key can never be
+ * known to the loader and unknown to the Workbench. Anything else is reserved
+ * for v2.
+ */
+export const KNOWN_TOP_LEVEL_KEYS: readonly string[] = Object.keys(QtapCustomToolSchema.shape);
+
+const KNOWN_TOP_LEVEL_KEY_SET: ReadonlySet<string> = new Set(KNOWN_TOP_LEVEL_KEYS);
 
 /**
  * Report top-level keys this build doesn't understand, so discovery can log
@@ -1241,5 +1243,5 @@ const KNOWN_TOP_LEVEL_KEYS = new Set([
  */
 export function collectUnknownKeys(raw: unknown): string[] {
   if (typeof raw !== 'object' || raw === null) return [];
-  return Object.keys(raw as Record<string, unknown>).filter((k) => !KNOWN_TOP_LEVEL_KEYS.has(k));
+  return Object.keys(raw as Record<string, unknown>).filter((k) => !KNOWN_TOP_LEVEL_KEY_SET.has(k));
 }

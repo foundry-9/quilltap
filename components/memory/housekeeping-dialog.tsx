@@ -179,7 +179,7 @@ export function HousekeepingDialog({ characterId, onClose, onComplete }: Houseke
               min={0}
               max={0.7}
               step={0.1}
-              className="w-full h-2 qt-bg-muted rounded-lg appearance-none cursor-pointer"
+              className="qt-range w-full"
             />
             <div className="flex justify-between qt-text-xs mt-1">
               <span>0%</span>

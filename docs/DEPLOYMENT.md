@@ -82,7 +82,7 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `QUILLTAP_HOST_IP` | Override host gateway IP for localhost URL rewriting (Docker/Lima/WSL2) | Auto-detected |
+| `QUILLTAP_HOST_IP` | Host gateway IP for localhost URL rewriting. Auto-detected in Docker; **required** to enable rewriting in a self-managed VM | Auto-detected in Docker |
 
 ### Encryption
 
@@ -105,7 +105,7 @@ Only needed when exposing Quilltap on a custom domain. For local use, everything
 | `QUILLTAP_TIMEZONE` | IANA timezone name (e.g., `America/New_York`, `Europe/London`, `Asia/Tokyo`) for timestamp injection. Auto-detected in Electron app. | System default (usually UTC in Docker) |
 | `TZ` | Standard Unix timezone for the process clock. Governs the paths that read local time directly rather than the formatting chain: episodic day-references ("today"/"yesterday" recall windows), the autonomous-room daily token budget rollover at local midnight, and croner schedule evaluation. | System default (UTC in Docker) |
 
-Setting either one in Docker is enough: the container entrypoint copies whichever is present into the other, with `QUILLTAP_TIMEZONE` winning if both are set and disagree. This mirrors what `lima/wsl-init.sh` does for the Lima and WSL2 shells. No `tzdata` package is needed — Node resolves `TZ` through its bundled ICU.
+Setting either one in Docker is enough: the container entrypoint copies whichever is present into the other, with `QUILLTAP_TIMEZONE` winning if both are set and disagree. No `tzdata` package is needed — Node resolves `TZ` through its bundled ICU.
 
 Setting only one *outside* the entrypoint (a bare `node server.js`, say) leaves the two halves disagreeing: chat timestamps on your clock, schedules and recall windows on UTC.
 
@@ -141,7 +141,7 @@ Use an IANA name, not an abbreviation — `America/Chicago`, not `CDT`. ICU can'
 
 ## Accessing Host Services (Ollama, LM Studio, etc.)
 
-If you run local services on your host machine (Ollama, LM Studio, MCP servers), Quilltap automatically rewrites `localhost` and `127.0.0.1` URLs to point at the host gateway IP. This means you can configure `http://localhost:11434` in the UI and it will work transparently in Docker, Lima VMs, and WSL2 — no manual port forwarding needed.
+If you run local services on your host machine (Ollama, LM Studio, MCP servers), Quilltap automatically rewrites `localhost` and `127.0.0.1` URLs to point at the host gateway. This means you can configure `http://localhost:11434` in the UI and it will work transparently in Docker — no manual port forwarding needed.
 
 On Linux, add `--add-host` so the container can resolve the host IP:
 
@@ -169,7 +169,7 @@ docker run -d \
   foundry9/quilltap
 ```
 
-This override works in all environments (Docker, Lima, WSL2).
+In Docker this overrides `host.docker.internal`. In a **self-managed virtual machine** it is the only supported route: Quilltap cannot detect a hand-rolled VM, so `QUILLTAP_HOST_IP` both switches rewriting on and supplies the gateway address. Set it to whatever address inside the VM reaches your host's loopback.
 
 ## Reverse Proxy Setup
 

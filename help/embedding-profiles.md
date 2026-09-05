@@ -48,6 +48,12 @@ The profiles list shows:
 - Cloud-hosted (requires internet)
 - High quality embeddings
 
+**NanoGPT:**
+
+- One pay-as-you-go key covering OpenAI's embedders alongside BGE, Jina, Qwen, and Gemini models
+- The same key serves chat and image generation, should you keep the whole establishment under one roof
+- Fetch Models asks NanoGPT's register directly, dimensions and all
+
 **Other cloud providers:**
 
 - Cohere Embeddings

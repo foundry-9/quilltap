@@ -12,6 +12,7 @@ import { apiFetch } from '@/lib/query/fetcher';
 import { queryKeys } from '@/lib/query/keys';
 import { showConfirmation } from '@/lib/alert';
 import { showErrorToast } from '@/lib/toast';
+import { downloadFetchedFile } from '@/lib/download-utils';
 import DeletedImagePlaceholder from './DeletedImagePlaceholder';
 
 export interface ImageData {
@@ -113,6 +114,16 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
     setMissingImages((prev) => new Set(prev).add(imageId))
   }
 
+  const handleDownloadImage = async (image: ImageData) => {
+    const src = image.url || (image.filepath.startsWith('/') ? image.filepath : `/${image.filepath}`)
+    try {
+      await downloadFetchedFile(src, image.filename)
+    } catch (err) {
+      console.error('Failed to download gallery image:', { error: err instanceof Error ? err.message : String(err) })
+      showErrorToast('Failed to download image')
+    }
+  }
+
   const handleCleanupMissing = () => {
     loadImages()
   }
@@ -159,13 +170,24 @@ export function ImageGallery({ tagType, tagId, onSelectImage, selectedImageId, c
 
           {/* Overlay with actions */}
           {!missingImages.has(image.id) && (
-            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all opacity-0 group-hover:opacity-100">
+            <div className="absolute inset-0 qt-bg-overlay-medium transition-all opacity-0 group-hover:opacity-100">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDownloadImage(image)
+                }}
+                className="absolute bottom-2 left-2 qt-bg-overlay-btn hover:qt-bg-overlay-btn qt-text-overlay p-2 rounded-full transition-colors"
+                title="Download image"
+                aria-label="Download image"
+              >
+                <Icon name="download" className="w-5 h-5" />
+              </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   handleDeleteImage(image.id)
                 }}
-                className="absolute bottom-2 right-2 bg-destructive qt-text-destructive-foreground p-2 rounded-full hover:qt-bg-destructive/90 transition-colors"
+                className="absolute bottom-2 right-2 qt-bg-destructive qt-text-on-destructive p-2 rounded-full hover:qt-bg-destructive/90 transition-colors"
                 title="Delete image"
                 aria-label="Delete image"
               >

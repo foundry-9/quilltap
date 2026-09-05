@@ -14,31 +14,42 @@ export interface OptimizerAnalysis {
   summary: string;
 }
 
+export interface OptimizerGeneratedWardrobeItem {
+  title: string;
+  description: string;
+  imagePrompt?: string;
+  types: string[];
+  appropriateness?: string;
+  isDefault?: boolean;
+}
+
 export interface OptimizerSuggestion {
   id: string;
   field: string;
   /**
-   * For an existing scenario/system prompt, the item's id. For a
+   * For an existing scenario/system prompt/wardrobe item, the item's id. For a
    * `physicalDescription` suggestion, the sub-field key being refined
    * (`fullDescription` | `shortPrompt` | `mediumPrompt` | `longPrompt` | `completePrompt`).
    */
   subId?: string;
   subName?: string;
   title?: string;
-  /** Suggested name for a brand-new system prompt (only when no `subId`). */
+  /** Suggested name for a brand-new system prompt or wardrobe item (only when no `subId`). */
   name?: string;
   currentValue: string;
   proposedValue: string;
   rationale: string;
   significance: number;
   memoryExcerpts: string[];
+  /** Structured payload for a brand-new wardrobe item (field='wardrobeItems', no subId). */
+  wardrobeItem?: OptimizerGeneratedWardrobeItem;
 }
 
 export type OptimizerPhase = 'preflight' | 'progress' | 'review' | 'apply' | 'suggestions-file-written';
 
 export type OptimizerOutputMode = 'apply' | 'suggestions-file';
 
-export type OptimizerSubStepKind = 'general' | 'scenario' | 'systemPrompt' | 'physicalDescription' | 'newSystemPrompts';
+export type OptimizerSubStepKind = 'general' | 'scenario' | 'systemPrompt' | 'physicalDescription' | 'wardrobe' | 'properties' | 'newSystemPrompts';
 
 export interface OptimizerSubStep {
   kind: OptimizerSubStepKind;

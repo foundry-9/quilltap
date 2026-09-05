@@ -119,6 +119,22 @@
     background-color: var(--color-destructive);
   }
 
+  /**
+   * Secondary surface background — the muted-but-not-grey fill used by the
+   * LLM inspector's job-type chips.
+   */
+  .qt-bg-secondary {
+    background-color: var(--color-secondary);
+  }
+
+  /**
+   * Input-well background — for the bare textareas (document source view)
+   * that want the form-field surface without the rest of qt-input.
+   */
+  .qt-bg-input {
+    background-color: var(--color-input);
+  }
+
   /* ==========================================================================
      STATUS BACKGROUND UTILITIES (with opacity variants)
      ========================================================================== */
@@ -229,6 +245,115 @@
     background-color: color-mix(in srgb, var(--color-muted-foreground) 60%, transparent);
   }
 
+  /**
+   * Muted backgrounds with opacity — the workhorse of the quiet surfaces:
+   * table rows, dropdown items, disabled wells, inspector panels.
+   */
+  .qt-bg-muted\/20 {
+    background-color: color-mix(in srgb, var(--color-muted) 20%, transparent);
+  }
+
+  .qt-bg-muted\/30 {
+    background-color: color-mix(in srgb, var(--color-muted) 30%, transparent);
+  }
+
+  .qt-bg-muted\/40 {
+    background-color: color-mix(in srgb, var(--color-muted) 40%, transparent);
+  }
+
+  .qt-bg-muted\/50 {
+    background-color: color-mix(in srgb, var(--color-muted) 50%, transparent);
+  }
+
+  .qt-bg-muted\/60 {
+    background-color: color-mix(in srgb, var(--color-muted) 60%, transparent);
+  }
+
+  .qt-bg-muted\/70 {
+    background-color: color-mix(in srgb, var(--color-muted) 70%, transparent);
+  }
+
+  .qt-bg-muted\/80 {
+    background-color: color-mix(in srgb, var(--color-muted) 80%, transparent);
+  }
+
+  /**
+   * Card backgrounds with opacity — translucent cards over an image or a
+   * backdrop-filtered surface.
+   */
+  .qt-bg-card\/50 {
+    background-color: color-mix(in srgb, var(--color-card) 50%, transparent);
+  }
+
+  .qt-bg-card\/60 {
+    background-color: color-mix(in srgb, var(--color-card) 60%, transparent);
+  }
+
+  .qt-bg-card\/80 {
+    background-color: color-mix(in srgb, var(--color-card) 80%, transparent);
+  }
+
+  .qt-bg-card\/90 {
+    background-color: color-mix(in srgb, var(--color-card) 90%, transparent);
+  }
+
+  /**
+   * Secondary background with opacity
+   */
+  .qt-bg-secondary\/50 {
+    background-color: color-mix(in srgb, var(--color-secondary) 50%, transparent);
+  }
+
+  /**
+   * Primary backgrounds — the remaining opacity steps
+   */
+  .qt-bg-primary\/15 {
+    background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  }
+
+  .qt-bg-primary\/30 {
+    background-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+
+  /**
+   * Destructive backgrounds — the remaining opacity steps
+   */
+  .qt-bg-destructive\/15 {
+    background-color: color-mix(in srgb, var(--color-destructive) 15%, transparent);
+  }
+
+  .qt-bg-destructive\/80 {
+    background-color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
+  }
+
+  /**
+   * Success background — remaining opacity step
+   */
+  .qt-bg-success\/15 {
+    background-color: color-mix(in srgb, var(--color-success) 15%, transparent);
+  }
+
+  /**
+   * Warning background — remaining opacity step
+   */
+  .qt-bg-warning\/15 {
+    background-color: color-mix(in srgb, var(--color-warning) 15%, transparent);
+  }
+
+  /**
+   * Info background — remaining opacity step
+   */
+  .qt-bg-info\/15 {
+    background-color: color-mix(in srgb, var(--color-info) 15%, transparent);
+  }
+
+  /**
+   * Muted-foreground background — remaining opacity step
+   */
+  .qt-bg-muted-foreground\/20 {
+    background-color: color-mix(in srgb, var(--color-muted-foreground) 20%, transparent);
+  }
+
   /* ==========================================================================
      BORDER UTILITIES
      ========================================================================== */
@@ -279,6 +404,21 @@
     border-color: var(--color-destructive);
   }
 
+  /**
+   * Accent color border — for drop zones that light up on hover
+   */
+  .qt-border-accent {
+    border-color: var(--color-accent);
+  }
+
+  /**
+   * Border in the primary foreground — for the spinner rings that sit
+   * inside a filled primary button and must read against its fill.
+   */
+  .qt-border-primary-foreground {
+    border-color: var(--color-primary-foreground);
+  }
+
   /* ==========================================================================
      BORDER OPACITY VARIANTS
      ========================================================================== */
@@ -320,6 +460,73 @@
 
   .qt-border-success\/40 {
     border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
+  }
+
+  /**
+   * Default border with opacity — softened dividers and card outlines
+   */
+  .qt-border-default\/50 {
+    border-color: color-mix(in srgb, var(--color-border) 50%, transparent);
+  }
+
+  .qt-border-default\/60 {
+    border-color: color-mix(in srgb, var(--color-border) 60%, transparent);
+  }
+
+  .qt-border-default\/70 {
+    border-color: color-mix(in srgb, var(--color-border) 70%, transparent);
+  }
+
+  /**
+   * Primary border with opacity — selection rings and hover outlines
+   */
+  .qt-border-primary\/20 {
+    border-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  }
+
+  .qt-border-primary\/30 {
+    border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+
+  .qt-border-primary\/40 {
+    border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
+  }
+
+  .qt-border-primary\/50 {
+    border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  }
+
+  .qt-border-primary\/60 {
+    border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+  }
+
+  /**
+   * Destructive border — the remaining opacity steps
+   */
+  .qt-border-destructive\/20 {
+    border-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+  }
+
+  .qt-border-destructive\/40 {
+    border-color: color-mix(in srgb, var(--color-destructive) 40%, transparent);
+  }
+
+  .qt-border-destructive\/50 {
+    border-color: color-mix(in srgb, var(--color-destructive) 50%, transparent);
+  }
+
+  /**
+   * Warning border — remaining opacity step
+   */
+  .qt-border-warning\/50 {
+    border-color: color-mix(in srgb, var(--color-warning) 50%, transparent);
+  }
+
+  /**
+   * Success border — remaining opacity step
+   */
+  .qt-border-success\/50 {
+    border-color: color-mix(in srgb, var(--color-success) 50%, transparent);
   }
 
   /* ==========================================================================
@@ -381,11 +588,73 @@
   }
 
   /**
-   * Foreground intended for use on an accent-coloured surface
-   * (e.g. text inside a qt-bg-accent pill).
+   * Secondary text with opacity — for the third rung of a three-level
+   * hierarchy, where qt-text-secondary is already the second.
+   */
+  .qt-text-secondary\/50 {
+    color: color-mix(in srgb, var(--color-muted-foreground) 50%, transparent);
+  }
+
+  .qt-text-secondary\/60 {
+    color: color-mix(in srgb, var(--color-muted-foreground) 60%, transparent);
+  }
+
+  .qt-text-secondary\/70 {
+    color: color-mix(in srgb, var(--color-muted-foreground) 70%, transparent);
+  }
+
+  .qt-text-secondary\/80 {
+    color: color-mix(in srgb, var(--color-muted-foreground) 80%, transparent);
+  }
+
+  /**
+   * Status text at 80% — the resting halves of the hover pairs below
+   */
+  .qt-text-destructive\/80 {
+    color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
+  }
+
+  .qt-text-success\/80 {
+    color: color-mix(in srgb, var(--color-success) 80%, transparent);
+  }
+
+  .qt-text-warning\/80 {
+    color: color-mix(in srgb, var(--color-warning) 80%, transparent);
+  }
+
+  .qt-text-info\/80 {
+    color: color-mix(in srgb, var(--color-info) 80%, transparent);
+  }
+
+  /**
+   * Foregrounds intended for use ON a filled surface — the paired counterparts
+   * of the accent/primary/success/destructive fills. Each maps to the token a
+   * theme defines for text sitting on that fill, so a badge or a solid button
+   * keeps its contrast on every theme instead of inheriting whatever colour the
+   * surrounding page happens to be using.
+   *
+   *   <span class="qt-bg-accent qt-text-on-accent">…</span>
+   *   <button class="bg-destructive qt-text-on-destructive">…</button>
+   *
+   * Mind the naming: these are `-on-<fill>`, never `-<fill>-foreground`. The
+   * `qt-text-destructive-foreground` spelling reads like a real class — it is
+   * the Tailwind utility with a `qt-` bolted on — and fifteen call sites wore
+   * one silently, doing nothing at all, until 4.9-dev.
    */
   .qt-text-on-accent {
     color: var(--color-accent-foreground);
+  }
+
+  .qt-text-on-primary {
+    color: var(--color-primary-foreground);
+  }
+
+  .qt-text-on-success {
+    color: var(--color-success-foreground);
+  }
+
+  .qt-text-on-destructive {
+    color: var(--color-destructive-foreground);
   }
 
   /**
@@ -438,7 +707,19 @@
   }
 
   /* ==========================================================================
-     HOVER VARIANTS
+     STATE VARIANTS — hover / focus / disabled / placeholder / file / group
+     ---------------------------------------------------------------------------
+     Tailwind generates variants only for utilities it knows about, and a class
+     declared inside `@layer utilities` is invisible to it: `hover:qt-bg-muted`
+     is not "qt-bg-muted, on hover", it is a class name nobody defined, and it
+     styles nothing at all. Every state form the app uses therefore has to be
+     written out here by hand, escaped, with its own pseudo-selector.
+
+     So: adding a `qt-*` utility is only half the job. If any markup reaches for
+     `hover:`/`focus:`/`disabled:` on it, that form belongs here too, or it will
+     fail silently — which is how bugs 39, 100 and 102 all happened.
+     `scripts/check-qt-classes.mjs` (run by `npm run lint`) fails the build on a
+     `qt-*` class, variant or not, that resolves to nothing.
      ========================================================================== */
 
   /**
@@ -495,6 +776,217 @@
    */
   .hover\:qt-bg-primary\/10:hover {
     background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  }
+
+  /**
+   * Hover foregrounds for filled surfaces — the hover partners of the
+   * qt-text-on-* family, for controls that sit quiet at rest and take a filled
+   * background on hover (`qt-text-secondary hover:bg-success
+   * hover:qt-text-on-success`). Tailwind generates no variants for classes
+   * declared inside @layer utilities, so every hover form has to be written out
+   * by hand; an unwritten one is simply inert.
+   */
+  .hover\:qt-text-on-accent:hover {
+    color: var(--color-accent-foreground);
+  }
+
+  .hover\:qt-text-on-primary:hover {
+    color: var(--color-primary-foreground);
+  }
+
+  .hover\:qt-text-on-success:hover {
+    color: var(--color-success-foreground);
+  }
+
+  .hover\:qt-text-on-destructive:hover {
+    color: var(--color-destructive-foreground);
+  }
+
+  /**
+   * Hover backgrounds — muted. The most-used state class in the app: list
+   * rows, table rows, dropdown items, icon buttons.
+   */
+  .hover\:qt-bg-muted:hover {
+    background-color: var(--color-muted);
+  }
+
+  .hover\:qt-bg-muted\/30:hover {
+    background-color: color-mix(in srgb, var(--color-muted) 30%, transparent);
+  }
+
+  .hover\:qt-bg-muted\/40:hover {
+    background-color: color-mix(in srgb, var(--color-muted) 40%, transparent);
+  }
+
+  .hover\:qt-bg-muted\/50:hover {
+    background-color: color-mix(in srgb, var(--color-muted) 50%, transparent);
+  }
+
+  .hover\:qt-bg-muted\/80:hover {
+    background-color: color-mix(in srgb, var(--color-muted) 80%, transparent);
+  }
+
+  /**
+   * Hover backgrounds — primary. /90 is the filled-button darken; the faint
+   * steps are option cards and selectable rows.
+   */
+  .hover\:qt-bg-primary:hover {
+    background-color: var(--color-primary);
+  }
+
+  .hover\:qt-bg-primary\/5:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 5%, transparent);
+  }
+
+  .hover\:qt-bg-primary\/15:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  }
+
+  .hover\:qt-bg-primary\/20:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  }
+
+  .hover\:qt-bg-primary\/90:hover {
+    background-color: color-mix(in srgb, var(--color-primary) 90%, transparent);
+  }
+
+  /**
+   * Hover backgrounds — destructive
+   */
+  .hover\:qt-bg-destructive:hover {
+    background-color: var(--color-destructive);
+  }
+
+  .hover\:qt-bg-destructive\/20:hover {
+    background-color: color-mix(in srgb, var(--color-destructive) 20%, transparent);
+  }
+
+  .hover\:qt-bg-destructive\/90:hover {
+    background-color: color-mix(in srgb, var(--color-destructive) 90%, transparent);
+  }
+
+  /**
+   * Hover backgrounds — success
+   */
+  .hover\:qt-bg-success:hover {
+    background-color: var(--color-success);
+  }
+
+  .hover\:qt-bg-success\/20:hover {
+    background-color: color-mix(in srgb, var(--color-success) 20%, transparent);
+  }
+
+  .hover\:qt-bg-success\/90:hover {
+    background-color: color-mix(in srgb, var(--color-success) 90%, transparent);
+  }
+
+  /**
+   * Hover backgrounds — warning and info
+   */
+  .hover\:qt-bg-warning\/20:hover {
+    background-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+  }
+
+  .hover\:qt-bg-info\/20:hover {
+    background-color: color-mix(in srgb, var(--color-info) 20%, transparent);
+  }
+
+  /**
+   * Hover foregrounds — status colours. For the quiet icon buttons in the
+   * message action rail that only declare their intent on hover.
+   */
+  .hover\:qt-text-destructive:hover {
+    color: var(--color-destructive);
+  }
+
+  .hover\:qt-text-destructive\/80:hover {
+    color: color-mix(in srgb, var(--color-destructive) 80%, transparent);
+  }
+
+  .hover\:qt-text-warning\/80:hover {
+    color: color-mix(in srgb, var(--color-warning) 80%, transparent);
+  }
+
+  .hover\:qt-text-info\/80:hover {
+    color: color-mix(in srgb, var(--color-info) 80%, transparent);
+  }
+
+  .hover\:qt-text-primary:hover {
+    color: var(--qt-text-primary-fg, var(--color-foreground));
+  }
+
+  /**
+   * Hover borders — the outline that answers a pointer on cards, drop zones
+   * and thumbnails.
+   */
+  .hover\:qt-border-primary:hover {
+    border-color: var(--color-primary);
+  }
+
+  .hover\:qt-border-primary\/50:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 50%, transparent);
+  }
+
+  .hover\:qt-border-primary\/60:hover {
+    border-color: color-mix(in srgb, var(--color-primary) 60%, transparent);
+  }
+
+  .hover\:qt-border-accent:hover {
+    border-color: var(--color-accent);
+  }
+
+  /**
+   * Focus border — the keyboard half of the pair above
+   */
+  .focus\:qt-border-primary:focus {
+    border-color: var(--color-primary);
+  }
+
+  /**
+   * Disabled state — a filled button that goes quiet rather than translucent
+   */
+  .disabled\:qt-bg-muted:disabled {
+    background-color: var(--color-muted);
+  }
+
+  .disabled\:qt-text-secondary:disabled {
+    color: var(--color-muted-foreground);
+  }
+
+  /**
+   * Placeholder colour for search and filter inputs
+   */
+  .placeholder\:qt-text-secondary::placeholder {
+    color: var(--color-muted-foreground);
+  }
+
+  /**
+   * The file input's own button (::file-selector-button), which inherits
+   * nothing from the input and has to be coloured on its own.
+   */
+  .file\:qt-bg-primary\/20::file-selector-button {
+    background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  }
+
+  .hover\:file\:qt-bg-primary\/30:hover::file-selector-button {
+    background-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+  }
+
+  /**
+   * Hover elevation — lifts a card or tile under the pointer.
+   */
+  .hover\:qt-shadow-md:hover {
+    box-shadow: var(--qt-card-shadow-hover, 0 4px 12px hsl(225 18% 10% / 0.1), 0 2px 4px hsl(225 18% 10% / 0.05));
+  }
+
+  /**
+   * Named group hover — the zoom scrim over an image thumbnail, which is
+   * driven by the hover state of its `group/thumb` ancestor rather than its
+   * own. Written as a plain descendant pair; Tailwind's own :is()/:where()
+   * form buys nothing here and reads worse.
+   */
+  .group\/thumb:hover .group-hover\/thumb\:qt-bg-overlay-light {
+    background-color: var(--qt-overlay-light-bg, rgb(0 0 0 / 0.2));
   }
 
   /* ==========================================================================

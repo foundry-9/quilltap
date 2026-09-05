@@ -19,9 +19,10 @@
 import { BackgroundJob } from '@/lib/schemas/types';
 import { getRepositories } from '@/lib/repositories/factory';
 import { processTurnForMemory } from '@/lib/memory/memory-processor';
+import { CheapLLMTaskLostError } from '@/lib/memory/cheap-llm-tasks';
 import type { TurnTranscript } from '@/lib/services/chat-message/turn-transcript';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
-import { isChatActiveDangerous } from '@/lib/services/dangerous-content/chat-override';
+import { shouldUseUncensoredRoute } from '@/lib/services/dangerous-content/chat-override';
 import { createMemoryExtractionEvent } from '@/lib/services/system-events.service';
 import { estimateMessageCost } from '@/lib/services/cost-estimation.service';
 import { getMemoryExtractionLimits } from '@/lib/instance-settings';
@@ -132,7 +133,7 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
     cheapLLMSettings: chatSettings.cheapLLMSettings,
     availableProfiles,
     dangerSettings,
-    isDangerousChat: isChatActiveDangerous(chat),
+    isDangerousChat: shouldUseUncensoredRoute(chat),
     memoryExtractionLimits,
     sourceMessageTimestamp,
     // Episodic spine: which clock the chat's story runs on.
@@ -141,6 +142,23 @@ export async function handleCarinaMemoryExtraction(job: BackgroundJob): Promise<
     // provenance as any other extraction there.
     inAutonomousRoom: chat.chatType === 'autonomous',
   });
+
+  // A pass lost to a timeout is work that never happened, and nothing
+  // downstream re-queues it. Fail the job rather than let it report a clean
+  // finish over the hole (bug 107): the child's writes are only applied on
+  // success, so the backed-off retry re-runs the whole turn from the state
+  // this attempt started in, and the extraction stays atomic. A refusal or an
+  // unparseable answer would fail identically on every retry and keeps the old
+  // log-and-move-on behaviour.
+  if (result.passesLostToTimeout > 0) {
+    logger.error('[CarinaMemoryExtraction] Extraction passes lost to a cheap-LLM timeout; failing the job for retry', {
+      jobId: job.id,
+      chatId: payload.chatId,
+      passesLostToTimeout: result.passesLostToTimeout,
+      error: result.error,
+    });
+    throw new CheapLLMTaskLostError('carina-memory-extraction', result.error);
+  }
 
   if (!result.success) {
     logger.warn('[CarinaMemoryExtraction] Processing did not succeed', {

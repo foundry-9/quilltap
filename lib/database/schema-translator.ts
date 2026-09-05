@@ -286,6 +286,27 @@ export function extractSchemaMetadata(name: string, schema: z.ZodType): SchemaMe
   };
 }
 
+/**
+ * Detect JSON, array, and boolean columns from a Zod schema — the column
+ * classifications `SQLiteCollection` needs to serialize and deserialize rows.
+ */
+export function classifySchemaColumns(
+  collectionName: string,
+  schema: z.ZodType,
+): { jsonColumns: string[]; arrayColumns: string[]; booleanColumns: string[] } {
+  const metadata = extractSchemaMetadata(collectionName, schema);
+  const jsonColumns = metadata.fields
+    .filter(f => f.type === 'array' || f.type === 'object')
+    .map(f => f.name);
+  const arrayColumns = metadata.fields
+    .filter(f => f.type === 'array')
+    .map(f => f.name);
+  const booleanColumns = metadata.fields
+    .filter(f => f.type === 'boolean')
+    .map(f => f.name);
+  return { jsonColumns, arrayColumns, booleanColumns };
+}
+
 // ============================================================================
 // SQLite DDL Generation
 // ============================================================================

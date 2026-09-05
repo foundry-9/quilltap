@@ -347,6 +347,9 @@ export const SQLITE_TABLES = [
       "useNativeWebSearch" INTEGER DEFAULT 0,
       "allowToolUse" INTEGER DEFAULT 1,
       "pseudoToolMode" TEXT DEFAULT 'auto',
+      "multiCharacterPrefill" INTEGER DEFAULT 1,
+      "fallbackProfileId" TEXT,
+      "allowTierFallback" INTEGER DEFAULT 0,
       "supportsImageUpload" INTEGER DEFAULT 0,
       "tags" TEXT DEFAULT '[]',
       "totalTokens" INTEGER DEFAULT 0,
@@ -450,6 +453,11 @@ export const SQLITE_TABLES = [
       `CREATE INDEX IF NOT EXISTS "idx_folders_userId" ON "folders" ("userId")`,
       `CREATE INDEX IF NOT EXISTS "idx_folders_parentFolderId" ON "folders" ("parentFolderId")`,
       `CREATE INDEX IF NOT EXISTS "idx_folders_projectId" ON "folders" ("projectId")`,
+      // One row per (user, project, path). `projectId` is nullable — general
+      // files carry NULL — and SQLite treats every NULL as distinct in a unique
+      // index, so it is coalesced to '' to make "no project" a single value.
+      // Enforced for existing instances by collapse-duplicate-folders-v1.
+      `CREATE UNIQUE INDEX IF NOT EXISTS "idx_folders_userId_projectId_path" ON "folders" ("userId", COALESCE("projectId", ''), "path")`,
     ],
   },
   {

@@ -1,0 +1,75 @@
+{
+  "$schema": "../../../public/schemas/plugin-manifest.schema.json",
+  "name": "qtap-plugin-nanogpt",
+  "title": "NanoGPT",
+  "description": "NanoGPT pay-as-you-go gateway to hundreds of chat, image, and embedding models",
+  "version": "1.2.5",
+  "author": {
+    "name": "Foundry-9 LLC",
+    "email": "charles.sebold@foundry-9.com",
+    "url": "https://foundry-9.com"
+  },
+  "license": "MIT",
+  "compatibility": {
+    "quilltapVersion": ">=1.7.0",
+    "nodeVersion": ">=18.0.0"
+  },
+  "capabilities": [
+    "LLM_PROVIDER",
+    "IMAGE_PROVIDER",
+    "EMBEDDING_PROVIDER"
+  ],
+  "category": "PROVIDER",
+  "main": "index.js",
+  "typescript": true,
+  "frontend": "REACT",
+  "styling": "TAILWIND",
+  "enabledByDefault": true,
+  "status": "STABLE",
+  "keywords": [
+    "quilltap",
+    "plugin",
+    "nanogpt",
+    "llm",
+    "chat",
+    "images",
+    "embeddings"
+  ],
+  "providerConfig": {
+    "providerName": "NANOGPT",
+    "displayName": "NanoGPT",
+    "description": "NanoGPT's OpenAI-compatible gateway: one API key for hundreds of chat, image, and embedding models",
+    "abbreviation": "NGPT",
+    "colors": {
+      "bg": "bg-violet-100",
+      "text": "text-violet-800",
+      "icon": "text-violet-600"
+    },
+    "requiresApiKey": true,
+    "requiresBaseUrl": false,
+    "apiKeyLabel": "NanoGPT API Key",
+    "capabilities": {
+      "chat": true,
+      "imageGeneration": true,
+      "embeddings": true,
+      "webSearch": false
+    },
+    "attachmentSupport": {
+      "supported": true,
+      "mimeTypes": [
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp"
+      ],
+      "description": "Images (JPEG, PNG, GIF, WebP) — requires a vision-capable routed model"
+    }
+  },
+  "permissions": {
+    "network": [
+      "nano-gpt.com"
+    ],
+    "userData": false,
+    "database": false
+  }
+}

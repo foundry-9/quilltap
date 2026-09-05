@@ -5,6 +5,7 @@
  */
 
 import type { ConnectionProfile } from '@/lib/schemas/types'
+import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 
 // ============================================================================
 // WIZARD STATE
@@ -23,7 +24,9 @@ export type GeneratableField =
   | 'personality'
   | 'scenarios'
   | 'exampleDialogues'
+  | 'firstMessage'
   | 'systemPrompt'
+  | 'properties'
   | 'physicalDescription'
   | 'wardrobeItems'
 
@@ -47,8 +50,21 @@ export interface GeneratedPhysicalDescription {
 export interface GeneratedWardrobeItem {
   title: string
   description: string
+  /** Terse literal visual cue for image generation; never Markdown. */
+  imagePrompt?: string
   types: string[]
   appropriateness?: string
+  /** Part of the character's default outfit. */
+  isDefault?: boolean
+  /** Composite outfit: titles of other items in the same batch it bundles. */
+  components?: string[]
+  /** Composite-only: clear the designated slots on equip instead of layering. */
+  replace?: boolean
+}
+
+export interface GeneratedProperties {
+  pronouns: { subject: string; object: string; possessive: string } | null
+  aliases: string[]
 }
 
 export interface GeneratedCharacterData {
@@ -60,7 +76,9 @@ export interface GeneratedCharacterData {
   personality?: string
   scenarios?: Array<{ title: string; content: string }> | string  // string when LLM returns unparseable JSON
   exampleDialogues?: string
+  firstMessage?: string
   systemPrompt?: string
+  properties?: GeneratedProperties
   physicalDescription?: GeneratedPhysicalDescription
   wardrobeItems?: GeneratedWardrobeItem[]
 }
@@ -124,6 +142,26 @@ export interface AIWizardState {
 // API TYPES
 // ============================================================================
 
+/**
+ * The character's current field values as the wizard sees them — sent to the
+ * API as `existingData` and threaded through the modal and hook props as
+ * `currentData`. A type alias rather than an interface so it stays assignable
+ * to the `Record<string, unknown>` surfaces that receive it.
+ */
+export type WizardCharacterData = {
+  title?: string
+  identity?: string
+  description?: string
+  manifesto?: string
+  personality?: string
+  scenarios?: Array<{ id: string; title: string; content: string }>
+  exampleDialogues?: string
+  systemPrompt?: string
+  firstMessage?: string
+  pronouns?: { subject: string; object: string; possessive: string } | null
+  aliases?: string[]
+}
+
 export interface AIWizardRequest {
   primaryProfileId: string
   visionProfileId?: string
@@ -133,16 +171,7 @@ export interface AIWizardRequest {
   documentId?: string
 
   characterName: string
-  existingData?: {
-    title?: string
-    identity?: string
-    description?: string
-    manifesto?: string
-    personality?: string
-    scenarios?: Array<{ id: string; title: string; content: string }>
-    exampleDialogues?: string
-    systemPrompt?: string
-  }
+  existingData?: WizardCharacterData
 
   background: string
 
@@ -166,16 +195,7 @@ export interface AIWizardModalProps {
   onClose: () => void
   characterId?: string
   characterName: string
-  currentData: {
-    title?: string
-    identity?: string
-    description?: string
-    manifesto?: string
-    personality?: string
-    scenarios?: Array<{ id: string; title: string; content: string }>
-    exampleDialogues?: string
-    systemPrompt?: string
-  }
+  currentData: WizardCharacterData
   onApply: (data: GeneratedCharacterData) => void
 }
 
@@ -212,7 +232,7 @@ export interface FieldSelectionStepProps {
   availableFields: GeneratableField[]
   selectedFields: Set<GeneratableField>
   onFieldToggle: (field: GeneratableField) => void
-  currentData: Record<string, string | Array<unknown> | undefined>
+  currentData: Record<string, unknown>
   canGeneratePhysicalDescription: boolean
 }
 
@@ -238,21 +258,29 @@ export const FIELD_LABELS: Record<GeneratableField, string> = {
   personality: 'Personality',
   scenarios: 'Scenarios',
   exampleDialogues: 'Example Dialogues',
+  firstMessage: 'First Message',
   systemPrompt: 'System Prompt',
+  properties: 'Properties (Pronouns & Aliases)',
   physicalDescription: 'Physical Description',
-  wardrobeItems: 'Wardrobe Items',
+  wardrobeItems: 'Wardrobe',
 }
 
+// Checkbox descriptions single-source their field-vantage wording from
+// PROMPT_FIELD_HINTS (helpers only — the checkbox list is tight on space; the
+// worked examples surface in GenerationStep's review pane). Wizard-specific
+// operational notes are appended after the shared helper.
 export const FIELD_DESCRIPTIONS: Record<GeneratableField, string> = {
   name: 'The character\'s name',
   title: 'A short epithet or title (e.g., "The Wanderer")',
-  identity: 'Outside-view facts a stranger could know on sight: station, occupation, public reputation',
-  description: 'How acquaintances perceive the character: behaviour, mannerisms, verbal patterns (not appearance)',
-  manifesto: 'The foundational tenets—the basic truths that anchor the character',
-  personality: 'The character\'s own self-knowledge: inner drivers, motivations, beliefs',
-  scenarios: 'Generate 2-3 named scenarios with distinct settings and contexts for interactions',
-  exampleDialogues: 'Example conversations to guide AI responses',
-  systemPrompt: 'Custom system instructions for AI roleplay',
-  physicalDescription: 'Detailed physical description for image generation',
-  wardrobeItems: 'Clothing and accessories for the character\'s wardrobe (top, bottom, footwear, accessories)',
+  identity: PROMPT_FIELD_HINTS.identity.helper,
+  description: PROMPT_FIELD_HINTS.description.helper,
+  manifesto: PROMPT_FIELD_HINTS.manifesto.helper,
+  personality: PROMPT_FIELD_HINTS.personality.helper,
+  scenarios: `${PROMPT_FIELD_HINTS.scenario.helper} Generates 2-3 named scenarios with distinct settings.`,
+  exampleDialogues: PROMPT_FIELD_HINTS.exampleDialogues.helper,
+  firstMessage: PROMPT_FIELD_HINTS.firstMessage.helper,
+  systemPrompt: PROMPT_FIELD_HINTS.systemPrompt.helper,
+  properties: 'Structured facts: pronouns and aliases (nicknames others use)',
+  physicalDescription: `${PROMPT_FIELD_HINTS.physicalDescription.helper} The person only — clothing lives in the wardrobe.`,
+  wardrobeItems: 'Clothing, accessories, hairstyles, and composite outfits (top, bottom, footwear, accessories, hair)',
 }

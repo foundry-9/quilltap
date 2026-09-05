@@ -4,7 +4,7 @@
 
 import {
   DEFAULT_DANGEROUS_CONTENT_SETTINGS,
-  OFF_DUTY_DANGEROUS_CONTENT_SETTINGS,
+  VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS,
   resolveDangerousContentSettings,
 } from '@/lib/services/dangerous-content/resolver.service'
 import type { ChatSettings } from '@/lib/schemas/types'
@@ -131,7 +131,7 @@ describe('resolveDangerousContentSettings', () => {
     })
   })
 
-  describe('per-chat off-duty override', () => {
+  describe('per-chat vouched-safe override', () => {
     const customSettings: DangerousContentSettings = {
       mode: 'AUTO_ROUTE',
       threshold: 0.7,
@@ -151,10 +151,10 @@ describe('resolveDangerousContentSettings', () => {
       dangerousContentSettings: customSettings,
     }
 
-    it('returns OFF_DUTY settings and source="chat-off-duty" when chat is Off-duty', () => {
+    it('returns VOUCHED_SAFE settings and source="chat-vouched" when the operator vouched', () => {
       const result = resolveDangerousContentSettings(globalSettings, { conciergeOverride: 'OFF' })
-      expect(result.settings).toEqual(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS)
-      expect(result.source).toBe('chat-off-duty')
+      expect(result.settings).toEqual(VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS)
+      expect(result.source).toBe('chat-vouched')
     })
 
     it('respects global settings when chat override is null', () => {
@@ -169,17 +169,77 @@ describe('resolveDangerousContentSettings', () => {
       expect(result.source).toBe('global')
     })
 
-    it('still returns Off-duty even if no global settings were configured', () => {
+    it('still returns Vouched Safe even if no global settings were configured', () => {
       const result = resolveDangerousContentSettings(null, { conciergeOverride: 'OFF' })
-      expect(result.settings).toEqual(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS)
-      expect(result.source).toBe('chat-off-duty')
+      expect(result.settings).toEqual(VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS)
+      expect(result.source).toBe('chat-vouched')
     })
 
-    it('OFF_DUTY settings have mode OFF and all scans disabled', () => {
-      expect(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS.mode).toBe('OFF')
-      expect(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS.scanTextChat).toBe(false)
-      expect(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS.scanImagePrompts).toBe(false)
-      expect(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS.scanImageGeneration).toBe(false)
+    it('VOUCHED_SAFE settings have mode OFF and all scans disabled', () => {
+      expect(VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS.mode).toBe('OFF')
+      expect(VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS.scanTextChat).toBe(false)
+      expect(VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS.scanImagePrompts).toBe(false)
+      expect(VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS.scanImageGeneration).toBe(false)
+    })
+  })
+
+  describe('per-chat uncensored override', () => {
+    const customSettings: DangerousContentSettings = {
+      mode: 'OFF',
+      threshold: 0.7,
+      scanTextChat: true,
+      scanImagePrompts: true,
+      scanImageGeneration: true,
+      displayMode: 'SHOW',
+      showWarningBadges: true,
+      uncensoredTextProfileId: '11111111-1111-4111-8111-111111111111',
+      uncensoredImageProfileId: '22222222-2222-4222-8222-222222222222',
+    }
+    const globalSettings: ChatSettings = {
+      id: 'test',
+      tokenDisplay: 'minimal',
+      contextCompression: false,
+      memoryCascade: false,
+      showTimestamps: false,
+      agentMode: false,
+      dangerousContentSettings: customSettings,
+    }
+
+    it('carries the uncensored profile IDs through from global', () => {
+      const result = resolveDangerousContentSettings(globalSettings, { conciergeOverride: 'UNCENSORED' })
+      expect(result.source).toBe('chat-uncensored')
+      expect(result.settings.uncensoredTextProfileId).toBe('11111111-1111-4111-8111-111111111111')
+      expect(result.settings.uncensoredImageProfileId).toBe('22222222-2222-4222-8222-222222222222')
+    })
+
+    it('forces AUTO_ROUTE even under a global OFF', () => {
+      const result = resolveDangerousContentSettings(globalSettings, { conciergeOverride: 'UNCENSORED' })
+      expect(result.settings.mode).toBe('AUTO_ROUTE')
+    })
+
+    it('leaves all scans false with nothing left to classify', () => {
+      const result = resolveDangerousContentSettings(globalSettings, { conciergeOverride: 'UNCENSORED' })
+      expect(result.settings.threshold).toBe(1.0)
+      expect(result.settings.scanTextChat).toBe(false)
+      expect(result.settings.scanImagePrompts).toBe(false)
+      expect(result.settings.scanImageGeneration).toBe(false)
+      expect(result.settings.showWarningBadges).toBe(false)
+    })
+
+    it('spreads the defaults when no global settings were configured', () => {
+      const result = resolveDangerousContentSettings(null, { conciergeOverride: 'UNCENSORED' })
+      expect(result.source).toBe('chat-uncensored')
+      expect(result.settings.mode).toBe('AUTO_ROUTE')
+      expect(result.settings.scanTextChat).toBe(false)
+    })
+
+    it('moderation-exempt chat types win over the uncensored override', () => {
+      const result = resolveDangerousContentSettings(globalSettings, {
+        chatType: 'brahma',
+        conciergeOverride: 'UNCENSORED',
+      })
+      expect(result.source).toBe('chat-type-exempt')
+      expect(result.settings).toEqual(VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS)
     })
   })
 
@@ -205,13 +265,13 @@ describe('resolveDangerousContentSettings', () => {
 
     it('forces OFF for help chats regardless of global AUTO_ROUTE', () => {
       const result = resolveDangerousContentSettings(globalSettings, { chatType: 'help' })
-      expect(result.settings).toEqual(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS)
+      expect(result.settings).toEqual(VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS)
       expect(result.source).toBe('chat-type-exempt')
     })
 
     it('forces OFF for brahma chats regardless of global AUTO_ROUTE', () => {
       const result = resolveDangerousContentSettings(globalSettings, { chatType: 'brahma' })
-      expect(result.settings).toEqual(OFF_DUTY_DANGEROUS_CONTENT_SETTINGS)
+      expect(result.settings).toEqual(VOUCHED_SAFE_DANGEROUS_CONTENT_SETTINGS)
       expect(result.source).toBe('chat-type-exempt')
     })
 

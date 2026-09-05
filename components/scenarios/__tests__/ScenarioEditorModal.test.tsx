@@ -46,6 +46,7 @@ function makeScenario(overrides: Partial<Scenario> = {}): Scenario {
     description: 'first',
     isDefault: false,
     rawIsDefault: false,
+    archived: false,
     body: 'ALPHA BODY',
     lastModified: '2026-01-01T00:00:00.000Z',
     createdAt: '2026-01-01T00:00:00.000Z',

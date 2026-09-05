@@ -14,10 +14,7 @@ import type {
   CharacterScenario,
 } from '@/lib/schemas/types';
 import type { WardrobeItem } from '@/lib/schemas/wardrobe.types';
-import {
-  readDatabaseDocument,
-  DatabaseStoreError,
-} from '@/lib/mount-index/database-store';
+import { readDatabaseDocumentIfExists } from '@/lib/mount-index/database-store';
 import { slugifyWardrobeTitle } from '@/lib/mount-index/character-vault';
 
 import {
@@ -32,6 +29,7 @@ import {
   CHARACTER_PHYSICAL_PROMPTS_JSON_PATH,
   CHARACTER_WARDROBE_JSON_PATH,
   CHARACTER_WARDROBE_FOLDER,
+  isWardrobeInstructionsFileName,
   CHARACTER_PROMPTS_FOLDER,
   CHARACTER_SCENARIOS_FOLDER,
   CharacterVaultPropertiesSchema,
@@ -58,12 +56,8 @@ export async function readVaultTextFile(
   characterId?: string,
 ): Promise<string | null> {
   try {
-    const doc = await readDatabaseDocument(mountPointId, path);
-    return doc.content;
+    return await readDatabaseDocumentIfExists(mountPointId, path);
   } catch (error) {
-    if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
-      return null;
-    }
     logger.warn('Failed to read vault file', {
       mountPointId,
       path,
@@ -113,14 +107,10 @@ export async function readCharacterVaultPropertiesForWrite(
 ): Promise<CharacterVaultProperties | null> {
   const charId = characterId ?? mountPointId;
 
-  let content: string;
+  let content: string | null;
   try {
-    ({ content } = await readDatabaseDocument(mountPointId, CHARACTER_PROPERTIES_JSON_PATH));
+    content = await readDatabaseDocumentIfExists(mountPointId, CHARACTER_PROPERTIES_JSON_PATH);
   } catch (error) {
-    if (error instanceof DatabaseStoreError && error.code === 'NOT_FOUND') {
-      // Genuinely absent — the caller may seed fresh defaults.
-      return null;
-    }
     const detail = error instanceof Error ? error.message : String(error);
     logger.error('Vault properties.json unreadable — refusing to seed defaults over it', {
       mountPointId,
@@ -132,6 +122,10 @@ export async function readCharacterVaultPropertiesForWrite(
       mountPointId,
       `${CHARACTER_PROPERTIES_JSON_PATH} unparseable: ${detail}`,
     );
+  }
+  if (content === null) {
+    // Genuinely absent — the caller may seed fresh defaults.
+    return null;
   }
 
   let json: unknown;
@@ -342,11 +336,15 @@ export async function readCharacterVaultWardrobe(
   // must NOT seed archetypes — that would recurse back through findArchetypes.
   const seedArchetypes = options?.seedArchetypes ?? true;
 
-  const itemDocs = await repos.docMountDocuments.findManyByMountPointsInFolder(
+  const allDocs = await repos.docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
     CHARACTER_WARDROBE_FOLDER,
     '.md',
   );
+  // `Wardrobe/instructions.md` is dressing guidance, never a garment. Filter
+  // before the length check so a folder holding only the instructions file
+  // still falls through to the legacy wardrobe.json branch below.
+  const itemDocs = allDocs.filter((doc) => !isWardrobeInstructionsFileName(doc.fileName));
 
   if (itemDocs.length > 0) {
     const items = itemDocs

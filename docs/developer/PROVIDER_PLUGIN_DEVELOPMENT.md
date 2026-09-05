@@ -298,7 +298,8 @@ Create `manifest.json` - this tells Quilltap about your provider:
 |-------|-------------|
 | `capabilities` | Must include `"LLM_PROVIDER"` |
 | `providerConfig.providerName` | Unique identifier (uppercase, used in API key storage) |
-| `providerConfig.requiresApiKey` | Whether users need to provide an API key |
+| `providerConfig.requiresApiKey` | Whether users **must** provide an API key |
+| `providerConfig.acceptsApiKey` | Optional. Whether users **may** provide one — it gates the Add-New-API-Key dropdown and the profile form's key field. Omitted, it follows `requiresApiKey`; set it only for an endpoint that spans authenticated and unauthenticated services, as `OPENAI_COMPATIBLE` does |
 | `providerConfig.requiresBaseUrl` | For self-hosted/custom endpoints (e.g., Ollama) |
 | `providerConfig.capabilities` | Which features your provider supports |
 | `providerConfig.attachmentSupport` | File attachment capabilities |
@@ -392,6 +393,11 @@ export const plugin: LLMProviderPlugin = {
       maxOutputTokens: 4096,
       supportsImages: true,
       supportsTools: true,
+      // Two separate facts. `supportsThinking` is a capability;
+      // `thinksByDefault` says the model reasons even when the profile never
+      // asked it to, which is what tells the host to skip the `[Name]` prefill.
+      supportsThinking: true,
+      thinksByDefault: false,
       pricing: { input: 5.0, output: 15.0 }, // per 1M tokens
     },
     {
@@ -582,6 +588,64 @@ export class MyAIProvider implements LLMProvider {
   }
 }
 ```
+
+### The attachment contract (read this before declaring `supportsAttachments`)
+
+`attachmentSupport` in your manifest is a **promise the host relies on**, and
+breaking it fails silently in the worst possible way. Bug 91 was exactly this:
+a plugin declared one thing, did another, and models spent months writing
+confident descriptions of images they had never received.
+
+The host asks two separate questions before an image reaches you:
+
+1. **Can the model read pictures?** — the connection profile's
+   `supportsImageUpload` flag, set by the operator.
+2. **Can your plugin put one on the wire?** — your manifest's
+   `attachmentSupport`, read through `providerCanTransportImages`
+   (`lib/llm/image-transport.ts`).
+
+If **either** answer is no, the host substitutes a written description and your
+plugin never sees the bytes. So:
+
+- **If you serialise image attachments**, declare `supportsAttachments: true`
+  with the image MIME types you accept — and actually emit them in every code
+  path that builds a request, streaming and non-streaming alike.
+- **If you do not**, declare `supportsAttachments: false`. This is a perfectly
+  respectable answer: the host will describe images in text for you and your
+  users keep working. What you must not do is declare `true` and then drop
+  them.
+- **Report honestly in `attachmentResults`.** `sent` is what went on the wire;
+  `failed` carries an error string per attachment, which the Salon shows the
+  user as a warning toast. Do not report success for bytes you discarded.
+- **`false` is only respectable while it is true.** The opposite failure is
+  just as silent and harder to notice, because nothing errors and the user
+  merely gets a worse answer: bug 97 was OpenRouter declaring `false` for two
+  releases after its provider learned to serialise `image_url` parts, so every
+  OpenRouter vision profile was routed to the describe-fallback and the
+  describer guard refused OpenRouter in the same sentence that recommended it.
+  When you teach a provider to send images, the declaration is part of that
+  change, not a follow-up.
+- **The declaration the host reads is the one in your plugin module**
+  (`index.ts`'s exported `attachmentSupport`), not the `providerConfig`
+  block in `manifest.json`. `provider-registry` hands the module's object
+  straight to `providerCanTransportImages`; OpenRouter's manifest was correct
+  throughout bug 97 and it changed nothing. If both exist, keep both honest,
+  but fix the module first.
+- **Keep the MIME list in one place.** Export it from the file that does the
+  serialising and import it into the declaration —
+  `plugins/dist/qtap-plugin-openrouter` does this — so "what we send" and "what
+  we claim to send" cannot drift. A comment tying the two together (NanoGPT's
+  `NANOGPT_SUPPORTED_IMAGE_MIME_TYPES`) is the weaker second-best.
+  `__tests__/unit/lib/llm/image-transport.test.ts` holds every bundled
+  plugin's built declaration against the client-safe mirror in
+  `lib/llm/attachment-support.ts`; add your provider to that mirror and the
+  test covers you too.
+
+**Do not keep your own list of which models have vision** if your provider is a
+router fronting many upstreams. It goes stale, and the host has already made
+that decision — an attachment reaching you means the operator asserted the
+model reads images. `plugins/dist/qtap-plugin-nanogpt/provider.ts` is the
+worked example.
 
 ### Provider Icon (src/icon.tsx)
 
@@ -1176,7 +1240,39 @@ interface LLMProviderPlugin {
   toolFormat?: 'openai' | 'anthropic' | 'google';
   cheapModels?: CheapModelConfig;
   defaultContextWindow?: number;
+  thinkingTurnRule?: ThinkingTurnRule;
 }
 ```
 
 See `@quilltap/plugin-types` for complete type definitions.
+
+### Declaring how thinking is switched on
+
+If your provider has a profile option that turns reasoning on or off, declare
+`thinkingTurnRule` so the host can tell whether a given profile will run a
+thinking turn:
+
+```typescript
+thinkingTurnRule: {
+  optionKey: 'thinking',            // a field key from getProviderOptionsSchema()
+  enabledValues: ['enabled'],
+  disabledValues: ['disabled'],
+},
+```
+
+It matters because a thinking turn changes what a request may look like. Quilltap
+anchors a multi-character reply either by appending an assistant message
+containing `[Character Name]` or by appending a prose instruction to the system
+prompt, and the prefill route goes badly wrong on a reasoning model: DeepSeek
+rejects the request outright (it wants the `reasoning_content` that produced the
+assistant turn, which a synthetic prefill has none of), and Ollama's chat
+template never opens the reasoning block behind a prefilled turn, so the
+reasoning is lost entirely. A profile Quilltap knows to be thinking gets the
+prose anchor by default; the user may still tick the box back on.
+
+The rule is declarative rather than a predicate function because the
+connection-profile editor runs in the browser and needs the same answer, so the
+rule has to cross the wire. It answers only the explicit half — "has this
+profile switched thinking on or off?". When the profile says nothing, the host
+falls back to the selected model's `thinksByDefault` flag (see below). Omit the
+rule entirely and only the model flag speaks.

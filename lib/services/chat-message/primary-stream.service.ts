@@ -40,6 +40,9 @@ import {
 } from './streaming.service'
 import { saveAssistantMessage } from './message-finalizer.service'
 import { attemptRequestLimitRecovery } from './recovery.service'
+import { attemptHardErrorFailover } from './provider-failover.service'
+import { collectAttachmentMimeTypes } from '@/lib/chat/message-attachment-adapter'
+import { summarizeFallbackAttempts } from '@/lib/llm/fallback'
 import { isRecoverableRequestError, isToolUnsupportedError } from '@/lib/llm/errors'
 import { stripCharacterNamePrefix, normalizeContentBlockFormat } from '@/lib/llm/message-formatter'
 
@@ -142,6 +145,13 @@ export interface RunPrimaryStreamOptions {
   originalMessage?: string
   /** Connection profile used for recovery (matches `streaming.effectiveProfile`). */
   connectionProfile: ConnectionProfile
+  /**
+   * Whether this turn is running in dangerous-routed territory. Threaded into
+   * the fallback chain so an auto-picked stand-in stays `isDangerousCompatible`
+   * — a reroute that quietly drafts a mainstream model hands the content back
+   * to the moderation that refused it.
+   */
+  isDangerousRouted?: boolean
   /** Mutated in place. */
   streaming: StreamingState
   controller: ReadableStreamDefaultController<Uint8Array>
@@ -166,7 +176,7 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
     chatId, userId, chat, character, characterParticipant, userParticipantId, isMultiCharacter,
     formattedMessages, modelParams, actualTools, useNativeWebSearch,
     previousResponseId, stop, preGeneratedAssistantMessageId,
-    attachedFiles, originalMessage, connectionProfile,
+    attachedFiles, originalMessage, connectionProfile, isDangerousRouted,
     streaming, controller, encoder, preservePartialOnError,
     repos,
   } = opts
@@ -347,7 +357,53 @@ export async function runPrimaryStream(opts: RunPrimaryStreamOptions): Promise<P
       logger.warn('Request limit recovery failed, propagating error', { chatId })
     }
 
+    // Fallback chain. The profile named an understudy, or is willing to have
+    // one drafted; give them the turn before the error reaches the user. Not
+    // reached for a token-limit overrun or a tool-unsupported rejection —
+    // `classifyFallbackTrigger` refuses those, so the two branches above keep
+    // their exclusive claim on them.
+    const failover = await attemptHardErrorFailover({
+      state: streaming,
+      error: streamingError,
+      repos,
+      context: {
+        userId,
+        purpose: 'chat',
+        dangerous: isDangerousRouted === true,
+        // What the array carries, not what the user uploaded — see the same
+        // note in the orchestrator's empty-response call.
+        needsVision: collectAttachmentMimeTypes(formattedMessages).some((m) => m.startsWith('image/')),
+        needsTools: actualTools.length > 0,
+        alreadyTried: [],
+      },
+      formattedMessages,
+      modelParams,
+      actualTools,
+      useNativeWebSearch,
+      chatId,
+      character,
+      controller,
+      encoder,
+      preGeneratedAssistantMessageId,
+      stop,
+    })
+
+    if (failover.recovered) {
+      return {}
+    }
+
     await preservePartialOnError(streamingError)
+
+    // Name the understudies in the error the user sees. Without this the
+    // chain is invisible: the message would blame the primary for a failure
+    // three providers deep.
+    if (failover.attempts.length > 1) {
+      const summary = summarizeFallbackAttempts(failover.attempts, failover.tierPickWasOffered)
+      const original = streamingError instanceof Error ? streamingError : new Error(String(streamingError))
+      original.message = `${original.message} (${summary})`
+      throw original
+    }
+
     throw streamingError
   }
 

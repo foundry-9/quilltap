@@ -11,6 +11,7 @@
  */
 
 import { useEffect, useState, type CSSProperties } from 'react'
+import { useOnTabActivated } from '@/components/workspace/workspace-tab-context'
 import { useDocumentStoreDetail } from './hooks/useDocumentStoreDetail'
 import { FileTable } from './components'
 import { EditDocumentStoreDialog } from '../components/EditDocumentStoreDialog'
@@ -58,6 +59,14 @@ export function DocumentStoreDetailView({ storeId, onBack, style }: DocumentStor
     fetchStore()
     fetchFiles()
   }, [fetchStore, fetchFiles])
+
+  // Navigating back to the containing workspace tab refreshes the store and
+  // its file list in place (silent — no loading flip, which would swap the
+  // page for its loading state).
+  useOnTabActivated(() => {
+    void fetchStore({ silent: true })
+    void fetchFiles()
+  })
 
   const handleUpdate = async (id: string, data: UpdateDocumentStoreData) => {
     const result = await updateStore(data)

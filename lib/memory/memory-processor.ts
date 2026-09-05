@@ -43,7 +43,7 @@ import type { Pronouns } from '@/lib/schemas/character.types'
 import type { DangerousContentSettings, MemoryExtractionLimits } from '@/lib/schemas/settings.types'
 import type { TurnTranscript, TurnCharacterSlice } from '@/lib/services/chat-message/turn-transcript'
 import { createMemoryWithGate } from './memory-service'
-import { resolveWhenPhrase } from './episodic'
+import { resolveEpisodicAnchors } from './episodic-anchors'
 import type { MemoryGateOutcome } from './memory-gate'
 import { logger } from '@/lib/logger'
 
@@ -192,6 +192,18 @@ export interface TurnMemoryProcessingResult {
   /** Populated only when the context was run with `dryRun: true`. */
   extractedCandidates?: ExtractedCandidate[]
   error?: string
+  /**
+   * How many extraction passes were lost to a cheap-LLM timeout rather than
+   * answered.
+   *
+   * A per-character pass fails soft — the loop logs it and moves to the next
+   * character — so a turn can lose half its extraction and still return
+   * `success: true`. That is right for a refusal, and wrong for a timeout: no
+   * memory was formed, nothing will re-queue the work, and the job that asked
+   * for it reports a clean finish over the hole (bug 107). The handler reads
+   * this and fails the job so the whole turn is re-run.
+   */
+  passesLostToTimeout: number
 }
 
 function toCheapLLMConfig(settings: CheapLLMSettings): CheapLLMConfig {
@@ -220,32 +232,6 @@ interface WriteOptions {
   collected: ExtractedCandidate[]
 }
 
-/**
- * Resolve a candidate's episodic anchors against the source turn's clock.
- *
- * Stamping rules (episodic spine):
- *  - Every memory gets `occurredAt` = the source message timestamp by default
- *    (authoritative from the transcript — never asked of the model).
- *  - A retold EVENT with a `when` phrase resolves that phrase server-side
- *    against the same anchor; a successful resolution overrides the default.
- *  - On fictional timelines the raw phrase is preserved as `narrativeTime`
- *    (whether or not it also resolved to a wall-clock date).
- */
-function resolveCandidateAnchors(
-  candidate: MemoryCandidate,
-  anchorIso: string | null,
-  timelineMode: 'realtime' | 'narrative',
-): { occurredAt: string | null; narrativeTime: string | null } {
-  const fallback = anchorIso ?? null
-  let occurredAt = fallback
-  if (candidate.when && fallback) {
-    const resolved = resolveWhenPhrase(candidate.when, fallback)
-    if (resolved) occurredAt = resolved
-  }
-  const narrativeTime =
-    timelineMode === 'narrative' && candidate.when ? candidate.when : null
-  return { occurredAt, narrativeTime }
-}
 
 async function writeCandidate(opts: WriteOptions): Promise<void> {
   const timelineMode = opts.ctx.timelineMode ?? 'realtime'
@@ -254,11 +240,16 @@ async function writeCandidate(opts: WriteOptions): Promise<void> {
     opts.ctx.sourceMessageTimestamp ??
     opts.ctx.transcript.turnTimestamp ??
     new Date().toISOString()
-  const { occurredAt, narrativeTime } = resolveCandidateAnchors(
-    opts.candidate,
-    anchorIso,
+  // Episodic spine: `occurredAt` defaults to the source message timestamp
+  // (authoritative from the transcript — never asked of the model); a retold
+  // EVENT's `when` phrase resolves against that same anchor and overrides it.
+  // On fictional timelines the raw phrase is preserved as `narrativeTime`.
+  const { occurredAt, narrativeTime } = resolveEpisodicAnchors({
+    when: opts.candidate.when,
+    referenceIso: anchorIso,
+    fallbackIso: anchorIso,
     timelineMode,
-  )
+  })
 
   if (opts.ctx.dryRun) {
     opts.collected.push({
@@ -366,6 +357,8 @@ export async function processTurnForMemory(
   const collectedCandidates: ExtractedCandidate[] = []
   const totalUsage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
   const sourceMessageId = ctx.transcript.latestAssistantMessageId
+  // Passes that never happened, as distinct from passes that found nothing.
+  let passesLostToTimeout = 0
 
   try {
     if (ctx.transcript.characterSlices.length === 0) {
@@ -379,6 +372,7 @@ export async function processTurnForMemory(
         usage: totalUsage,
         sourceMessageId,
         debugLogs,
+        passesLostToTimeout,
         ...(ctx.dryRun ? { extractedCandidates: collectedCandidates } : {}),
       }
     }
@@ -534,6 +528,13 @@ export async function processTurnForMemory(
         totalUsage.totalTokens += selfResult.usage.totalTokens
       }
 
+      if (!selfResult.success && selfResult.timedOut) {
+        passesLostToTimeout++
+        debugLogs.push(
+          `[Memory] SELF extraction for ${slice.characterName} was LOST to a timeout, not refused: ${selfResult.error}`
+        )
+      }
+
       if (selfResult.success) {
         const rawCandidates = selfResult.result || []
         const candidates = rl.mode === 'throttle'
@@ -635,8 +636,10 @@ export async function processTurnForMemory(
       }
 
       if (!otherResult.success) {
+        if (otherResult.timedOut) passesLostToTimeout++
         debugLogs.push(
-          `[Memory] OTHER extraction failed (${observer.characterName} → ${resolvedSubjects.length} subject(s)): ${otherResult.error}`
+          `[Memory] OTHER extraction ${otherResult.timedOut ? 'was LOST to a timeout' : 'failed'} ` +
+          `(${observer.characterName} → ${resolvedSubjects.length} subject(s)): ${otherResult.error}`
         )
         continue
       }
@@ -688,6 +691,7 @@ export async function processTurnForMemory(
       usage: totalUsage,
       sourceMessageId,
       debugLogs,
+      passesLostToTimeout,
       ...(ctx.dryRun ? { extractedCandidates: collectedCandidates } : {}),
     }
   } catch (error) {
@@ -702,6 +706,7 @@ export async function processTurnForMemory(
       usage: totalUsage,
       sourceMessageId,
       debugLogs,
+      passesLostToTimeout,
       ...(ctx.dryRun ? { extractedCandidates: collectedCandidates } : {}),
       error: errorMsg,
     }

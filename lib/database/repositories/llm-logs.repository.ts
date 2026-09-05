@@ -17,7 +17,36 @@ import { AbstractBaseRepository, CreateOptions } from './base.repository';
 import { DatabaseCollection, TypedQueryFilter, QueryOptions } from '../interfaces';
 import { SQLiteCollection } from '../backends/sqlite/backend';
 import { getRawLLMLogsDatabase, isLLMLogsDegraded } from '../backends/sqlite/llm-logs-client';
-import { generateDDL, extractSchemaMetadata } from '../schema-translator';
+import { generateDDL, classifySchemaColumns } from '../schema-translator';
+
+/**
+ * The usage/latency/failure projection shared by every per-group roll-up:
+ * token sums out of the `usage` JSON, the measured-latency average with its
+ * denominator, and the failure count. Column aliases are the row-type field
+ * names ({@link LLMLogTypeStatsRow} / {@link LLMLogProfileStatsRow}).
+ */
+const USAGE_AGGREGATE_COLUMNS = `
+         COALESCE(SUM(json_extract("usage", '$.promptTokens')), 0)     AS promptTokens,
+         COALESCE(SUM(json_extract("usage", '$.completionTokens')), 0) AS completionTokens,
+         COALESCE(SUM(json_extract("usage", '$.totalTokens')), 0)      AS totalTokens,
+         SUM(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN 1 ELSE 0 END) AS measuredRequests,
+         AVG(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN "durationMs" END) AS avgDurationMs,
+         SUM(CASE WHEN json_extract("response", '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS failures`;
+
+/** The attribution keys a per-profile roll-up can group by. */
+type ProfileGroupBy = 'connectionProfileId' | 'imageProfileId' | 'providerModel';
+
+/**
+ * The SQL for a profile attribution key: the expression that names the group,
+ * and the WHERE fragment that drops rows without one. `'providerModel'` is
+ * the approximate pre-4.9 fallback — a synthesised `provider/model` string
+ * that every row has, so it needs no such filter.
+ */
+function profileKey(groupBy: ProfileGroupBy): { keyExpr: string; notNullClause: string } {
+  return groupBy === 'providerModel'
+    ? { keyExpr: `"provider" || '/' || "modelName"`, notNullClause: '' }
+    : { keyExpr: `"${groupBy}"`, notNullClause: `AND "${groupBy}" IS NOT NULL` };
+}
 
 /**
  * LLM Logs Repository
@@ -62,16 +91,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
     }
 
     // Detect JSON, array, and boolean columns from schema
-    const metadata = extractSchemaMetadata(this.collectionName, this.schema);
-    const jsonColumns = metadata.fields
-      .filter(f => f.type === 'array' || f.type === 'object')
-      .map(f => f.name);
-    const arrayColumns = metadata.fields
-      .filter(f => f.type === 'array')
-      .map(f => f.name);
-    const booleanColumns = metadata.fields
-      .filter(f => f.type === 'boolean')
-      .map(f => f.name);
+    const { jsonColumns, arrayColumns, booleanColumns } = classifySchemaColumns(this.collectionName, this.schema);
 
     return new SQLiteCollection<LLMLog>(db, this.collectionName, jsonColumns, arrayColumns, booleanColumns);
   }
@@ -757,12 +777,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
       `SELECT
          "type"                                                        AS type,
          COUNT(*)                                                      AS requests,
-         COALESCE(SUM(json_extract("usage", '$.promptTokens')), 0)     AS promptTokens,
-         COALESCE(SUM(json_extract("usage", '$.completionTokens')), 0) AS completionTokens,
-         COALESCE(SUM(json_extract("usage", '$.totalTokens')), 0)      AS totalTokens,
-         SUM(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN 1 ELSE 0 END) AS measuredRequests,
-         AVG(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN "durationMs" END) AS avgDurationMs,
-         SUM(CASE WHEN json_extract("response", '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS failures
+         ${USAGE_AGGREGATE_COLUMNS}
        FROM "llm_logs"
        WHERE "userId" = ?
        GROUP BY "type"
@@ -783,13 +798,10 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    */
   async getStatsByProfile(
     userId: string,
-    groupBy: 'connectionProfileId' | 'imageProfileId' | 'providerModel',
+    groupBy: ProfileGroupBy,
     options: { type?: LLMLogType } = {},
   ): Promise<LLMLogProfileStatsRow[]> {
-    const keyExpr =
-      groupBy === 'providerModel'
-        ? `"provider" || '/' || "modelName"`
-        : `"${groupBy}"`;
+    const { keyExpr, notNullClause } = profileKey(groupBy);
     const typeClause = options.type ? `AND "type" = ?` : '';
     const params: unknown[] = options.type ? [userId, options.type] : [userId];
 
@@ -799,15 +811,10 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
          "provider"                                                    AS provider,
          "modelName"                                                   AS modelName,
          COUNT(*)                                                      AS requests,
-         COALESCE(SUM(json_extract("usage", '$.promptTokens')), 0)     AS promptTokens,
-         COALESCE(SUM(json_extract("usage", '$.completionTokens')), 0) AS completionTokens,
-         COALESCE(SUM(json_extract("usage", '$.totalTokens')), 0)      AS totalTokens,
-         SUM(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN 1 ELSE 0 END) AS measuredRequests,
-         AVG(CASE WHEN "durationMs" IS NOT NULL AND "durationMs" > 0 THEN "durationMs" END) AS avgDurationMs,
-         SUM(CASE WHEN json_extract("response", '$.error') IS NOT NULL THEN 1 ELSE 0 END) AS failures
+         ${USAGE_AGGREGATE_COLUMNS}
        FROM "llm_logs"
        WHERE "userId" = ? ${typeClause}
-         ${groupBy === 'providerModel' ? '' : `AND "${groupBy}" IS NOT NULL`}
+         ${notNullClause}
        GROUP BY key, "provider", "modelName"
        ORDER BY requests DESC`,
       params,
@@ -825,12 +832,9 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
    */
   async getMedianDurationByProfile(
     userId: string,
-    groupBy: 'connectionProfileId' | 'imageProfileId' | 'providerModel',
+    groupBy: ProfileGroupBy,
   ): Promise<Array<{ key: string; medianDurationMs: number }>> {
-    const keyExpr =
-      groupBy === 'providerModel'
-        ? `"provider" || '/' || "modelName"`
-        : `"${groupBy}"`;
+    const { keyExpr, notNullClause } = profileKey(groupBy);
     return this.aggregate<{ key: string; medianDurationMs: number }>(
       `WITH measured AS (
          SELECT ${keyExpr} AS key, "durationMs" AS d,
@@ -839,7 +843,7 @@ export class LLMLogsRepository extends AbstractBaseRepository<LLMLog> {
          FROM "llm_logs"
          WHERE "userId" = ?
            AND "durationMs" IS NOT NULL AND "durationMs" > 0
-           ${groupBy === 'providerModel' ? '' : `AND "${groupBy}" IS NOT NULL`}
+           ${notNullClause}
        )
        SELECT key, AVG(d) AS medianDurationMs
        FROM measured

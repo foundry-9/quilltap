@@ -695,6 +695,11 @@ Override these variables for consistent component styling:
 --qt-radio-accent
 --qt-radio-focus-ring
 
+/* Range sliders (natively rendered — accent-color paints the filled track and
+   the thumb; appearance:none would discard the filled bar in Chrome/Safari) */
+--qt-range-accent
+--qt-range-focus-ring
+
 /* Badges */
 --qt-badge-radius
 --qt-badge-padding-y

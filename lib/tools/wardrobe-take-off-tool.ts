@@ -15,6 +15,9 @@
 
 import { z } from 'zod'
 import { zodToOpenAISchema } from './zod-to-openai-schema'
+import { WardrobeItemTypeEnum } from '@/lib/schemas/wardrobe.types'
+import type { WardrobeItemType } from '@/lib/schemas/wardrobe.types'
+import { HAIR_SLOT_GUIDANCE } from '@/lib/wardrobe/slot-guidance'
 
 /** One take-off operation in a `wardrobe_take_off` call. */
 const WardrobeTakeOffOperationSchema = z.object({
@@ -40,11 +43,11 @@ const WardrobeTakeOffOperationSchema = z.object({
       '"clear_slot" — empty one named slot entirely (requires slot).'
     )
     .optional(),
-  slot: z
-    .enum(['top', 'bottom', 'footwear', 'accessories'])
+  slot: WardrobeItemTypeEnum
     .describe(
       'Required for clear_slot. Optional for remove (restricts the removal to ' +
-      'that single slot instead of every slot the item covers).'
+      'that single slot instead of every slot the item covers). ' +
+      HAIR_SLOT_GUIDANCE
     )
     .optional(),
 })
@@ -101,12 +104,7 @@ export interface WardrobeTakeOffToolOutput {
   /** Per-operation results, in input order (truncated at the first failure). */
   operations: WardrobeTakeOffOpResult[];
   /** Per-slot arrays of equipped item IDs after all applied operations. */
-  current_state: {
-    top: string[];
-    bottom: string[];
-    footwear: string[];
-    accessories: string[];
-  };
+  current_state: Record<WardrobeItemType, string[]>;
   coverage_summary: string;
   error?: string;
 }

@@ -2,6 +2,7 @@
  * Connection Profiles API v1 - Individual Profile Endpoint
  *
  * GET /api/v1/connection-profiles/[id] - Get a specific profile
+ * GET /api/v1/connection-profiles/[id]?action=get-tags - Get the profile's tags
  * PUT /api/v1/connection-profiles/[id] - Update a profile
  * DELETE /api/v1/connection-profiles/[id] - Delete a profile
  * POST /api/v1/connection-profiles/[id]?action=add-tag - Add a tag
@@ -10,11 +11,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createContextParamsHandler, RequestContext } from '@/lib/api/middleware';
+import { createContextParamsHandler, RequestContext, resolveEditorTags } from '@/lib/api/middleware';
 import { getActionParam, isValidAction } from '@/lib/api/middleware/actions';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
-import { notFound, forbidden, badRequest, serverError, conflict } from '@/lib/api/responses';
+import { notFound, forbidden, badRequest, serverError, conflict, successResponse } from '@/lib/api/responses';
 import { isValidModelClassName } from '@/lib/llm/model-classes';
 import { normalizeProfileName } from '@/lib/llm/connection-profile-names';
 import { autoConfigureProfile } from '@/lib/services/auto-configure.service';
@@ -34,6 +35,9 @@ const removeTagSchema = z.object({
 
 const CONNECTION_PROFILE_ITEM_POST_ACTIONS = ['add-tag', 'remove-tag', 'auto-configure'] as const;
 type ConnectionProfileItemPostAction = typeof CONNECTION_PROFILE_ITEM_POST_ACTIONS[number];
+
+const CONNECTION_PROFILE_ITEM_GET_ACTIONS = ['get-tags'] as const;
+type ConnectionProfileItemGetAction = typeof CONNECTION_PROFILE_ITEM_GET_ACTIONS[number];
 
 /**
  * Helper to enrich profile with API key info
@@ -79,6 +83,28 @@ export const GET = createContextParamsHandler<{ id: string }>(
         return notFound('Connection profile');
       }
 
+      // An unrecognised action is refused rather than quietly serving the whole
+      // profile. Leniency here is what hid Bug 74's second layer: `get-tags`
+      // did not exist, the GET ignored the parameter, and the caller read
+      // `data.tags` off a `{ profile }` body as `undefined` — no tags, no error.
+      const action = getActionParam(req);
+      if (action) {
+        if (!isValidAction(action, CONNECTION_PROFILE_ITEM_GET_ACTIONS)) {
+          return badRequest(
+            `Unknown action: ${action}. Available actions: ${CONNECTION_PROFILE_ITEM_GET_ACTIONS.join(', ')}`
+          );
+        }
+
+        const getActionHandlers: Record<ConnectionProfileItemGetAction, () => Promise<NextResponse>> = {
+          'get-tags': async () => {
+            const tags = await resolveEditorTags(profile.tags, repos);
+            return successResponse({ tags });
+          },
+        };
+
+        return getActionHandlers[action]();
+      }
+
       const enrichedProfile = await enrichProfile(profile, repos);
 
       return NextResponse.json({ profile: enrichedProfile });
@@ -122,6 +148,9 @@ export const PUT = createContextParamsHandler<{ id: string }>(
         maxContext,
         sortIndex,
         supportsImageUpload,
+        multiCharacterPrefill,
+        fallbackProfileId,
+        allowTierFallback,
       } = body;
 
       // Build update data
@@ -280,6 +309,51 @@ export const PUT = createContextParamsHandler<{ id: string }>(
           return badRequest('pseudoToolMode must be one of auto, native, simple-json, text-block');
         }
         updateData.pseudoToolMode = pseudoToolMode;
+      }
+
+      // Whether multi-character turns are anchored with the assistant "[Name]"
+      // prefill. Applies to every transport — the Courier renders the same
+      // assembled context for the user to carry by hand.
+      if (multiCharacterPrefill !== undefined) {
+        if (typeof multiCharacterPrefill !== 'boolean') {
+          return badRequest('multiCharacterPrefill must be a boolean');
+        }
+        updateData.multiCharacterPrefill = multiCharacterPrefill;
+      }
+
+      // The fallback chain's named understudy. Two rules, both structural:
+      // a profile cannot understudy itself (the chain would be one attempt
+      // wearing two names), and a Courier profile cannot stand in for anyone
+      // (its "transport" is a human carrying the request by hand, which is no
+      // kind of automatic failover). Everything else — a target with no API
+      // key yet, a cycle A->B/B->A — is legal; chains never recurse, so a
+      // cycle simply stops.
+      if (fallbackProfileId !== undefined) {
+        if (fallbackProfileId === null || fallbackProfileId === '') {
+          updateData.fallbackProfileId = null;
+        } else if (typeof fallbackProfileId !== 'string') {
+          return badRequest('fallbackProfileId must be a profile id or null');
+        } else if (fallbackProfileId === id) {
+          return badRequest('A connection profile cannot be its own fallback');
+        } else {
+          const target = await repos.connections.findById(fallbackProfileId);
+          if (!target || target.userId !== user.id) {
+            return badRequest('Fallback profile not found');
+          }
+          if (target.transport === 'courier') {
+            return badRequest(
+              'A Courier profile cannot be used as a fallback — its requests are carried by hand, so it cannot stand in automatically'
+            );
+          }
+          updateData.fallbackProfileId = fallbackProfileId;
+        }
+      }
+
+      if (allowTierFallback !== undefined) {
+        if (typeof allowTierFallback !== 'boolean') {
+          return badRequest('allowTierFallback must be a boolean');
+        }
+        updateData.allowTierFallback = allowTierFallback;
       }
 
       if (modelClass !== undefined) {

@@ -14,6 +14,7 @@ import { runBrahmaQuery } from '../one-shot.service'
 
 jest.mock('@/lib/plugins/provider-validation', () => ({
   requiresApiKey: jest.fn(() => false),
+  acceptsApiKey: jest.fn(() => false),
 }))
 jest.mock('@/lib/services/chat-message/streaming.service', () => ({
   buildTools: jest.fn(),

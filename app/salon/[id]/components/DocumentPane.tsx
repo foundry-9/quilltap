@@ -13,9 +13,8 @@
 
 import { useRef, useState, useCallback, useMemo, useEffect } from 'react'
 import { Icon } from '@/components/ui/icon'
-import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/query/fetcher'
-import { queryKeys } from '@/lib/query/keys'
+import { useChatSettingsQuery } from '@/hooks/useChatSettingsQuery'
+import { useCopyToClipboard } from '@/hooks/useCopyToClipboard'
 import DocumentGutter, { type LinePosition } from './DocumentGutter'
 import { LexicalComposer } from '@lexical/react/LexicalComposer'
 import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin'
@@ -252,11 +251,8 @@ function DocumentEditorPlugins({
   onFocusProcessed?: () => void
 }) {
   const [editor] = useLexicalComposerContext()
-  const { data: chatSettings } = useQuery({
-    queryKey: queryKeys.settings.chat,
-    queryFn: ({ signal }) => apiFetch<{ composerSpellcheck?: boolean }>('/api/v1/settings/chat', { signal }),
-  })
-  const spellCheck = chatSettings?.composerSpellcheck ?? true
+  const { data: composerSpellcheck } = useChatSettingsQuery((settings) => settings.composerSpellcheck)
+  const spellCheck = composerSpellcheck ?? true
 
   // Sync editable state
   useEffect(() => {
@@ -387,7 +383,7 @@ export default function DocumentPane({
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [showSource, setShowSource] = useState(false)
   const [editTitle, setEditTitle] = useState(document.displayTitle)
-  const [uriCopied, setUriCopied] = useState(false)
+  const { copied: uriCopied, copy: copyUri } = useCopyToClipboard(1200)
   // Gutter state — populated by DocumentChangeTracker plugin
   const [changedLines, setChangedLines] = useState<Set<number>>(new Set())
   const [linePositions, setLinePositions] = useState<LinePosition[]>([])
@@ -396,7 +392,6 @@ export default function DocumentPane({
   const sourceTextareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const scrollThrottleRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const copyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const isMarkdown = useMemo(() => isMarkdownFile(document.filePath), [document.filePath])
   const extractedContent = useMemo(() => {
@@ -533,9 +528,6 @@ export default function DocumentPane({
       if (scrollThrottleRef.current) {
         clearTimeout(scrollThrottleRef.current)
       }
-      if (copyResetRef.current) {
-        clearTimeout(copyResetRef.current)
-      }
     }
   }, [])
 
@@ -561,21 +553,10 @@ export default function DocumentPane({
   }, [document.displayTitle, onDeleteDocument])
 
   const handleCopyUri = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(documentUri)
-      setUriCopied(true)
+    if (await copyUri(documentUri)) {
       showSuccessToast('Document URL copied')
-      if (copyResetRef.current) {
-        clearTimeout(copyResetRef.current)
-      }
-      copyResetRef.current = setTimeout(() => {
-        setUriCopied(false)
-      }, 1200)
-    } catch (error) {
-      console.error('[DocumentPane] Failed to copy document URI', error)
-      setUriCopied(false)
     }
-  }, [documentUri])
+  }, [copyUri, documentUri])
 
   const handleTitleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {

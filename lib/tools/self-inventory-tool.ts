@@ -297,10 +297,8 @@ export type SelfInventoryRuntimeMode =
   | 'local-dev'
   | 'local-production'
   | 'docker'
-  | 'vm'
   | 'electron'
-  | 'electron-docker'
-  | 'electron-vm';
+  | 'electron-docker';
 
 export type SelfInventoryClientShell =
   | { type: 'electron'; shellVersion: string }

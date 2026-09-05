@@ -8,16 +8,16 @@ No subscriptions. No data harvested. No forgetting between sessions. No landlord
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Latest Stable](https://img.shields.io/github/v/release/foundry-9/quilltap-server?logo=github&label=stable&sort=semver&filter=!*dev*)](https://github.com/foundry-9/quilltap-server/releases/latest)
-[![This Version](https://img.shields.io/badge/version-4.8.5--bugfix.0-yellow.svg?logo=github)](package.json)
+[![This Version](https://img.shields.io/badge/version-4.9.1--bugfix.0-yellow.svg?logo=github)](package.json)
 [![Docker Hub](https://img.shields.io/docker/v/foundry9/quilltap?logo=docker&label=docker&sort=semver)](https://hub.docker.com/r/foundry9/quilltap)
 [![npm](https://img.shields.io/npm/v/quilltap?logo=npm)](https://www.npmjs.com/package/quilltap)
-[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/6enCeQxY)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/fnTPEZDE4)
 
 <p align="center">
   <img src="https://quilltap.ai/images/welcome-to-quilltap-2-8.png" alt="Welcome to Quilltap" />
 </p>
 
-**Website:** [quilltap.ai](https://quilltap.ai) · **Discord:** [Join us](https://discord.gg/6enCeQxY) · **Docker:** [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap)
+**Website:** [quilltap.ai](https://quilltap.ai) · **Discord:** [Join us](https://discord.gg/fnTPEZDE4) · **Docker:** [foundry9/quilltap](https://hub.docker.com/r/foundry9/quilltap)
 
 ---
 
@@ -57,20 +57,28 @@ Quilltap doesn't replace Claude or ChatGPT — it connects to them (and others) 
 
 There are several paths to the same destination. Which one you choose depends on two questions: **what are you willing to install?** and **how much do you trust AI running on your machine?**
 
-That second question deserves a moment of your attention. As AI models grow more capable — reading files, writing code, using tools — the question of *where* that code executes becomes important. A virtual machine is a genuine locked room: if an AI-generated script misbehaves, it misbehaves inside a contained environment with no access to your host system. Docker provides a similar boundary, though somewhat thinner. Running directly on your machine provides no boundary at all.
+That second question deserves a moment of your attention. As AI models grow more capable — reading files, writing code, using tools — the question of *where* that code executes becomes important. Docker is a genuine locked room: if an AI-generated script misbehaves, it misbehaves inside a container, with no access to your host system beyond the volumes you handed it. Running directly on your machine provides no boundary at all. If you want something stouter still, run Quilltap — or Docker itself — inside a virtual machine you build and keep yourself; Quilltap will live there quite happily, but it does not provision or manage a VM on your behalf.
 
 | | Desktop App | Docker | Node.js (`npx`) |
 | --- | --- | --- | --- |
 | **You install** | Download from GitHub | Docker Desktop or Docker Engine | Node.js 24+ |
 | **First launch** | Double-click the app | Fast — pulls the container image | Fast — downloads app files, runs directly |
-| **AI sandbox** | ✅ VM isolation (Lima/WSL2) or container | ⚠️ Container isolation (good, not airtight) | ❌ No isolation (runs with your permissions) |
-| **Best for** | Most users — native window, managed updates | Server deployments, Docker veterans, Linux users | Quick evaluation, developers, the impatient |
+| **AI sandbox** | ✅ in Docker mode · ❌ in Direct mode | ✅ Container isolation — the strongest option we ship | ❌ No isolation (runs with your permissions) |
+| **Best for** | A native window, managed updates, instance management — over any of the three back ends | Anyone who wants the AI kept behind a door; server deployments, Linux users | Quick evaluation, developers, the impatient |
 
-> **Our recommendation:** The Desktop App provides the best experience for most people — a native window with managed updates and optional VM isolation for AI sandboxing. If you're deploying to a server or already live in Docker, the container image is excellent. If you have Node.js and simply want to kick the tires, `npx quilltap` will have you running in under a minute.
+> **Our recommendation:** If the assistant will be touching files or running tools, put Docker underneath it — it is the strongest boundary we ship, and it is equally at home on a server. The pleasantest arrangement is the Desktop App in its **Docker** mode: a native window with managed updates, and the back end safely behind a door. If you have Node.js and simply want to kick the tires, `npx quilltap` will have you running in under a minute. And for the belt-and-braces crowd: a virtual machine of your own making, with or without Docker inside it, is entirely supported — the building of it is your affair.
 
 ### Desktop App
 
-The Quilltap desktop app (Electron) is available from the [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository. It provides a native window on macOS, Windows, and Linux, with automatic updates, instance management, and optional VM-based isolation (Lima on macOS, WSL2 on Windows) for sandboxed AI execution.
+The Quilltap desktop app (Electron) is available from the [quilltap-shell](https://github.com/foundry-9/quilltap-shell) repository. It provides a native window on macOS, Windows, and Linux, with automatic updates and instance management. The window is only ever a front end; you choose what sits behind it:
+
+| Mode | What it does | Sandboxed? |
+| --- | --- | --- |
+| **Direct** | Runs the Node server inside Electron itself. Nothing else to install. | No — runs with your permissions |
+| **Docker** | Native window in front, the Docker image behind. The recommended arrangement. | Yes — container isolation |
+| **Remote** | Points the window at a Quilltap URL — `http://127.0.0.1:3000`, a dev server, an `npx quilltap` instance, or any machine on your network that is listening. | Whatever the far end is |
+
+Remote mode takes a little effort to set up, but it means one app window can front a development server, a production server, or a box in the basement, as the mood takes you.
 
 ### Docker
 
@@ -151,17 +159,22 @@ Connect to any major AI provider — or several at once. Quilltap uses a three-m
 | **xAI** | Grok families. Native image generation, web search. |
 | **DeepSeek** | DeepSeek chat and reasoning models. Tool use, chain-of-thought reasoning. |
 | **Z.AI** | GLM families (GLM-4.6, GLM-4.5, vision). Reasoning, web search, CogView image generation. |
+| **NanoGPT** | Pay-as-you-go gateway to 600+ chat models, 200+ image models (Flux, HiDream, Recraft), and embeddings — one API key for all three. |
 | **Ollama** | Local/offline models (Llama, Phi, Mistral, etc.). Fully local, no API key needed. |
 | **OpenRouter** | 200+ models through a unified API with automatic pricing. |
 | **OpenAI-Compatible** | LM Studio, vLLM, Together AI, Groq, and any compatible endpoint. |
 
 Each connection profile is classified into a **model class** — Compact, Standard, Extended, or Deep — that defines its context window and output capacity. Don't know the right settings for your model? **Auto-configure** searches the web for your model's specifications, sends the results to your default LLM for analysis, and applies optimal settings automatically. When a provider misbehaves mid-flow, the auto-configure now falls through to candidates from other providers and surfaces every attempt's error in the resulting message, so you find out *why* nothing worked rather than just *that* nothing worked. Budget-driven **context compression** uses your profile's context window and output limits to intelligently compress conversation history and recalled memories when they approach capacity, rather than using arbitrary message counts.
 
+Every connection profile can name an **understudy** — another profile to try when this one's provider rejects the key, throttles, times out, hits a content limit, or hands back nothing at all. Tick **Draft a stand-in from the company when both named players are indisposed** and Quilltap will also auto-pick one same-or-better-tier replacement, preferring a different provider than the one that just failed (off by default — spending money at a provider you didn't choose is not a thing to do quietly). Cheap-LLM tasks get the same courtesy through **Allow a Similar-Tier Stand-In** in Cheap LLM settings. Chains are at most three attempts deep and never recurse, so wiring two profiles at each other is harmless configuration rather than a loop, and nothing is sticky: the next message tries your primary again, so a passing outage heals without your having to notice it happened. The Salon emits a "failing over" stage per attempt while it walks the chain, and when the chain is exhausted the error names every profile that was asked and how each one declined.
+
 Agent Mode lets the AI use tools iteratively — web search, image generation, file management, memory search, and any MCP server you connect. The Run Tool feature lets you invoke any tool directly from the chat toolbar. The plugin system means additional providers and tools can be added without waiting for us.
 
 ### The Workspace
 
 Quilltap opens as a **two-pane workspace of tabs**. Chats, documents, terminals, characters, settings — each is a tab that stays live in the background, so switching between them never reloads anything, and a conversation streaming in one tab keeps going while you read a document beside it. Drag a tab into the other pane to work on two things side by side. Old bookmarks still land on the right tab without disturbing whatever else you have open.
+
+The interface keeps itself current rather than asking. A single multiplexed WebSocket carries invalidation hints — never data — to every open tab, so a finished background job, an autonomous room changing state, or a freshly generated backdrop lands the moment it happens, in every window at once. Polling is still wired behind each of those surfaces, but only as the fallback for a socket that isn't up. Relative timestamps run off one shared, boundary-aligned ticker, so every "4m ago" on screen turns over together.
 
 ### Projects & Document Stores
 
@@ -187,13 +200,17 @@ Quilltap characters are designed as long-running collaborators: persistent ident
 
 A per-character switch flips the character's source of truth from the database row to the vault on disk for live overlay reads. When the LLM playing the character reaches for the document tools, that character's own vault is extended to it automatically — even when the vault hasn't been independently linked to the active project. A per-chat **Shared Vaults** toggle opens read-only crossover so peer characters at the table can read each other's vaults.
 
-Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same character in different settings, or different facets of the same relationship. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text). The **Non-Quilltap Prompt generator** exports any character as a standalone system prompt for use in other AI tools — taking your collaborator with you when you need to. Plugins can store per-character metadata for their own use via the character plugin data API.
+Characters aren't limited to a single personality template. Each can have multiple named system prompts and scenarios, letting you shift context — the same character in different settings, or different facets of the same relationship. A chat's scenario is not fixed at creation either: the Salon's Chat drawer can change the scene mid-conversation, choosing from the same project, general, group, and character tiers the new-chat dialog offers or writing a custom one, and the Host announces the change as a revision so the earlier scene-setting reads as superseded rather than contradicted. The AI Character Import wizard can generate a complete character from source material (wiki pages, documents, freeform text). The **Non-Quilltap Prompt generator** exports any character as a standalone system prompt for use in other AI tools — taking your collaborator with you when you need to. Plugins can store per-character metadata for their own use via the character plugin data API.
 
-The **wardrobe system** gives characters a persistent closet — tops, bottoms, footwear, and accessories that the LLM knows about and can reference. Items live as Markdown files in the character's vault (`Wardrobe/<title>.md`); outfit presets live in `Outfits/`. Create items manually, generate them from the AI Wizard or lore, or **import from an image** using vision AI to analyze a photo and propose wardrobe items. Save outfit presets, gift items between characters, and let the LLM choose what to wear when a chat starts. Aurora announces outfit changes automatically, debounced so fiddling with all four slots collapses to a single notification once you stop touching the closet.
+The **wardrobe system** gives characters a persistent closet — tops, bottoms, footwear, accessories, and hair (hairdos, not hair itself) that the LLM knows about and can reference. Items live as Markdown files in the character's vault (`Wardrobe/<title>.md`); outfit presets live in `Outfits/`. Create items manually, generate them from the AI Wizard or lore, or **import from an image** using vision AI to analyze a photo and propose wardrobe items. Save outfit presets, gift items between characters, and let the LLM choose what to wear when a chat starts — guided, if you like, by a plain-language `Wardrobe/instructions.md` in any of the four wardrobes (character, group, project, or Quilltap General) saying what that closet is for and how its owner likes to dress. The Wardrobe dialog browses and edits every one of those containers rather than the character's alone, and moving or copying an outfit brings its component garments along instead of leaving a preset pointing at clothes that aren't there. Aurora announces outfit changes automatically, debounced so fiddling with every slot collapses to a single notification once you stop touching the closet.
+
+**Scenarios and wardrobe items can be archived rather than deleted.** An archived entry drops out of every list, dropdown, and picker; a "Show archived" checkbox on each listing surface brings it back, badged, and still selectable. Archiving hides, it does not forbid — a garment archived mid-chat stays worn, and a chat whose scenario was archived keeps its scenario text. The one hard rule is that the outfit-selection LLM at the start of a chat never sees archived garments, in any tier, with no parameter and no override.
 
 **Characters can be archived rather than deleted.** When a collaborator's story has ended but you don't want to erase them, archiving packs everything heavy and private — memories, mail, conversation summaries, non-avatar photographs, and their embeddings — into a single encrypted `.qtap` bundle in your file library, then prunes that material from the live instance. What stays is the character: fields, portrait, wardrobe, and every chat she appears in, so old messages keep their faces and her page still renders. An archived character takes no turns and appears in no picker; **Rehydrate** unpacks the bundle and restores everything at its original identities, with nothing repointed. The bundle is sealed with your instance passphrase (changing it re-seals every archive on the shelf) and stays in the library afterwards as a spare copy. Available from a character's page in Aurora, from the API, and from the CLI (`npx quilltap db characters archives|archive|rehydrate|export`).
 
 **Provider limits should not decide which collaborators you get to keep.** The Concierge system treats a provider's refusal as a routing problem, not as permission to erase the collaborator or confiscate the relationship — detecting content type and, when configured, sending the request to a provider equipped to handle that kind of work. The default behavior keeps you on your primary provider; the routing kicks in only when you've configured it to. You set the boundaries. The software respects them.
+
+Each chat carries one of **four Concierge states**, grouped by who is doing the deciding. Under *The Concierge decides*: **Monitored** (the classifier keeps watch and may flip the chat to Flagged) and **Flagged** (the classifier's verdict — uncensored routing and danger styling). Under *You decide*: **Vouched Safe** (you vouch for the chat; no classification, no scanning, ordinary providers) and **Uncensored** (every route Flagged takes, with no classification, no scans, no announcements and no danger styling, even when the global Concierge mode is off). The state is choosable on the New Chat form as well as in the Salon, so a conversation whose nature you already know is created that way rather than corrected afterwards — the opening greeting is composed under the state you picked, and **Continue Elsewhere** carries it across.
 
 ### System Transparency: A Per-Character Covenant
 
@@ -207,15 +224,17 @@ The toggle is framed as a covenant: off says *"My character will trust me withou
 
 Memory is what turns an assistant into a collaborator. Quilltap's memory system is designed around that: long-term semantic memory persists across conversations, but by design, it's not a transcript. The Memory Gate system distills what characters *learn* from conversations: facts, preferences, relationship dynamics, emotional patterns, and the occasional memorable quote. Characters remember that you hate cilantro and that Tuesday was hard. They don't parrot back what you said word for word. This is deliberate. Human memory works by impression and meaning, not by recording, and character memory is built the same way.
 
-When you *do* need verbatim recall, the search bar at the top of every screen provides it — full-text search across all conversations, memories, and characters. That's your eidetic index. The characters get something more like wisdom.
+When you *do* need verbatim recall, the search bar at the top of every screen provides it — full-text search across all conversations, memories, characters, and every enabled document store, filtered by chip. A **Documents** result opens in Document Mode: in the Salon chat you have focused, if one is focused (with the usual Librarian announcement), and in the standalone document view otherwise. That's your eidetic index. The characters get something more like wisdom.
 
 **Memory protection now favors what's used over what's admired.** A blended protection score combines four evidence streams — time-decayed content importance (with a 30-day half-life and a cap on how much the LLM's rating alone can contribute), a log-saturating reinforcement bonus, a graph-degree bonus from related-memory links, and a flat recent-access bonus for memories touched within the last 90 days. A reinforced, well-linked, recently-accessed memory stays protected even if the LLM rated it low. An old, unreferenced memory the LLM happened to admire on the way past becomes eligible for cleanup. Manual memories remain durable — explicit user intent always wins.
+
+A character's vault also keeps a summary of every conversation it has taken part in, and the Commonplace Book searches that shelf to build the "Relevant Past Conversations" a character sees. By default that list refreshes at the opening recap, at each summary fold, and on turns that reach for the past explicitly; **Consult past conversations every turn** (Settings → Memory → Recall Relevance) re-runs the search every turn instead, at no extra embedding cost — it reuses the vector the turn's memory search already embedded, and sits out any turn where there isn't one.
 
 Proactive recall lets characters analyze recent conversation for relevant memories without being asked. Memory recap at chat start generates a first-person narrative summary from each character's memory, including a Recent Conversations block listing the title and summary of up to twenty prior chats with the same character. Built-in memory housekeeping handles deduplication and cleanup, paginated and event-loop-safe even on characters carrying nearly 20,000 memories. Context compression manages long conversations, and the AI can request full context reload when needed.
 
 ### Multi-Character & Roleplay
 
-Multi-character chats let you put more than one collaborator in the room at once. A turn-order sidebar manages who speaks when; four-state participation (active, silent, absent, removed) handles characters drifting in and out of the conversation; identity reinforcement keeps each character anchored to who they are even on long threads; impersonation lets you speak as another participant when the scene calls for it; swipe alternatives let you regenerate any response without losing your place. Characters can whisper to each other privately when the conversation calls for it. SillyTavern character and chat imports are fully supported. Native roleplay templates with configurable narration delimiters — no plugins required.
+Multi-character chats let you put more than one collaborator in the room at once. A turn-order sidebar manages who speaks when; four-state participation (active, silent, absent, removed) handles characters drifting in and out of the conversation; anti-chorus discipline keeps a group scene from turning into a committee meeting where every character answers the same question in turn; identity reinforcement keeps each character anchored to who they are even on long threads; impersonation lets you speak as another participant when the scene calls for it; swipe alternatives let you regenerate any response without losing your place. Characters can whisper to each other privately when the conversation calls for it. SillyTavern character and chat imports are fully supported. Native roleplay templates with configurable narration delimiters — no plugins required.
 
 The Estate's Staff narrates the room as it changes — the Host announces participants joining, leaving, or shifting between active and silent states; Prospero announces when a participant's connection profile changes; Aurora announces wardrobe changes; the Lantern announces image generation with the prompt that was actually used; the Librarian announces document operations; the Concierge speaks up exactly once when a chat is flagged for routing to a different provider. Each announcement is filtered out of the LLM context for opaque characters, so adding voices to the room doesn't leak the system to characters who shouldn't see it.
 
@@ -234,6 +253,10 @@ Persistent chat state for inventories, stats, scores, and any structured data �
 ### Image Generation
 
 AI-generated background images for chats based on scene context, with character appearance resolution using clothing and physical descriptions. The Scene State Tracker automatically maintains a structured summary of the current scene after every turn, so image generation always reflects what's actually happening. Per-conversation avatar generation creates unique portraits for each character in a chat, with a manual regeneration button. Projects can set a default image generation profile that applies to all their chats. When a generated image is rejected by post-hoc moderation, the Concierge reroutes through a configured fallback profile rather than just failing the request.
+
+An image profile can carry **LoRA adapters** — `{ source, scale, trigger phrase }` rows naming small trained weights that steer a base model toward a style, a subject, or a look you cannot reach by prompting. A provider opts in by declaring the capability per model or provider-wide, at which point the editor appears, caps the list at whatever that model will take, and hands the adapters over at generation time. A **Query** button beside each Source reads the repository's public card off HuggingFace — server-side, so your browser never contacts it — and reports what the card says: the base model it names, whether it is tagged as an adapter, which `.safetensors` files it holds, whether it is gated, and the trigger phrase in its metadata, which one further click copies into the row. Alongside it, providers that implement the model-options hook drive the rest of the panel from their own advertised capabilities rather than from a hardcoded table, so sizes and image-count ceilings come from the model you actually chose. Profile parameters — negative prompt, seed, guidance scale, steps — now reach avatars, story backgrounds, the images API and the wardrobe's preview portrait, not just `generate_image` in the Salon.
+
+Characters can look at pictures as well as make them. `describe_image` answers "what is in this photograph?" from the description written at upload, the prompt that generated it, or a fresh vision call, and Quilltap asks two questions before sending an image on the wire — whether the *model* can read pictures and whether the *plugin* can send them — routing to a description instead of quietly dropping the bytes when the answer to the second is no. Every full-size viewer in the app has a Download button wired through the same Electron-aware helper, so saving a picture works in the desktop shell where right-click → Save Image doesn't.
 
 ---
 
@@ -296,8 +319,8 @@ Quilltap was built to be extended. The plugin system supports eight extension po
 | Plugin Type | What It Does |
 | ----------- | ------------ |
 | **LLM Provider** | Add new AI chat services with tool use, streaming, and multimodal support |
-| **Image Provider** | Image generation backends (bundled: OpenAI/DALL-E, Google Imagen, xAI/Grok, Z.AI/CogView) |
-| **Embedding Provider** | Semantic search and memory embedding (bundled: OpenAI, Ollama, built-in) |
+| **Image Provider** | Image generation backends (bundled: OpenAI/DALL-E, Google Imagen, xAI/Grok, Z.AI/CogView, NanoGPT) |
+| **Embedding Provider** | Semantic search and memory embedding (bundled: OpenAI, Ollama, NanoGPT, built-in) |
 | **Theme** | Custom visual styles via `.qtap-theme` bundles or legacy npm plugins |
 | **Template** | Roleplay formatting templates for different prompt styles |
 | **Tool** | Custom LLM capabilities (the AI can use your tool mid-conversation) |
@@ -312,7 +335,7 @@ Quilltap is a single Next.js 16 application (App Router) that serves both the UI
 - **Backend:** Next.js API routes, SQLite with SQLCipher encryption (better-sqlite3-multiple-ciphers) with WAL mode, Zod schema validation
 - **Build:** GitHub Actions CI/CD with automated releases — Docker multi-arch images and npm package built from a single tag push
 
-The entire provider system is plugin-based — every bundled provider (Anthropic, OpenAI, Google, xAI, DeepSeek, Z.AI, Ollama, OpenRouter, OpenAI-Compatible) is a plugin with the same API surface available to third-party authors.
+The entire provider system is plugin-based — every bundled provider (Anthropic, OpenAI, Google, xAI, DeepSeek, Z.AI, NanoGPT, Ollama, OpenRouter, OpenAI-Compatible) is a plugin with the same API surface available to third-party authors.
 
 > **Repository note:** Server source lives at [`foundry-9/quilltap-server`](https://github.com/foundry-9/quilltap-server). The original `foundry-9/quilltap` repository is reserved for the next-generation native Quilltap application currently under development. If your tooling references the old URL, update it.
 
@@ -382,7 +405,7 @@ Copyright © 2025, 2026 Foundry-9 LLC
 ## Support
 
 - **Issues:** [GitHub Issues](https://github.com/foundry-9/quilltap-server/issues)
-- **Discord:** [Join us](https://discord.gg/6enCeQxY)
+- **Discord:** [Join us](https://discord.gg/fnTPEZDE4)
 - **Website:** [quilltap.ai](https://quilltap.ai)
 - **Author:** Charles Sebold ([charles.sebold@foundry-9.com](mailto:charles.sebold@foundry-9.com))
 - **Company:** [Foundry-9 LLC](https://foundry-9.com)

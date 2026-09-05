@@ -69,7 +69,6 @@ function run(cmd: string, description: string): void {
 run('docker login', 'Logging in to Docker Hub');
 
 // Build native image with regular docker (fast)
-// Target the production stage — the wsl2 stage is only for Windows/WSL2 rootfs exports
 run(
   `docker build --target production -t ${IMAGE}:${version}-${nativeArch} -t ${IMAGE}:${channel}-${nativeArch} .`,
   `Building native ${nativeArch} image`

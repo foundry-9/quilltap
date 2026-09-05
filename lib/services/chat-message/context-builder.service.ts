@@ -7,12 +7,14 @@
 
 import { createServiceLogger } from '@/lib/logging/create-logger'
 import { buildContext, type MessageWithParticipant, type BuiltContext, type ContextCompressionResult } from '@/lib/chat/context-manager'
-import type { SemanticSearchResult } from '@/lib/memory/memory-service'
+import type { SemanticSearchResult, SearchQueryEmbedding } from '@/lib/memory/memory-service'
 import type { MemorySearchExtraction } from '@/lib/memory/cheap-llm-tasks'
 import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
 import type { UncensoredFallbackOptions } from '@/lib/memory/cheap-llm-tasks'
 import type { ContextCompressionSettings } from '@/lib/schemas/settings.types'
 import { formatMessagesForProvider } from '@/lib/llm/message-formatter'
+import { profileUsesNamePrefill } from '@/lib/llm/multi-character-prefill'
+import { profileRunsThinkingTurn } from '@/lib/plugins/provider-registry'
 import { loadChatFilesForLLM } from '@/lib/chat-files-v2'
 import { getErrorMessage } from '@/lib/error-utils'
 import {
@@ -76,6 +78,12 @@ export interface BuildMessageContextOptions {
   preSearchedMemories?: SemanticSearchResult[]
   /** Turn-level recall signals from the proactive distillation (retrospective cadence). */
   recallSignals?: MemorySearchExtraction
+  /**
+   * Query text + vector the proactive memory search already embedded. Reused
+   * (never re-embedded) by the per-turn conversation-summary list when the
+   * pre-searched memories are the ones this turn uses.
+   */
+  preSearchedQueryEmbedding?: SearchQueryEmbedding
   /** Whether to generate a memory recap for this character (chat start or character join) */
   generateMemoryRecap?: boolean
   /** Uncensored fallback options for memory recap in dangerous chats */
@@ -88,6 +96,14 @@ export interface BuildMessageContextOptions {
    * room paces its run across multiple turns. Undefined for everything else.
    */
   autonomousContextCap?: number
+  /**
+   * Tokens the caller will add to the payload after this returns — the tool
+   * schemas plus any system message the orchestrator splices in (agent-mode
+   * instructions, tool-change notice). Held back from the message budget so
+   * history is not packed into space they will occupy. See `collectTurnExtras`
+   * in `turn-extras.ts`, which builds and measures them together.
+   */
+  reservedOutgoingTokens?: number
   /**
    * "Nothing to add" turn-skipping — per-turn instruction control. When
    * `offerSkip` is true, a Turn note is injected inviting the character to pass
@@ -247,21 +263,9 @@ export function collectLanternImageFileIdsForCharacter(
     const atts = msg.attachments
     const hasAttachments = Array.isArray(atts) && atts.length > 0
 
-    // Detect the character's own previous ASSISTANT turn. Anything older than
-    // that was already delivered, so we stop the walk there.
-    //
-    // Multi-character chats set `participantId` on every character response,
-    // while Lantern notifications leave it null — a direct id match is enough.
-    //
-    // Single-character chats don't populate participantId on character
-    // responses, so we fall back to the structural signal: Lantern
-    // notifications always carry image attachments, character responses
-    // don't. An ASSISTANT message without attachments is therefore the
-    // character's own prior turn.
-    const isOwnPriorResponse = isMultiCharacter
-      ? msg.participantId === characterParticipantId
-      : !hasAttachments
-    if (isOwnPriorResponse) break
+    // Anything older than the character's own previous turn was already
+    // delivered, so we stop the walk there.
+    if (isCharactersOwnPriorResponse(msg, characterParticipantId, isMultiCharacter)) break
 
     scanned++
 
@@ -279,6 +283,222 @@ export function collectLanternImageFileIdsForCharacter(
     }
   }
   return collected.reverse()
+}
+
+/**
+ * Has this ASSISTANT message been authored by the character we are building
+ * context for? Both attachment walkers stop there: anything older was already
+ * delivered on a previous turn and must not be re-sent.
+ *
+ * Multi-character chats set `participantId` on every character response, while
+ * Staff notifications leave it null — a direct id match is enough. Single-
+ * character chats don't populate participantId on character responses, so we
+ * fall back to the structural signal: Staff image notifications always carry
+ * attachments and character responses never do, so an ASSISTANT message
+ * without attachments is the character's own prior turn.
+ */
+function isCharactersOwnPriorResponse(
+  msg: { attachments?: string[] | null; participantId?: string | null },
+  characterParticipantId: string,
+  isMultiCharacter: boolean,
+): boolean {
+  if (isMultiCharacter) return msg.participantId === characterParticipantId
+  return !(Array.isArray(msg.attachments) && msg.attachments.length > 0)
+}
+
+/**
+ * The USER-side counterpart of `collectLanternImageFileIdsForCharacter`: walk
+ * the tail of existingMessages and collect the attachments the *human* shared
+ * that this character has not yet been shown.
+ *
+ * Bug 121. A file the user attaches is expanded into prompt text (or carried
+ * as raw bytes) at request-assembly time by `loadAndProcessFiles`, from the
+ * `fileIds` on that one HTTP request, and the expansion is never written down
+ * — `chat_messages` keeps the user's typed words and a pointer. The second
+ * character to speak in a multi-character turn is a fresh request with no
+ * `fileIds`, assembling context from those rows, so it received the typed
+ * words alone: in the reported scene a 29 KB transcript reached 1 of 13 model
+ * calls while the attachment chip sat in the UI telling the user otherwise.
+ * The Lantern walk could not cover it, because its first filter is
+ * `role !== 'ASSISTANT'` and a user upload is a USER-role message.
+ *
+ * Returns rows in chronological order so the caller can splice each file back
+ * in at the message that carried it, rather than restating it at the tail.
+ * The same "stop at the character's own prior response" rule bounds the walk
+ * and gives the budget for free: a character is shown a given attachment once,
+ * on its first turn after the upload, and never again.
+ *
+ * `historyCutoff` (ISO timestamp) excludes uploads older than a joining
+ * character's arrival; `lookback` caps the scan for very long chats.
+ *
+ * Exported for unit testing.
+ */
+export function collectUnseenUserAttachmentsForCharacter(
+  existingMessages: Array<{ type: string; role?: string; id?: string; attachments?: string[] | null; participantId?: string | null; createdAt?: string; systemSender?: string | null }>,
+  characterParticipantId: string,
+  isMultiCharacter: boolean,
+  historyCutoff: string | null,
+  lookback: number,
+): Array<{ messageId: string; fileIds: string[] }> {
+  const collected: Array<{ messageId: string; fileIds: string[] }> = []
+  const seen = new Set<string>()
+  let scanned = 0
+
+  for (let i = existingMessages.length - 1; i >= 0 && scanned < lookback; i--) {
+    const msg = existingMessages[i]
+    if (msg.type !== 'message') continue
+
+    if (msg.role === 'ASSISTANT') {
+      if (isCharactersOwnPriorResponse(msg, characterParticipantId, isMultiCharacter)) break
+      scanned++
+      continue
+    }
+
+    if (msg.role !== 'USER') continue
+    scanned++
+
+    const atts = msg.attachments
+    if (!Array.isArray(atts) || atts.length === 0) continue
+    if (!msg.id) continue
+
+    // A joining participant without history access must not see uploads from
+    // before they arrived — symmetric with the Lantern walk's own guard.
+    if (historyCutoff && msg.createdAt && msg.createdAt < historyCutoff) continue
+
+    const fileIds = atts.filter((id): id is string => typeof id === 'string' && !seen.has(id))
+    if (fileIds.length === 0) continue
+    for (const id of fileIds) seen.add(id)
+    collected.push({ messageId: msg.id, fileIds })
+  }
+
+  return collected.reverse()
+}
+
+/**
+ * How far back either attachment walk will look for a user upload the
+ * character has not seen. The real bound is the character's own previous turn;
+ * this is the safety cap for a very long chat, or a character that has never
+ * spoken and so has no previous turn to stop at.
+ */
+const USER_ATTACHMENT_LOOKBACK = 20
+
+/**
+ * Ceiling on the re-hydrated text a single turn may carry, in characters.
+ *
+ * The walk already bounds *how many* uploads come back (one pass per
+ * character, per upload), but not how large they are, and a user may attach a
+ * novel. Files are taken oldest-first until the budget is spent; what does not
+ * fit is skipped with a warning rather than silently truncated mid-document,
+ * because half a transcript is a worse input than none and a model given one
+ * has no way to tell. ~80k characters is roughly 20k tokens — comfortably
+ * inside a modern window, and `buildContext` still compresses and trims what
+ * this produces like any other message body.
+ */
+const REHYDRATED_ATTACHMENT_CHAR_BUDGET = 80_000
+
+/**
+ * Load the user uploads a character has not yet been shown and turn them back
+ * into prompt content. See `collectUnseenUserAttachmentsForCharacter` and bug
+ * 121 for why this is a read-side derivation rather than a stored body.
+ *
+ * Returns the text to splice in ahead of each carrying message, keyed by that
+ * message's row id, plus any raw attachments the provider takes natively
+ * (images on a vision profile) for the caller to anchor the usual way.
+ *
+ * Never throws: an unreadable file leaves the turn exactly as it was before
+ * this existed.
+ */
+async function rehydrateUserAttachments(args: {
+  messages: Array<{ type: string; role?: string; id?: string; content?: string; attachments?: string[] | null; participantId?: string | null; createdAt?: string }>
+  characterParticipantId?: string
+  isMultiCharacter: boolean
+  historyCutoff: string | null
+  connectionProfile: ConnectionProfile
+  repos: ReturnType<typeof getRepositories>
+  userId: string
+}): Promise<{ rehydratedContentByMessageId: Map<string, string>; rehydratedAttachmentsToKeep: unknown[] }> {
+  const rehydratedContentByMessageId = new Map<string, string>()
+  const rehydratedAttachmentsToKeep: unknown[] = []
+  const { characterParticipantId } = args
+  if (!characterParticipantId) return { rehydratedContentByMessageId, rehydratedAttachmentsToKeep }
+
+  try {
+    const unseen = collectUnseenUserAttachmentsForCharacter(
+      args.messages,
+      characterParticipantId,
+      args.isMultiCharacter,
+      args.historyCutoff,
+      USER_ATTACHMENT_LOOKBACK,
+    )
+    if (unseen.length === 0) return { rehydratedContentByMessageId, rehydratedAttachmentsToKeep }
+
+    const repos = args.repos ?? getRepositories()
+    let budgetLeft = REHYDRATED_ATTACHMENT_CHAR_BUDGET
+    let skippedForBudget = 0
+
+    for (const { messageId, fileIds } of unseen) {
+      const loaded = await loadChatFilesForLLM(fileIds, { provider: args.connectionProfile.provider })
+      let prefix = ''
+
+      for (const fileAttachment of loaded) {
+        const fallbackResult = await processFileAttachmentFallback(
+          {
+            id: fileAttachment.id,
+            filepath: fileAttachment.filepath ?? `/api/v1/files/${fileAttachment.id}`,
+            filename: fileAttachment.filename,
+            mimeType: fileAttachment.mimeType,
+            size: fileAttachment.size,
+          },
+          fileAttachment,
+          args.connectionProfile,
+          repos,
+          args.userId,
+        )
+
+        // Mirror the `loadAndProcessFiles` filter: keep the raw bytes only
+        // when the provider takes them natively. A failed fallback drops the
+        // file rather than tripping the provider's "no image input" refusal.
+        if (fallbackResult.type === 'unsupported') {
+          if (!fallbackResult.error) rehydratedAttachmentsToKeep.push(fileAttachment)
+          continue
+        }
+
+        const text = formatFallbackAsMessagePrefix(fallbackResult)
+        if (!text) continue
+        if (text.length > budgetLeft) {
+          skippedForBudget++
+          continue
+        }
+        budgetLeft -= text.length
+        prefix += text
+      }
+
+      if (prefix) rehydratedContentByMessageId.set(messageId, prefix)
+    }
+
+    if (skippedForBudget > 0) {
+      logger.warn('Re-hydrated attachments exceeded the per-turn budget; some were not re-sent', {
+        skippedForBudget,
+        budget: REHYDRATED_ATTACHMENT_CHAR_BUDGET,
+        characterParticipantId,
+      })
+    }
+    if (rehydratedContentByMessageId.size > 0 || rehydratedAttachmentsToKeep.length > 0) {
+      logger.debug('Re-hydrated user attachments from history', {
+        messagesExpanded: rehydratedContentByMessageId.size,
+        rawAttachmentsKept: rehydratedAttachmentsToKeep.length,
+        charactersUsed: REHYDRATED_ATTACHMENT_CHAR_BUDGET - budgetLeft,
+        characterParticipantId,
+      })
+    }
+  } catch (err) {
+    logger.warn('Failed to re-hydrate user attachments from history', {
+      error: getErrorMessage(err),
+      characterParticipantId,
+    })
+  }
+
+  return { rehydratedContentByMessageId, rehydratedAttachmentsToKeep }
 }
 
 /**
@@ -469,6 +689,131 @@ export function normalizeWhisperRoles<
 }
 
 /**
+ * Pick the message that image attachments (and the Lantern description
+ * prefix) should ride on.
+ *
+ * Bug 95: this used to be "the last message, if it happens to be role user".
+ * Staff whispers format as `role: user` and routinely accumulate after the
+ * human's turn — a Host timestamp, a Prospero context memorandum, a
+ * connection-profile-change bubble — so on any regenerate or swipe the picture
+ * was stapled to "Abigail's current response model is now …" while the
+ * Librarian's announcement was telling the model the bytes rode with the
+ * user's message. Worse, after a tool call the tail isn't role user at all,
+ * and the attachments were dropped on the floor without a word.
+ *
+ * Preference order:
+ *  1. the message flagged as *this* turn's user input (`metadata.isUserTurn`),
+ *     set by the context manager where `newUserMessage` is appended;
+ *  2. the last `role: user` message whose source row was a genuine human turn
+ *     — the regenerate/swipe case, where there is no new user message and the
+ *     human's words are already in history;
+ *  3. the last `role: user` message of any kind. This is the old behaviour,
+ *     kept as a floor: a context shape we haven't anticipated should still
+ *     deliver the bytes *somewhere* rather than silently discard them.
+ *
+ * Returns -1 when there is no user-role message at all, which the caller logs
+ * — the attachments genuinely cannot be delivered in that shape.
+ *
+ * Exported for unit testing.
+ */
+export function selectAttachmentAnchorIndex(
+  contextMessages: Array<{ role: string; metadata?: { messageId?: string; isUserTurn?: boolean } }>,
+  userTurnMessageIds: ReadonlySet<string>
+): number {
+  for (let i = contextMessages.length - 1; i >= 0; i--) {
+    if (contextMessages[i].metadata?.isUserTurn) return i
+  }
+  for (let i = contextMessages.length - 1; i >= 0; i--) {
+    const id = contextMessages[i].metadata?.messageId
+    if (contextMessages[i].role === 'user' && id && userTurnMessageIds.has(id)) return i
+  }
+  for (let i = contextMessages.length - 1; i >= 0; i--) {
+    if (contextMessages[i].role === 'user') return i
+  }
+  return -1
+}
+
+/**
+ * Anti-chorus content rules for multi-character turns, appended to the system
+ * message on BOTH anchor routes (the discipline is about what a turn contains,
+ * not who speaks it).
+ *
+ * Motivated by the "committee meeting" failure mode observed with weaker
+ * models: every character opens with a roll-call recap of the prior speakers,
+ * endorses all of it, claims "the one thing nobody has named," parrots the
+ * cast's coined phrases verbatim, and closes by restating the group's action
+ * list. The rules target the *shape* of the chorus rather than specific
+ * wording — phrase blocklists alone have proven too weak to hold. Exported for
+ * unit testing.
+ */
+export const GROUP_SCENE_DISCIPLINE = `GROUP-SCENE DISCIPLINE — the failure mode of a group scene is the chorus: each character recaps what the others said, agrees with all of it, and adds one small item shaped like everyone else's. Never join a chorus:
+- Do not open by summarizing or listing what other characters just said. Everyone present heard it. React to at most one specific thing, or simply act.
+- Do not agree-then-add ("X is right — but there's one thing nobody has named"). If all you have is agreement plus a small addendum, give the addendum alone in a sentence or two — or pass the turn if passing is offered.
+- Never reuse another character's metaphors, images, or coined phrases. A striking phrase someone else used in this scene is spent; repeating it is a defect, not a callback. If several characters have already said much the same thing, saying it again in your own accent adds nothing.
+- Do not restate the plan, the task list, or the group's conclusions. They are already on the record; a speech re-affirming what is decided adds nothing.
+- Speak to change something: new information, a genuine objection or disagreement, a question, an action actually taken, a joke, a refusal. Re-pledging your commitment is not a turn.
+- Vary register and length. Most real conversational turns are one to three sentences. A long speech is an event, not a default — and never the second one in a row.`
+
+/**
+ * In multi-character chats, anchor each reply to the responding character and
+ * forbid it from writing anyone else's turn. Two routes, chosen per profile by
+ * `multiCharacterPrefill`:
+ *
+ *   - **prefill** — append an assistant `[Name]` message. The model
+ *     structurally continues only that character's line; the leading tag is
+ *     stripped downstream by `stripCharacterNamePrefix()`.
+ *   - **prose** — append an instruction to the system message instead, leaving
+ *     the conversation ending on a user message. We deliberately do NOT tell
+ *     the model to emit a `[Name]` tag — that both contradicts the always-on
+ *     Identity Reminder ("do not prefix with your name") and teaches weaker
+ *     models the very screenplay format they then run away with, writing the
+ *     whole cast's turns. Identity is anchored in prose and foreign speaker
+ *     tags forbidden outright.
+ *
+ * Both routes also append {@link GROUP_SCENE_DISCIPLINE} to the system message:
+ * the identity anchor keeps a turn attributed to one character, but says
+ * nothing about content, and with the previous turns as the strongest style
+ * examples in context, models converge into the recap-endorse-echo chorus the
+ * discipline block forbids.
+ *
+ * `finalizeMessageResponse()` truncates a response at the first foreign
+ * `[Name]`/`Name:` tag as a structural backstop either way.
+ *
+ * Mutates `formattedMessages` in place. Exported for unit testing.
+ */
+export function applyMultiCharacterTurnAnchor(
+  formattedMessages: Array<{ role: string; content: string; thoughtSignature?: string; name?: string }>,
+  characterName: string,
+  usePrefill: boolean
+): void {
+  const systemIdx = formattedMessages.findIndex(m => m.role === 'system')
+
+  const systemAdditions: string[] = []
+  if (!usePrefill) {
+    systemAdditions.push(
+      `IMPORTANT — this is a multi-character scene. Respond as ${characterName} and ONLY ${characterName}: write only ${characterName}'s own dialogue, actions, and thoughts for this single turn, then stop. Never write, narrate, quote, or continue another participant's turn, and never label any text with another participant's name (no "[Name]" or "Name:" speaker tags for anyone but ${characterName}). Output only ${characterName}'s contribution.`
+    )
+  }
+  systemAdditions.push(GROUP_SCENE_DISCIPLINE)
+
+  if (systemIdx >= 0) {
+    formattedMessages[systemIdx] = {
+      ...formattedMessages[systemIdx],
+      content: formattedMessages[systemIdx].content + '\n\n' + systemAdditions.join('\n\n'),
+    }
+  }
+
+  if (usePrefill) {
+    formattedMessages.push({
+      role: 'assistant',
+      content: `[${characterName}]`,
+      thoughtSignature: undefined,
+      name: undefined,
+    })
+  }
+}
+
+/**
  * Build the full message context for the LLM
  */
 export async function buildMessageContext(
@@ -497,6 +842,7 @@ export async function buildMessageContext(
     cachedCompressionMessageCount,
     preSearchedMemories,
     recallSignals,
+    preSearchedQueryEmbedding,
     generateMemoryRecap: requestMemoryRecap,
     uncensoredFallbackOptions,
   } = options
@@ -600,9 +946,64 @@ export async function buildMessageContext(
   // `normalizeWhisperRoles` for the full rationale.
   const filteredExistingMessages = normalizeWhisperRoles(messagesAfterWhisperFilter, isOpaqueAnywhere)
 
+  // Row ids of the *human's* own turns, captured before normalization erases
+  // the distinction. Staff whispers are re-roled to USER above, so after this
+  // point "role === 'user'" no longer means "the user said it" — and the image
+  // attachment anchor needs it to (bug 95).
+  const userTurnMessageIds = new Set(
+    messagesAfterWhisperFilter
+      .filter(m => m.type === 'message' && m.role === 'USER' && !m.systemSender && m.id)
+      .map(m => m.id as string)
+  )
+
+  // If this is a joining character without history access and they have not
+  // yet responded, clamp both attachment walks to messages posted after they
+  // joined. Computed from the filtered set so opaque characters never reach
+  // Staff attachments either — symmetric with their text-side filter.
+  const hasPriorResponse = filteredExistingMessages.some(
+    m => m.type === 'message' && m.role === 'ASSISTANT' && m.participantId === characterParticipant?.id
+  )
+  const attachmentHistoryCutoff = (isMultiCharacter && characterParticipant && !characterParticipant.hasHistoryAccess && !hasPriorResponse)
+    ? (characterParticipant.createdAt ?? null)
+    : null
+
+  // Bug 121: re-hydrate the human's own attachments out of history.
+  //
+  // `loadAndProcessFiles` expands the files on *this* request's `fileIds` and
+  // the expansion dies with the request — the row keeps the typed words and a
+  // pointer. Everyone after the first character to answer therefore saw a bare
+  // message where a document had been. Re-deriving from the file here (rather
+  // than persisting the expanded body) keeps the file the single source of
+  // truth, survives regenerate, swipe, import and restore, and treats an
+  // uploaded image exactly like an uploaded transcript: the same
+  // `processFileAttachmentFallback` pass either inlines the text, describes
+  // the image, or hands the raw bytes back for a provider that takes them.
+  //
+  // This runs *before* `buildContext` so the tokens are budgeted, compressed
+  // and trimmed like any other message content — the Lantern prefix is spliced
+  // in after budgeting, which is affordable for a description and would not be
+  // for a 29 KB transcript.
+  const { rehydratedContentByMessageId, rehydratedAttachmentsToKeep } =
+    await rehydrateUserAttachments({
+      messages: filteredExistingMessages,
+      characterParticipantId: characterParticipant?.id,
+      isMultiCharacter,
+      historyCutoff: attachmentHistoryCutoff,
+      connectionProfile,
+      repos: options.repos,
+      userId,
+    })
+
+  const messagesForConversation = rehydratedContentByMessageId.size > 0
+    ? filteredExistingMessages.map(m => {
+        const prefix = m.id ? rehydratedContentByMessageId.get(m.id) : undefined
+        return prefix ? { ...m, content: prefix + (m.content ?? '') } : m
+      })
+    : filteredExistingMessages
+
   // Build conversation messages
   const { conversationMessages, messagesWithParticipants } = buildConversationMessages(
-    filteredExistingMessages,
+    messagesForConversation,
     isMultiCharacter
   )
 
@@ -674,6 +1075,7 @@ export async function buildMessageContext(
     // Proactive memory recall
     preSearchedMemories,
     recallSignals,
+    preSearchedQueryEmbedding,
     // Memory recap (chat start or character join)
     generateMemoryRecap: shouldGenerateRecap,
     uncensoredFallbackOptions,
@@ -684,6 +1086,9 @@ export async function buildMessageContext(
     // Autonomous-room per-turn context cap (tokens) — clamps the model-derived
     // budget so a token-budgeted room paces its run across multiple turns.
     autonomousContextCap: options.autonomousContextCap,
+    // Room held back for the tool schemas and the system messages the caller
+    // splices in after this returns.
+    reservedOutgoingTokens: options.reservedOutgoingTokens,
     // "Nothing to add" turn-skipping — per-turn ephemeral instruction control.
     turnSkip: options.turnSkip,
   })
@@ -717,25 +1122,14 @@ export async function buildMessageContext(
   // Without that step, non-vision providers (e.g. DeepSeek via OpenRouter)
   // reject the request because they're being handed images they can't read.
   const ASSISTANT_IMAGE_LOOKBACK = 6
-  let mergedAttachmentsToSend: unknown[] = attachmentsToSend
+  let mergedAttachmentsToSend: unknown[] = [...attachmentsToSend, ...rehydratedAttachmentsToKeep]
   let lanternImagePrefix = ''
   try {
-    // If this is a joining character without history access and they have
-    // not yet responded, clamp the walk to messages posted after they joined.
-    // Use the filtered set so opaque characters never reach Staff (Lantern et
-    // al.) image attachments either — symmetric with their text-side filter.
-    const hasPriorResponse = filteredExistingMessages.some(
-      m => m.type === 'message' && m.role === 'ASSISTANT' && m.participantId === characterParticipant.id
-    )
-    const historyCutoff = (isMultiCharacter && !characterParticipant.hasHistoryAccess && !hasPriorResponse)
-      ? (characterParticipant.createdAt ?? null)
-      : null
-
     const recentAssistantImageFileIds = collectLanternImageFileIdsForCharacter(
       filteredExistingMessages,
       characterParticipant.id,
       isMultiCharacter,
-      historyCutoff,
+      attachmentHistoryCutoff,
       ASSISTANT_IMAGE_LOOKBACK,
     )
     if (recentAssistantImageFileIds.length > 0) {
@@ -772,7 +1166,7 @@ export async function buildMessageContext(
           }
         }
         if (lanternAttachmentsToKeep.length > 0) {
-          mergedAttachmentsToSend = [...attachmentsToSend, ...lanternAttachmentsToKeep]
+          mergedAttachmentsToSend = [...mergedAttachmentsToSend, ...lanternAttachmentsToKeep]
         }
       }
     }
@@ -782,13 +1176,27 @@ export async function buildMessageContext(
     })
   }
 
+  // `formatMessagesForProvider` is a pure map, so indices stay parallel with
+  // `builtContext.messages` and an index chosen against one applies to the other.
+  const attachmentAnchorIndex = selectAttachmentAnchorIndex(
+    builtContext.messages,
+    userTurnMessageIds
+  )
+
+  if (mergedAttachmentsToSend.length > 0 && attachmentAnchorIndex === -1) {
+    logger.warn('Image attachments could not be anchored — no user-role message in context; images will not reach the model', {
+      attachmentCount: mergedAttachmentsToSend.length,
+      contextMessageCount: builtContext.messages.length,
+    })
+  }
+
   // Prepare final messages for LLM
   const formattedMessages = formattedContextMessages.map((msg, idx) => {
-    const isLastUserMessage = idx === formattedContextMessages.length - 1 && msg.role === 'user'
-    const content = isLastUserMessage && lanternImagePrefix
+    const isAnchor = idx === attachmentAnchorIndex
+    const content = isAnchor && lanternImagePrefix
       ? lanternImagePrefix + msg.content
       : msg.content
-    if (isLastUserMessage && mergedAttachmentsToSend.length > 0) {
+    if (isAnchor && mergedAttachmentsToSend.length > 0) {
       return {
         role: msg.role,
         content,
@@ -804,39 +1212,21 @@ export async function buildMessageContext(
     }
   })
 
-  // In multi-character chats, anchor each reply to the responding character and
-  // forbid it from writing anyone else's turn. The two providers take different
-  // routes because Anthropic 4.6+ rejects requests that end with an assistant
-  // message (so we can't prefill it with a "[Name]" turn-opener there):
-  //   - Non-Anthropic: prefill an assistant "[Name]" message. The model
-  //     structurally continues only that character's line; the leading tag is
-  //     stripped downstream by stripCharacterNamePrefix().
-  //   - Anthropic: append a system instruction. We deliberately do NOT tell it
-  //     to emit a "[Name]" tag — that both contradicts the always-on Identity
-  //     Reminder ("do not prefix with your name") and teaches weaker models the
-  //     very screenplay format ("[Name] …") they then run away with, writing
-  //     the whole cast's turns. Instead we anchor identity in prose and forbid
-  //     foreign speaker tags outright. finalizeMessageResponse() truncates a
-  //     response at the first foreign "[Name]"/"Name:" tag as a structural
-  //     backstop regardless of provider.
   if (isMultiCharacter) {
-    if (connectionProfile.provider === 'ANTHROPIC') {
-      const systemIdx = formattedMessages.findIndex(m => m.role === 'system')
-      if (systemIdx >= 0) {
-        formattedMessages[systemIdx] = {
-          ...formattedMessages[systemIdx],
-          content: formattedMessages[systemIdx].content +
-            `\n\nIMPORTANT — this is a multi-character scene. Respond as ${character.name} and ONLY ${character.name}: write only ${character.name}'s own dialogue, actions, and thoughts for this single turn, then stop. Never write, narrate, quote, or continue another participant's turn, and never label any text with another participant's name (no "[Name]" or "Name:" speaker tags for anyone but ${character.name}). Output only ${character.name}'s contribution.`,
-        }
-      }
-    } else {
-      formattedMessages.push({
-        role: 'assistant',
-        content: `[${character.name}]`,
-        thoughtSignature: undefined,
-        name: undefined,
-      })
-    }
+    applyMultiCharacterTurnAnchor(
+      formattedMessages,
+      character.name,
+      // The thinking answer only matters for a profile that never chose —
+      // `profileUsesNamePrefill` honours a stored boolean over any default.
+      profileUsesNamePrefill(
+        connectionProfile,
+        profileRunsThinkingTurn(
+          connectionProfile.provider,
+          connectionProfile.modelName,
+          connectionProfile.parameters as Record<string, unknown> | null | undefined
+        )
+      ),
+    )
   }
 
   return {

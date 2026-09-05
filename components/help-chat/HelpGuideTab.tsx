@@ -29,6 +29,9 @@ interface NavHistoryEntry {
   scrollTop: number
 }
 
+/** Keystroke settling time before the text search hits the server. */
+const SEARCH_DEBOUNCE_MS = 200
+
 export function HelpGuideTab() {
   const { currentPageUrl } = useHelpChat()
   // Keep-alive-safe page navigation (opens tab-equivalent routes in place).
@@ -43,6 +46,15 @@ export function HelpGuideTab() {
   const [activeDocId, setActiveDocId] = useState<string | null>(null)
   const [activeCategoryLabel, setActiveCategoryLabel] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
+  /**
+   * Text-search hits, tagged with the query that produced them. Tagging (rather
+   * than clearing on every keystroke) keeps stale results from a previous query
+   * from leaking into the current filter, and keeps this effect free of a
+   * synchronous setState.
+   */
+  const [contentMatches, setContentMatches] = useState<
+    { query: string; bySlug: Map<string, string | null> } | null
+  >(null)
 
   // Navigation history for scroll position restoration
   const navHistoryRef = useRef<NavHistoryEntry[]>([])
@@ -104,7 +116,48 @@ export function HelpGuideTab() {
     }))
   }, [documents])
 
-  // Filter categories by search query
+  // Text-search hits from the server, keyed by slug. Document *content* is not
+  // shipped with the index (far too large), so matching against the prose has
+  // to happen server-side; the title match below stays client-side so the list
+  // narrows on the first keystroke rather than waiting on a round trip.
+  useEffect(() => {
+    const query = searchQuery.trim()
+
+    if (query.length < 2) {
+      return
+    }
+
+    let cancelled = false
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/v1/help-docs?action=search&q=${encodeURIComponent(query)}`)
+        if (!res.ok || cancelled) return
+
+        const data = await res.json()
+        const bySlug = new Map<string, string | null>()
+        for (const match of data.matches || []) {
+          bySlug.set(match.slug, match.snippet ?? null)
+        }
+        setContentMatches({ query, bySlug })
+      } catch {
+        // Leave the title-only filter in place; the box still works.
+      }
+    }, SEARCH_DEBOUNCE_MS)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [searchQuery])
+
+  /** Text hits for the query currently in the box, or null if they're stale. */
+  const currentTextHits = useMemo(
+    () => (contentMatches?.query === searchQuery.trim() ? contentMatches.bySlug : null),
+    [contentMatches, searchQuery]
+  )
+
+  // Filter categories by search query — title match, plus any document whose
+  // text the server matched.
   const filteredCategories = useMemo(() => {
     if (!searchQuery.trim()) return categories
     const query = searchQuery.toLowerCase()
@@ -112,11 +165,11 @@ export function HelpGuideTab() {
       .map((cat) => ({
         ...cat,
         resolvedDocs: cat.resolvedDocs.filter((doc) =>
-          doc.title.toLowerCase().includes(query)
+          doc.title.toLowerCase().includes(query) || currentTextHits?.has(doc.id)
         ),
       }))
       .filter((cat) => cat.resolvedDocs.length > 0)
-  }, [categories, searchQuery])
+  }, [categories, searchQuery, currentTextHits])
 
   const handleSelectTopic = useCallback((docId: string, categoryLabel: string) => {
     navHistoryRef.current = []
@@ -203,6 +256,7 @@ export function HelpGuideTab() {
                     currentPageUrl={currentPageUrl}
                     defaultExpanded={cat.id === contextCategoryId && !searchQuery}
                     forceExpanded={!!searchQuery}
+                    snippets={currentTextHits}
                     onSelectTopic={(docId) => handleSelectTopic(docId, cat.label)}
                   />
                 ))}

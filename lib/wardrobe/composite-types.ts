@@ -11,7 +11,7 @@ import type { WardrobeItem, WardrobeItemType } from '@/lib/schemas/wardrobe.type
 
 /**
  * Compute the union of slot types across a list of components, in canonical
- * slot order (`top → bottom → footwear → accessories`). Used to derive a
+ * slot order (`top → bottom → footwear → accessories → hair`). Used to derive a
  * composite item's `types` from its components.
  */
 export function unionTypes(components: readonly Pick<WardrobeItem, 'types'>[]): WardrobeItemType[] {

@@ -22,12 +22,13 @@ import { logger } from '@/lib/logger'
 import { getErrorMessage } from '@/lib/error-utils'
 import { getRepositories } from '@/lib/repositories/factory'
 import type { Character, ConnectionProfile } from '@/lib/schemas/types'
-import type { CheapLLMSelection } from '@/lib/llm/cheap-llm'
+import { selectionFromProfile } from '@/lib/llm/cheap-llm'
 import type { LLMMessage } from '@/lib/llm/base'
 import { executeCheapLLMTask } from '@/lib/memory/cheap-llm-tasks/core-execution'
 import { buildSystemPrompt } from '@/lib/chat/context/system-prompt-builder'
 import { searchMemoriesSemantic } from '@/lib/memory/memory-service'
 import { formatDynamicMemoryHead } from '@/lib/chat/context/memory-injector'
+import { buildMemorySubjectContext } from '@/lib/memory/memory-subject'
 import { buildCommonplaceLLMContext } from '@/lib/services/commonplace-notifications/writer'
 
 export interface CharacterVoicedAnnouncementParams {
@@ -52,21 +53,6 @@ export interface CharacterVoicedAnnouncementResult {
 }
 
 const TASK_TYPE = 'announcement-rewrite'
-
-function buildSelection(profile: ConnectionProfile): CheapLLMSelection {
-  return {
-    provider: profile.provider,
-    modelName: profile.modelName,
-    baseUrl: profile.baseUrl || undefined,
-    connectionProfileId: profile.id,
-    isLocal: profile.provider === 'OLLAMA',
-    // Forward the profile's provider params (e.g. DeepSeek thinking mode) so
-    // per-model settings take effect for this utility call too.
-    profileParameters: profile.parameters && typeof profile.parameters === 'object'
-      ? (profile.parameters as Record<string, unknown>)
-      : undefined,
-  }
-}
 
 /** "Alice", "Alice and Bob", "Alice, Bob, and Carol". */
 function formatNameList(names: string[]): string {
@@ -115,7 +101,9 @@ export async function generateCharacterVoicedAnnouncement(
   const whisperAudience = audienceNames?.filter(n => n.trim().length > 0) ?? []
 
   try {
-    const selection = buildSelection(profile)
+    // The chosen profile as-is; provider params ride along so per-model
+    // settings (e.g. DeepSeek thinking mode) take effect for this call too.
+    const selection = selectionFromProfile(profile)
 
     // System prompt: identity stack only — no roleplay template, no tools.
     const systemPrompt = buildSystemPrompt({
@@ -137,7 +125,14 @@ export async function generateCharacterVoicedAnnouncement(
       )
 
       if (memoryResults.length > 0) {
-        const formatted = formatDynamicMemoryHead(memoryResults, profile.provider, {
+        // The recall spans the character's whole store, so it carries their
+        // memories about other people too; attribute them or the rewrite reads
+        // someone else's life as its own (bug 122).
+        const subject = await buildMemorySubjectContext(
+          character.id,
+          memoryResults.map(r => r.memory),
+        )
+        const formatted = formatDynamicMemoryHead(memoryResults, profile.provider, subject, {
           maxEntries: 12,
         })
         if (formatted.content) {

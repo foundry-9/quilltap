@@ -93,6 +93,16 @@ Quilltap treats JSON and JSONL files as first-class document types alongside Mar
 
 In Lexical-based markdown editors (including Document Mode), markdown delimiter characters are preserved as typed on save/export. Quilltap no longer rewrites ordinary delimiters as escaped punctuation (for example, writing `*`, `_`, `` ` ``, and `~` back as `\*`, `\_`, `\```, and `\~`).
 
+#### A word on curly quotes, and why an edit no longer trips over one
+
+Your characters write like authors, which is to say they write `’` and `—` without being asked, and Quilltap files their prose exactly as composed — a document is a record, not a fair copy. The difficulty arrives a turn later, when a character recalls a sentence from that page and sets it down again with an honest typewriter apostrophe. To the letter of the law the two sentences differ; to any reader on earth they are the same sentence, and the edit that follows ought not to be refused over a curl of ink.
+
+It no longer is. `doc_str_replace` and `doc_insert_text` first look for your text precisely as given; only when that finds *nothing whatsoever* do they look again with the punctuation set aside — curly quotes read as straight ones, the dash family as a plain hyphen, `…` as three periods, and the non-breaking spaces as ordinary ones. Should a passage be found only on that second reading, the tool says so plainly in its reply, and the passage is thereafter spelled as the character wrote it. Nothing else in the document is disturbed.
+
+The order of those two readings is the whole of the courtesy. A page that contains *both* spellings has one correct answer — the one you actually typed — and the exact reading always claims it first, so a document of mixed punctuation never dissolves into an ambiguity. `doc_grep`, having no such nicety to protect, simply ignores the distinction throughout when searching for literal text: a search for words is not a search for punctuation. (A search given a regular expression is left entirely to your own devising, as it should be.)
+
+None of this touches what is *stored*. Quilltap's typographic manners — the curled quotation marks you see in a chat message — are a matter of presentation only, applied as the page is drawn and never written into a file, an export, or anything a character reads.
+
 ### File Management
 
 - **`doc_move_file`** — Move or rename a file. If the destination is in a different directory, the file is moved; if in the same directory, it is renamed. The destination must not already exist. The Librarian announces the move in the chat, naming the old and new addresses.

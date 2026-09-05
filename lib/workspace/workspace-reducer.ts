@@ -142,9 +142,43 @@ export function isSplit(state: WorkspaceState): boolean {
 // Internal pure utilities
 // ---------------------------------------------------------------------------
 
-function clampSplitRatio(ratio: number): number {
+/** Clamp a split ratio into `[MIN_SPLIT_RATIO, MAX_SPLIT_RATIO]`; a non-finite value resets to the default. */
+export function clampSplitRatio(ratio: number): number {
   if (!Number.isFinite(ratio)) return DEFAULT_SPLIT_RATIO
   return Math.min(MAX_SPLIT_RATIO, Math.max(MIN_SPLIT_RATIO, ratio))
+}
+
+/**
+ * Re-normalise the pane layout after tabs have been removed or moved: an
+ * emptied right pane collapses (pulling focus back to the left), an emptied
+ * left pane is filled from the right, and when nothing is left at all the
+ * workspace resets to a single fresh home tab (`homeFallbackId`).
+ *
+ * `state.panes` is read as given — the caller has already filtered orders and
+ * repaired active references. Shared by the reducer's close/move paths and
+ * the persistence layer's prune, so a dropped tab lands in the same layout
+ * whichever way it went.
+ */
+export function normalizePanes(state: WorkspaceState, homeFallbackId: string): WorkspaceState {
+  let left = state.panes.left
+  let right = state.panes.right
+  let focusedPane = state.focusedPane
+
+  // Collapse an emptied right pane; focus cannot stay on a pane that is gone.
+  if (right && right.order.length === 0) right = null
+  if (focusedPane === 'right' && !right) focusedPane = 'left'
+  // If the left pane emptied but the right still has tabs, promote right→left.
+  if (left.order.length === 0 && right && right.order.length > 0) {
+    left = right
+    right = null
+    focusedPane = 'left'
+  }
+  // Everything is gone — reset to a single home tab.
+  if (left.order.length === 0 && (!right || right.order.length === 0)) {
+    return createInitialState(homeFallbackId)
+  }
+
+  return { ...state, panes: { left, right }, focusedPane }
 }
 
 function setPane(
@@ -215,35 +249,18 @@ function removeTabs(
     if (!removeIds.has(id)) tabs[id] = tab
   }
 
-  let left: PaneState = {
+  const left: PaneState = {
     order: state.panes.left.order.filter((id) => !removeIds.has(id)),
     activeTabId: pickActiveAfterRemoval(state.panes.left, removeIds),
   }
-  let right: PaneState | null = state.panes.right
+  const right: PaneState | null = state.panes.right
     ? {
         order: state.panes.right.order.filter((id) => !removeIds.has(id)),
         activeTabId: pickActiveAfterRemoval(state.panes.right, removeIds),
       }
     : null
-  let focusedPane = state.focusedPane
 
-  // Collapse an emptied right pane.
-  if (right && right.order.length === 0) {
-    right = null
-    if (focusedPane === 'right') focusedPane = 'left'
-  }
-  // If the left pane emptied but the right still has tabs, promote right→left.
-  if (left.order.length === 0 && right && right.order.length > 0) {
-    left = right
-    right = null
-    focusedPane = 'left'
-  }
-  // Everything is gone — reset to a single home tab.
-  if (left.order.length === 0 && (!right || right.order.length === 0)) {
-    return createInitialState(homeFallbackId)
-  }
-
-  return { ...state, tabs, panes: { left, right }, focusedPane }
+  return normalizePanes({ ...state, tabs, panes: { left, right } }, homeFallbackId)
 }
 
 // ---------------------------------------------------------------------------
@@ -379,18 +396,9 @@ export function workspaceReducer(
       panes = setPane(panes, fromPane, { order: sourceOrder, activeTabId: sourceActive })
       panes = setPane(panes, toPane, { order: targetOrder, activeTabId: action.id })
 
-      let left = panes.left
-      let right = panes.right
-      let focusedPane: PaneId = toPane
-      if (right && right.order.length === 0) {
-        right = null
-      }
-      if (left.order.length === 0 && right && right.order.length > 0) {
-        left = right
-        right = null
-        focusedPane = 'left'
-      }
-      return { ...state, panes: { left, right }, focusedPane }
+      // The moved tab keeps the target pane non-empty, so normalisation can
+      // only collapse the vacated source (never the home fallback).
+      return normalizePanes({ ...state, panes, focusedPane: toPane }, action.id)
     }
 
     case 'SET_ACTIVE': {

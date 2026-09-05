@@ -17,22 +17,14 @@ import type {
   GeneratedCharacterData,
   AIWizardRequest,
   AIWizardResponse,
+  WizardCharacterData,
 } from '../types'
 import { normalizeGeneratedScenarios } from '../types'
 
 interface UseAIWizardProps {
   characterId?: string
   characterName: string
-  currentData: {
-    title?: string
-    identity?: string
-    description?: string
-    manifesto?: string
-    personality?: string
-    scenarios?: Array<{ id: string; title: string; content: string }>
-    exampleDialogues?: string
-    systemPrompt?: string
-  }
+  currentData: WizardCharacterData
   onApply: (data: GeneratedCharacterData) => void
   onClose: () => void
 }
@@ -138,7 +130,11 @@ export function useAIWizard({
     // Scenarios are always available — you can always generate more
     fields.push('scenarios')
     if (!currentData.exampleDialogues?.trim()) fields.push('exampleDialogues')
+    if (!currentData.firstMessage?.trim()) fields.push('firstMessage')
     if (!currentData.systemPrompt?.trim()) fields.push('systemPrompt')
+
+    // Properties are available when pronouns are unset (aliases ride along)
+    if (!currentData.pronouns) fields.push('properties')
 
     // Physical description is available if not skipping
     if (descriptionSource !== 'skip') {

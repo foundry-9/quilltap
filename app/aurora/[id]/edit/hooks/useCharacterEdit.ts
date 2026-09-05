@@ -64,6 +64,7 @@ export function useCharacterEdit(id: string) {
     avatarRefreshKey: 0,
     externalUpdateCount: 0,
   })
+  const [savingCanChooseOutfit, setSavingCanChooseOutfit] = useState(false)
 
   /**
    * Fetch character data from API
@@ -224,6 +225,42 @@ export function useCharacterEdit(id: string) {
       ...prev,
       formData: { ...prev.formData, coreWhisperEnabled: value },
     }))
+  }
+
+  /**
+   * Persist the "let this character choose their opening outfit" flag (vault
+   * properties.json). Immediate save, mirroring the other per-character
+   * wardrobe toggles and `useCharacterView.handleSaveCanChooseOutfit`: the
+   * local character row is updated on success (the form's unsaved edits are
+   * left alone), and a failure re-fetches to snap the checkbox back to server
+   * truth.
+   */
+  const handleSaveCanChooseOutfit = async (enabled: boolean) => {
+    setSavingCanChooseOutfit(true)
+    try {
+      const res = await fetch(`/api/v1/characters/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ canChooseOutfit: enabled }),
+      })
+      if (!res.ok) throw new Error('Failed to update outfit-choice setting')
+
+      setState((prev) => ({
+        ...prev,
+        character: prev.character ? { ...prev.character, canChooseOutfit: enabled } : prev.character,
+      }))
+      showSuccessToast(
+        enabled
+          ? 'New chats will let this character choose their own opening outfit'
+          : 'New chats will use this character’s default opening outfit',
+      )
+    } catch (err) {
+      showErrorToast(err instanceof Error ? err.message : 'Failed to update outfit-choice setting')
+      console.error('Failed to save outfit-choice setting', { error: err instanceof Error ? err.message : String(err) })
+      await fetchCharacter() // Revert to server state
+    } finally {
+      setSavingCanChooseOutfit(false)
+    }
   }
 
   /**
@@ -388,6 +425,7 @@ export function useCharacterEdit(id: string) {
   return {
     // State
     ...state,
+    savingCanChooseOutfit,
 
     // Computed
     isNpc,
@@ -400,6 +438,7 @@ export function useCharacterEdit(id: string) {
     handleSystemTransparencyChange,
     handleCanBeCarinaChange,
     handleCoreWhisperEnabledChange,
+    handleSaveCanChooseOutfit,
     handleSubmit,
     handleCancel,
     setCharacterAvatar,

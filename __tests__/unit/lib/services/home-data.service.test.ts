@@ -36,7 +36,8 @@ function chat(over: AnyRecord = {}): AnyRecord {
     projectId: null,
     updatedAt: '2026-07-01T00:00:00.000Z',
     lastMessageAt: '2026-07-01T00:00:00.000Z',
-    isDangerousChat: false,
+    conciergeState: 'monitored',
+    dangerCategories: [],
     storyBackground: null,
     participants: [],
     _count: { messages: 3 },
@@ -214,6 +215,29 @@ describe('getHomeData — recent chats', () => {
     const data = await getHomeData(makeRepos({ chats: [chat()] }), { userId: 'u1' })
 
     expect(data.recentChats[0].storyBackgroundUrl).toBeNull()
+  })
+
+  it.each(['monitored', 'flagged', 'vouched', 'uncensored'])(
+    'passes the derived Concierge state (%s) through to the card',
+    async (conciergeState) => {
+      // The list must never see the raw danger label — the mark and the
+      // quick-hide rule both read this state.
+      const repos = makeRepos({ chats: [chat({ conciergeState })] })
+
+      const data = await getHomeData(repos, { userId: 'u1' })
+
+      expect(data.recentChats[0].conciergeState).toBe(conciergeState)
+    }
+  )
+
+  it("carries the classifier's categories for the mark's tooltip", async () => {
+    const repos = makeRepos({
+      chats: [chat({ conciergeState: 'flagged', dangerCategories: ['NSFW', 'Violence'] })],
+    })
+
+    const data = await getHomeData(repos, { userId: 'u1' })
+
+    expect(data.recentChats[0].dangerCategories).toEqual(['NSFW', 'Violence'])
   })
 })
 

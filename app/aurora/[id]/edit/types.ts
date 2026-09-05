@@ -2,13 +2,15 @@
  * TypeScript interfaces and types for character editing functionality
  */
 
-export interface CharacterScenario {
-  id: string
-  title: string
-  content: string
-  createdAt: string
-  updatedAt: string
-}
+/**
+ * Re-exported from the schema rather than redeclared: the edit form round-trips
+ * whole scenario objects back through `PUT /api/v1/characters/[id]`, so a local
+ * shape that omitted a field (`description`, `archived`) would silently strip it
+ * from the vault file on every save.
+ */
+import type { CharacterScenario } from '@/lib/schemas/character.types'
+
+export type { CharacterScenario }
 
 export interface Character {
   id: string

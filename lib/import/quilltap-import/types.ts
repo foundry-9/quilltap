@@ -158,6 +158,15 @@ export interface ImportOptions extends ExportImportOptions {
   preserveIdsMode?: PreserveIdsMode;
 }
 
+/**
+ * Repository `create` options for a `preserveIds` import: carry the source id
+ * through to the insert, or nothing at all when ids are being reminted.
+ */
+export function getPreserveIdsCreateOptions(sourceId: string | undefined, options: ImportOptions) {
+  if (!sourceId || !options.preserveIds) return undefined;
+  return { id: sourceId };
+}
+
 export interface ImportResult {
   success: boolean;
   imported: QuilltapExportCounts;

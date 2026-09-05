@@ -2,2193 +2,2617 @@
 
 ## Recent Changes
 
-### 4.8.4
-
-#### Fix: CI failed on a composer-typeahead test that raced the settings query
-
-The GitHub Actions test job went red on the last two runs, both times on the same assertion — `CharTypeaheadPlugin — emoji profile › bail conditions › is inert when composerEmoji is off — and never even fetches the dataset` expected 0 dataset fetches and got 1. It passed on every local run.
-
-The test was racing, not failing. `CharTypeaheadPlugin` reads its feature flag from the chat-settings query and falls back to enabled while that query is in flight, so a `:` typed before the settings land still warms the emoji dataset. The test tried to wait that window out with `await act(async () => new Promise(r => setTimeout(r, 0)))`. That wait cannot be relied on: TanStack Query schedules its notifications through `setTimeout(…, 0)` and React's async `act` drains its work loop through a `setImmediate`-class task, and the order those two fire in is the classic Node coin flip — decided by how busy the machine is. A loaded CI runner lost it; an idle laptop won it.
-
-The wait is gone. `renderPluginEditor` now takes a `chatSettings` option that seeds the settings query cache before mounting, so the flag is in effect on the first render and no timer is involved. Both typeahead suites (emoji and Unicode) use it for their flag-off cases; the Unicode suite's "never fetched from the space bar" test now seeds the flag *on*, where it previously passed even if the feature had been disabled. No production code changed.
-
-### 4.8.3
-
-#### Fix: the version guard was silently inert since 2026-08-12 (bug 65)
-
-The guard that stops an older Quilltap from opening a database a newer Quilltap has already migrated had been doing nothing since 2026-08-12, while reporting success. Two `error` lines at the top of every boot log — `isSQLiteBackend is not a function` — were the only evidence.
-
-`lib/startup/version-guard.ts` reached into `migrations/lib/database-utils` with a synchronous `require()`. That module became an async module in the bundler's server graph when the bug 58 fix added a static `instance-lock` import to it, and a sync `require()` of an async module returns an exports object whose body has never run: every property `undefined`, every call a TypeError, straight into a catch that allows startup anyway. So `instance_settings.highest_app_version` was never written (instances created since 2026-08-12 have no row at all), `minServerVersion` never reached the `.dbkey` where the Electron shell looks for it, and an older binary would open a newer database without complaint.
-
-Both guard functions are now `async` and use `await import(...)`, matching every other app-side reach into `migrations/`; `instrumentation.ts` awaits them. The import edge in `database-utils.ts` was deliberately left alone — unwinding it would have left the next static import free to break the guard again, silently.
-
-Three changes beyond the mechanism:
-
-- The guard can now report that it is broken. Both catch arms still allow startup, but they also push a warning through the migration-warnings channel, so a failure reaches the user instead of dying at `error` level in a log nobody reads on a healthy boot.
-- An ESLint `no-restricted-syntax` rule fails the build on `require('@/migrations/…')` — and on the relative form — anywhere in `lib/`, `app/`, `components/`, or `hooks/`.
-- The tests assert the effect rather than the absence of a throw: that `storeCurrentVersion()` writes `highest_app_version` with the running version, that a failed guard announces a warning, and — since Jest cannot reproduce the bundler's async-module classification — a source-level check that the file contains no sync `require` of the migration utilities.
-
-No repair is needed for existing instances: the correct value is written on the next boot. An instance with no row gets one; an instance frozen at an old value is corrected upward.
-
-#### Bug 65 filed: the version guard has been silently inert since 2026-08-12
-
-Docs only; no code change. `lib/startup/version-guard.ts` reaches into `migrations/lib/database-utils` with a synchronous `require()`. That module became an async module in Turbopack's graph when the bug 58 fix added a static `instance-lock` import to it, and a sync `require()` of an async module returns an exports object that is never populated — measured empty even a microtask later, while `await import()` of the same specifier returns all twelve exports. Every call throws `isSQLiteBackend is not a function` into a catch that allows startup anyway.
-
-Consequences: `instance_settings.highest_app_version` is never written (a fresh instance has no row at all; Friday is frozen at `4.8.0`), `minServerVersion` never reaches `.dbkey`, and an older binary will open a newer database without complaint. Nothing is corrupted by the bug itself, but the guard has been off for a day and reports success while doing nothing.
-
-The bug file (`docs/developer/bugs/bug-65-version-guard-async-require.md`) has the measurements, the experiment that isolates the import edge, and the fix spec: make both guard functions async and `await import`, surface the failure instead of swallowing it, and test the effect rather than the absence of a throw. Explicitly *not* fixed by unwinding the import edge — that would leave the next static import free to break it again, silently.
-
-#### Fix: first-run encryption setup wedged every database connection until restart (bug 64)
-
-Completing the encryption-key setup on a fresh instance left the app broken until the process was stopped and started. Every repository call failed with "The database connection is not open" — the session route, `instance_settings` reads, scheduled housekeeping, job reaping — while the HTTP server kept serving and the setup screen reported success. No data was lost; the encryption conversion itself always completed correctly.
-
-The setup handler closed the SQLite client directly before converting the database files. That respects only the client singleton's invariant: `SQLiteBackend` went on caching the closed handle, and the manager went on handing out that backend, so nothing above the client layer ever learned the connection was gone.
-
-Teardown now goes through two new manager functions, `suspendDatabase()` and `resumeDatabase()`, which close and reopen every handle while keeping the cached backend instance. Keeping the instance matters: repositories latch a per-instance "already ran `ensureCollection`" flag, and the resulting JSON/array/boolean column maps live on the backend, so a rebuilt backend would leave those maps empty for every live repository and structured columns would silently start round-tripping as raw strings.
-
-Four related defects fixed in the same pass:
-
-- The LLM-logs client stayed open while its file was converted, so subsequent log writes landed in the unlinked pre-conversion inode and were lost.
-- The mount-index database was not converted at setup at all — document-store bytes sat in plaintext on disk until the next restart. All three databases are now converted together.
-- `SQLiteBackend.disconnect()` closed two of the three databases `connect()` opens. It now closes the mount index too.
-- Auto-lock had the same disease, so the lock → unlock cycle wedged identically and without even a restart prompt. Lock suspends and unlock resumes; no restart needed.
-
-The backend also self-heals now: if it holds a handle that was closed behind its back, it re-fetches from the client singleton instead of handing out a dead one. It deliberately refuses to do this while suspended, since that is exactly when the database files are being replaced.
-
-If the reopen fails after setup, the response still carries the one-time encryption key — it is displayed exactly once, so it is never withheld behind an error — and the setup screen shows a restart notice beside it.
-
-The `better-sqlite3` test mock now throws `TypeError: The database connection is not open` from `prepare`/`exec`/`pragma` after `close()`, matching the real driver. A mock that kept answering after close hid this class of defect.
-
-### 4.8.2
-
-#### Bug 64 filed: first-run encryption setup wedges the database until restart
-
-Docs only; no code change. On a fresh instance, completing the encryption-key setup closes the main SQLite connection out-of-band before converting the database files, but the backend and manager singletons keep the dead handle cached — every repository call then fails with "The database connection is not open" until the process is restarted. No data is lost; the conversion itself completes correctly. The bug file (`docs/developer/bugs/bug-64-setup-stale-db-handle.md`) documents the root cause and the fix as a spec: tear down through `closeDatabase()`, convert all three databases (the mount-index DB is currently skipped until the next restart), reinitialize before returning success, and give the auto-lock path the same treatment. Also noted: the LLM-logs client stays open on the pre-conversion file during setup, losing log writes.
-
-#### Smart typography
-
-Two parts, split by how confident the rule is.
-
-Quotes: the conversation now displays curly quotes while storing and sending exactly what you typed, so nothing about your text or the model's input changes. Off by default; toggle on the Chat settings tab under Smart Typography. Code, math, and link addresses are skipped structurally — they are separate node types in the markdown tree, not text. A roleplay template that claims a quote character as one of its own delimiters suppresses the curling for that chat, as does dialogue-detection config that names a straight quote without its curly counterpart. Applies everywhere the message renderer runs: the Salon, streaming replies, thinking blocks, the help chat, the Brahma console.
-
-Dashes: typing `--` gives an en dash, `---` an em dash, and `...` an ellipsis, in the Salon composer and Document Mode. On by default. These write real characters into your text. One Backspace or one Cmd/Ctrl+Z reverts any substitution. Nothing fires in code blocks, inline code, source-mode editors, or during IME composition, and pasted text is left alone.
-
-Dashes are deliberately not applied at render time and won't be, so `--verbose` written in prose stays intact.
-
-The rule engine (`lib/smart-typography/`) imports nothing outside the standard library, enforced by an ESLint rule, and is pinned by a fixture corpus so the v5 port can be verified against it rather than re-derived.
-
-New `smartTypographySettings` column on `chat_settings`.
-
-#### Dependency updates
-
-Refreshed npm dependencies across the app, the published packages, and all 14 bundled plugins.
-
-App: Next.js 16.2 → 16.3, openai 7.2 → 7.4, katex 0.18.1 → 0.18.4, mammoth 1.12.0 → 1.12.1, ws 8.21.1 → 8.21.3, and dev tooling (esbuild 0.28.2, postcss 8.5.26, tsx 4.23.12, @openrouter/sdk 1.2.32, eslint-config-next 16.3, @testing-library/user-event 14.6.4).
-
-Packages: `create-quilltap-theme` 2.0.18, `@quilltap/plugin-utils` 2.2.20, `@quilltap/theme-storybook` 1.0.59.
-
-Plugins: all 14 patch-bumped and rebuilt against `@quilltap/plugin-types` 2.5.6 and `@quilltap/plugin-utils` 2.2.20.
-
-Every plugin's `manifest.json` version now matches its `package.json` version. Nine had drifted by one or two patches from earlier bumps that touched only one of the two files. The plugin build doesn't sync them, so the drift was invisible until checked.
-
-#### Fix: chat export navigated the window instead of downloading on Electron
-
-The Salon sidebar's chat export set `window.location.href` to the export API route. In a browser that starts a download, but in the Electron shell it navigated the app window to the API endpoint instead. It now uses the same `triggerUrlDownload` helper the Markdown export directly beside it already used, which calls Electron's download API and falls back to an anchor click in the browser. The server still names the file from the chat title; the `.qtap` name here is only the fallback.
-
-#### Internal navigation cleanup
-
-eslint-config-next 16.3 adds a rule flagging `window.location.href` for internal page navigation. Two sites are now `router.push()`: the legacy-shell handoff that opens a standalone document in the workspace, and canceling the new-chat modal when it was opened from a query parameter.
-
-Six sites keep the full page load on purpose and now carry a comment explaining why — the three setup-wizard steps and the auto-lock redirect all need client state rebuilt from scratch (for auto-lock that is the whole point, since a client transition would leave decrypted data in memory), and the message-navigation helper is a plain module with no router in scope whose sessionStorage handoff depends on mount timing.
-
-#### Composer Unicode
-
-Type `\` plus a LaTeX name (`\to`, `\phi`), a description (`\right arrow`), or a code point (`\u2192`, `\u+2192`, `\u{1D538}`) to insert a Unicode character, in both the Salon composer and Document Mode. A menu lists the matches; Enter or a click inserts. Typing a complete name and following it with a space — `\to ` — inserts immediately without the menu, keeping the space. A toolbar button labeled `Ω` opens a searchable picker with a browsable grid and a recents row.
-
-Aliases are case-sensitive: `\phi` is φ and `\Phi` is Φ, likewise `\gamma`/`\Gamma`, `\delta`/`\Delta`, `\sigma`/`\Sigma`, `\omega`/`\Omega`, `\theta`/`\Theta`.
-
-Nothing fires inside a math span, so `$$\phi$$`, `$\phi$`, `\(\phi\)` and `\[\phi\]` stay LaTeX. A `$` followed by a digit or a space is read as currency, so `costs $5 and \to ` still works. Markdown escapes are untouched — an escape is a backslash plus punctuation, and a symbol name must start with a letter, so `\*`, `\_` and `\[` never open a menu. As with emoji, nothing fires in fenced code blocks or inline code.
-
-The dataset holds 3,282 characters across 26 Unicode blocks (40 KB gzipped, smaller than the emoji index), served from `public/` and fetched only on the first `\` query or first picker open. The space bar never triggers the fetch. Characters already in the emoji index are excluded, so `\` and `:` never both offer the same character; 165 were dropped that way. Code-point entry resolves arithmetically with no table lookup, so every character in Unicode stays reachable, including the ones the curation dropped.
-
-Toggle on the Chat settings tab under Composer, labeled "Symbol shortcuts"; default on. The toolbar button is not gated by the toggle. Recently-used characters are stored in the browser's local storage under a key separate from the emoji recents.
-
-Adds a `composerUnicode` column to `chat_settings` (migration `add-composer-unicode-field-v1`).
-
-#### Internal: one character-insertion engine, two dataset profiles
-
-`lib/emoji/` is now `lib/char-insert/`, with emoji and Unicode as profiles over one implementation rather than two near-duplicate features. `EmojiEntry.shortcodes` became `CharEntry.aliases`, `findEmojiTrigger` became `findTrigger(text, config)`, the module-level loader became a per-profile factory, and `EmojiTypeaheadPlugin` became `CharTypeaheadPlugin`, mounted once per profile. The picker's search field and grid moved into a shared `CharPickerPanel`; `EmojiPickerPopover` and the new `UnicodePickerPopover` are thin wrappers.
-
-Search gained one bucket, `NameAllWords`, which matches when every query token prefixes a distinct name word. It ranks below every existing bucket, so it can only add results that previously did not appear at all — which is why the emoji corpus passed unedited through the whole refactor. That is the regression proof: emoji behavior is unchanged.
-
-The dataset files did not change. `public/emoji/emoji-index.v1.json` is byte-identical.
-
-#### Composer emoji
-
-Type `:` plus at least two letters to search emoji by name and insert one, in both the Salon composer and Document Mode. A menu lists the matches; Enter or a click inserts. Typing a complete shortcode and closing it — `:smile:` — inserts immediately without the menu. A button in the formatting toolbar opens a searchable picker with a browsable grid and a recents row.
-
-Inserted emoji are plain Unicode characters, not shortcodes, images, or custom nodes, so exports, Markdown round-trip, search, and the LLM all see ordinary text. No trailing space is added. One Cmd/Ctrl+Z removes the emoji and restores the literal `:smi` that was typed.
-
-The menu does not open after `http://`, inside a time like `10:30`, in a Windows path, after `:` alone or `:a`, or on `:)`. It also stays shut inside fenced code blocks and inline code.
-
-The emoji dataset (1,914 entries, ~53 KB gzipped) is served from `public/` and fetched only on the first `:` or first picker open, so instances that never use the feature never load it. If the fetch fails, typing is unaffected and the menu simply doesn't open.
-
-Toggle on the Chat settings tab under Composer, labeled "Emoji shortcuts"; default on. The toolbar button is not gated by the toggle — the flag governs the automatic `:` trigger only. Recently-used emoji are stored in the browser's local storage, not on the server.
-
-Adds a `composerEmoji` column to `chat_settings` (migration `add-composer-emoji-field-v1`).
-
-#### Fix: text replacements fired inside code blocks and inline code (bug 63)
-
-With any text-replacement rule defined, typing the trigger inside a fenced code block or an inline `code` run and then a word-boundary character applied the replacement — so a rule like `fn → function` silently rewrote code as it was typed. The plugin checked only that the cursor sat at the end of a text node, and `CodeHighlightNode` extends `TextNode`, so fenced-block tokens passed that check; nothing checked the `code` format bit for inline runs.
-
-Both surfaces now bail, via a single `$isInCodeContext` helper shared with the new emoji plugin so the two typing aids can't drift apart again. Replacements in ordinary prose are unchanged. The plugin previously had no tests at all; it has them now.
-
-#### Fix: curly-quoted dialogue wasn't highlighted in chats without a roleplay template (bug 62)
-
-Quilltap styles dialogue — the quoted parts of a message — differently from narration. In a chat using a roleplay template that supplies its own patterns, that worked with either kind of quotation mark. In a chat with no template, or one whose template supplies no rendering patterns, only straight quotes (`"like this"`) were ever highlighted. Curly quotes (`"like this"`) were not, and most model output is curly-quoted, as is anything pasted from Word, Pages, or Scrivener, or typed on macOS with smart quotes on.
-
-The built-in fallback patterns claimed in a comment to handle both kinds. They didn't: the character sets they used listed the straight quote twice instead of listing the straight and the curly one, and the duplicate did nothing. Both the inline highlighting and the whole-paragraph dialogue styling were affected, on both the mid-stream and the settled render.
-
-Both now match straight and curly double quotes. Single quotes are deliberately still not treated as dialogue — an apostrophe is a single quote far more often than a quotation mark is, so matching them would mis-highlight ordinary prose. Chats on a roleplay template are unchanged.
-
-The same mistake was in the `@quilltap/plugin-types` documentation, where the `DialogueDetection` examples a plugin author copies listed the straight quote twice under a "straight and curly quotes" comment. A plugin built from those examples got a detector that never matched curly dialogue. Fixed in `@quilltap/plugin-types` 2.5.6 — six sites across the two examples and the `openingChars`/`closingChars` field docs, now spelled with explicit escapes so the characters can't be misread. Documentation only; no type or behavior change, and existing plugins are unaffected.
-
-#### Fix: wardrobe items moved into a group were invisible to everyone
-
-The wardrobe transfer dialog has offered every group as a destination since groups gained document stores, and moving or copying a garment there worked — the file landed in the group store's `Wardrobe/` folder. Nothing ever read it back. `findArchetypes` and the wearable pool it feeds took only Quilltap General plus the chat's project stores, so a group garment did not appear in the wardrobe dialog, was not listed by `wardrobe_list`, could not be resolved by id or title by `wardrobe_read`/`wardrobe_wear`/`wardrobe_update`/`wardrobe_archive`, was never equipped as a default at chat start, and could not be moved back out (the transfer's source lookup didn't scan groups either). An item moved to a group effectively vanished.
-
-The group tier is now read everywhere the other shared tiers are. A character's wearable pool is the union of their own vault, the `Wardrobe/` folder of every store belonging to every group they're a member of (official and linked), the chat project's stores, and Quilltap General. Precedence matches the document-store tiers: **character > group > project > general**, so a group's livery shadows a project's copy of the same item and a character's personal copy shadows both — including the `isDefault: false` personal copy that is how a character opts out of a shared default.
-
-Group stores follow the character, not the chat: a character sees only their own groups' wardrobes and never a co-participant's, the same rule Knowledge already used. The one exception is the chat outfit-summary endpoint, which spans the whole cast and therefore reads the union of the participants' groups so every equipped item resolves to a title.
-
-Paths now covered: `wardrobe_list`, `wardrobe_read`, `wardrobe_wear`, `wardrobe_take_off`, `wardrobe_update`, `wardrobe_archive`, `wardrobe_create` (gifted composites resolve against the *recipient's* groups), the wardrobe dialog and outfit builder, chat-start outfit selection including the cheap LLM's pick and default outfits, equipped-outfit resolution for scene state, story backgrounds, avatar prompts, Aurora's wardrobe announcements, and the chat list's equipped-item titles. Group items are shared, so they are wear-only for a character, exactly like project and General items.
-
-The transfer dialog can now also take an item *out* of a group: the source lookup scans the source character's group stores between the project store and Quilltap General.
-
-Internally, the three copies of "read a mount's `Wardrobe/` folder" (general, project, and now group) collapsed into `lib/mount-index/shared-wardrobe.ts`, with the scoped modules as façades over it. The tier options that used to be threaded as a bare `projectMountPointIds` array are now one `SharedWardrobeTiers` object (`lib/wardrobe/shared-tiers.ts`) resolved by a single helper, so a call site can no longer thread one tier and silently drop the other — which is what let this go unnoticed.
-
-#### Change: wearing a bundled outfit now breaks it apart automatically
-
-Equipped state used to store a composite wardrobe item's own id in every slot it covered, expanding to the individual garments only at read time. In the wardrobe dialog that produced a single "Man in Black · bundle" card above four slot rows that all read *Empty* — the outfit was on, but nothing on screen said which shirt or which boots. Getting to that view took a separate **Break apart** click.
-
-Putting a bundle on now dissolves it in the same gesture. The component garments are stored in the slots their own types cover, and the bundle's id is never written to equipped state, so you can see each piece and remove one without touching the rest. Expansion is complete: a bundle nested inside a bundle comes apart too, so no bundle card can reappear.
-
-This happens wherever an outfit is put on, not just in the dialog — the Live tab, the Outfit Builder, the chat-start outfit composer, a character's default outfit, the cheap LLM's chat-start outfit pick, and the `wardrobe_wear` tool's `wear`, `replace`, and `add_to_slot` modes.
-
-The `replace` flag still governs a bundle, and now clears the union of the slots the bundle designates and the slots its pieces actually land in — so a replacing outfit that includes boots turns out the shoes already worn instead of layering over them. A "Naked" composite that designates all four slots still strips the character as documented.
-
-Bundles whose components can't be resolved — a shared outfit whose pieces live in a store the caller can't read — are stored whole, exactly as before, and still render correctly through read-time expansion. Outfits equipped before this change keep their composite id and their bundle card, so **Break apart** remains available for them; no migration is needed.
-
-Component hydration (the level-by-level fetch that resolves a bundle's pieces across the character vault, project stores, and Quilltap General) moved to `lib/wardrobe/hydrate-components.ts` and is now shared by the read and write sides instead of living only in `resolve-equipped`.
-
-#### Fix: a wardrobe change made before the outfit finished loading was thrown away (bug 61)
-
-The in-chat Wardrobe dialog gets its item list from one request and what the character is currently wearing from another, and the second one is a chain of three round trips. Between the list painting and that chain finishing, the Wear and Layer buttons were live but there was nothing to apply them to. A click in that window was staged against an empty outfit, then overwritten when the real outfit arrived, and the Done flush treated "this character has no recorded starting outfit" the same as "nothing changed" — so it sent no request, reported success, and closed the dialog. The change was gone with no error and no visible difference from a save that worked.
-
-Clicks made in that window are now recorded and re-applied to the real outfit the moment it arrives, so the change survives and lands on top of what the character was already wearing rather than replacing it. (Simply keeping the staged outfit would have committed only the item just clicked and removed everything else.) If the outfit never loads at all, Done now says so and asks before discarding the unsaved change instead of closing as though it had saved.
-
-#### Fix: the Core whisper dropdown squeezed its own label into a sliver
-
-On the first tab of the character editor, the "Aurora's Core whisper" card put its label and description in one flex column and the dropdown in another. The dropdown is full-width by default, so it took nearly the whole card and wrapped the label text down a column a few characters wide. The card now stacks: label and description across the full width, dropdown beneath them. The two checkbox cards above it are unchanged — a checkbox is narrow enough for the side-by-side layout.
-
-### 4.8.1
-
-#### Fix: the spelling lint rule never looked at documentation
-
-The project is spelled Quilltap, and an ESLint rule has flagged the doubled-t misspelling since 2.9. That rule only ever saw files ESLint parses. The flat config supplies no configuration for `.md`, `.json`, `.yml`, or shell files, so `eslint .` skipped each one with a "no matching configuration" warning and `npm run lint` stayed green while the misspelling sat in `docs/`.
-
-`npm run lint` and `npm run lint:fix` now run `scripts/check-quilltap-spelling.mjs` after ESLint. It sweeps every tracked and new-but-not-ignored text file, using the same pattern as the ESLint rule — both now read it from `quilltap-spelling.js`, so the two enforcers cannot drift. Deliberate occurrences are declared in an `ALLOWED_PATHS` list in the script, or exempted per line with a `quilltap-spelling-exception` marker.
-
-The misspelling itself was corrected in `docs/developer/features/complete/restore-rootfs-builds.md`, which had it in the release asset names, the download URLs, and the prose. Every other occurrence in `docs/` is deliberate: documents that state the spelling rule have to quote the wrong spelling, and the shipped changelogs and release notes record the misspelling being caught and fixed. Those are on the allowlist, unchanged.
-
-#### Fix: the documented way to back up your encryption key copied nothing (bug 60)
-
-The backup instructions in BACKUP-RESTORE.md and DEPLOYMENT.md gave the wrong path for the `.dbkey` file. The key file lives in the `data/` subdirectory alongside the database files, and the documented commands pointed one level above it, so `cp` failed and copied nothing. Anyone who followed the procedure had no backup of their encryption key — which is the one file that, if lost, makes the databases permanently unopenable. The same wrong path appeared in the Docker restore steps, and the in-app help called the file `.dbkey` instead of `quilltap.dbkey`. All of these now give the real path, and the help page warns specifically about aiming a backup one directory too high.
-
-The docs also described per-database key files that do not exist. An instance has one pepper and one `quilltap.dbkey`; all three databases open with it. `quilltap-mount-index.dbkey` was documented but never written by any version. `quilltap-llm-logs.dbkey` was written in exactly one place — changing your passphrase — and read by nothing, so it appeared only on instances whose passphrase was changed after setup. Because the other two paths that write the main key file never updated that copy, it could end up holding an out-of-date key while looking like a valid spare.
-
-That write is now removed. If your data directory has a `quilltap-llm-logs.dbkey`, it is inert and safe to delete; Quilltap does not delete it for you, since removing key material on your behalf is not a decision the app should make. Back up `data/quilltap.dbkey`.
-
-#### Fix: migrations ran without the instance lock (bug 58)
-
-Every database read and write in the app goes through the SQLite backend, which acquires the instance lock before opening the database. The migration runner used its own connection and skipped that step, so migrations — the heaviest writers in the codebase — could rewrite whole tables while another Quilltap process held the lock. This was found on an instance where a Docker container held the lock and a second Quilltap ran ten migrations against the same database anyway, rewriting 20,037 embeddings and 9,212 memory rows, before discovering it could not open the database at all.
-
-The migration runner now acquires the lock before opening, and refuses to run when another live process holds it. Acquisition is re-entrant for the same process, so a normal single-instance startup behaves exactly as before. A migration that cannot get the lock fails startup rather than proceeding, which is already how migration failures are handled.
-
-#### Fix: a failed database read could start new-install seeding on a populated instance (bug 59)
-
-The repository layer returns an empty list when a query fails, so "this table is empty" and "the database could not be read" arrive as the same value. Startup seeding asked whether any characters existed and treated an empty answer as a first startup — which meant a transient read failure could send an established instance down the new-install path: default characters, a default embedding profile, and a full `.qtap` import. On the instance where this was found, the seeding writes failed for the same reason the read did, so nothing was actually written, but only by coincidence.
-
-Seeding now determines emptiness with a strict count that raises the underlying error instead of hiding it, and skips seeding entirely when the question cannot be answered. Counting also runs beneath row validation and the document-store overlay, so a character whose vault is temporarily unreachable no longer subtracts from the total. Both the character check and the embedding-profile check were affected and both are fixed. Ordinary list queries keep their existing empty-list behavior.
-
-### 4.8.0
-
-#### Fix: streaming thinking indicator crowded the tool block above it
-
-When a streaming turn paused on a tool call with no prose after it, the "still working" quill rendered inline immediately below the tool block. The quill glyph paints slightly above its own layout box, so the two appeared to touch. The indicator now takes its own line with the same top spacing the tool block uses above itself. Inline placement mid-prose is unchanged.
-
-#### Docs: 4.8.0 release notes take in the character archive and the fourth batch of post-draft work
-
-Fourth catch-up pass over `docs/releases/4.8.0.md`, covering everything that landed after the 2026-08-05 pass. `pubDate` and the closing signature move to 2026-08-11. Features and user-visible fixes only; docs-only commits, the bug-catalogue reorganization, and the CI/test work are deliberately not in the notes.
-
-- **Added — "A Character May Be Packed Away":** a new top-level section on the character archive — what the bundle takes and what stays, the verify-then-commit ordering and idempotent re-run, rehydration at original IDs, the guards around a tombstone, bundle encryption under the instance passphrase (and the re-seal on a passphrase change), the Aurora/API/CLI surfaces, archive-sparing data wipes, and the faults found on the way (character exports carrying the vault, reconciliation clobbering bundle rows, the shared-document and twice-linked-blob rehydrate refusals, the 404-not-500 file read, the muted Archive button, the export wizard's vault size reporting, and the one-default-embedding-profile fix across all six paths).
-- **Added — "Taking Up a Character's Seat":** impersonation as an overlay rather than a seat rewrite, the turn handoff and speaking-as turn-follow, the overlay-aware turn banner and optimistic bubble, stop-impersonate reaching the server, impersonation surviving a reload, fair rotation in two-human-seat rooms, and the composer's speaking-as portrait.
-- **Added to "Documents, Everywhere You Left Them":** filesystem document stores bound into Docker automatically, the bind plan with its new flags, warnings, and outright Windows refusal, and the unreachable-base-path folder-create fix.
-- **Added to "A New Generation of Models":** OpenRouter non-streaming image sends and client attachment capability, Grok text/PDF attachments, base64 text mojibake, and the Ollama cross-read stream loss.
-- **Added to "The Almanack":** the three phase-3 ledger diagnostics (failed-row status, cast-size histogram, effective wardrobe permissions).
-- **Added to "The Archive Can Be Read Back":** the store-delete cascade and its orphan reaper, conversation annotations on the wipe/restore and per-chat delete paths, all three import-overwrite store-identity defects, the dangling imported folder pointers, and the second-generation restore link-id race.
-- **Added to "A Lighter Database":** oversize interchange sub-chunking with its boot re-render, the mount-chunk dimension reconcile reading the wrong database, and the memory-gate links overwritten by the fold pass.
-- **Added to "Under the Floorboards":** the corrupt `properties.json` character-field clobber, the blank help-file table wipe, the blobless-store GC throw, stale hard-link sibling chunks, attaching a native-text document, the orphan-thumbnail sweep, and the About page's workspace backdrop.
-- **Added to "Selected Fixes":** the four unprojected chat settings and their siblings, the three attribution faults, the Brahma Console turn budget and its exhaustion salvage, and the UI polish round.
-- **Added to "Upgrading from 4.7":** the archive columns and the passphrase's relationship to a bundle, and that Docker users with filesystem stores must re-create the container.
-
-#### Docs: release-freshness pass over README, About, CLAUDE.md, and DEVELOPMENT.md
-
-The About page's Key Features list had not kept up with the cycle: it named no tabbed workspace at all, described Pascal as dice-and-inventories with no mention of custom tools or the Workbench, and said nothing about character archiving or the Almanack. All four are now listed, and the Docker entry notes that filesystem document stores are bound through to the container.
-
-The README gained a paragraph on character archiving in its Characters section (what is packed away, what stays, how to rehydrate, and the passphrase seal), and its Docker section now says the startup scripts bind filesystem and Obsidian stores into the container — with the caveat that binds are fixed at creation, so a store added later needs `--recreate`.
-
-DEVELOPMENT.md's project-structure listing had drifted: `app/custom-tools/`, `app/workspace/`, `app/photos/`, `app/scenarios/`, `components/workspace/`, and `lib/{brahma-console,characters,pascal,post-office,query,workspace}/` were all missing. Its Docker section explained none of the store-bind problem and now does.
-
-CLAUDE.md gained two chokepoint entries the archive work introduced: archived characters are tombstones whose only sanctioned patch is `{ archivedAt: null }` (via `validateCharacterArchivePatch`), with the vault resolvers that must respect them named; and `.qtap` export exclusions go through the single predicate in `lib/export/excluded-files.ts` rather than a hand-rolled category check at each of its three call sites.
-
-#### Fix: shell completions missing the character-archive CLI subcommands
-
-Tab completion for `quilltap db characters` stopped at the verb itself. Bash, zsh, and fish now complete `status`, `archives`, `archive`, `rehydrate`, and `export`, plus their flags (`--write`, `--port`, `--out`).
-
-#### Fix: rehydrate refused any vault that links the same bytes twice (bug 57)
-
-Archiving a character whose vault holds one blob linked at two paths — what an ordinary content-addressed save produces, such as the same image saved into the gallery twice — made them unrehydratable. Every attempt failed identically with `Preserve IDs collision for document store blob <id> (also seen as document store blob)`.
-
-The export's blob leg iterates `listByMountPoint`, whose SQL joins from `doc_mount_file_links`, so it emits one record per link. A blob row linked twice therefore appears twice in the bundle under one `blobId`. The rehydrate preflight collected `carriedBlobIds` without deduping and threw on any repeated id, before the sha-match skip classifier added for bug 54 could sanction the rows — the within-bundle duplicate killed the import first. The list directly above it, `carriedFileIds`, already deduped for the same reason.
-
-`carriedBlobIds` is now deduped first-occurrence. A repeated `blobId` within one bundle can only come from the per-link join over a single database row, so the repeats are identical claims; a genuine same-id/different-bytes clash is a cross-bundle concern and still refuses. The change is reader-side only, so bundles already written — all of which carry the duplicates — rehydrate correctly against the fixed reader.
-
-#### Filesystem document stores are passed through to Docker automatically
-
-A container can only see host paths bound into it at creation. Database-backed stores live in the data directory and ride along; filesystem and Obsidian stores point anywhere on the host and were simply absent inside the container. The failure was misleading: the store listed its folders normally (that listing comes from the cached mount index in the database) while every operation touching real bytes failed.
-
-`npm run start:docker` now enumerates the instance's filesystem stores before creating a container and binds each at its own host path, so a store's `basePath` means the same thing inside and outside. New flags: `--instance NAME` (resolve the data dir from the instance registry, and unlock an encrypted instance for enumeration), `--recreate` (replace an existing container — the only way to change binds), and `--no-store-mounts`. Enumeration failure is non-fatal; it warns and starts without store binds.
-
-The planning is not just a list of paths: stores sharing a vault collapse to one bind, a store nested inside another bind is dropped (binding both would shadow the parent's view), and a path that does not exist is skipped and reported rather than passed through — Docker would otherwise create the missing source as a root-owned empty directory and present a hollow store as a healthy one. macOS paths outside Docker Desktop's default shares and Linux uid mismatch both warn. Windows is refused outright: container paths cannot mirror Windows host paths.
-
-Because binds are fixed at creation, a store added later is invisible until the container is rebuilt. Running the start script against an existing container now diffs its mounts against the current stores and names the ones that are unreachable.
-
-New CLI subcommand `quilltap docs docker-mounts [--format args|json]` reports the same plan, for hand-assembled `docker run` commands or for inspecting the arrangement before making it.
-
-#### Fix: creating a folder in a store with an unreachable path (bug 56)
-
-`createFilesystemFolder` ran `fs.mkdir(target, { recursive: true })` without checking that the store's own `basePath` existed. Against an unreachable mount root — an unmounted volume, or a host path never bound into a container — mkdir walked up to the topmost missing ancestor and tried to create the entire chain. Observed as `EACCES: permission denied, mkdir '/Users'` for a store rooted five levels below that, surfaced to the UI as a bare "Failed to create folder". Where the process can write to those ancestors it is worse: the folder is created inside a fabricated tree unrelated to the user's store, and reported as success.
-
-A new `lib/mount-index/base-path-availability.ts` answers "is this base path reachable, and is a container why not" for every caller. It distinguishes missing (ENOENT) from denied (EACCES/EPERM) from not-a-directory, and reports whether the process is containerized. Folder creation asserts before the mkdir and the route returns 409 with the diagnosis; store creation uses the same check for its warning, replacing the narrower `verifyBasePath`. When the path is missing inside a container, the message names the actual remedy — bind the path in and recreate the container — instead of leaving ENOENT to be interpreted.
-
-#### Fix: a file whose bytes are gone now answers 404 instead of 500 (bug 55)
-
-A `files` row can outlive its content — a dangling avatar pointing into a mount point deleted long ago, an attachment whose blob is gone. Serving it produced a 500 on every render, which tells the client the server is at fault and the request is worth retrying; neither is true, and the repeated error-level pairs bury real storage faults in the log. The distinction was destroyed before any caller could see it: `fileStorageManager.downloadFile` caught everything and rethrew a fresh generic `Error`, so both file routes mapped "no such object" and "the read blew up" alike to `serverError`.
-
-A typed `FileContentMissingError` (`lib/file-storage/errors.ts`) now carries that one distinction. The manager throws it for a missing mount-blob and passes it through its catch un-wrapped, logging a warning rather than an error; the local backend throws it on `ENOENT`; `GET /api/v1/files/[id]` and the proxy route both answer 404 for it. Every other failure — permissions, corruption, a backend that is down — stays generic and still produces a 500.
-
-#### Fix: rehydrate refused any character who shared a document with another vault (bug 54)
-
-Archiving a character out of a group chat made them unrehydratable. `doc_mount_files` rows are content-addressed — a conversation summary written into every participant's vault is one row with one link per participant — and the archive prune deletes only the target's link, leaving the row standing on its co-owners'. The rehydrate preflight decided whether an existing id was "inside the target" by asking whether the row had a link in the target's vault, which for exactly this content is no, so it refused the whole import atomically: `Preserve IDs collision for document store file <id>`.
-
-That was also stricter than the writer it guards. `linkDocumentContent` and `linkBlobContent` find-or-create the content row by sha256 and honor the carried `fileId` only when they actually insert, so the import would have deduped onto the existing row and simply recreated the character's link. Both content-addressed kinds now settle it by content hash: a live row whose `sha256` matches the hash the bundle carries for that id is dedup and passes, a same-id/different-bytes row is a real clash and still refuses, and the link-membership test stays as the fallback. `skippable` is consulted only in skip-if-present mode, so the ordinary import wizard is untouched.
-
-Rehydrate also logs its own failures now. The importer's warning names only the import module, so a failed rehydrate left no log line that searching for "rehydrate" would find.
-
-#### Fix: the Archive button looked disabled
-
-The Archive action on a character's page rendered its label and folder icon in `qt-text-secondary` (`--color-muted-foreground`) while every sibling button in the cluster used `text-foreground`. That is the same muted token disabled controls use, so the one enabled action that packs a character away read as unavailable. It now carries the same classes as Convert to NPC, Non-Quilltap Prompt, Refine from Memories, and Search & Replace.
-
-#### Everything embedded now uses the one default embedding profile
-
-Two paths could diverge from the system default. The import/rehydrate memory fan-out skipped enqueueing entirely when the default profile was the built-in TF-IDF one, stranding imported memories unembedded indefinitely (a rehydrated character's memories were invisible to semantic search until something else happened to trigger a reindex). It now enqueues per-memory embedding jobs against the default profile regardless of provider — exactly mirroring the backfill sweeper — and, when that default is BUILTIN, also schedules the same debounced vocabulary refit-with-reindex that manual memory creation triggers, since the corpus just grew; the reindex additionally heals any row embedded before the vocabulary was first fitted. Verified live: a rehydrate on a TF-IDF instance now ends with 22/22 memories embedded, where before it was 0/22.
-
-Separately, four sites fell back to an arbitrary profile (`profiles[0]`) when no profile was marked default: the mount-chunk embedding scheduler, the scoped mount reindex, conversation-chunk embedding after a render, and the Scriptorium cold-chunk re-embed (plus the startup reconcile's FAILED-row exclusion filter, which mirrored them). All now use only the marked default and skip (or throw, for the explicit reindex) when there is none — embedding under whichever profile happens to sort first would silently mix vector spaces.
-
-#### Feature: characters can be archived into an encrypted bundle, and rehydrated from it
-
-Archiving packs everything heavy and private about a character into a single encrypted `.qtap` bundle in the file library, then prunes that material from the live instance. What stays is the character herself: fields, portrait and avatar overrides, wardrobe, and every chat she appears in — an archived character still renders a full character page, and old messages keep their faces with no pointer patching. What moves into the bundle and out of the instance is mail, conversation summaries, non-avatar photographs, their chunks and embedding-status rows, the vector store, and the character's own memories; each is deleted through its chokepoint (`deleteWithGC` for vault links so link-group orphan GC runs, `deleteMemoriesWithUnlinkBatch` for memories), emptied folders are removed, and folders still sheltering kept content survive. The bundle is written and verified first — character, memory count, and vault mount/document/blob counts checked against the live vault, footer counts against the records actually parsed — and a failure before the tombstone commit deletes the bundle it wrote, so failed attempts don't accumulate orphans. Re-running on an already-archived character re-runs only the prune, which is idempotent by construction, and a post-prune re-listing catches deletes that silently failed. Archiving also flips the character's chat seats to absent, so turn rotation, speaker selection, and the Carina probes stop offering her a turn.
-
-Rehydration is the inverse, and restores everything at its original IDs. The service downloads the bundle, decrypts it (a bundle sealed under an older passphrase gets the named "predates your passphrase change" diagnosis; a plaintext bundle passes through), verifies the decrypted bytes against the file row's recorded sha256, and imports with preserved IDs in skip-if-present mode — IDs already present inside the character's own vault (the keep-set, by construction) are skipped, IDs living anywhere else refuse the whole import atomically. Everything the prune removed lands back at its original ID in the vault that never left, so nothing is repointed and no reconcile pass runs (the import's post-run reconcile skips the rehydrate target entirely: every id it references maps to itself, so the reconcile write was an identity patch the archived-row guard refused). Only then is the tombstone cleared, absent chat seats flip back to active, restored documents are re-chunked, and embedding jobs are queued. Any failure before the clear leaves the character archived with the bundle intact, and re-running skips whatever already made it back. The bundle stays in the library afterward as a spare copy; a post-rehydrate dialog offers to discard it, and the UI toast and CLI output report what was restored.
-
-Because a pruned vault is still live and writable, the guards around a tombstone are what keep an archived character from being edited back into existence. The repository write guard sanctions exactly one patch on an archived row, `{ archivedAt: null }`. `resolveSelfVaultMountPointId` (doc_edit and the list/grep/blob tools) returns null for an archived character, and `resolveWardrobeMount` throws `CharacterArchivedError` rather than falling back to the legacy DB write path. The shared character resolver no longer matches archived characters by name — a live namesake wins, while an exact id still resolves, so mail and Carina callers can refuse with the named "archived; rehydrate" message instead of a generic not-found. The conversation-summary vault bridge skips archived participants, since `Conversation Summaries/` is part of what archiving prunes and a fresh summary would silently resurrect the folder outside the bundle. `.qtap` exports exclude `ARCHIVE` files and the `/archives` folder path — otherwise every bundle would ride inside the export, base64-inflated — through one predicate in `lib/export/excluded-files.ts` used by the writer's file streamer, the export-type id resolver, and the export wizard's entity picker. And `DELETE /api/v1/files/[id]` refuses (code `ARCHIVE_BUNDLE_HELD`, overridable with `force=true`) to delete a bundle a still-archived character points at: that copy is the only one there is.
-
-Schema: `characters` gains `archivedAt` and `archiveFileId`, plus `archivedAvatarFileId`, which the shipped path never writes — an earlier design copied the avatar aside, where prune-in-place keeps the original. Design and implementation plan: `docs/developer/features/character-archive-and-export-fidelity.md` and `character-archive-spec.md`.
-
-#### Character archive bundles are encrypted at rest
-
-Archive bundles live in `files/`, outside every SQLCipher database, so they were the one place an archived character's mail, photos, and personality sat unprotected. Bundles are encrypted with the same mechanism `.dbkey` uses — PBKDF2-SHA256 at 600k iterations deriving an AES-256-GCM key from the instance passphrase (or the internal no-passphrase sentinel) — and never with `ENCRYPTION_MASTER_PEPPER`, which doesn't travel with logical backups and would make every restored archive permanently undecryptable. The format is a new binary sibling of the pepper string helpers (`lib/characters/archive-crypto.ts`): a small JSON header carrying the KDF parameters, salt, IV, and a key-verification hash, then raw ciphertext and the GCM tag — no JSON-stringify, no hex inflation. The verification hash lets a wrong passphrase be diagnosed as "this archive predates your passphrase change" instead of a bare GCM failure. The archive service verifies each bundle by decrypting and parsing the actual ciphertext it will persist; the `files` row keeps the plaintext sha256 (what rehydration verifies after decrypting) while `size` tracks the on-disk encrypted bytes.
-
-Because the passphrase only ever passes through the `.dbkey` flow, each of its chokepoints (setup, unlock, change, store) now deposits the effective passphrase in an in-memory runtime cache (`lib/startup/passphrase-cache.ts`) that locking clears — archive encryption reads it from there, falling back to the internal sentinel on no-passphrase instances and refusing with a named error if a user passphrase exists but was never seen by this process.
-
-Changing the passphrase also re-encrypts every ARCHIVE bundle from the old passphrase to the new one, reporting per-file progress to the log. A partial failure doesn't undo the passphrase change; the response and the settings card name exactly which archives still hold the old passphrase. The change-passphrase card states up front how many archive bundles will be rewritten (the files API gained a `category` filter for the count). The CLI's `characters export` is the decrypt-to-plaintext escape hatch.
-
-#### Archiving surfaces: Aurora, the API, and the CLI
-
-`POST /api/v1/characters/[id]?action=archive` runs the full pipeline (encrypted bundle, verification, tombstone commit, prune) and `?action=rehydrate` runs the restore. In Aurora, the character page grew an Archive action with a confirmation dialog that itemizes what is packed away (memories, mail, non-avatar photos, summaries) versus what stays (fields, portrait, wardrobe, chats, other characters' memories); an archived character's page renders read-only behind a banner with a Rehydrate button, and edit controls disappear. The roster hides archived characters by default with a Show Archived toggle (they sort last, badged, with card actions reduced to delete); group member lists badge archived members and report "N members / M can speak"; Salon participant cards badge archived seats.
-
-`GET /api/v1/characters` gained `archived=exclude|include|only` (default exclude), which is the single chokepoint for every picker — chat, group, mail, image, and search dialogs no longer offer archived characters. Adding an archived character to a group or project roster is refused server-side (existing edges survive, per the design); the export wizard and per-character export refuse tombstones, since the bundle already is the export.
-
-The CLI grew four subcommands under `db characters`: `archives` lists archived characters and bundles (loose ones flagged); `archive`/`rehydrate <name|id> --write` proxy through the running server, which holds the export pipeline and the unlocked passphrase; and `export <name|id>` writes a plaintext `.qtap` — decrypting an archived character's bundle offline (internal key, then `QUILLTAP_DB_PASSPHRASE`, then a prompt), or running the server's export pipeline for a live one. Documented in CLI.md with the pre-emptive-not-recovery caveat; the archive lifecycle is documented in the character-management help.
-
-#### Data wipes can now spare archived-character bundles
-
-Delete All Data and a replace-mode restore now take a `keepArchivedCharacterBundles` option (default on). When kept, archived characters' encrypted `.qtap` bundles — the `files` rows of category `ARCHIVE` and their on-disk bytes — survive the wipe. The character rows themselves do not, so what survives is a loose bundle: importable through the ordinary character import, not rehydratable. Because bundles are encrypted under the passphrase rather than under anything stored in the databases being wiped, a kept bundle stays openable afterward. Both wizard dialogs grew a checkbox spelling out that consequence, the delete preview counts the bundles on hand, and the deletion summary reports how many were kept. Two small Delete All Data dialog defects fixed in passing: the "Total Items" line rendered NaN (it summed a `personas` field the API never returns), and the dialog had no internal scroll, so on short windows its footer buttons sat off-screen.
-
-#### Fix: filesystem reconciliation clobbered and could delete archive bundle rows (bug 53)
-
-Startup reconciliation didn't know archive bundles exist, three ways. It "corrected" any row whose folderPath differs from the path derived from its storage key — for a bundle (`<fileId>/character-archive.qtap`, curated `folderPath: '/archives'`) that meant stripping the shelf folder to `/` on every boot. Its stale-row cleanup deleted rows whose bytes are missing at boot unless a character references them, but the reference set only read avatar fields — never `archiveFileId` — and the sha256 cross-match can't rescue a bundle by design (the row stores the plaintext hash; the disk bytes are encrypted), so a cloud-dataless bundle file lost its row permanently. And the file watcher could adopt a freshly-written bundle as an orphaned DOCUMENT row, because the archive service created the row keyless and patched the storage key in after uploading. Fixed: reconciliation leaves ARCHIVE/BACKUP folderPaths alone, preserves `archiveFileId`/`archivedAvatarFileId` references (read raw, so broken-vault rows still count), and the archive service writes the row with its storage key before the bytes hit disk. Filed as bug 53 (fixed same day).
-
-#### Fix: character exports now carry the character's vault (bug 52)
-
-A `characters` `.qtap` export emitted only the character row, wardrobe, plugin data, and memories — never the character's document store. Since `defaultImageId` and `avatarOverrides[].imageId` are `doc_mount_file_links.id` values in the exporting instance's vault, a character imported into another instance arrived faceless, with no photos and no mail (bug 52).
-
-`streamCharacters` now emits the character's whole vault — mount point, folders, documents, blobs and their chunks — after the plugin-data records and before the memories. The per-store writer body was extracted from `streamDocumentStores` into a shared `streamOneStore` so both paths emit identical records; character vaults skip project links, which they never have. Manifest counts are bumped from the characters path.
-
-On import, the character keeps the vault its bundle carried: the importer records which mount point the bundle claimed (`characters.create()` drops the incoming pointer and provisions a scaffold vault of its own, so the row can't be asked afterwards), repoints the character at the imported store, then cascade-deletes the scaffold through `deleteStoreCascade` and hands back the canonical `"<name> Character Vault"` name. Bundle wins, whole-store — the two are never merged. Under the `skip` conflict strategy the bundle's vault is not imported at all, since the existing character keeps its own.
-
-Import also remaps `defaultImageId` and `avatarOverrides[].imageId` from the bundle's link ids onto the ones the target instance actually created, so the face arrives intact. Two defects in that remap are fixed: an avatar override that can't be remapped is now dropped rather than written with a `null` `imageId` (which failed the schema on the next validated read), and the override array is only rewritten when something actually changed.
-
-The export wizard's options step now reports what the vaults add to the bundle — stores, documents, images, and an estimated size — via new vault counts on `previewExport`. Both JSON schemas gained the optional `fileId`/`linkId`/`blobId` fields the writer already emitted (they were failing their own published schema, which forbids unknown properties), a missing `ExportedDocumentStoreFolder` definition, the `preserveIds` manifest flag, the three character archive fields, and a note that document-store records now appear in a `characters` stream.
-
-#### .qtap imports can preserve source IDs (archive tooling only)
-
-The `.qtap` manifest gained a `preserveIds` flag: an import honoring it restores every record at its original ID — characters, stores, memories, and everything inside a document store (folders, file rows, link rows, document rows, blob rows) — refusing atomically before any write if a preserved ID would collide with an existing item. Folder records in exports now carry their row id; `linkDocumentContent`, `linkBlobContent`, and `docMountBlobs.create` accept explicit ids honored only when the row is actually created (content-addressed dedup and path upserts keep existing ids); and the importer threads the bundle's carried ids through all of them. The flag is set by Quilltap's own archive tooling — the export/import wizard has no control for it and never sets it.
-
-The collision preflight has a second, explicitly-named mode — `skip-if-present`, used by rehydration: an id that already exists inside the rehydrate target's own vault (or is the target character itself, or its own memories) is skipped so the surviving row wins, while an id existing anywhere else still refuses the whole import atomically. The ordinary import wizard never uses it.
-
-A pre-existing import bug is fixed along the way: without `preserveIds`, imported documents carried their *source* instance's `folderId` while folders were created with fresh ids, leaving every imported document's folder pointer dangling (harmless only because store listings resolve by path). The importer now remaps folder parents and document folder pointers onto the folders it actually created.
-
-#### Docs: character archive implementation spec; bug 52 filed (dangling avatar on cross-instance import)
-
-New `docs/developer/features/character-archive-spec.md`: the implementation plan for the character archive / export-fidelity design (`character-archive-and-export-fidelity.md`), verified against the code. Six work packages (A1 bug filing, A2 export fidelity, B1 `preserveIds`, B2 archive core, B3 surfaces, B4 rehydration), the full raw-call-site audit the design doc required before implementation (7 sites need changes out of ~30; the biggest hazard class is vault resurrection via `ensureCharacterVault` in the startup backfill and mail paths), a crash-safe archive ordering, and eight verified corrections to the design doc. Also filed bug 52 (`docs/developer/bugs/bug-52-avatar-import-dangling.md` + index row): a `characters` `.qtap` export carries neither the vault nor the avatar bytes, and import never remaps `defaultImageId`/`avatarOverrides[].imageId`, so every cross-instance character import arrives faceless with a dangling id; the fix is WP A2 of the spec. No code changed.
-
-#### Fix: the sole LLM answered every human turn when you drove two seats (bug 50)
-
-In a multi-character chat where you drive two seats and there is exactly one LLM — e.g. you play Charlie and impersonate Lorian while Kumar is the AI — the rotation collapsed to Charlie → Kumar → Lorian → Kumar…, giving Kumar half the turns instead of a fair third. The cause: after you post, the first responder was chosen from an **LLM-only** shortlist (`resolveRespondingParticipant`), so the sole LLM answered every one of your turns; the full rotation (which correctly includes all seats) only governed the turns *between* LLM responses. The two paths disagreed.
-
-The first responder after a human post now honors the same full rotation the chained turns use. When the rotation's next speaker is another seat you drive, the chat saves your message and **pauses for that seat** (its turn banner appears) instead of forcing the LLM to speak out of turn. New pure helper `selectNextSpeakerAfterUserMessage` (`lib/chat/turn-manager/selection.ts`) projects the rotation one step past your just-typed message (which isn't persisted yet when the responder is picked); the send path (`lib/services/chat-message/orchestrator.service.ts`, `maybePauseForUserSeatTurn`) uses it and emits a `chainComplete` `user_turn` event. The seat count is taken over the full roster (a genuine `controlledBy: 'user'` seat plus any impersonated seats), not the LLM-only shortlist the misnamed `getActiveCharacterParticipants` returns. Single-user-seat rooms — the common case — are untouched; whispers, nudges, and continue-mode turns bypass the guard. Verified live in a Charlie/impersonated-Lorian/Kumar room: Charlie→Lorian→Kumar→Lorian→Charlie… with each seat taking its own turn.
-
-#### Fix: impersonation was lost on reload; the composer stuck on one seat (bug 51)
-
-The chat GET (`app/api/v1/chats/[id]/handlers/get.ts`) built its response from an explicit field allowlist that omitted `impersonatingParticipantIds` and `activeTypingParticipantId`, so a page reload (or a server restart mid-session) returned a chat with no impersonation state and the client showed an impersonated seat as not impersonated — the database had it the whole time. Both fields are now projected. Restoring `activeTypingParticipantId` then exposed a second issue: `useImpersonation` re-applied the persisted "speaking as" on every refetch, clobbering the turn-follow so one seat appeared to take every turn; it now seeds that value only when still unset (`prev => prev ?? activeTypingId ?? null`), letting the turn-follow and manual selection own it. Same family as bug 22.
-
-#### Fix: Brahma Console budget exhaustion + impersonation/turn reconciliation (bugs 47, 48, 49)
-
-Three defects from the v5 port's 2026-08-08 dogfood walk.
-
-Bug 47: the Brahma Console no longer ends in silence when its turn budget runs out. The forced final turn executes no tools, so a model that answered it with another tool call (instead of `submit_final_response`) left `fullResponse` empty — and the `if (fullResponse)` finalizer then saved no message and enqueued no `done` event, so an expensive run ended with nothing on screen and the client hanging. Both the streaming orchestrator (`lib/services/brahma-console/orchestrator.service.ts`) and the one-shot `@Brahma` path (`one-shot.service.ts`) now salvage: when the budget is exhausted with no answer they synthesize a short "I reached my N-turn budget" message that folds in the last tool result, and the orchestrator always enqueues the `done` event. The one-shot path returns the salvaged text as its answer when it has tool data, falling back to the existing empty-response failure only when there is genuinely nothing to report.
-
-Bug 48: impersonating a character now hands them the current turn. Starting an impersonation is an explicit "I'll take this character now," so — unless an LLM is mid-generation — `app/salon/[id]/SalonView.tsx` moves the current turn to the newly impersonated seat, so the turn banner names it and a typed message lands in turn instead of staying on whichever seat the rotation had reached.
-
-Bug 49: the composer's speaking-as now follows the current user-driven turn. When the rotation lands on a seat the human drives (their own character or one they are impersonating) and that seat changes, the composer defaults the speaking-as to it — so on the impersonated character's own turn you speak as them without a manual switch. It keys on the turn seat, not the speaking-as value, so a deliberate SpeakerSelector choice made on the same turn still sticks until the turn moves on. This is a per-turn client default; it sets only the client speaking-as (forwarded to the server as `speakingAsParticipantId`), so attribution is correct without persisting a per-turn write.
-
-#### Docs: Bugs 48 and 49 catalogued — impersonation and turn selection don't reconcile
-
-Two sibling defects found on the v5 port's 2026-08-08 dogfood walk of the impersonation surface, both facets of the same decoupling between "whose turn is it" and "who am I speaking as." Bug 48: impersonating a character does not hand them the current turn — `addImpersonation` (`app/api/v1/chats/[id]/actions/participants.ts`) writes only `impersonatingParticipantIds` and `activeTypingParticipantId`, never the turn state, so on another user seat's turn the banner keeps naming that seat while anything typed is attributed to the character you just took over. Bug 49: the speaking-as seat does not follow the current user-driven turn — nothing in `app/salon/[id]/hooks/useImpersonation.ts` reconciles `activeTypingParticipantId` with `nextSpeakerId`, so when the rotation reaches the impersonated seat the composer still defaults to whichever seat was last selected. Both are open design decisions for v4, best settled together; v5 reproduces both faithfully and absorbs the fix as drift. Filed as `docs/developer/bugs/bug-48-impersonate-doesnt-take-the-turn.md` and `bug-49-speaking-as-doesnt-follow-the-turn.md` with Status rows in the index. No code changed.
-
-#### Docs: bug catalogue split into one file per bug; `found-bugs.md` renamed to `bugs.md`
-
-`docs/developer/found-bugs.md` is now `docs/developer/bugs.md` and holds only the index: the filing convention, the provenance vocabulary (Pinned/Faithful/Inert), the v5 oracle-coordination notes and tripwire tables, the Inert dead-code appendix, and a single Status table with one row per bug — date found, date fixed, severity, what goes wrong, fix site, v5 status, and a link to the entry. Each of the 47 bugs moved to its own file: the open one at `docs/developer/bugs/bug-<n>-<short-title>.md`, the 46 fixed ones at `docs/developer/bugs/fixed/bug-<n>-<short-title>.md`, each opening with a metadata table and keeping its full root-cause write-up unchanged. Numbers are permanent; a fix moves the file into `fixed/` and updates both the file and its index row. The convention is recorded in CLAUDE.md. Bug 14, 17, 19–21, 26, 39–42 — fixed in the 2026-08-06 batch but never given Status rows — now have their fix sites and v5 obligations recorded. No code changed beyond one comment reference in `lib/backup/restore/restore.ts`.
-
-#### Feature: "speaking as" avatar beside the composer + impersonation cue fixes (bugs 45, 46)
-
-A persistent portrait of the character you're currently speaking as now sits inside the composer, directly left of the action-button cluster (announcement/attach/custom-tools), standing the full height of the composer row. It renders at full brightness when you can type and dims to near-dark while a reply is in flight, so you can always tell both who you're speaking as and whether the floor is yours. Hidden on the narrowest viewports where there's no room. New component `app/salon/[id]/components/SpeakingAsAvatar.tsx`, rendered by `ChatComposer` via a new `speakingAs` prop; the seat is resolved with `findActiveUserParticipant` (impersonation-overlay aware) so it matches server attribution.
-
-Bug 46 (b): the user-turn banner is now impersonation-overlay aware. It previously keyed on the raw `controlledBy` column, so an impersonated seat's own turn (`controlledBy` stays `'llm'` under the Bug 44 overlay) was never announced and offered no Skip. `SalonView.tsx` now gates the banner on the shared `isUserDrivenSeat(participant, impersonatingParticipantIds)` helper, so when the rotation lands on an impersonated seat the banner names it and offers Skip — matching what `help/chat-turn-manager.md` already described.
-
-Bug 45: the optimistic user bubble no longer flickers to the wrong author while impersonating. `useSSEStreaming.ts` attributed the just-sent bubble to the bare `activeTypingParticipantId`, which diverged from the server's `findActiveUserParticipant` resolution and re-attributed on refetch. The client now resolves the optimistic author with the same overlay-aware helper (threaded `impersonatingParticipantIds` into the hook), so the bubble is authored correctly from the first paint.
-
-The Brahma Console's agent-turn cap is now an instance setting instead of a hardcoded 25, and the default is raised to 50. On a deep search — especially when the Console is hunting for something in the database — 25 turns could run out mid-investigation. Settings → Chat → Brahma Console exposes a numeric field (5–200, default 50) stored in `instance_settings['brahmaConsole']`; both the streaming orchestrator (`lib/services/brahma-console/orchestrator.service.ts`) and the one-shot `@Brahma` path (`one-shot.service.ts`) read it through the shared `resolveBrahmaMaxAgentTurns` resolver (`lib/services/brahma-console/turn-budget.ts`). The duplicate/stale-query guard (`MAX_DUPLICATE_TOOL_CALLS = 2`) is unchanged and independent, so a loop that repeats the same query still stops early regardless of the budget. New API route `GET/PUT /api/v1/settings/brahma-console`.
-
-#### Fix: About page lost its background image inside the workspace
-
-The About surface set its background only through the inline `--story-background-url` variable, which drives the per-view `.qt-page-container::before` layer. That layer is suppressed inside `.qt-workspace` in favor of the single arbitrated backdrop (`components/workspace/workspace-backdrop.tsx`), and About — unlike the Salon — never reported to it, so once About rendered as a workspace tab the image vanished. `AboutView` now calls `useReportWorkspaceBackdrop('/images/about.webp', false)`; it stays a no-op on the legacy `/about` route, where the `::before` layer still paints. The background URL is now a single `ABOUT_BACKGROUND_URL` constant shared by both paths.
-
-#### Fix: impersonation overlays the seat instead of mutating it (bug 44)
-
-"Speak as an AI character" no longer rewrites the participant's `controlledBy`. Bug 27's fix flipped the seat to `controlledBy: 'user'` on impersonate and back to `'llm'` on stop; that restore arm left a seat permanently user-controlled if the stop never came (browser closed mid-impersonation), could hand the seat back on a different connection profile, and — because it made the impersonated character the chat's first user-controlled participant — resolved the "user seat" to her, which hid the card's own Stop button in solo-shaped casts.
-
-Impersonation is now a pure overlay: `addImpersonation`/`removeImpersonation` (recording the id in `impersonatingParticipantIds` and moving `activeTypingParticipantId`) are the whole state change, and `controlledBy` is never written. Two turn-resolution gates read the overlay instead of the bare column, via a shared `isUserDrivenSeat(participant, impersonatingParticipantIds)` helper: message attribution (`findActiveUserParticipant`, `findUserParticipantName`, `resolveUserIdentity`) and who-responds resolution (`selectNextSpeaker`, the LLM-candidate filter in `resolveRespondingParticipant`, the turn-orchestrator pause, and the `skipUserTurn` gate). The stable "user seat" (`findUserParticipant`/`userParticipantId`) keeps reading the column, which restores the Stop button with no client change. The stop flow's optional `newConnectionProfileId` is now a plain profile reassignment (no `controlledBy` write, no identity-stack recompile).
-
-Seats flipped by the old mechanism while an impersonation was active at upgrade time stay `controlledBy: 'user'` — the overlay stop restores nothing, and a blind repair can't tell a legacy flip from a genuinely user-owned seat. Fix a stuck seat in one click from the participant editor.
-
-#### Docs: Bug 44 catalogued — Bug 27's impersonation mechanism ruled a mistake
-
-The fix for Bug 27 ("Speak as" honoured for real) chose the wrong
-mechanism: it rewrites the participant's `controlledBy` on impersonate and
-restores it on stop, where the ruled design overlays the already-persisted
-impersonation state at the two turn-resolution gates and never touches the
-seat. The defect stays fixed; the mechanism correction is catalogued as
-Bug 44 in `docs/developer/found-bugs.md` with the full account: the
-restore-arm failure modes, the two-sources-of-truth hazard, the measured
-hidden-Stop-button casualty, the exact fix sites, the test rewrites, the
-transition note, and the v5 sequencing (v4-first — the port mirrors the
-shipped behavior until this lands). No code changed in this commit.
-
-#### Fix: CI test failures from a fragile SQLite driver loader
-
-Two mount-index unit suites (`doc-mount-file-links-blobless-gc.test.ts`, `link-groups-reindex.test.ts`) loaded the real `better-sqlite3` binding through a fallback chain that tried a bare `better-sqlite3-multiple-ciphers` require before the absolute root path. In CI the nested `packages/quilltap/node_modules` path is absent, so the loader fell through to the bare require — which `jest.config`'s `moduleNameMapper` maps to the no-op mock (`get()`→`undefined`, `all()`→`[]`). Every query returned empty: `CREATE TABLE` was a no-op and the read-back after an insert found nothing ("Link disappeared immediately after upsert"). Both suites now load the driver by absolute root path (`process.cwd()/node_modules/better-sqlite3`), matching the canonical reference, which the mock mapper can't intercept.
-
-#### Fix: provider attachments and streaming (bugs 31, 32, 33, 34, 35)
-
-**OpenRouter now sends images on the non-streaming path.** On regenerate and continuation legs (`OpenRouterProvider.sendMessage`, non-streaming), `@openrouter/sdk` 1.2.2's `chat.send()` rejected the OpenAI `image_url` content parts at client-side Zod validation (it expects camelCase `imageUrl`), so the image never left the machine — streaming was fine, non-streaming sent nothing. Image sends now route around the SDK through a direct `POST /api/v1/chat/completions` (`stream:false`), the same escape hatch the streaming path already uses for image/tool requests; no-image sends keep the SDK path. The direct path forwards cache key, tools, web search, structured output, fallback models, provider preferences (including ZDR), and reasoning. (bug 31)
-
-**The client now offers image attachments on OpenRouter profiles.** `PROVIDER_ATTACHMENT_CAPABILITIES.OPENROUTER` in `lib/llm/attachment-support.ts` still declared OpenRouter unsupported for attachments while the plugin emitted image parts; it now reports the plugin's four image MIME types. Each map entry gained a comment pointing at its plugin. (bug 32)
-
-**Grok text and PDF attachments are no longer dead code.** Grok's supported-MIME gate was images-only and ran ahead of the `text/*` and PDF branches, so every text/PDF attachment fell to "Unsupported file type" and the "requires Grok Files API" arm was unreachable. The gate now admits `text/*` (sent inline) and `application/pdf` (routed to the Files-API message); a genuinely unsupported binary still gets the generic rejection. Actual Grok Files API support stays deferred. (bug 33)
-
-**Text attachments no longer arrive as mojibake.** For a newline-free, base64-charset text file attached to Anthropic or Grok, the decode was wrapped in a `try/catch` — but `Buffer.from(s, 'base64')` never throws; it silently mangles (`"hello"` → garbage). A new `decodeBase64Text` helper round-trips instead: decode, re-encode (normalizing whitespace/padding), and compare — a match keeps the decoded text, a mismatch treats the input as plain text and ships it verbatim. Applied in both provider plugins. (bug 34)
-
-**Ollama streaming no longer drops content split across network reads.** The stream decoder split each read on `\n` with no cross-read buffer, so a JSON object straddling two reads was silently lost. `OllamaProvider.streamMessage` now carries the trailing partial line in a buffer between reads and flushes any final tail at stream end. (bug 35)
-
-#### Fix: chat state projection, participant updates, and impersonation (bugs 22, 23, 24, 25, 27, 36, 37)
-
-**Four chat-settings selects now survive a reload.** The chat GET projection (`app/api/v1/chats/[id]/handlers/get.ts`) omitted `timelineMode` (Story's Clock), `alertCharactersOfLanternImages`, `showThinking`, and `answerConfirmationOverride`, though the client `Chat` type declared all four. A save landed in the database but the select snapped back to its default and a reload never showed the truth. The four fields are now projected (each defaulting to `null`).
-
-**Changing who controls a participant now recompiles identity stacks.** `handleParticipantUpdate` (`helpers.ts`) re-read the chat and returned early inside the `controlledBy !== undefined` block, so the status/`isActive` back-compat sync and `compileAllIdentityStacks(finalChat)` below it never ran for such a patch. The block now falls through to that shared tail, fed by the post-write re-read.
-
-**Removing an impersonated participant returns fresh state.** The impersonation clean-up `repos.chats.update` in `handleRemoveParticipantAction` ran after the response chat was captured, so the body still listed the removed participant in `impersonatingParticipantIds`. The handler now returns the chat from after the cleanup update.
-
-**"Stop impersonating" now reaches the server.** The client sends `DELETE ?action=stop-impersonate`, but the action was registered only on the POST map and the DELETE handler hard-rejected unknown actions. It is now registered on DELETE (the semantically correct verb); the stale, uncalled POST registration was removed.
-
-**"Speak as an AI character" now actually attributes to that character.** "Speak as" was wired to the impersonation start path, but starting impersonation never flipped the participant's `controlledBy`, so attribution (`findActiveUserParticipant`, which honours the active speaker only when `controlledBy === 'user'`) ignored the selection and the next message still landed under the operator's own character. `handleImpersonate` now sets the character to `controlledBy: 'user'` and `handleStopImpersonate` hands it back to `'llm'` — the same invariant the "User (you type)" connection-profile option already maintained — and both recompile identity stacks. The differential-verified turn resolver is unchanged; the "You"/"Speaking as" badge is now truthful.
-
-**The "tools disabled by profile" warning box can finally appear.** `getConnectionProfile` (`lib/services/chat-enrichment.service.ts`) projected only `{ id, name, provider, modelName, apiKey }`, so `ChatModals.tsx`'s `allowToolUse === false` condition was always `undefined === false`. `allowToolUse` is now projected (in both the detail and helper enrichment paths), so a chat whose connection profile forbids tools shows the box.
-
-**The all-LLM pause is no longer silent.** When an all-LLM room hit the turn-count threshold the chat was marked `isPaused` and simply stopped — `AllLLMPauseModal` had no opener and `isPaused`/`allLLMPauseTurnCount` were not projected. Both fields are now in the chat GET projection, and `SalonView` opens the modal whenever `chat.isPaused && isAllLLM`; because the chain-complete SSE event already triggers a chat refetch, that one effect covers both a live pause and loading an already-paused room, with no change to the SSE transport.
-
-#### Fix: message attribution and tool cards (bugs 28, 29, 30)
-
-**A Staff-signed ad-hoc announcement now reaches the model attributed.** Speaker attribution for ad-hoc announcements keyed on `customAnnouncer`, which the Insert Announcement dialog writes only in `character` and `custom` modes. A `staff`-mode announcement carries a `systemSender` and no `customAnnouncer`, so it passed through untouched and reached the LLM as a bare anonymous `user` turn — the exact anonymous block the attribution feature exists to abolish. `resolveAnnouncerName` (`lib/chat/context/announcement-attribution.ts`) now falls back to the message's `systemSender` when no `customAnnouncer` is present, resolving the display name through the single staff-name table (`staffDisplayName`), and emits the same `[Name] ` prefix the other modes get. The fallback is gated to `systemKind === 'announcement'` so ordinary Staff whispers (image notices, tool bubbles, memory recalls), which also carry a `systemSender` and name themselves in their own prose, are not double-tagged. The prefix lands on `opaqueContent` too when present, so a staff-signed announcement stays attributed in an opaque-anywhere chat where that persona-free body replaces `content` in the LLM context.
-
-**A user-initiated tool card no longer wears the last speaker's face.** A composer-run tool persists its pending TOOL result with `initiatedBy: 'user'` and no `participantId`. The renderer's positional borrow — a TOOL row with no participant takes the nearest preceding assistant's participant, stopping at a USER boundary — grabbed whoever spoke last, because the tool row is written before the user's own message. The borrow is now extracted into `resolveToolRowAttributionMessage` (`app/salon/[id]/group-tool-messages.ts`), which resolves a user-initiated row as a USER row so it wears the operator's face; character-initiated rows keep the positional borrow, which is correct for them.
-
-**A private user-initiated run now says "whispered to you" instead of "whispered to unknown".** A standalone user-initiated Pascal custom-tool run whispers to the operator's own userId — deliberately not a participant id, so every character's context filter excludes it. The renderer resolved each `targetParticipantId` through a map keyed only by character-participant ids, so the operator's own id fell to "unknown". The whisper label now resolves through `resolveWhisperTargetLabel` (`app/salon/[id]/whisper-visibility.ts`): the operator's own userId renders "you", a participant id renders its name, anything else keeps the "unknown" fallback. The route's userId targeting is unchanged — it is how `private: true` runs hide from characters.
-
-#### Fix: UI polish — error color, search dialog, download filenames, toast animation (bugs 39, 40, 41, 42)
-
-**Inline error text now renders in the destructive color.** `.qt-text-danger` was referenced by `StartupProgress.tsx` and `ChatCreationProgressModal.tsx` but defined in no CSS file, so startup/creation errors ("Connection lost…") rendered in ordinary body color. Added `.qt-text-danger { color: var(--color-destructive) }` to `app/styles/qt-components/_utilities.css` and mirrored it into `packages/theme-storybook/src/css/qt-components.css` (patch bump to 1.0.57).
-
-**The toolbar search dialog now closes on an outside click.** `.qt-page-toolbar`'s `backdrop-filter` makes the toolbar the containing block for `position: fixed` descendants, so the dialog's full-screen backdrop resolved against the toolbar, not the viewport — nothing outside it to click, only Esc closed it. `SearchDialog` now renders through a `document.body` portal. Esc and input focus still work.
-
-**Downloads with an apostrophe and a non-ASCII character keep their real name.** `buildContentDisposition` built `filename*=UTF-8''…` with `encodeURIComponent`, which leaves `'` unescaped — but the apostrophe is RFC 8187's `charset'lang'value` delimiter, so browsers discarded the whole `filename*` and fell back to the underscore-substituted ASCII name. The ext-value now percent-encodes the stray characters `encodeURIComponent` leaves (`' ( ) * !`); the apostrophe arrives as `%27`. A chat titled `Wings Over Suparṇā's Quiet Governance` downloads under its real name. Plain-ASCII names are unchanged.
-
-**Toasts now animate on entry.** The toast markup named `slideInUp` keyframes that were defined nowhere, plus `animate-in …` classes from a Tailwind plugin the app doesn't load, so toasts appeared instantly. Defined the `slideInUp` keyframes in `app/globals.css`, removed the dead classes, and added a `prefers-reduced-motion` guard.
-
-#### Fix: Almanack ledger diagnostics (bugs 19, 20, 21)
-
-**The embedding "failed rows" census reports real numbers.** The phase-3 census (`lib/tools/almanack/phase3-ledgers.ts`) filtered `embedding_status.status = 'PERMANENTLY_FAILED'`, a value `EmbeddingStatusEnum` (PENDING/EMBEDDED/FAILED) can never hold, so the cell was structurally always 0. It now filters `FAILED` — the real terminal state — and the cell/label is renamed from "Permanently failed rows" to "Failed rows", noted as permanent for the current embedding profile. Type field renamed `permanentlyFailed` → `failed`.
-
-**The "Cast sizes" histogram rolls up by cast size.** `collectChatBreakdown` selected `json_array_length("participants") AS participants` but wrote `GROUP BY participants ORDER BY participants` — SQLite bound the bare name to the raw JSON column, so every distinct cast string was its own row instead of one row per cast size. It now groups and orders by the `json_array_length(...)` expression.
-
-**Wardrobe-permission counts report the effective permission.** The census counted `canDressThemselves = 1` / `canCreateOutfits = 1` (explicit opt-in), but the runtime permission is null-safe (`canDressThemselves !== false` in `lib/services/chat-message/pseudo-tool.service.ts`), so a NULL flag means allowed and every default-state character was uncounted. Both counts now use `IS NOT 0`, matching the runtime check (NULL and 1 count, only an explicit 0 denies). The Core-whisper-override count is unchanged — it is correctly explicit-only.
-
-#### Fix: oversize conversation chunks and clobbered memory links (bugs 17, 26)
-
-**A long interchange is now split into several embeddable chunks.** The Scriptorium renderer (`lib/scriptorium/markdown-renderer.ts`) had no interchange sub-chunking, so a long interchange became a single conversation chunk of 34k–117k chars — under the 131,072-char transport cap but over the embedding model's ~8,192-token context (~31k chars for `text-embedding-3-large`). The embed failed deterministically, the chunk was marked FAILED, and it stayed unsearchable forever (515 such chunks on the measured instance). The renderer now holds each chunk to `CHUNK_CHAR_BUDGET` (24,000 chars, a conservative proxy for ~6k tokens) and splits any over-budget interchange into sequential chunks — at message boundaries first, then within a single oversize message at paragraph/sentence/whitespace boundaries, never mid-word. Each sub-chunk gets its own sequential `interchangeIndex` (a chunk ordinal), so ordering and the `(chatId, interchangeIndex)` chunk identity stay intact; a conversation with no over-budget interchange renders byte-identically to before. `ConversationChunksRepository.upsert` now NULLs a preserved embedding when a chunk's content changes and no new embedding is supplied, so the chunks that shift onto new content when a formerly-oversize interchange splits are re-embedded rather than left carrying the previous occupant's vector.
-
-**The existing oversize cohort is re-rendered once at boot.** The startup render/embed reconcile (`lib/startup/reconcile-conversation-rendering.ts`) gains an arm (C) that re-renders a chat holding an un-embedded chunk over the per-chunk budget but within the transport cap. Re-rendering now sub-chunks it, so the arm is self-limiting — once split, the chat no longer matches. It reuses the existing stale-chat gate, so a cold-tiered chat is left for its reopen/next-played heal instead of being resurrected at boot, and the >131,072-char / empty cohort both apps already exclude is left untouched.
-
-**`INSERT_RELATED` memory writes no longer lose the links the gate just made.** On an `INSERT_RELATED` decision the gate links the new memory to its related memories, but `createMemoryWithGate` (`lib/memory/memory-service.ts`) returned the memory object as it stood *before* the link write — with an empty `relatedMemoryIds`. The fold-episode pass then started its `relatedMemoryIds` union from that empty array and overwrote the gate's links. The gate now returns the post-link row, and the fold pass's comment names that dependency. Every other gate action already read the persisted row and was unaffected.
-
-#### Fix: mount-index and file hygiene (bugs 13, 15, 16, 38, 43)
-
-**A second write to a document store that never held a blob no longer throws.** The content-addressed garbage collector (`gcOrphanedFileRow` in `lib/database/repositories/doc-mount-file-links.repository.ts`) issued `DELETE FROM doc_mount_blobs` unconditionally, but that table has no Zod schema and is created lazily by the blobs repository on first access. On an index that had only ever held documents — a restore from an old backup, or a hand-built index — the second write to any path orphaned a content row, reached the GC, and died with `no such table: doc_mount_blobs`. Each payload delete (`doc_mount_documents`, `doc_mount_blobs`) is now guarded behind a table-existence check; a missing payload table has nothing to collect.
-
-**Hard-linked document siblings no longer serve stale search chunks.** `queryJoined` — the shared joined-read for `doc_mount_file_links` — never selected `l.linkGroupId`, so every joined read reported `linkGroupId: undefined` and `reindexLinkGroupSiblings` hit its early-out and re-indexed nothing. Editing a file hard-linked into two store locations updated the other location's *content* (raw SQL in the write transaction) but left its chunks pointing at the previous revision, so semantic search and character context served the old text. The projection now carries `linkGroupId`, so the sibling chunk reindex actually runs.
-
-**The startup embedding-dimension reconcile now counts mount chunks from the right database.** `countNonconformingMountChunks` (`lib/startup/reconcile-embedding-dimensions.ts`) guarded on `doc_mount_points` in the *main* database, but that is a mount-index table, so on every real instance the guard was false and the function returned 0 — the reconcile never enqueued a reindex for non-conforming mount chunks on their own. It now reads the ENABLED filter and the chunk scan from the mount-index handle (only the FAILED-status exclusion still comes from the main DB). The existing unit test created the table in the main test DB and so passed for the wrong reason; it now reproduces the real two-database layout.
-
-**Attaching a markdown/text/JSON document from a database store now works.** `.md`/`.txt`/`.json` files put into a database store are held as documents (in `doc_mount_documents`, with no blob row), but the library picker's attach path required a blob and returned "Mount-point file blob not found" for exactly those. The picker listed the document and attaching it failed. The attach handler (`app/api/v1/chats/[id]/files/route.ts`) now serves a native-text document when no blob exists, and the LLM-side resolver (`loadMountFileAsAttachment` in `lib/chat-files-v2.ts`) loads the document text as a text attachment, so an attached document actually reaches the model.
-
-**Orphaned thumbnails are now swept.** `files/_thumbnails/{fileId}_{size}.webp` is a derived cache that only ever grew: nothing reaped a thumbnail whose source file left by a route other than an in-app delete (a restore, a delete-all, an out-of-app edit). The daily maintenance pass gains an orphan-thumbnail sweep (`lib/background-jobs/maintenance/sweep-orphaned-thumbnails.ts`) that lists the cache, parses the leading `fileId`, and deletes entries whose `files` row is gone; unparseable names are skipped, not deleted. The cache is regenerated on demand, so deletion is always safe.
-
-#### Fix: backup/restore/import integrity (bugs 9, 10, 11, 12)
-
-**Deleting a document store is now atomic and complete.** The DELETE route ran seven independent, un-transacted repository calls in an order that left two of them reading a table an earlier call had already emptied (so native-text documents leaked) and never deleted `group_doc_mount_links` at all. A partial failure minted a permanent orphan; because read connections keep foreign keys off, the orphans sat silent until a backup carried them into a restore where constraints are live, which then failed with `FOREIGN KEY constraint failed`. The teardown now runs in a single mount-index transaction (`lib/mount-index/delete-store-cascade.ts`): embedding chunks, links, garbage-collected file/document/blob content, folders, and both project and group links, then the store row — rolling the whole thing back on any mid-cascade failure. `GroupDocMountLinksRepository` gained a `deleteByMountPointId`. A reaper (`lib/mount-index/orphan-store-reaper.ts`, exposed as `DocMountFileLinksRepository.sweepOrphanedStoreChildren`) clears links/folders/documents already stranded on existing instances; it runs once at boot and in the daily maintenance sweep.
-
-**"Delete all my data" and replace-mode restore now clear `conversation_annotations`.** The table was on no delete path, so deleting everything left annotation rows behind (a privacy leak), and restoring into a migrated instance failed with `UNIQUE constraint failed: conversation_annotations`. It is now in `clearFormat3Entities`' truncate list (`lib/backup/restore/delete-service.ts`), and `chats.repository.delete()` sweeps a single chat's annotations when that chat is deleted. (The `UNIQUE` and `ON DELETE CASCADE` on this table exist only on migrated instances — `generateDDL` emits neither — which is why only migrated instances hit the restore hard-fail; reconciling that DDL drift is tracked separately.)
-
-**`.qtap` import overwrite now handles store identity correctly.** Three defects in `lib/import/quilltap-import/import-document-stores.ts`: an overwrite cleared documents but not folders (stale husks, `UNIQUE` warnings on re-import); it matched the target store by name, so renaming a store let an overwrite land on an unrelated store that inherited the old name; and a create minted a fresh store id, so no archive could ever be re-recognized on a later import. Overwrite now clears folders too, the target is matched by id, and create preserves the archive's id (a `duplicate` import onto an existing id still mints a fresh one).
-
-**A second-generation restore no longer loses archived link ids.** Restoring a backup taken from an instance that was itself restored re-ingested every user file into `restored/<name>` — exactly where the archived link rows already lived — so the replay won the race, the archived links collided on `UNIQUE(mountPointId, relativePath)` and lost their ids, and store rows duplicated once per generation. The file replay now recognizes when the archive already carries a project-less file's store rows (file/link/blob) and skips re-ingesting it, letting the archived rows restore intact (`lib/backup/restore/carried-store-rows.ts`). First-generation archives are unaffected.
-
-#### Fix: corrupt-input guards for character properties and help-doc sync (bugs 8, 18)
-
-**A corrupt `properties.json` no longer overwrites six character fields with defaults.** The character vault write overlay read-modify-writes `properties.json` to merge a partial patch over the current file. On a parse failure the read returned `null`, and the write path treated `null` identically to "file absent" — it seeded empty-properties defaults and projected them over the six fields whose only home is that file (`pronouns`, `aliases`, `title`, `firstMessage`, `talkativeness`, `canChooseOutfit`), permanently and with the save reporting success. The write path now uses `readCharacterVaultPropertiesForWrite`, which returns `null` only for a genuinely absent file (`NOT_FOUND`) and throws `CharacterVaultUnavailableError` when the file exists but is unreadable, unparseable, or fails schema validation. A truncated or conflicted sidecar now fails the save loudly, naming the file as unparseable, instead of silently clobbering it — matching the vault's existing "no silent hollow character" read semantics. The stale safety comment in `managed-fields.ts` that reasoned from the pre-cutover world (when these fields still had DB columns) was rewritten. Fix site: `lib/database/repositories/vault-overlay/vault-readers.ts`, `lib/database/repositories/vault-overlay/managed-fields.ts`.
-
-**A whitespace-only help file no longer wipes the `help_docs` table.** `syncHelpDocs` guarded its destructive delete-stale pass with `if (files.length === 0)`, which protects an empty `help/` directory but not a directory whose only `.md` is whitespace-only: the file count is nonzero, the sync extracts no usable content, and the prune deleted every row already in the table. The guard now also refuses the prune when no file on disk parsed to usable content while the table is non-empty — an all-blank help set against a populated table is treated as suspicious rather than as an instruction to wipe. Fix site: `lib/help/help-doc-sync.ts`.
-
-#### Docs: found-bugs catalog expanded; fix plan batched into session specs
-
-`docs/developer/found-bugs.md` now catalogues bugs 8–43 — the defects the v5 port has surfaced since bugs 1–7 were fixed, each with root cause, fix sketch, and v5 coordination notes (Pinned tripwires vs Faithful mirrors). The open bugs are batched into nine dependency-ordered, session-sized specs under `docs/developer/bugfix-sessions/` (README + one file per session), grouped by subsystem so one session fixes as many related bugs as possible: corrupt-input guards (8, 18) first as the urgent data-loss item, then restore/import integrity (9–12), mount-index/file hygiene (13, 15, 16, 38, 43), embedding/memory data (14, 17, 26), Almanack ledgers (19–21), chat API/participants (22–25, 27, 36, 37), message attribution (28–30), provider attachments (31–35), and UI polish (39–42).
-
-#### Docs: PROMPT_ARCHITECTURE.md rewritten for the current builder
-
-The file still described the pre-refactor prompt — twelve concatenated blocks (`[IDENTITY BLOCK]`, `[RELATIONSHIP FRAME]`, `[EMOTIONAL STYLE]`, …) assembled by `lib/chat/initialize.ts`. None of that is how a turn has been built for several releases. The rewrite documents what actually runs: the stable-prefix / Staff-whisper split and why it exists; `buildIdentityStack` block order and the fields deliberately left out of it (`description`, `identity`, `scenario`); the per-turn wrapper (roleplay template, math note, Taboo, tool instructions, tool reinforcement); the wire order of the three system blocks, the history, and the trailing sections on the new user message; `chats.compiledIdentityStacks` with its five invalidation hooks and read-through fallback; both provider-caching mechanisms; the persona-body/`opaqueContent` split and whisper role normalization; the template-variable table; and the help-chat, Brahma Console, Carina, and `self_inventory` prompt paths. Closes with the traps — including that the `role: SYSTEM` message `initialize.ts` writes at the head of every chat is filtered out of the LLM context and reaches no model.
-
-#### Taboo: instance-wide forbidden phrases
-
-A per-instance list of phrases characters must never say, maintained on Settings → Chat → Taboo and injected into the system prompt on conversational turns.
-
-**Storage.** One `instance_settings['taboo']` row holding `{"phrases": [...]}` — no migration, since the table is key/value and absence falls back to an empty list. The key is portable, so it exports with `.qtap` `instance-settings` and rides along in full backups automatically. Writes normalize: trim, drop empties, drop case-insensitive duplicates keeping the first occurrence. Order is not sorted — the rendering lives in the cacheable prompt prefix, so leaving order under the user's control means it only shifts when the list is actually edited. Schema `TabooSettingsSchema` (`lib/schemas/settings.types.ts`); accessors `getTabooSettings` / `setTabooSettings` (`lib/instance-settings`); `GET`/`PUT /api/v1/settings/taboo`.
-
-**Prompt placement.** `renderTabooSection` emits the section between the universal math-formatting note and the per-turn tool instructions, keeping it inside system block 1 — the segment Anthropic's `cache_control` breakpoint and OpenAI's `prompt_cache_key` both cover. `buildSystemPrompt` stays synchronous; the async read happens in `buildContext` and the phrases are passed down through a new optional `tabooPhrases` option. Call sites that don't pass it get no section, which is the intended default for the character-voiced announcer and the `self_inventory` tool. Carina builds her prompt from `buildIdentityStack` directly and is unaffected.
-
-An empty list emits no section at all — no header, no blank block — so an instance that never touches the feature produces a byte-identical prompt to one built before the feature existed. Phrases never pass through `processTemplate`; a phrase containing `{{...}}` reaches the model literally.
-
-**Section wording is deliberate and documented in-code.** A bare list of banned strings fails three ways: printing the forbidden tokens raises their salience and weak models parrot them back; prohibition without an alternative leaves a vacuum filled by the phrase's nearest neighbor; and banning an exact string invites trivial variants. The template frames the entries as worn-out clichés beneath the character, pairs the ban with a positive instruction to say the plain thing instead, extends each entry to its inflections and near-variants, and forbids referencing the list itself.
-
-**UI.** A card on Settings → Chat → Taboo, deep-linkable at `/settings?tab=chat&section=taboo`. Instance-scoped, so it fetches for itself through TanStack Query rather than riding the per-user chat-settings blob. Add and remove each PUT the whole array and write the server's normalized response into the cache, so a rejected duplicate can't leave the view disagreeing with the database. Phrases render with the existing `qt-tag-badge` family rather than a hand-rolled pill, so they follow the active theme. Enter is wired explicitly via `onKeyDown` instead of relying on the form's implicit submission, which does not fire consistently.
-
-`PROMPT_CACHE_STRUCTURE_VERSION` bumped 2 → 3. Provider-side caches go cold once on first use after deploy.
-
-Also removed stray tool-call markup (`</content></invoke>`) accidentally written to the end of `docs/developer/PROMPT_ARCHITECTURE.md`.
-
-#### CI: timezone-pinned tests, Discord notifications off deprecated actions, build job cleanup
-
-**The Almanack snapshot failed in CI but passed locally.** `renderAlmanackMarkdown` formats its date stamps with `toLocaleString`, which uses the ambient timezone, so the committed snapshot carried the recording machine's local times and the UTC runner produced a five-hour shift on every date. The test's own pin (`process.env.TZ = 'UTC'` in a `beforeAll`) never worked: ICU resolves and caches the default zone the first time a locale-aware formatter runs in a worker process, well before `beforeAll`. The pin moved to `jest.config.ts` and `jest.integration.config.ts`, where it runs before Jest forks its workers, and the snapshot was regenerated under UTC. Local and CI now agree on timezone instead of agreeing by accident.
-
-**Discord notifications no longer run deprecated actions.** `tristanbudd/discord-commit-github-action@1.0.1` (CI) and `tsickert/discord-webhook@v7.0.0` (Release) both declare `using: node20` in their latest releases, so the runner's Node 20 deprecation warning had no version to bump to. Each action amounted to one webhook POST; both steps are now `curl` + `jq` with no JavaScript runtime to go stale, and the release embed is byte-identical to what the action sent. Commit data reaches the payload through `env:` and `jq --arg` rather than `${{ }}` interpolation, so an attacker-controlled commit message cannot inject shell. A missing webhook secret or a push carrying no head commit skips with a warning; a non-2xx response fails the step.
-
-**Build job.** Dropped the `.next` artifact upload — nothing consumed the artifact, and the job exists only to prove the application still compiles. Removed `continue-on-error: true`, so a broken build now fails CI instead of being ignored. The CI Summary's Build row rendered "❌ Failed" on every run, including runs where the build passed, because the `report` job never listed `build` in `needs` and `needs.build.result` was therefore an empty string; `build` is now in `needs` and in the failure condition. Removed the dead `MONGODB_URI` and `JWT_SECRET` build env vars — MongoDB support was removed in 2.7, and neither variable appears in `lib/env.ts`'s schema or anywhere else in the application.
-
-#### The Almanack: capabilities report renamed, rewritten, and taught about the Scriptorium
-
-The capabilities report was last overhauled in March; its model of the system was the 4.0 app. Since then the 4.4–4.9 cutovers moved character content, wardrobe, custom tools, photos, mail and scenarios into the mount-index database — which the report never opened. It is now **The Almanack (System Report)**, with a rewritten collector, four new sections, and a progress bar that names what it is doing.
-
-The API action names (`capabilities-report-generate` and friends) and the settings deep-link anchor (`?section=capabilities-report`) are deliberately unchanged; renaming them would break bookmarks to buy nothing.
-
-**Bugs fixed on the way in.**
-
-- **Download 404 on a freshly generated report.** `generateAndSaveReport` minted a throwaway `crypto.randomUUID()` as `reportId`, but list/get/delete key off the `files` row created in the route. The card fed the generate response's id straight to the dialog, whose Download link then 404'd every time. Report creation now returns the files-row id.
-- **`GET ?action=capabilities-report`** returned a hardcoded fake object (`maxFileSize: 50MB`, `maxCharactersPerUser: 500`) and had no callers. Deleted.
-- **`LLMLogsRepository.getTotalTokenUsage` and `getTotalTokenUsageSince` always returned zero.** Both filtered on `usage: { $exists: true, $ne: null }`; the SQLite translator emits the `$ne` as `usage != NULL`, which is unknown for every row, so the filter matched nothing. The report renders exactly this number, which is how a long-standing "0 tokens logged" reading was finally traced. The in-repo comment on the third sibling had documented the trap since 4.6.
-- **Memory counting was O(characters) queries.** `collectEnhancedDatabaseStats` ran `findByCharacterId(...).length` per character. One `GROUP BY characterId` now serves both the census and the new top-ten table.
-- **`customTools` was rendered under "Pascal the Croupier (RNG)".** Custom tools are Pascal's Workbench, a separate subsystem; it has its own heading and a real inventory.
-- **`databaseSecurity` and `backupStatus` knew about two databases.** The mount index has its own file, its own size and its own backups. Both are three rows now.
-
-**Profile attribution in `llm_logs` (migration `add-llm-logs-profile-columns-v1`).** No table recorded which connection or image profile served a request. `provider`/`modelName` are flattened copies taken from the profile at call time and cannot distinguish two profiles sharing a pair. Two nullable columns, `connectionProfileId` and `imageProfileId`, now carry the id; older rows fall back to a `(provider, modelName)` join and the report labels those figures approximate. Both columns are added to the `new-account` restore's UUID remap list — connection and image profiles are themselves remapped, so a restored log row left holding the source instance's profile id would name nothing on the receiving one.
-
-`durationMs` was also missing at most call sites. The shared cheap-LLM path (memory extraction, title generation, summarization, context compression, scene-state tracking, image-prompt crafting — a large share of all rows) never set it; auto-configure and the gatekeeper never set it; the character optimizer hardcoded `0`, which poisoned any average taken over the column. All of them measure now. Latency figures in the report always print the count they were averaged over.
-
-**Seven phases, all new coverage.** `generateReportData`'s flat 17-way `Promise.all` became seven sequential phase groups, each running its own collectors in parallel. The collectors moved out of the single 1,750-line file into `lib/tools/almanack/`, and they now read SQL aggregates rather than hydrating entities to count them.
-
-New or substantially expanded: migration state and `highest_app_version` (declared in the type since March, never populated); plugins by capability kind and npm-vs-bundled; `provider_models` cache staleness per provider; API keys per provider with never-used flagged; theme icon-override counts including overrides naming an icon that does not exist; chats by type, cast-size histogram, document mode, outfits, narrative clock; autonomous rooms by run state, schedule, budgets and visibility; memories by kind/source/witnessed-context with the episodic-recall fields; characters by vault, NPC, persona, Carina and transparency; every feature dial added since 4.4; instance settings including how many chats the next stale sweep would actually touch; background jobs by status and type with failures; the embedding pipeline including stored-vector widths versus the active profile's; Ariel's terminal sessions; and generated images by model.
-
-Entirely new: **the Scriptorium** (document stores by kind, wedged scans and conversions, content rows, blobs by MIME type — now the largest disk consumer and previously absent — hard-link groups and dedup ratio, per-document policy, character-vault keystone health, wardrobe by tier, Pascal's Workbench inventory *including definitions that failed to parse*, the Post Office, photograph albums, scenarios by tier, state cascade); **dramatis personae** (ten busiest characters by chats/memories/vault size in one `json_each` pass, every project, every group with members by name); and a much-expanded **wire records** section (requests by type, per-profile lifetime and windowed usage with average and median latency, prompt-cache hit and miss by provider and by profile).
-
-The wire-records section prints the current LLM-logging enabled flag and retention window at its top, since those bound everything below it.
-
-**Progress bar.** The chat-creation progress bus generalized into `lib/progress/operation-progress.ts` — same buffered channel, replay and TTL, plus a `phase` event; `lib/chat/creation-progress.ts` is now a thin face over it. `capabilities-report-generate` accepts an optional `progressId` and a new `capabilities-report-progress` GET streams the phases over SSE. Because the bus buffers, the card can be collapsed and reopened mid-run and the bar picks up where it left off.
-
-**`qt-progress` class family.** A sweep found three bar-shaped constructs in the app, each styled differently and two using raw Tailwind colours. The new family covers all of them — track, fill, success/danger states, two heights, an indeterminate mode, and a `--qt-progress-indicator` variable for callers needing a bespoke fill colour. The character optimizer's bar (which drops `bg-primary`/`bg-green-500`), Pascal's Proving Bench outcome meters (which keep their per-state colours through the variable) and the search-results importance meter (which was not themeable at all) all migrated in the same change. The optimizer's segmented bar itself moved to `components/ui/ProgressBar` and both features drive it.
-
-
-#### Export/import: embeddings dropped, all fifteen types reachable, compact backup
-
-Five related changes to the `.qtap` export surface and the backup archive.
-
-**Embeddings no longer travel in exports.** `Memory.embedding` is a `Float32Array`, and `JSON.stringify` turns a typed array into an index-keyed object — about 29.6 KB per memory. On a real corpus that was 99.7% of the file: a measured `characters` export ran to 791 MB, of which roughly 2.5 MB was the actual content.
-
-Size was the smaller problem. A vector is only meaningful against the model that produced it, so importing a foreign one into a corpus governed by a different embedding standard silently corrupts semantic search whenever the dimensionality happens to match — and nothing downstream detects it. The boot repair in `lib/startup/repair-text-embeddings.ts` would make it worse, converting a JSON-string embedding written to the DB into a valid blob, i.e. *preserving* the bad vector rather than discarding it. Import time is the only correct place to drop it.
-
-The writer strips the field at both memory-emitting sites (`streamCharacters`, `streamChats`), and `QtapMemoryRecord.data` is now `Omit<Memory, 'embedding'>` so re-introducing it is a type error. The reader drops it twice over: in the NDJSON reassembler for archives already in the wild, and again in `importMemories`, which also covers the legacy monolithic path that never passes through the reassembler.
-
-Imports then re-embed what they inserted. `importMemories` returns the ids it created, and `executeImport` enqueues one `EMBEDDING_GENERATE` per row against the default embedding profile — the same pattern as the memory backfill sweeper, including its per-entity dedup. Previously nothing in the import path re-embedded at all: the memories sat with NULL embeddings and semantic search over them stayed broken until the next restart's reconcile sweep. `EMBEDDING_REINDEX_ALL` was rejected as the mechanism; it walks every character's entire memory table plus conversation chunks, help docs, and mount chunks, which is wildly disproportionate to importing a handful of rows. With no default profile, or with the built-in TF-IDF one, the import warns and leaves the rows to the boot reconcile.
-
-Imports keep using the raw repository rather than `createMemoryWithGate`, deliberately: the gate can skip near-duplicates, reinforce an existing row instead of inserting, or lose rows entirely when the embedding provider is down.
-
-**Three export types were unreachable from the UI.** The NDJSON writer has supported all ten `ExportEntityType` members for some time — `streamGroups` and `streamDocumentStores` exist and both dispatch switches have every case — but `handleExportEntities` had eight cases and `EXPORTABLE_TYPES` in the picker listed seven. `projects`, `groups`, and `document-stores` could be written and never selected. Both lists are now exhaustive, and `EXPORTABLE_TYPES` carries a comment requiring any future exclusion to be stated at the exclusion site; silence is what produced the bug.
-
-`handleExportEntities` reads document stores from the **global** repositories, not the user-scoped ones — they are instance-scoped, matching `resolveExportIds`.
-
-**Import order fixed for group↔store links.** `executeImport` created group↔document-store links at step 7c but imported document stores last at step 9, so in a mixed archive the links resolved against `idMaps.mountPoints` before `importDocumentStores` had populated it and were silently dropped. Document stores now import before the link step (and still after projects, whose id map their project links need).
-
-**Five new export types.** `files` (the general file library: folders, metadata, and bytes as chunked base64 modeled on the existing doc-store blob pair), `prompt-templates`, `provider-models`, `plugin-configs`, and `instance-settings`. Each is wired through the full stack — type union, counts, record types, writer generator, both dispatch switches, preview, stream reassembler, importer, wizard labels, picker, entity lister, and both JSON Schemas. `ExportEntityType` now carries that touch-list as a comment.
-
-Notes on the ones with teeth:
-
-- **`files`**: `storageKey` is instance-specific (commonly `mount-blob:<mountPointId>:<blobId>`, naming a row in *this* instance's mount-index DB) and never transfers. It rides as `_sourceStorageKey` provenance; the importer discards it and records the key its own upload bridge returns, along with the **post-bridge** mime/size, since the bridges transcode bitmaps to WebP. Backup files are excluded exactly as the backup service excludes them. `linkedTo` ids are remapped where the import knows them, kept where they already name something on the receiving instance (including message ids belonging to a chat that resolved), and dropped otherwise with a warning — a dangling id is not inert, since `lib/cascade-delete.ts` reads `linkedTo` to decide whether a file is still referenced.
-- **`plugin-configs`**: redaction is mandatory. `PluginConfig.config` is an untyped bag and manifests may declare `password`-typed fields stored in plaintext — acceptable in a local backup, not in a portable file. The exporter resolves the plugin manifest, drops every password-typed key, and lists what it removed in `_redactedKeys`, which the import preview surfaces per plugin. If the manifest can't be resolved the whole `config` is withheld with `_redactedKeys: ['*']`; the exporter never guesses. Import uses `upsertForUserPlugin`, which merges — so a redacted key leaves the receiving instance's own secret intact.
-- **`instance-settings`**: the whole key/value table minus `NON_PORTABLE_INSTANCE_SETTING_KEYS`, a named constant beside the key constants in `lib/instance-settings` so a new setting is a conscious include/exclude decision. Excluded: the three mount-point pointer keys (instance-local UUIDs into this instance's mount-index DB), `lastMaintenanceSweepAt`, and the version guard's `highest_app_version` — an imported value there could lock a healthy instance out of its own database. Import overwrites by key; that is the point of the type.
-
-Format compatibility is forward-only. The NDJSON envelope stays `version: 1` and old readers warn-and-skip unknown record kinds, but `buildExportDataForType` throws on an unknown `manifest.exportType`, so an older build cannot consume an archive of a new type. The error names the type plainly.
-
-Also fixed in passing: `upsertForUserPlugin` takes an optional `enabled`, and backup restore now passes it. Restoring previously dropped the flag, so a plugin the user had switched off came back on.
-
-**Restore runs the embedding reconcile.** `restore()` ended after applying instance settings with no reindex or reconcile of any kind; a restored corpus was only repaired by the next boot's `reconcile-embedding-dimensions`. Fine for an in-place restore, wrong for `new-account` mode or a restore onto an instance whose default embedding profile differs from the archive's. It now calls `reconcileEmbeddingDimensions()` at the end — the function takes no arguments, never throws, resolves the default profile itself, and dedupes its own reindex enqueue, so the conforming case is a cheap no-op. The result (or `skippedReason`) lands in the restore summary and the debug log.
-
-**Compact backup (opt-in).** `createBackup(userId, { compact })` nulls memory embeddings and skips `conversation-chunks.json`, `vector-entries.json`, `vector-index-metas.json`, `tfidf-vocabularies.json`, `embedding-status.json`, and `doc-mount-chunks.json` entirely — the restore reader treats all of them as optional, so an absent file behaves as an empty one. The manifest records `compact: true`; restore detects it and enqueues one `EMBEDDING_REINDEX_ALL`, whose fan-out regenerates NULL-embedding memories, conversation chunks, help docs, and mount chunks. It is enqueued before the reconcile so the reconcile's own dedup sees it. Missing chunk *rows* (as distinct from NULL embeddings) rebuild as chats and stores are next touched, which the restore summary says plainly.
-
-Full fidelity stays the default: a backup restores the *same* instance, so its vectors are valid on arrival, and re-embedding costs real money and time exactly when the user is recovering. `POST /api/v1/system/backup` parses `{ compact?: boolean }` from the body it previously ignored; the backup dialog has a checkbox, default off. `llmLogs` handling is unchanged — compact is about embeddings, not logs.
-
-**Schemas.** `public/schemas/qtap-export.schema.json` gains the five new `exportType` branches (plus `groups`, which the enum had been missing), the new definitions, the count keys it lacked, and a note on `Memory` explaining why `embedding` is absent. A new `public/schemas/qtap-export-ndjson.schema.json` describes the streaming format — envelope, footer, and every record kind — which no schema covered at all.
-
-#### Standalone tarball drops redundant plugin node_modules: 274 MB → 143 MB
-
-`scripts/build-standalone-tarball.ts` copied `plugins/dist/.` wholesale, so every bundled plugin's `node_modules` rode along into the tarball — and from there into the Electron shell and the `npx quilltap` path, which both consume it. esbuild inlines each plugin's dependencies into its `index.js`, so most of that is dead weight: 680 MB across the 14 plugins, the bulk of the tarball.
-
-Most, but not all — which is why this isn't the same `rm -rf` the Docker images use. A few packages survive bundling as bare `require()` calls, either because the plugin marks them external or because a dependency requires them dynamically in a way esbuild can't follow. Node resolves those by walking up from the plugin directory, so whether the plugin's own copy matters depends on what sits in the standalone root. Docker can delete all of them because its image carries the full production `node_modules`; the standalone root is only Next's traced subset, and `ajv`, `ajv-formats`, `@quilltap/plugin-types`, and `google-auth-library` are not in it. Deleting wholesale would have broken the MCP, Google, OpenAI-compatible, and default-system-prompts plugins.
-
-The build now decides per plugin: scan the bundle for bare `require()` specifiers, and keep the tree only when one of them resolves from it and *not* from the standalone root. That correctly ignores specifiers resolving from neither — `ws` reaching for its optional native accelerators (`bufferutil`, `utf-8-validate`) is absent everywhere today and handled by a fallback, so keeping a tree for it would buy nothing. Computed per build rather than hardcoded, so it stays correct as plugin dependencies change. Current result: 10 pruned, 4 kept, logged individually with the package that pinned each one.
-
-Verified by driving the real script against a published 4.8.0-dev.155 tarball staged as `.next/standalone`, so the root's traced module set was the genuine article rather than a guess. The produced tarball keeps all 14 plugin bundles and 4 trees, and a check against the original trees confirms no stripped plugin lost a package that previously resolved — 10 checked, 0 regressions.
-
-One note on how this was tested, because it shaped the approach. A load test that `require()`s each plugin passes even with a needed tree removed: the `ajv` calls inside the MCP SDK are lazy, so nothing throws at module load. Runtime loading is therefore not a sufficient check, and the guard here is the textual scan of the bundle, which sees lazy requires the same as eager ones. An earlier hand-run scan that only matched double-quoted requires missed `google-auth-library` entirely — computing the set during the build, over both quote styles, is what caught it.
-
-#### Startup scripts pass the host timezone to the container
-
-`a7f691e7` made the container honor `QUILLTAP_TIMEZONE` / `TZ`, but nothing set them, so a container started with the shipped scripts still ran on UTC — scheduled rooms firing at the wrong hour, daily budget rollover at UTC midnight, and "today"/"yesterday" recall windows offset. All three launchers now detect the host's IANA timezone and pass it as `QUILLTAP_TIMEZONE`: `scripts/start-quilltap.sh`, `scripts/start-quilltap.ps1`, and `scripts/start-quilltap-docker.ts` (`npm run start:docker`).
-
-An explicit `-e QUILLTAP_TIMEZONE=…` or `-e TZ=…` always wins; detection only fills the gap. Each script prints what it resolved and falls back to UTC with a note when the host zone can't be determined. `-e QUILLTAP_TIMEZONE=UTC` pins to UTC.
-
-Detection order is `QUILLTAP_TIMEZONE`, then `TZ`, then a platform lookup, and every path is validated to be an IANA name (`UTC`, or containing `/`) before use. `date +%Z` is deliberately never used: it returns an abbreviation like `CDT`, which ICU cannot resolve and would silently fall back to UTC — the exact bug being fixed. A bogus `TZ=CDT` is therefore rejected rather than forwarded.
-
-Platform lookups differ per script. The TypeScript version needs no fallback chain — it already runs under Node, so `Intl.DateTimeFormat().resolvedOptions().timeZone` is authoritative by construction. The shell script tries Node, then `/etc/timezone`, then `timedatectl`, then `readlink /etc/localtime`, stripping through `zoneinfo/` so it handles both Linux (`/usr/share/zoneinfo/…`) and macOS (`/var/db/timezone/zoneinfo/…`). PowerShell uses `[TimeZoneInfo]::Local.Id`, which returns a *Windows* id on Windows (`Central Standard Time`) rather than IANA, so it converts via `TryConvertWindowsIdToIanaId` (.NET 6+ / PowerShell 7.2+) and falls back to Node.
-
-Verified per script: macOS under zsh/bash/sh, Linux containers with and without `node` and with `/etc/timezone` removed to exercise the `readlink` path, and PowerShell 7.4 in a container covering the env-var, override, rejection, and Windows-id paths (`Central Standard Time` → `America/Chicago`).
-
-Also fixed in passing: `scripts/start-quilltap.sh --help` printed a sed error instead of help on macOS. The expression `sed -n '2,/^$/{ s/^# \?//; p }'` is rejected by BSD sed, which wants a separator before `}`, and its line range ended at the blank line on line 3 rather than covering the usage block. Replaced with an `awk` one-liner that behaves identically on BSD and GNU.
-
-And the Ollama probe in `start-quilltap.ps1` is now bounded. It used `TcpClient.Connect("localhost", 11434)`, which takes no timeout: on a host that silently drops the SYN rather than refusing it — corporate firewalls, some VPN configurations — that blocks for the OS default, roughly 21 seconds on Windows, before concluding "no Ollama." Now `BeginConnect` plus a 500 ms bounded wait, which is generous for a service on loopback. The `finally` also closes a leak: the old form only reached `Close()` on the success path, so every miss abandoned an undisposed socket. Measured against a blackholed address: 534 ms instead of the OS default. Detection itself is unchanged — a live listener on 11434 is still found, in 78 ms.
-
-#### Anthropic SDK 0.88.0 → 0.115.0, and published images stop shipping plugin node_modules
-
-Two findings from scanning a locally built image, both in the same area.
-
-**The Anthropic SDK was frozen 27 minor versions behind.** `qtap-plugin-anthropic` declared `"@anthropic-ai/sdk": "^0.88.0"`. For 0.x packages npm's caret pins the minor, so `^0.88.0` resolves to `>=0.88.0 <0.89.0` — `npm update` could never reach anything newer, and `@anthropic-ai/sdk` is not a root dependency, so nothing else pulled it forward. It is the only plugin SDK on a 0.x line; `openai@^7.2.0`, `@google/genai@^1.52.0`, `@modelcontextprotocol/sdk@^1.30.0`, and `@openrouter/sdk@^1.2.2` all float minors normally.
-
-That left CVE-2026-41686 (GHSA-p7fg-763f-g4gf, medium, fixed in 0.91.1): `BetaLocalFilesystemMemoryTool` created memory files with Node's default `0o666`/`0o777` modes, world-readable under a standard umask and world-writable under the permissive umask common in Docker images. Quilltap never instantiates that class — the plugin only uses `new Anthropic()`, `client.messages.create()`, and `client.models.list()` — so it was unreachable dead code inside the bundle, but it was real code, not a scanner artifact.
-
-Now on `^0.115.0`. The SDK surface in use is unchanged, the `anthropic-version` header is still `2023-06-01`, and all nine streaming event types the provider switches on (`content_block_start`/`_delta`/`_stop`, `message_start`/`_delta`, `text_delta`, `thinking_delta`, `signature_delta`, `input_json_delta`) still exist in 0.115.0 — checked explicitly, because the streaming path casts through `as unknown as AsyncIterable<any>` and the typecheck cannot see it. Plugin 1.0.51 → 1.0.52; `manifest.json` had drifted to 1.0.50 in 74ec93b5 and is resynced to 1.0.52.
-
-**Published images shipped every plugin's `node_modules`.** esbuild bundles each plugin's dependencies into its `index.js`, so those trees are dead weight once the build finishes — 683 MB across the 14 plugins, plus scanner findings for SDK copies that are never loaded. `.dockerignore` excluded `plugins/dist/*/node_modules` and the root `Dockerfile` also `rm -rf`'d them, but `Dockerfile.ci` copies `prebuild/plugins/dist/` from the CI artifact, and neither guard matched that path — so the images actually published to Docker Hub carried all 14. `Dockerfile.ci` now strips them, and `.dockerignore` excludes `prebuild/plugins/dist/*/node_modules` as well, matching the belt-and-braces already used for the non-CI path.
-
-Verified by building both Dockerfiles: the CI path now reports 0 plugin `node_modules` directories while keeping every plugin bundle, the bundled SDK reads 0.115.0, and the image scans 0 critical / 0 high. The image is 1.73 GB, down from 2.73 GB.
-
-Two verification limits worth knowing before the next release. First, every build and scan across this Docker pass was **arm64 only** — releases publish a multi-arch manifest, and the amd64 half is unverified. That matters most for the perl purge in the entry below: `dpkg --purge` ends in `|| true`, so if the unqualified `libperl5.36` name failed to resolve on amd64 the build would still succeed and perl would silently survive, putting 2 critical + 2 high back into that half. Worth one emulated `--platform linux/amd64` build and scan to confirm. Second, the Anthropic SDK bump was verified statically — typecheck, bundle load, streaming event types, version header — but no live API call was made, so a real streaming turn with extended thinking is still worth running.
-
-Not changed: `scripts/build-standalone-tarball.ts` copies `plugins/dist/.` wholesale, so the standalone tarball — and the Electron shell and `npx quilltap` paths that consume it — still carry the same 683 MB. Same root cause, different consumer; left alone here because it needs testing against those two shells.
-
-#### Docker image CVE reduction: 3 critical / 12 high → 0 critical / 0 high
-
-A Docker Scout scan of `foundry9/quilltap:4.8.0-dev.152` reported 117 vulnerabilities across 30 packages (3 critical, 12 high, 22 medium, 91 low). None were in Quilltap's own code; all came from tooling that ships in the image but is never executed at runtime. Four changes, verified by rescanning:
-
-**Removed npm, npx, corepack, and yarn from the production stage.** These ship in `node:24-bookworm-slim` and account for 1 critical and 6 high — all in npm's own bundled `node_modules` (`tar` 7.5.16, `brace-expansion` 5.0.6, `undici` 6.26.0, `ip-address` 10.2.0). The container's only command is `node server.js`, and plugin installs go through `lib/plugins/registry-client.ts`, which downloads and extracts registry tarballs over HTTP rather than shelling out to the npm CLI. Nothing at runtime invokes any of these binaries.
-
-**Purged Debian's `perl`.** 2 critical (CVE-2026-13221, CVE-2026-12087) and 2 high (CVE-2026-48959, CVE-2026-48962), all marked "not fixed" in Debian 12 *and* Debian 13, so no base-image bump clears them — `node:24-trixie-slim` scans identically to bookworm on this package. `perl-base` is Essential, so the purge needs `--force-remove-essential`. Verified afterward: `zip`, `unzip`, `bash`, Node, and all three native modules (`better-sqlite3`, `sharp`, `node-pty`) still load.
-
-**Dropped `git`, `curl`, `wget`, and `jq`** from the production and CI images. These were pre-installed as a convenience toolbox for the LLM shell agent. `git` is what dragged in `perl`; `git` and `curl` together pull `libssh2` (CVE-2025-15661, high, no fix available). Not a code path: the `curl` **tool** is `qtap-plugin-curl`, which uses Node's `fetch()`, not the binary, and is unaffected. Only a human typing at Ariel's bash prompt inside a container loses them; non-Docker installs are untouched. `bash`, `zip`, and `unzip` stay — `lib/backup/restore/archive.ts` and `lib/backup/backup-service.ts` shell out to `unzip`/`zip`, and the PTY hard-codes `/bin/bash`.
-
-**Added `fast-uri` and `postcss` overrides** in `package.json`. `ajv` pinned `fast-uri` to 3.1.4 (CVE-2026-18446, high) and `next` pinned `postcss` to 8.4.31 (GHSA-r28c-9q8g-f849 and CVE-2026-45623, both high, plus the `<=8.5.22` sourceMappingURL chain). Now `^3.1.5` and `^8.5.25`; `postcss` hoists to a single copy instead of a nested one under `next`. `npm audit --omit=dev` reports 0 vulnerabilities.
-
-The attack-surface reduction runs as the last `RUN` in the production stage of both `Dockerfile` and `Dockerfile.ci`. Nothing may `apt-get` or `npm` after it — the `wsl2` stage in `Dockerfile.ci` extended production and re-ran `apt-get install zip unzip`, which the production stage already covers, so that step is gone.
-
-Not changed: the production stage still overwrites the Next.js standalone traced `node_modules` with the full `--omit=dev` tree. That is deliberate (native modules are prebuilt in `deps-prod`), and no remaining critical or high traces to it.
-
-#### Docker containers now apply the timezone to the process clock, not just to timestamps
-
-`QUILLTAP_TIMEZONE` feeds the timestamp-formatting chain in `lib/chat/timestamp-utils.ts`, but several paths read Node's system-local clock instead and so stayed on UTC in Docker:
-
-- `lib/memory/day-references.ts` — resolves "today"/"yesterday" for episodic recall against the server-local calendar, so recall windows were offset by the UTC gap.
-- `lib/background-jobs/handlers/autonomous-room-turn.ts` — the daily user-token budget rolls over at "instance-local midnight."
-- `lib/background-jobs/handlers/autonomous-room-schedule-tick.ts` — croner evaluates cron expressions in local time, so a room scheduled for 07:00 fired at 02:00 US Eastern.
-
-Those follow `TZ`, which nothing was setting. `docker/entrypoint.sh` now copies whichever of `TZ` / `QUILLTAP_TIMEZONE` is set into the other, with `QUILLTAP_TIMEZONE` winning when both are set and disagree — matching what `lima/wsl-init.sh` already did for the Lima and WSL2 shells. Setting neither is unchanged (UTC). No `tzdata` package is required; Node resolves `TZ` through bundled ICU.
-
-The `development` stage in `Dockerfile` had no `ENTRYPOINT` at all and now uses the same one, so dev containers get the same behavior as production and CI.
-
-Docs updated: `docs/DEPLOYMENT.md` (new `TZ` row plus the precedence note), `README.md` timezone tip, `help/chat-settings.md`.
-
-#### Staff announcements no longer wrap themselves in asterisks
-
-Twelve staff strings were written as asterisk-delimited narration — `*Aurora regards Charlie and pronounces upon their attire —*` and the like. Under a roleplay template that uses a different narration delimiter, those asterisks teach the model the wrong format. Models copy what the context shows them far more reliably than they follow an instruction that contradicts it, and the closing delimiter is where the instruction loses: a model told to narrate with `+` will open the span correctly and then close it with `*` two hundred tokens later, matching the surrounding prior.
-
-The announcements are now plain declarative lines, matching what the Host, Librarian, Lantern, Prospero, Ariel, Concierge, and Pascal writers already did. Wording is unchanged — only the delimiters are gone, and a trailing em-dash becomes a colon where the line introduces content. Affected: `aurora-notifications/writer.ts` (opening outfit, outfit change), `aurora-notifications/core-whisper.ts` (Core whisper opener), `commonplace-notifications/writer.ts` (all seven recall sections), `suparna-notifications/writer.ts` (mail delivery opener, and the blank-letter placeholder).
-
-The substrings that `system-message-labels.ts` matches on to label these bubbles all sit inside the wording, not the delimiters, so bubble labels are unaffected.
-
-Most of these were already reaching the model in persona-free form: every one has an `opaqueContent` twin, swapped in whenever any non-user character in the chat has `systemTransparency !== true`. The exceptions were chats where every character is transparent, and Suparṇā, which sets `opaqueContent` equal to `content` by design so the recipient reads her announcement verbatim.
-
-#### Tool-execution rules stop demonstrating asterisk narration
-
-`buildNativeToolInstructions` illustrated the "don't narrate tool use" rule with `"*pulls up the file*"`, `"*executes the search*"`, and `"*reaches for the vault*"`. That block is appended to the system prompt on every tool-enabled turn regardless of chat, character, or roleplay template, so those three examples were the one unconditional source of asterisk narration in the prompt — and they landed after the template's own formatting rules, where recency works against them. The examples are now unquoted prose: "Describing the action in prose — pulling up the file, executing the search, reaching for the vault — is NOT the same as calling a tool."
-
-#### Pick a roleplay template when you create the chat
-
-The New Chat form (page and modal) now has a **Roleplay Template** dropdown, beneath **Play As**. Previously the template was decided silently at creation — project default, then the user's global default — and could only be seen or changed afterward from the chat sidebar.
-
-The dropdown is pre-selected with exactly what the chat would have gotten: project default > user/global default > No Template. That option is labelled `(default)`, so an override is visible. Built-in templates keep their `(Built-in)` marker. The control is hidden when no templates exist.
-
-The chosen value is always sent on create, including `null` for "No Template". `POST /api/v1/chats` accepts a new `roleplayTemplateId` field: present (even as `null`) wins over both defaults; omitted keeps the old default chain. An id that doesn't resolve is a 400.
-
-Reference-data reloads — adding a character, switching projects — re-seed the default only until the user picks a template by hand (`roleplayTemplateTouched` on the form state), so an explicit choice is never overwritten.
-
-Known limitation, pre-existing: choosing "No Template" stores `null`, and `getRoleplayTemplate` treats a null template on a chat as "never set" and re-inherits the default on the first turn. Same behavior as picking "No Template" in the chat sidebar today. Distinguishing a deliberate none from an unset value needs a data-model marker and is not part of this change.
-
-#### `PLUGIN_UTILS_VERSION` is generated, not hand-written
-
-plugin-utils exported `PLUGIN_UTILS_VERSION` as a hardcoded string literal, documented as usable "at runtime to check compatibility." It had been left at `2.2.1` while the package shipped `2.2.18` — seventeen releases of drift, and a wrong answer for anything that trusted it. Nothing in this repo or in `plugins/dist/` actually reads the constant, so no shipped behavior was affected, but the value published to npm was wrong.
-
-The literal is gone. `scripts/generate-version.mjs` writes `src/version.generated.ts` from the `version` field in package.json, and runs from `prebuild` and `pretypecheck` — so `npm run build`, `npm run typecheck`, and `prepublishOnly` (which builds) all regenerate before anything reads it. `src/index.ts` re-exports the generated constant. The generated file is committed so a fresh checkout typechecks without building first, and the generator skips the write when the content is unchanged so watch-mode rebuilds don't loop. The emitted `.d.ts` keeps a literal type (`declare const PLUGIN_UTILS_VERSION = "2.2.19"`) rather than widening to `string`, matching what the hand-written constant declared. Bumping package.json is now the only step.
-
-Published as plugin-utils 2.2.19; the app's dependency moves from `^2.2.17` to `^2.2.19`. The bundled plugins are not rebuilt for this — their declared ranges (`^2.2.16` / `^2.2.18`) already admit 2.2.19, so each picks it up on its next install, and since nothing reads the constant a mass rebuild would regenerate thirteen bundles for no behavior change.
-
-#### A stalled provider no longer wedges a turn
-
-A turn could sit on "Recalling *X*'s memories…" for ten minutes with no log output and no CPU use. The cause was a provider that accepted the request and then never answered: provider SDKs default to a 600-second request timeout, so a single silent DeepSeek call held the turn for the full ten minutes before its first retry — measured at 622,451 ms for a memory recap whose healthy runtime is about 9 seconds. Nothing was wrong locally; nothing was logged, because `llm_logs` rows are only written when a call *finishes*.
-
-Requests are now bounded at three levels.
-
-**The caller's deadline** — `executeCheapLLMTask` gives each attempt a wall-clock budget: 45 s against a remote provider, 180 s against a local one, where a cold model load is slow rather than stalled. Exceeding it throws `CheapLLMTimeoutError`, which the existing failure path already degrades through, and logs `[CheapLLM] Abandoned a stalled provider call` with the provider, model, task type and elapsed time. This covers every cheap-LLM task on every provider: recap, titling, compression, extraction, summarization, prompt crafting.
-
-**The phase ceiling** — the memory recap in `context-manager.ts` gets its own 60-second bound. It makes an embedding call *and* a cheap-LLM call in sequence, so per-leg budgets alone could still add up to a long visible stall. The ceiling sits above the per-leg budget deliberately: a recap slow in two places is still working, and the recap is optional context.
-
-**The provider's own budget** — new `LLMParams.requestTimeoutMs` (plugin-types 2.5.5) is a hard per-request ceiling that providers must not retry past. Cheap-LLM calls set it 5 s inside their own deadline, so a stalled request is aborted at the socket rather than left running while the caller walks away. plugin-utils 2.2.18 adds `resolveRequestTimeoutMs`, `buildSdkRequestOptions`, `buildSdkClientOptions` and `buildRequestAbortSignal` so every provider applies it identically, and drops `OpenAICompatibleProvider`'s client default from the SDK's 600 s to 300 s.
-
-All nine text providers were updated. How the budget is applied depends on what the transport measures:
-
-- **OpenAI-SDK-backed** (deepseek, openai-compatible, grok, z-ai, openai) and **Anthropic** — the SDK timeout stops at the response headers, not the last token, so it is safe on streaming paths and applies everywhere.
-- **ollama** — non-streaming bounds the whole exchange; streaming clears its timer once the headers land, so the body streams unbounded and a long generation is not cut off.
-- **openrouter** — same split, via the SDK for non-streaming and a manual first-byte timer on the Chat Completions fetch path.
-- **google** and **openrouter streaming** — only an explicit caller budget is honored. Both SDKs document their timeout as bounding the whole request, so imposing a default could truncate a long answer. Background work, which is what the budget exists for, never streams.
-
-Also: `withTimeout` (`lib/promise-timeout.ts`) now accepts an error factory alongside a message string, so a caller can tell "the deadline fired" from "the work failed" by type rather than by string matching.
-
-An abandoned request is not cancelled at the caller's layer — nothing there can cancel it. It runs to completion and its result is discarded; only the *waiting* stops, which is the part that blocked the turn.
-
-#### Custom tools: run presets, and a schema-description fix
-
-- **Run presets.** The Salon's custom-tool run dialog can now save the current parameter values as a named preset, stored as `Tools/{tool}.{preset}.settings.json` in the running character's vault (an ordinary JSON file — flat map of parameter name → value, hand-editable, rides in vault export/backup). A dropdown lists the tool's existing presets and loads a selection back into the form; a Reset-to-defaults button re-seeds from the definition. Loading is loosely bound: preset keys naming a declared parameter land, everything else is ignored, so presets survive tool revisions. Preset names are locked to `[a-z0-9][a-z0-9_-]{0,63}` — the input filters illegal characters as typed, and dots are excluded so the filename parses unambiguously (tool names can't contain dots). The roster listing gains `vaultMountPointId` (null hides the controls, as does a parameterless tool); file IO goes through the existing mount-points file routes. Naming contract in new `lib/pascal/tool-presets.ts`; spec at `docs/developer/features/custom-tool-presets.md`.
-- **Fix:** the LLM-consult `prompt` field's schema description omitted `{{state.path}}` from its supported-placeholder list. Rendering always supported it (and the help doc said so); the description now agrees.
-- **Tooling:** `.qt-oracle-mirror/` (the native-port differential-harness oracle bridge, mirrored into this checkout by an external tool) is now ignored by git, eslint, and jest — its suites drive the Rust port's harness and were failing this repo's lint and unit runs.
-
-#### Hard links between document stores are now real
-
-A file linked into a second store with `quilltap docs link` did not stay linked. Editing either side forked the two apart silently: the write kept pointing the edited link at a fresh content row while the other link kept the old one, so the second location went on serving the previous revision indefinitely — to the file browser, to search, and to characters.
-
-The cause was that a hard link had no representation of its own. Both `linkDocumentContent` and `linkBlobContent` find-or-create a `doc_mount_files` row for the incoming sha256 and repoint the written link at it; nothing consulted the file's other links. Simply propagating on a shared `fileId` would have been much worse than the bug: content rows are content-addressed, so unrelated byte-identical files (empty files, boilerplate headers) share one row by coincidence — one row in a real instance was shared by 36 character vaults — and a write would have rewritten all of them.
-
-Deliberate links are therefore recorded explicitly:
-
-- New nullable `doc_mount_file_links.linkGroupId` (migration `add-doc-mount-link-groups-v1`, partial index on non-null values). Links sharing a non-null group are one file; a shared `fileId` alone still means nothing.
-- `linkFile` binds a group via `bindLinkGroup` (DB→DB and FS→FS both). `copyFile` deliberately does not — a copy shares a deduped content row until the first write, then forks, which is correct copy semantics.
-- On write, `fanOutGroupFileId` repoints every group member at the new content row, carrying `plainTextLength`, conversion status, and the three `allow*` policy flags. Per-link `description` and `extractedText` are not propagated — two consumers of the same bytes keep their own captions.
-- Chunks are per-`linkId`, so `reindexLinkGroupSiblings` (new `lib/mount-index/link-groups.ts`) rebuilds each sibling's chunk set after the write commits, from `writeDatabaseDocument` and from the doc-edit tools' `triggerReindexIfNeeded`. Parent-process only; in-child writes leave it to the next rescan.
-- `deleteWithGC` NULLs the group when one member is left.
-
-No backfill: a pre-existing shared `fileId` cannot be told apart from coincidence, so existing links start ungrouped and must be re-made with `docs link`.
-
-`ensureLinkGroupColumn` (`mount-index-case-repair.ts`) adds the column at repository init as well, called from both repositories that reference it. `generateDDL` only ever emits CREATE TABLE, so on an existing database the column would otherwise arrive solely from the startup migration — while code can reach the table before it (a dev-server hot reload, a failed or skipped migration, a backup restored mid-upgrade). That gap is not a loud failure: every link query names the column, and `safeQuery` turns the resulting "no such column" into a null result, so a missing column presents as *every document silently not existing* — `docs link` reporting a file that plainly exists as "source not found", and writes to those paths looking like first-time creates.
-
-**Orphaned content rows.** Every content-addressed rewrite abandoned its old `doc_mount_files` row and never collected it, leaking the `doc_mount_documents` / `doc_mount_blobs` payload with it (36 orphans in one instance). `gcOrphanedFileRow` now collects on the write path, `deleteWithGC` shares it, and the migration sweeps the backlog. The payload rows are deleted explicitly rather than via `ON DELETE CASCADE`, which only exists on databases whose tables came from `add-doc-mount-file-links-v1` — schema-generated tables have no foreign keys, so `deleteWithGC` had been leaking there too.
-
-**CLI.** The `ls` `links` column and `--links` now count group members rather than rows sharing a `fileId`, so a boilerplate file no longer reports 36 links when nothing was linked. Degrades to `1` against an instance that hasn't run the migration. Help text for `link` / `copy` / `move` corrected.
-
-**Export/import.** `linkGroupId` rides in `ExportedDocumentStoreDocument` and is re-bound on import (remapped to a fresh id, so importing an archive twice can't fuse the copies); export schema updated, along with `folderId`, which the writer had been emitting without a schema entry.
-
-#### Custom tools: per-run chip labels, two-block bubbles, and side effects
-
-Three additions to Pascal's custom tools (spec: `docs/developer/features/pascal-custom-tool-enhancements.md`):
-
-- **`chipLabel`** — an optional template (same placeholders as an outcome message, rendered after the outcome is chosen) that names each run on the Salon chip and the announcement heading: "Agent lambda — Jackie" instead of the static title. Rendered once in `executeCustomTool`; carried in `pascalMeta.chipLabel`; chip precedence is `chipLabel → toolTitle → tool`. Never shown to the model — to have the LLM name the run, declare a string parameter and template it.
-- **Two-block bubble** — `buildPascalResultContent` now emits `🎲 **Heading**\n\n<message>` instead of a single line, so an outcome message that opens with a list item, heading, quote, or fence renders as written instead of gluing inline to the bold title. Old messages keep their one-line bodies (content is frozen at post time). The heading is the rendered `chipLabel` when present. The ProvingBench miniature matches.
-- **`effects`** — a tool-level array (max 16) of conditional writes applied server-side after the run: into tiered persistent state ("write where it lives": chat → project → group → general, project only with a projectId, group only under the exactly-one rule, defaulting to chat) or onto the rolling character's metadata (whole-object RMW; skipped when no character rolled — including unattributed manual runs). Effect `when` is the outcome-row comparator language plus an `outcome` (winning state) subject. Effect `value` is a literal number/boolean, or a string that is **always an expression** — a new closed, eval-free grammar in `lib/pascal/expressions.ts` (arithmetic, concatenation, parentheses, literals, `{{ref}}` substitution; no identifiers, no calls; bare prose like `"broken pick"` is a load-time parse error — quote it: `"'broken pick'"`). Run-time eval failures skip that effect fail-soft; writes are batched one per touched store, buffered-repo (job-child) safe, never re-read, and recorded in `pascalMeta.effects` with previous values. Applied before the Pascal post; the Workbench preview/audit never applies.
-
-Also: the underscore guard (`_`-prefixed state keys are user-only) is enforced on effect targets at load and apply time; the `run_custom` preamble mentions side effects and per-tool descriptions list write targets (hidden under `revealOdds: false`); tool vocabulary gains `stateWrites`/`metadataWrites` and the run dialog shows a "may write" line; the Workbench gains a Chip label field, a Side effects card (Always / on-outcome conditions authored in the form, richer conditions carried verbatim), and dry-run effect display on the bench; export schema and DDL updated (`pascalMeta` is JSON — no migration).
-
-#### Sub-lists survive the Markdown editor, and can be created in it
-
-Opening a document with nested bullets flattened them, and the next save wrote the flat version back to disk:
-
-```diff
- - **Jackie** (3 nodes)
--  - Implant
--  - Notation Engine
-+- Implant
-+- Notation Engine
-```
-
-`@lexical/markdown` hard-codes a four-space indent unit and resolves a list item's depth on import with `Math.floor(spaces / 4)`. Two-space nesting — what Prettier emits, what most LLMs emit, what most hand-written Markdown uses — divides to zero, so every child became a sibling. Nothing downstream could recover the nesting because it was already gone from the editor state.
-
-New `components/chat/lexical/transformers/list-indentation.ts` sits on both sides of the bridge:
-
-- **On import**, list indentation is rewritten onto the four-space grid Lexical counts in, with depth resolved from a stack of open levels rather than a fixed divisor. Two-space, three-space, four-space and tab-indented documents all import identically.
-- **On export**, indentation is written back at the unit the loaded document used, detected when it was opened. A two-space file stays a two-space file; editing one line no longer reflows every nested line in the diff.
-- A child is never emitted narrower than its parent's marker, so an `1. ` parent keeps its children at three columns even in a two-space document, where two would re-parse as a sibling rather than a child.
-
-Fenced code blocks and leading YAML frontmatter are copied through untouched — a YAML sequence looks exactly like a bullet list.
-
-All conversions now go through `$importComposerMarkdown` / `$exportComposerMarkdown` in `MarkdownBridgePlugin`, so the composer, the Salon's document pane, and the standalone Markdown editor cannot drift apart.
-
-Separately, there was no way to *create* a sub-list in the first place: no plugin claimed Tab, and the toolbar had no indent control. `FormattingCommandPlugin` now registers `INDENT_LIST_ITEM_COMMAND` / `OUTDENT_LIST_ITEM_COMMAND` and handles Tab / Shift+Tab, and the formatting toolbar gained ⇥ / ⇤ buttons (which also work in raw-source mode). All of it is confined to list items — Tab outside a list still moves focus, and indenting a paragraph is refused rather than accepted and silently dropped on save, since Markdown can't represent it.
-
-Sub-lists also rendered with a doubled bullet on their first item. Lexical represents nesting as a list item whose only child is another list, and maps that wrapper to `list.nested.listitem` — `qt-lexical-li-nested`, which the theme declared but no stylesheet ever styled, so the wrapper drew the parent list's marker beside the sub-list's own. It now clears its marker and its margin. Ordered lists are unaffected: Lexical writes an explicit `value` on each real item and skips the wrapper, so the numbering never depended on the marker being drawn.
-
-The buttons act on the caret wherever it sits in a list item, not only where it happens to land first. `$selectionIsInListItem` consults the selection's anchor and focus alongside `getNodes()`, which reports nothing for a collapsed caret expressed as an element point; the commands restore the previous selection when the editor has none; and, like every other button in the toolbar, they are never disabled on selection state — a stale or blurred selection used to leave them greyed out with no way to tell why.
-
-#### Salon message list no longer calls flushSync from React's commit phase
-
-`VirtualizedMessageList` passed `virtualizer.measureElement` straight to each row's `ref`. TanStack Virtual measures the row inside that callback, and when a row above the scroll fold measures differently from the 150px estimate, it corrects `scrollTop` and asks React to re-render synchronously via `flushSync`.
-
-Ref callbacks run in React's commit phase, where `flushSync` is illegal. React logged:
-
-> flushSync was called from inside a lifecycle method. React cannot flush when React is already rendering. Consider moving this call to a scheduler task or micro task.
-
-and downgraded the flush to an ordinary asynchronous update. The synchronous correction the library was reaching for never happened on this path, so the console error bought nothing.
-
-Row measurement now runs on a microtask — the remedy React's own message suggests. It runs after commit unwinds, so `flushSync` is legal, but still before paint, so the scroll correction lands in the same frame and the list doesn't visibly jump. New `app/salon/[id]/hooks/useDeferredMeasureRef.ts`.
-
-Only the ref path is deferred. The virtualizer also measures from a ResizeObserver — the path that keeps a streaming message anchored as it grows — and that already fires outside React, where `flushSync` works. The blunter fix, the adapter's `useFlushSync: false` option, would have disabled both.
-
-Detach (`ref(null)`) still runs synchronously: inside the virtualizer it is only cache pruning, never a notify, and deferring it would let the element cache outlive the DOM node. A row unmounted between the ref firing and its microtask is skipped, so a detached node's stale `data-index` can't resize the wrong row.
-
-Verified layout-neutral against a 784-message chat: with and without the change, row offsets track measured heights exactly across the mounted window.
-
-#### Chat-start wardrobe consults now run in parallel, time out, and can choose nudity
-
-Three fixes to the `llm_choose` starting-outfit path, prompted by a live chat that took 2m32s to open.
-
-**The consults were serial.** Each character's wardrobe consult is a network round trip, and they ran one after another. A DeepSeek call that took 2m32s to emit 19 tokens held the entire chat-creation request behind one character while the rest waited their turn.
-
-`applyOutfitSelections` now runs in two phases. Every character's outfit is resolved concurrently through `Promise.allSettled`; the results are then committed serially. The split is not cosmetic — `chats.setEquippedOutfit` reads the chat's whole `equippedOutfit` map, sets one character's key, and writes it back, so concurrent writers would silently drop each other's entries. Resolution is parallel, persistence is not. Writes go in the caller's selection order regardless of who finished first, so the stored JSON is deterministic. The function still resolves only after every character has landed, and a character who can't be resolved or persisted is logged and left as-is instead of failing the chat around them.
-
-**A stalled provider had no bound.** Concurrency stops one straggler from blocking the others, but not from blocking the chat. The wardrobe consult now gives up after 60s (`OUTFIT_LLM_TIMEOUT_MS`) and dresses that character in their defaults. The abandoned request is not aborted — it will still be billed and still appear in the LLM log.
-
-**"Naked" and "I failed" were the same answer.** The model's only way to say a character should be unclothed was to return every slot empty, which is exactly what a model that has failed to choose also returns. The previous entry's fix — treat all-empty as a miss and fall back to defaults — made the failure case safe but made deliberate nudity unexpressible.
-
-The prompt now asks for `"deliberate": true` alongside the empty slots, and explicitly states that an unflagged empty answer will be overridden by the character's defaults. `chooseLLMOutfit` returns `{slots, deliberatelyUnclothed}` instead of bare `EquippedSlots`; only a real boolean `true` counts, so a model that omits the flag or sends `"true"` as a string still gets the safe fallback. A deliberate choice is applied as-is and noted in the chat-creation dialog.
-
-Observed in the wild before this change: a character whose manifesto describes her as a nudist was asked what to wear in a scene with no setting, answered `{"top": [], "bottom": [], ...}`, and was overridden — arguably the model was right and had no way to say so.
-
-Not changed: the candidate pool is still unfiltered. Pre-filtering by `appropriateness` would cut prompt size and cost, but it was not the cause here — the slow call was 5,034 prompt tokens and the fast one 1,671, a 3× difference against a 95× difference in wall time.
-
-#### Shared wardrobe tiers now dress characters at chat start
-
-The wardrobe has three tiers: a character's own vault, the project's linked document stores, and the singleton "Quilltap General" store. The wardrobe UI and every in-chat wardrobe tool already merged all three. The two server paths that dress characters at chat start read the character's vault only.
-
-Three defects followed:
-
-- `llm_choose` could not pick shared items. The candidate list came from `findByCharacterId` alone, and the validator dropped any id outside it. A character whose wardrobe is entirely shared also failed the non-empty guard, so the LLM was never called at all — the character silently fell through to defaults.
-- `default` mode disagreed between client and server. The composer decided "has a usable default" over the merged list and sent `mode: 'default'`; the server resolved it from the character vault. A character whose defaults live in shared tiers showed "Use defaults" in the dialog and then started the chat wearing nothing.
-- The creation dialog's outfit preview missed the project tier, so a project-tier garment rendered with no title.
-
-All three run through `applyOutfitSelections`, so new chat, Add Character, and conversation merge were all affected.
-
-Behavior now: items marked `isDefault` in any tier auto-equip. A General default dresses every character everywhere; a project default dresses everyone in that project's chats. Personal and shared defaults **layer** in the same slot rather than one winning it, ordered by `createdAt` ascending on both the server and the composer preview. The character tier still shadows on id collision, so a personal copy with `isDefault: false` is how a character opts out of a shared default.
-
-That ordering matters because the tiers are merged *before* the `isDefault` filter, not after. Filtering first would hide the opt-out: a personal `isDefault: false` item is absent from a filtered list, so nothing would be there to shadow the shared default.
-
-A fourth defect had to be fixed for any of this to be visible. A shared composite — a "House Livery" bundling coat, waistcoat, and boots, all General items — resolved to nothing: `resolve-equipped.ts` seeded its item map from the character's vault plus the equipped ids only, so the components were absent, `expandComposites` emitted each one as an unknown leaf, and the routing pass dropped them. Blank preview panel, `topIsBare` in avatar prompts, empty live-clothing override, empty Aurora announcement. It now hydrates missing components with one bulk query per nesting level, bounded by the same depth expansion walks.
-
-Also changed:
-
-- New `lib/wardrobe/wearable-pool.ts` (`mergeWearablePool`) and `wardrobe.repository.findWearablePoolForCharacter` — one merged-pool method with one merge rule, replacing the hand-rolled merge in `wardrobe-list-handler`. `findDefaultsForCharacter` is deleted; it asked the same question the wrong way.
-- `OutfitSelectionContext.projectMountPointIds` is required, so a future call site that forgets the project tier fails to compile. Callers resolve it from the project id they already hold; `apply-chat-merge` resolves it once outside the per-character loop.
-- The shared tier is read once per `applyOutfitSelections` call, not once per character.
-- An `llm_choose` result with every slot empty is now treated as a miss and falls back to defaults. `chooseLLMOutfit` never fails parsing — it drops ids it can't validate and still reports success — so this was previously a silent path to an undressed character. Rare before; routine once shared-only characters could reach it.
-- The pool size per character is debug-logged.
-
-Known gaps, unchanged by this work: cross-tier composite component refs are still dropped at parse time (a character-vault composite whose components live in a project store, or a project composite whose components live in General); character-scoped `.qtap` exports carry no shared-item records, so `equippedOutfit` ids pointing at shared items dangle on import; the repository still does not accept group mounts.
-
-#### Whisper labels were unreadable in light mode
-
-`--qt-chat-whisper-label-fg` colors the "whispered to X" label on a whisper bubble. In light mode it failed WCAG AA (4.5:1 for normal text; the label is 0.75rem) in every bundled theme but one, and in the default theme. Art Deco measured 1.07:1 — effectively invisible. Measured against each theme's own `--qt-chat-whisper-bg`:
-
-| theme (light) | before | after |
-|---|---|---|
-| Art Deco | 1.07 | 5.20 |
-| The Great Estate | 1.95 | 4.65 |
-| Earl Grey | 3.13 | 4.86 |
-| Old School | 3.24 | 4.85 |
-| Rains | 3.67 | 5.03 |
-| Madman's Box | 5.84 | unchanged |
-| default theme | 2.79 | 5.02 |
-
-Each theme's light value was darkened within its own palette family — violet for the five purple themes, blue-gray for Rains.
-
-Art Deco needed more than a label change. This theme's `muted` is an unusually dim `hsl(222 16% 72%)` for a light theme, so the shared whisper recipe landed the bubble at a luminance whose *maximum possible* contrast is 5.13:1 against pure black — no palette-appropriate violet could clear 4.5. Its light-mode `--qt-chat-whisper-bg` is now mixed lighter, which also lifts the bubble's own body text from 4.25 (failing) to 6.30.
-
-The same variable colors `.qt-chat-system-bar-whisper`, the audience tag on announcement chips. That usage sits on `--qt-chat-system-bar-bg` and already measured better; every theme improves there too (light mode now 5.94–9.69).
-
-This corrects a claim in the whispered-announcements entry below, which said no bundled theme needed a change. The new classes did reuse an existing variable, as stated — but that variable was already failing AA in light mode, so reusing it spread a pre-existing bug to a second surface rather than introducing one.
-
-Dark mode needed three fixes as well. The default theme measured 4.33 and is now 5.02. Earl Grey and Rains measured 3.26 and 3.33: both set their whisper colors in the mode-agnostic base block and override only light, so dark inherited a label tuned for neither. Their base-block labels are now `hsl(270 20% 70%)` and `hsl(240 18% 68%)`, in line with the 65–72% lightness the other themes already use for this label in dark. That also lifts the announcement-chip audience tag in those two themes from 3.47 and 4.06 to 5.70 and 6.62.
-
-All 6 bundled themes plus the default theme now clear 4.5:1 on both surfaces in both modes — 26 measurements, lowest 4.65.
-
-Changed: `themes/bundled/{art-deco,great-estate,earl-grey,old-school,rains}/styles.css` (patch-bumped), `app/styles/qt-components/_variables.css`, and the mirrors in `@quilltap/theme-storybook` (1.0.54) and `create-quilltap-theme` (2.0.17).
-
-#### Ad-hoc announcements now name their speaker to the LLM
-
-`customAnnouncer` — the off-scene character or custom display name on an Insert Announcement bubble — was a rendering field. The Salon painted the name and avatar; nothing carried it into the model's context, so an announcement posted as a named character arrived at every character as anonymous prose.
-
-Observed in the wild: a whispered announcement posted as one character was read by its recipient as a message from a different member of the Staff, and the character carried that misattribution into the scene. The Host then auto-introduced the *one* figure the prose happened to name, because that machinery keys off the text — while the actual speaker, named only in the metadata, went unintroduced.
-
-The Courier transport already resolved the speaker for its own transcript (`courier-transport.service.ts`), so the same message was attributed on one path and anonymous on the other; the model's reading of a scene changed with the transport carrying it.
-
-Announcements with a `customAnnouncer` are now prefixed `[Name] ` in LLM context, the same form `attributeMessagesForCharacter` already emits for participant messages. New `lib/chat/context/announcement-attribution.ts`, applied in `buildMessageContext` so both the single- and multi-character paths get it. An announcer that can't be resolved (deleted character) passes through unnamed rather than inventing one, and the pass is idempotent so retries don't stack tags. Staff announcements are untouched — they name themselves in their prose.
-
-#### Prospero's group-context whispers ignored the All Whispers toggle
-
-`OPERATOR_FACING_WHISPER_SENDERS` exempted whole senders. It was narrowed to `pascal` and `prospero` in 4.8-dev after a blanket `systemSender` exemption leaked the Commonplace Book's recall, but `prospero` covers more than the private Run Tool results the exemption was written for — notably `group-context`, Prospero telling one character which group shelves they may read. That is scene machinery addressed to a character, and at 3,059 rows in the reporting instance it is the highest-volume whisper in the app. All of them rendered to the operator with All Whispers off.
-
-The exemption is now keyed on sender **and** `systemKind`: `pascal/custom-tool-result`, and `prospero/tool-run`, `custom-tool-error`, `carina-error` — the rolls, the private runs, and the failure notices for each, since an error the operator can't see is one they can't act on. Everything else follows the toggle. A legacy row with no stored kind keeps the old sender-level behavior rather than disappearing from a view the operator is used to.
-
-Sender alone has now been the wrong granularity twice, so the map is keyed by kind and the tests pin `group-context` explicitly.
-
-#### Manual announcements can be whispered to specific characters
-
-Insert Announcement only ever posted publicly. The dialog now has a **Who hears it** section listing the chat's current participants with a checkbox each. Check none and the announcement is public, exactly as before — that remains the default and the unchanged path. Check one or more and the bubble is persisted as a whisper (`targetParticipantIds`), so only those participants' LLM contexts include it.
-
-The API takes an optional `targetParticipantIds` on both `?action=announcement` and `?action=announcement-preview`. These are chat participant ids, not character ids. Every id is re-verified server-side against the chat's current participants; a removed participant or an id from another chat is a 400 on the post action, since the alternative is storing a message no filter will ever surface. An empty array is normalized to NULL rather than stored as `[]`.
-
-Three supporting changes:
-
-- **The operator always sees their own asides.** A whispered announcement has no `participantId`, so the existing visibility rule — author or target, else hidden unless "All Whispers" is on — would have hidden it from the person who just wrote it. `systemKind: 'announcement'` is set by exactly one writer, so it now serves as the operator-authored marker: those messages are never filtered and never dimmed as "overheard".
-- **The chip says who it went to.** A collapsed announcement showed none of the message body's whisper chrome. It now carries the whisper border color and an audience tag (*to Amy*), so a private aside is distinguishable from a public one without expanding it.
-- **The in-character rewrite is told the audience.** `announcement-preview` gives the character the named audience in place of the room's roster, and tells them the remark is private — a line pitched to a full room reads wrong when one person hears it. Changing the audience invalidates a proposal already on screen.
-
-Also aligned one filter: single-character context building applied the whisper rule to TOOL messages only, so it was the one path where a targeted non-TOOL message could reach a character it wasn't addressed to. It now applies the same test as `filterWhisperMessages` to every role.
-
-Two new `qt-*` classes, `qt-chat-system-bar-whisper` and `qt-chat-announcement-chip-whisper`, propagated to `@quilltap/theme-storybook` (1.0.53) with a whispered chip and a whispered expanded bar added to the Chat story. Both derive from the existing `--qt-chat-whisper-label-fg`, so no theme has a new variable to define and no bundled theme needed a change — verified by measuring the resolved colors under all six themes in both modes.
-
-`targetParticipantIds` is now declared in `public/schemas/qtap-export.schema.json`. The exporter has always emitted it (it writes the whole `MessageEvent`), and `additionalProperties` is true so exports validated regardless, but the published schema didn't document a field the format carries — and it now decides whether an imported announcement is private or public.
-
-#### Release build: a duplicated line and a script the Docker images never got
-
-Two failures in the same release run, both from the pdf.worker.mjs fix.
-
-`scripts/build-standalone-tarball.ts` had `const imgDir = ...` twice in a row, a duplicated line. esbuild refused to transform the file ("The symbol `imgDir` has already been declared"), so the standalone tarball job died before it started.
-
-The same commit added `node scripts/sync-pdf-worker.js` to the root `postinstall`, but the Docker dependency stages copy only the scripts they need before `npm ci`, and that list still held just `fix-node-pty-permissions.js`. Both architectures failed on `Cannot find module '/app/scripts/sync-pdf-worker.js'`. All four dependency stages — `deps`, `deps-prod`, `development` in `Dockerfile`, and `deps-prod` in `Dockerfile.ci` — now copy both scripts.
-
-#### CI build: the shared plugin tsconfig was never committed
-
-`plugins/tsconfig.base.json`, added when plugin typechecking went in, was matched by `.gitignore`'s `plugins/*` rule and never tracked. It exists on a development machine, so `npm run build:plugins` passes locally; on a fresh clone it does not exist, and every plugin's `tsconfig.json` (`"extends": "../../tsconfig.base.json"`) fails with TS5083. The follow-on `TS2307` module-resolution errors in the CI log are cascade — without the base config, tsc falls back to its default `module`/`moduleResolution` and resolves none of the imports.
-
-That took down the whole GitHub Actions build job, not just the plugins: `npm run build` runs `build:plugins && next build`, so the Next build never started. All 14 plugins failed, 0 succeeded.
-
-`.gitignore` now exempts the file alongside `!plugins/*.md` and `!plugins/dist/`, with a comment saying why removing the exemption breaks CI.
-
-#### CLI: semantic search reaches the help text, and every subcommand completes its own flags
-
-Release-checklist pass over `packages/quilltap`. The only new command this cycle, `recall-replay`, was already documented everywhere — CLI.md, the package README, `--help`, and the bash and zsh completions. Two older gaps turned up alongside it.
-
-`grep --semantic` (docs and memories, shipped in 4.5.0) was in all three completion scripts and in `help/cli-docs.md`, but in neither command's `--help` nor in CLI.md. The docs version was discoverable only by triggering the usage error. Both help texts now list it with its defaults (`--top 20`, `--threshold 0.5`), CLI.md documents both, including that each goes through the server because the embedding provider lives there and that the memories variant takes one holder at a time, and the package README lists both.
-
-Flag completion was missing for `file-verify` in all three shells and for `recall-replay` in fish, which also never offered `recall-replay` as a top-level verb. The existing guard test only checked that a subcommand's name appeared *somewhere* in each template, so a verb named in a shared `case` list passed while completing none of its own flags. The test now requires a real per-subcommand arm: a `case` arm in bash, a `_quilltap_subcommand` dispatch in zsh, and both a top-level entry and a `__quilltap_using_subcommand` block in fish. Run against the pre-fix templates it fails on exactly the three gaps.
-
-#### Docs: 4.8.0 release notes take in the second batch of post-draft work
-
-Second catch-up pass over `docs/releases/4.8.0.md`, covering the twenty-six commits that landed after the 2026-07-26 pass. Features and significant fixes only — the release-checklist work (dead-code sweep, coverage passes, response-helper and middleware renames, `qt-*` definitions, plugin typechecking and packaging, dependency bumps) is deliberately not in the notes.
-
-- **Added — "Taking a Conversation With You":** the Markdown transcript export, what it includes and excludes, and its use of the chat's own clock.
-- **Added — "The Archive Can Be Read Back":** the three restore defects (mount-point/file-link type coercion, the `backupFormat === 2` gate, the files-before-stores ordering), the memory-id restore fix that had been returning the Commonplace Book as unconnected notes, and the >3 MB blob import truncation.
-- **Added to "A Lighter Database":** one enforced embedding standard — profile switch forces a re-embed, the startup reconcile, and the cold-tier boot loop that re-embedded and re-billed on every restart.
-- **Added to the episodic-recall subsection:** same-day references reaching recall (local-calendar day resolution) and the fresh-event weight, with the current-chat echo guard.
-- **Added to Pascal:** a composer run rolls against the operator's own character rather than the first participant, and labels the row when it cannot.
-- **Added to "A New Generation of Models":** OpenRouter image/embedding model discovery returning nothing since the SDK paginated its catalogue.
-- **Added to "Under the Floorboards":** the `properties.json` read failure that wiped project settings, the stale PDF worker, and the xterm 6 terminal selection key and exited-session input guard.
-- **Added to "Upgrading from 4.7":** the one-time re-embed the enforced embedding standard queues on first restart, and that built-in-embedder instances are unaffected.
-
-Dates left at 2026-07-20, as in the previous pass.
-
-#### Plugins are typechecked now
-
-Until this, no plugin TypeScript was verified anywhere. The root `tsconfig.json` excludes `plugins/`, no plugin had a `tsconfig.json` or a `typecheck` script, and esbuild strips types without checking them — so `npx tsc` passing said nothing about the 14 bundles that actually ship. That is how the OpenRouter pagination bugs survived three years of `models.list()` returning a `PageIterator`.
-
-Each plugin now has a `tsconfig.json` extending a shared `plugins/tsconfig.base.json`, plus a `typecheck` script. `npm run build:plugins` runs it before esbuild, in both the serial and `--parallel` paths, and fails the build on any error. Verified by planting a deliberate type error: both paths fail the plugin and report the file, line, and message. That last part needed a fix of its own — `execSync` failures were reported as bare "Command failed", discarding the child's output, so the tsc diagnostics never reached the summary.
-
-The first run turned up 11 errors across 5 plugins. Two were the config's fault (`findLastIndex` needs `lib: ES2023`, which Node 18+ has). The rest:
-
-- **ollama** — `logger.warn(message, context, error)` passed three arguments to a two-argument method. `PluginLogger` only accepts a third `Error` on `error()`, so the cause was dropped and the warning about a failed `/api/show` carried no detail. Folded into the context object.
-- **grok** — three xAI extensions that OpenAI's Responses types do not model: `stop` sequences, the `x_search` tool, and the `citations` include value. All sent deliberately, so `stop` is now recorded once as a `WithGrokStop<T>` alias rather than cast away at each assignment, and the two value-level extensions are cast at their use sites with a note on why.
-- **deepseek** and **z-ai** — assistant messages are built as `Record<string, unknown>` to carry the vendor-specific `reasoning_content`, which stops them overlapping `ChatMessage`'s discriminated union. Routed through `unknown` with the reason recorded.
-
-One trap worth writing down: **esbuild auto-discovers `tsconfig.json`** and honors `useDefineForClassFields`. Simply adding these configs flipped class fields from assignment to `Object.defineProperty` semantics and rewrote nine bundles — a real behavior change from what was meant to be a type-only addition. The base pins the option to `false`. With that in place, rebuilding leaves exactly one bundle changed (ollama's, the only genuine runtime fix); the ten plugins with no source edits rebuild byte-identical, which is what confirms the config is emit-neutral.
-
-`npx tsc` clean, `eslint` clean, 561 suites / 9,229 tests pass.
-
-#### OpenRouter model discovery has been returning nothing since 0.13
-
-`@openrouter/sdk` 0.13.67 → 1.2.2. The major bump itself costs nothing: typechecking the plugin against both versions produces the same five errors, and every surface we use is unchanged — `chat.send`, `models.list`, `callModel`, `fromChatMessages` from the `lib/chat-compat` subpath, `Parameter.Tools` / `Parameter.ToolChoice`, and `GetModelsResponse = { result: ModelsListResponse }`.
-
-Those five pre-existing errors were the real finding. `models.list()` became a paginated async-iterable back in **0.13**, and only two of four call sites were migrated. `provider.ts` and `lib/llm/pricing-fetcher.ts` iterate pages correctly. Three others were left reading `response.data`, which does not exist on a `PageIterator` — so `|| []` swallowed it and they silently produced nothing:
-
-- `image-provider.ts` — image-model discovery found zero models on every call and always fell through to `FALLBACK_IMAGE_MODELS`. It logged "No image models found via API, using fallback list", which reads like an empty API response rather than a bug.
-- `embedding-provider.ts` — same failure for embedding-model discovery.
-- the plugin's own `pricing-fetcher.ts` — same bug, but the file is unreferenced and tree-shaken out of the bundle, so it never shipped. Fixed rather than deleted; it is a candidate for the next dead-code sweep.
-
-All three now iterate pages the way `provider.ts` already did.
-
-The reason this survived is that **no plugin TypeScript is typechecked anywhere**. The root `tsconfig.json` excludes `plugins`, `packages`, and `scripts`; no plugin has a `tsconfig.json` or a `typecheck` script; and esbuild strips types without checking them. A throwaway tsconfig surfaced all five errors in one run against the version already installed. Wiring a real typecheck into the plugin builds is tracked separately.
-
-The tests did not catch it either, for a subtler reason. `openrouter-image-provider.test.ts` covered only the two failure paths — network error and missing API key — both of which assert the fallback list, so the broken success path had nothing asserting against it. Worse, the file declared an inline `jest.mock('@openrouter/sdk', ...)` factory, but `jest.config.ts` maps that specifier to `__mocks__/@openrouter/sdk.ts`. The inline factory registered against the raw specifier while the subject's own import was rewritten to the manual mock, so the provider called a different `jest.fn()` than the test configured: `models.list()` returned `undefined`, the call threw, and the test went green off the error path. The suite now configures the manual mock's exported handle, and a new test walks a two-page paginated response and asserts real discovery — confirmed to fail when the old `response.data` read is restored.
-
-Worth recording for that follow-up: three other test files use inline factories for modules that `moduleNameMapper` also redirects (two for `openai`, one for `@anthropic-ai/sdk`). They may be exercising the same wrong mock and were not touched here.
-
-`npx tsc` clean, `eslint` clean, 561 suites / 9,229 tests pass.
-
-#### openai 7, xterm 6, and a terminal selection color that was never applied
-
-The two upgrades held back from the earlier dependency pass, plus the theme work xterm 6 required.
-
-**openai 6.49.0 → 7.2.0.** The only breaking change in 7.0.0 is the Node floor moving to 22; we require 24 in `engines`, CI, and both Dockerfiles. The v4→v5 migration notes also flag `asResponse`, `withResponse`, and `APIError.headers` as reshaped — none of which appear anywhere in this repo. Every call site we do use is stable: `chat.completions.create`, `responses.create`, `images.generate`, `embeddings.create`, `models.list`.
-
-The blocker was declaration, not code. `@quilltap/plugin-utils` listed `openai: "^4 || ^5 || ^6"` as an optional peer, so installing 7 anywhere produced an unmet-peer resolution. Widened to include `^7.0.0` and published as 2.2.16, after confirming the package typechecks and builds against 7.2.0. All 11 openai-carrying plugin bundles now ship 7.2.0.
-
-**@xterm/xterm 5.5.0 → 6.0.0**, with addon-fit 0.11.0, addon-serialize 0.14.0, and addon-web-links 0.12.0. Two things had to change:
-
-- `@xterm/addon-canvas` is gone. xterm 6 removed the canvas renderer, and the addon was retired with it — its last release (April 2024) and even its abandoned 0.8.0 beta still peer on xterm `^5.0.0`. It was loaded in a try/catch so it would have degraded quietly, but it would have been a permanently peer-broken dependency. Removed; the DOM renderer is the supported default.
-- **xterm 6 renamed the `selection` theme key to `selectionBackground`.** The old key is ignored rather than rejected, so every bundled theme's `--qt-terminal-selection` would have stopped reaching the terminal — selection highlighting silently falling back to the xterm default, in all six themes at once.
-
-That silence had a root cause worth fixing. `getTerminalTheme()` had no return type, so its object was inferred, assigned to a variable, and only then handed to the Terminal constructor — and TypeScript skips excess-property checks on variables. The function is now annotated `ITheme`, which turns any unknown key into a build error. Verified by reintroducing the old key: `TS2353: 'selection' does not exist in type 'ITheme'`.
-
-Six optional terminal variables are now mapped through, deliberately left undefined so xterm keeps deriving them from `--qt-terminal-bg` / `--qt-terminal-fg` (the scrollbar sliders default to the foreground at 20/40/50% opacity, which already tracks the theme). A theme sets one only to override that derivation: `--qt-terminal-cursor-accent`, `--qt-terminal-selection-fg`, `--qt-terminal-selection-inactive`, `--qt-terminal-scrollbar`, `--qt-terminal-scrollbar-hover`, `--qt-terminal-scrollbar-active`. Because they are optional, no bundled theme needed editing. They read through a separate `optionalColor` helper — the existing `getColor` falls back to `#000000`, which would have painted each of them hard black instead of letting xterm derive them. Documented in `_variables.css` and in THEME_PLUGIN_DEVELOPMENT.md, which had no terminal section at all before.
-
-Also fixed while in the file: disabling input after a session exits poked at `termRef.current._input`, which is not an xterm field in any version — `_input` appears zero times in the 6.0 runtime. The guard always short-circuited, so exited sessions stayed typeable. Now uses the documented `textarea` handle.
-
-`npx tsc` clean, `eslint` clean, 561 suites / 9,227 tests pass.
-
-Known flake, unrelated: full-suite runs intermittently lose one worker to a SIGSEGV, in a different suite each time, and the affected suites pass in isolation. This is the existing native-SQLCipher-under-jsdom teardown crash, not a regression from these upgrades.
-
-pdfjs-dist 6.x remains blocked by `pdf-parse@2.4.5`'s exact pin on 5.4.296.
-
-#### Dependency refresh across root, packages, and plugins
-
-`npm update -S` over the root project, all five packages, and all 14 distributed plugins. Everything stayed inside its existing semver range, so no majors moved — openai stays on 6.x, `@xterm/*` on 5.x, pdfjs-dist on 5.x, all three deferred for the reasons recorded in the previous dependency entry.
-
-The root diff is range floors only. Its lockfile shows zero installed version changes: `npm update -S` rewrote `^` floors that had fallen behind what was already installed — next ^16.2.10 to ^16.2.12, react and react-dom ^19.2.7 to ^19.2.8, openai ^6.48.0 to ^6.49.0, TanStack Query ^5.101.2 to ^5.101.4, @playwright/test ^1.61.1 to ^1.62.1, plus postcss, tar, and @openrouter/sdk. Tidier declarations, no behavior change.
-
-Real updates landed in the packages and a few plugin SDKs. `@quilltap/plugin-utils` 2.2.14 → 2.2.15 (plugin-types floor, openai devDep) and `@quilltap/theme-storybook` 1.0.51 → 1.0.52 (Storybook 10.5.2 → 10.5.5); both published, and plugin-utils 2.2.15 is installed at the root and in all 13 plugins that bundle it. `create-quilltap-theme` had no changes; `@quilltap/plugin-types` saw lockfile churn only, so neither was bumped.
-
-All 14 plugins had declared-dependency changes and were patch-bumped in both `package.json` and `manifest.json`. Only three bundles actually changed:
-
-- **mcp** — `@modelcontextprotocol/sdk` 1.29.0 → 1.30.0, the one substantive code change
-- **openrouter** — `@openrouter/sdk` 0.13.66 → 0.13.67, which adds 403 handling to the endpoints-list calls
-- **google** — `@google/genai` internal API version constants
-
-The other 11 rebuilt byte-identical; their version bumps reflect declared ranges only. Rebuilding against plugin-utils 2.2.15 changed no bundles beyond those three, which is expected — its only edits were a types-only floor that gets stripped at build and a devDep floor.
-
-`npx tsc` clean, `eslint` clean, 561 suites / 9,227 tests pass.
-
-#### PDF preview was broken by a stale worker file
-
-In-app PDF preview has been failing silently. `public/pdf.worker.mjs` is checked in and was hand-copied at some point at PDF.js **5.4.296**, while the installed `pdfjs-dist` had moved to **5.7.284**. PDF.js compares the two build versions on worker setup and throws on any difference:
-
-```
-The API version "5.7.284" does not match the Worker version "5.4.296".
-```
-
-`FilePreviewPdf.tsx` sets `GlobalWorkerOptions.workerSrc = '/pdf.worker.mjs'` and catches load failures to show "Failed to load PDF. Try downloading instead." — so the version throw was indistinguishable from a corrupt file, and every PDF hit it. Reproduced directly by pairing the installed API against each worker build: the checked-in one throws the version error, the installed one clears the handshake.
-
-The stale copy came from `pdf-parse@2.4.5`, which hard-pins `pdfjs-dist@5.4.296`. That is the version someone would have found by walking into `node_modules` at the time, and it stopped matching the moment the root dependency moved.
-
-Fixed by re-copying the worker and removing the hand-copy step entirely. `scripts/sync-pdf-worker.js` now runs on `postinstall`: it compares the two version strings, no-ops when they agree, and re-copies when they don't. Because the file stays checked in, a `pdfjs-dist` bump now shows up as a visible `public/pdf.worker.mjs` diff instead of drifting unnoticed. The script never fails the install — a read-only tree just gets a warning, since the mismatch is caught downstream anyway.
-
-That downstream catch is `pdf-worker-version.test.ts`, which pins the served worker to both the installed worker build and the API version the app actually loads, and asserts the component still points at that path. Confirmed to fail on drift, not just pass on green: reverting the version string to 5.4.296 fails two of its four assertions with the exact mismatched versions.
-
-Unrelated to any `pdfjs-dist` upgrade. Moving to 6.x stays blocked — `pdf-parse@2.4.5` hard-pins `pdfjs-dist@5.4.296`, and the repo's `"pdfjs-dist": "$pdfjs-dist"` override would force it across two majors with no install-time warning.
-
-#### Dependency pass: esbuild 0.28, sharp 0.35, plugin bundles realigned
-
-First of a staged dependency sweep, covering the two upgrades with no API surface to break.
-
-**esbuild 0.24.2 → 0.28.1 (root devDependency).** All 14 plugins already declared and installed `^0.28.1`; only the root lagged, so the project carried two esbuild copies and two platform binaries. The bump dedupes against the one `tsx` pulls in. None of the breaking changes apply: the 0.25.0 dev-server CORS lockdown only affects `esbuild serve`, which is unused, and 0.27.0's `binary` loader change needs an explicit `target`, which every call site already sets. Plugin bundles rebuilt byte-identical for this bump — the root esbuild is only used by `build-standalone-overlay.mjs` for `server.ts`, `lib/terminal/ws.ts`, and the background-job child entry. The stale `esbuild@0.24.2` entry was dropped from `allowScripts`.
-
-**sharp 0.34.5 → 0.35.3 (libvips 8.18.3).** No call site touched anything 0.35 removed — no `failOnError`, no `paletteBitDepth`, no `format.jp2k`, no deprecated `sharpen` properties. Four things did need handling:
-
-- Next 16 optionally depends on `sharp@^0.34.5`, so the bump broke the dedupe and nested a second copy under `node_modules/next/node_modules/` — 16 MB of duplicate native binaries that the standalone tarball's strip step, which only knows about `node_modules/sharp`, would have shipped. Pinned with a `"sharp": "$sharp"` override, matching the existing `pdfjs-dist` treatment. Next's image optimizer only uses `limitInputPixels`, `sequentialRead`, `timeout`, `rotate`, `resize`, and the format encoders, none of which changed.
-- 0.35.2 replaced sharp's TypeScript namespace with named exports for ESM, so `sharp.FormatEnum` and `sharp.Metadata` no longer resolve. `lib/files/image-processing.ts` now imports both as named types.
-- 0.35 dropped the `install` script (compiling from source is opt-in via `build`), so the `sharp@0.34.5` entry in `allowScripts` is gone. Restoring the stripped binaries on a user's machine now runs purely through `optionalDependencies`; coverage got wider this release, not narrower, with FreeBSD and WebContainers wasm32 targets added.
-- The package no longer ships `build/` or `prebuilds/` directories — every native binary lives in `@img/sharp-*`. The two strip blocks in `build-standalone-tarball.ts` targeting those paths had become silent no-ops and were removed; the `@img/sharp-*` strip that follows already did the work.
-
-Also new and harmless: sharp 0.35 adds an `exports` map limited to `"."`, so `require('sharp/package.json')` no longer resolves. Nothing in the repo imports a sharp subpath.
-
-**Plugin bundles realigned on openai 6.49.0.** Rebuilding surfaced pre-existing drift. The five provider plugins that depend on `openai` directly — openai, grok, z-ai, deepseek, openai-compatible — install it into their own `node_modules` and were pinned at 6.48.0. The eight that reach it transitively through `@quilltap/plugin-utils` resolve from the root, which had moved to 6.49.0, and their committed bundles were stale. Refreshing the five plugin lockfiles puts all 13 openai-carrying bundles on 6.49.0. Patch versions bumped in both `package.json` and `manifest.json`: anthropic 1.0.47, curl 1.0.20, deepseek 1.0.13, default-system-prompts 1.1.12, google 1.1.41, grok 1.0.44, mcp 1.1.31, ollama 1.0.34, openai 1.0.53, openai-compatible 1.0.34, openrouter 1.0.50, search-serper 1.0.15, z-ai 1.1.16. builtin-embeddings carries no openai and was untouched.
-
-`packages/quilltap` tracks the sharp bump so the CLI's native-module linking stays on the same version as the app.
-
-Verified: `npx tsc` clean, `eslint` clean, 560 suites / 9,223 tests pass. sharp 0.35.3 confirmed end to end against a real encode — create, `metadata()`, resize, WebP out — and esbuild 0.28.1 confirmed to bundle the background-job child entry with the production flag set.
-
-Deferred to later passes, with reasons: **openai 7.x** breaks nothing but the Node floor (22; we require 24), yet `@quilltap/plugin-utils` declares `openai: "^4 || ^5 || ^6"` as an optional peer, so it needs a package republish before anything can install cleanly. **@xterm/\* 6.0** removes the canvas renderer, stranding `@xterm/addon-canvas` at a `^5.0.0` peer with no successor, and renames the `selection` theme key to `selectionBackground` — a silent loss of terminal selection color across all six bundled themes if missed. **pdfjs-dist 6.x** is blocked outright: `pdf-parse@2.4.5` hard-pins `pdfjs-dist@5.4.296`, and the repo's `$pdfjs-dist` override would force it across two majors without an install-time warning.
-
-#### Restore no longer breaks the memory graph
-
-Release-checklist pass over backup/restore completeness. Backup is schema-driven — `ensureCollection` derives each table's JSON, array, and boolean columns straight from its Zod schema, backup reads entities through the repositories, and restore re-inserts them by spreading whatever the archive held. All 16 columns added this cycle are covered by that pipeline with no per-field work: the six answer-confirmation and Pascal columns on `chat_messages`, the four new `chats` columns, `customTools` and `answerConfirmationSettings` on `chat_settings`, and `occurredAt` / `narrativeTime` / `entities` / `kind` on `memories`. DDL.md documents all of them.
-
-What the pass turned up was older and worse. Memories were the one entity restored without their backed-up id. Characters and chats pass `{ id }` to `create()`; memories did not, so the repository minted a fresh UUID for every restored memory. Memories reference each other through `relatedMemoryIds`, and `uuid-remap` rewrites those edges in lockstep with `id` for new-account restores — so in every restore mode, all of them pointed at memories that no longer existed. The Commonplace Book's graph came back as isolated nodes with no error and no warning.
-
-The root cause was one level down. `UserScopedMemoriesRepository` scopes by character rather than by userId, so it is hand-written instead of extending the generic `UserScopedRepository`, and its `create()` never declared or forwarded the `CreateOptions` argument the generic wrapper passes through. It now does, and restore pins each memory to its backed-up id.
-
-Also confirmed: the only things excluded from a backup are encrypted API keys (they are user-key-encrypted and cannot be restored elsewhere), built-in templates, and previous backup files. `commonplaceRecallHistory` and `commonplaceSceneCache` are dropped from portable `.qtap` exports on purpose as instance-local ephemera — they are still backed up, and `qtap-export.schema.json` is `additionalProperties: false`, so their absence there is required rather than an oversight.
-
-Added `restore-field-fidelity.test.ts`: four round-trip tests pinning all 16 new columns through restore plus the memory-id contract, which is what caught the bug. `npx tsc` clean, `eslint` clean, 560 suites / 9,223 tests pass.
-
-#### OpenAI-Compatible plugin now bundles plugin-utils
-
-Release-checklist pass over plugin self-containment. All 14 distributed plugins were checked for reach-ins to app internals — no `@/lib` imports, no relative paths escaping a plugin directory. Everything comes in through `@quilltap/plugin-types` and `@quilltap/plugin-utils`.
-
-One plugin was packaged wrong. `qtap-plugin-openai-compatible` was the only one listing `@quilltap/plugin-utils` in its esbuild `EXTERNAL_PACKAGES`, so its shipped `index.js` emitted bare `require('@quilltap/plugin-utils')` and `require('@quilltap/plugin-utils/tools')`. Those resolved only by walking up to a host `node_modules` — the same packaging failure that broke the externally published Mistral plugin, which fails to load with `Cannot find module '@quilltap/plugin-utils'`.
-
-It matters more for this plugin than most: `provider.ts` is a thin re-export of plugin-utils' canonical `OpenAICompatibleProvider`, so plugin-utils is the implementation, not a helper. It is also a reference example that independent plugin developers copy.
-
-`@quilltap/plugin-utils` is now bundled, matching the other 13. `@quilltap/plugin-types` stays external — it is type-only and stripped at build time. Plugin version 1.0.32 → 1.0.33.
-
-Verified: the rebuilt bundle's only external requires are `fs` and an unreferenced `@quilltap/plugin-types` binding (same as `qtap-plugin-default-system-prompts`), and it loads standalone under `node` with the full export surface intact, including the `parseTextToolCalls` / `stripTextToolMarkers` helpers that previously came from the external `/tools` subpath. `npm run build:plugins` ran 14/14 clean; the other 13 rebuilt byte-identical.
-
-Two other pitfalls were checked and are fine. Every provider plugin that can see prompt-cache hits normalizes usage to exclude them — openai, grok, google, z-ai, openrouter, and deepseek subtract cache reads from `promptTokens`/`totalTokens` while still reporting them in `cacheUsage`; Anthropic correctly does not subtract, because its API reports `input_tokens` separately from `cache_read_input_tokens`; Ollama is local with no remote cache. The Anthropic plugin's model-ID prefix branching for new-generation models is also intact — those models skip `temperature`/`top_p` and use adaptive thinking.
-
-Worth recording for the next pass: all 14 plugins mark `zod` external as "provided by the main app," and openrouter and mcp emit runtime `require('zod/v3')` and similar. Each ships its own `zod` in its plugin `node_modules` and the standalone tarball copies those wholesale, so it resolves today. It is the same class of pattern as the bug above, currently benign and uniform, and was left alone.
-
-#### qt-* utility pass: three classes that were never defined
-
-Release-checklist pass over the `qt-*` theme utilities in components changed since the last checklist run. The raw-Tailwind audit came up clean — new components pair a `qt-*` class with layout-only utilities, which is the established pattern. What it did turn up was three class names that are referenced but have no rule anywhere, in the app CSS or in any bundled theme, so they silently did nothing.
-
-- `.qt-text` — the full-strength counterpart to `qt-text-secondary`, used 59 times across 7 files and never defined. Sites fell back to inherited color, which usually looked right, so the gap stayed hidden. Where it did show: `LLMInspectorEntry` styles inactive tabs `qt-text-secondary hover:qt-text`, and that hover brightening never happened. Now defined as `var(--color-foreground)`.
-- `.qt-bg-surface-hover` — used as `qt-bg-surface hover:qt-bg-surface-hover` on clickable rows in `CustomToolRunDialog` and `RunToolModal`. Never defined in any commit. Those rows did not respond to hover. Now defined as `var(--color-muted)`, matching `hover:qt-bg-surface-alt`.
-- `qt-icon-button` — the defined class is `qt-button-icon`. Five icon-only buttons across the terminal UI (`TerminalPane`, `TerminalEmbed`, `TerminalPopoutPageClient`) had the two words transposed and so got no button styling at all. Renamed at all five sites.
-
-Worth recording for whoever touches these next: `hover:` on a `qt-*` class does not work by itself. Tailwind 4 only generates variants for utilities registered with `@utility`, and these are plain rules inside `@layer utilities`, so each hover variant has to be hand-authored as an escaped `.hover\:qt-…:hover` selector. `_utilities.css` has a HOVER VARIANTS section holding the eight that exist; the two added here went there. This means the roughly 230 other `hover:qt-*` usages in the codebase whose escaped selector was never written are also inert — a pre-existing issue, not addressed here.
-
-Verified by running the project's own PostCSS/Tailwind pipeline over `app/globals.css` and confirming each new selector appears in the generated CSS. `npx tsc` clean, `eslint` clean.
-
-#### Dead-code sweep
-
-Release-checklist pass with knip, plus a whole-repo reference count over the 1,914 symbols it flagged. Only symbols with zero references anywhere — including tests, barrels, `packages/`, and `plugins/` — were considered, and each was checked by hand before removal.
-
-Removed:
-
-- `highlightMessage` (`lib/chat/message-navigation.ts`) and its four tests. Nothing called it, and it added `memory-source-highlight` — a class that does not exist; the live `scrollToMessage` uses `qt-memory-source-highlight`. Its three siblings stay: `getPendingMessageNavigation` and `scrollToMessage` are wired in `SalonView`, and `navigateToMessage` is the writer half of that sessionStorage pair.
-- `findCheapestAvailableModel` (`lib/llm/pricing-fetcher.ts`) — never called; joins `getAllModelsSortedByCost`, `clearPricingCache`, and `isCacheFresh`, removed from the same file in earlier sweeps.
-- `getThemeBundleCacheDir` (`lib/paths.ts`) — the `<base>/themes/.cache` path it built is not used by the bundle loader or anything else. The only reference was a stale key in the `@/lib/paths` mock in `bundle-loader.test.ts`, dropped with it.
-- `ICON_NAMES` (`components/ui/icons/icon-registry.ts`) — speculative "for storybook / soft validation" array with no consumer in the app, `packages/`, or the themes. `ICON_REGISTRY` and `isIconName` are the live surface.
-- Four unreferenced types: `DatabaseBackendFactory` (`lib/database/interfaces.ts`, alongside `BackendRegistry` from the last sweep), `MemoryCollection` (`lib/export/types.ts`), `RegenerateConversationSummariesPayload` (`lib/background-jobs/queue-service.ts` — the job takes no payload), and `AdoptableStore` (`lib/mount-index/ensure-official-store.ts`).
-
-`tar` was added to knip's `ignoreDependencies`. It is a false positive: `lib/plugins/registry-client.ts` imports it at line 17 as `import * as tar from 'tar'`, and that module is live behind the plugin installer and version checker.
-
-Kept with reasons recorded in the dead-code report: the two in-progress SVAR file-manager files, the Zod `z.infer` schema surface, the theme validation API, and the tool-input types. `invalidateFrozenArchive` (`lib/memory/frozen-archive-cache.ts`) also stays, but it is worth noting that nothing in production calls it. The cache only refreshes when the compaction generation changes, so the out-of-band edits its doc comment names — manual deletion, a housekeeping sweep, an import — leave a stale archive in place until the next compaction.
-
-`npx tsc` clean, `eslint` clean, 559 suites / 9,219 tests passing.
-
-#### Finish the context-middleware rename and drop the vestigial auth surface
-
-The `createAuthenticatedHandler` → `createContextHandler` rename was started back in 2.x, but it landed as a set of aliases and the call sites were never moved. 105 routes still used the old names. This finishes it and deletes the shim.
-
-- `createAuthenticatedHandler` → `createContextHandler`, `createAuthenticatedParamsHandler` → `createContextParamsHandler`, `withAuth`/`withAuthParams` → `withContext`/`withContextParams`, and the `AuthenticatedContext` / `AuthenticatedHandler` / `AuthenticatedParamsHandler` types → `RequestContext` / `ContextHandler` / `ContextParamsHandler`. 201 files.
-- `lib/api/middleware/auth.ts` is now `lib/api/middleware/context.ts`. It never did authentication — its own header comment already called it "Request Context Middleware." The legacy alias block at the bottom is gone, so the barrel exports one name per thing.
-- `checkOwnership(entity, user.id)` → `exists(entity)` at 28 call sites. `checkOwnership` already ignored its `userId` argument, so this is a rename, not a behavior change.
-
-That last point had a consequence worth recording. `lib/api/state-handlers.ts` carried a `useOwnershipCheck` config flag whose two branches were `checkOwnership(entity, userId)` and `entity != null` — identical, since the first ignored `userId`. The flag and its three call-site settings are removed and `authorize` is now `requireEntity`.
-
-It also surfaced a test asserting behavior the app never had: the character-wardrobe DELETE suite claimed a character owned by another user 404s. Production never did that — the mock implemented real ownership semantics that `checkOwnership` did not. The test now pins what the route actually does (404 when the character is missing).
-
-Dead single-user exports removed: `getRequiredSession`, `getCurrentUserId`, and `getRequiredUserId` (referenced only by each other and a jest mock), plus `isSingleUser` and the `UNAUTHENTICATED_USER_ID` / `getOrCreateUnauthenticatedUser` / `isUnauthenticatedUser` aliases. `lib/auth/session.ts` drops from 99 lines to 58. The migration script that appeared to use `UNAUTHENTICATED_USER_ID` declares its own local copy.
-
-`/api/v1/session` stays. It reads like an auth endpoint but is really the client's server-readiness probe: `components/providers/session-provider.tsx` drives a 5-second retry loop off its 5xx responses so the UI recovers as soon as startup and pepper-vault setup finish. Removing it means replacing that probe first.
-
-#### Route responses go through the shared helpers
-
-Release-checklist pass over the API endpoint standard. No route moved and no response body changed.
-
-The audit itself came up clean: every route outside `/api/v1/` is one of the three sanctioned exceptions (`/api/health`, `/api/plugin-routes/[...path]`, `/api/themes/*`), all 21 routes changed since 4.7.0 use the context middleware and dispatch non-CRUD verbs through `?action=`, and there are no synchronous `params` / `cookies()` / `headers()` reads left.
-
-What did need fixing was response construction. Seven route files still called `NextResponse.json` by hand where a helper from `lib/api/responses` applies:
-
-- `characters/[id]/wardrobe/[itemId]`, `messages`, `messages/[id]`, `mount-points`, `mount-points/[id]`, `embedding-profiles/[id]`, and `chats` now use `successResponse` / `created` / `conflict`.
-- The swaps are byte-identical on the wire: `successResponse(data, status)` is `NextResponse.json(data, { status })` and `created(data)` is the 201 form, so no client sees a different payload.
-
-The nine `FileOpError` responses in the two `mount-points` routes were deliberately left as raw `NextResponse.json`. They return `{ error, code }`, and `errorResponse` emits `{ error, details? }` — converting them would have silently dropped the `code` field that callers branch on.
-
-Two test suites mocked `@/lib/api/responses` with only the helpers their route used at the time, so the new helpers were added to those factories, shaped to match the global `next/server` mock (payload on `.body`).
-
-#### Deduplicate helpers across the release diff
-
-Release-checklist refactor pass over the 171 non-test source files changed since 4.7.0. Behavior is unchanged; the point is to collapse copies that would drift.
-
-- `extractErrorMessage` existed four times (`CustomToolRunDialog`, `WorkbenchEditor`, `ProvingBench`, `ComposeMailDialog`). Two read only `info.error`, two also read `info.message`. Now one `apiErrorMessage(err, fallback)` in `lib/query/fetcher.ts`, beside the `ApiFetchError` it unwraps; each caller keeps its own fallback sentence.
-- `resolveUserCharacterParticipant` was byte-identical in `lib/background-jobs/handlers/memory-extraction.ts` and `app/api/v1/chats/[id]/actions/memories.ts`. Moved to `lib/services/chat-message/turn-transcript.ts`, which both already import and whose `userCharacter*` options are exactly what it returns.
-- The Staff display-name table existed in `app/salon/[id]/components/system-message-labels.ts` and again in the new `lib/export/markdown-transcript.ts`. Now `lib/chat/staff-display-names.ts`. The `systemSender` enum is also extracted from `MessageEventSchema` into a named `SystemSenderEnum` / `SystemSender` in `lib/schemas/chat.types.ts`, so the authoritative list can be referenced instead of respelled.
-- The default `TimestampConfig` literal gained a fifth copy in the Markdown exporter. `DEFAULT_TIMESTAMP_CONFIG` now lives in `lib/chat/timestamp-utils.ts` with its consumers; `components/settings/chat-settings/types.ts` re-exports it, so existing imports are unchanged.
-- `tableExists` was duplicated in `lib/startup/reconcile-embedding-dimensions.ts` and `lib/embedding/reapply-profile.ts` — and `reapply-profile` had two further inline copies that shadowed its own function with a row object. All four now use `lib/database/backends/sqlite/introspection.ts`. The existing `sqliteTableExists` could not serve: it resolves the main database itself, and these need the mount-index handle.
-- `withTimeout` was duplicated in `lib/pascal/llm-consult.ts` and `lib/services/chat-message/answer-confirmation.service.ts`. Now `lib/promise-timeout.ts`. It takes the whole message rather than a label, because Pascal's version is shown to a person reading a failed roll ("timed out after 30s") while the other two only reach the log ("after 30000ms") — composing from a label would have quietly changed user-visible text.
-- The Workbench preview and audit handlers opened with the same parse-body / validate-definition / resolve-metadata triple and closed with the same `CustomToolRunError` to 422 catch. Both are now shared helpers in `app/api/v1/custom-tools/route.ts`.
-- `occurredAt ?? createdAt` plus `Date.parse` was inlined in both recall multipliers in `lib/memory/recall-tags.ts`; folded into one helper.
-
-Left alone deliberately: `resolveWhenPhrase` and `resolveDayReference` share an English day lexicon but resolve a point versus a window, in UTC versus server-local, against a message timestamp versus now — merging them would risk behavior for no correctness gain. The two same-named `collapseOneChat` functions do unrelated jobs. `getMessageAvatar` in `SalonView.tsx` respells the staff names in an eleven-branch chain and is a good candidate for the new table, but this diff did not touch it.
-
-#### Test coverage for the eight untested API routes
-
-Continues the release-checklist coverage pass. The `lib/` subset closed in the previous entry; this closes the API-route subset — the eight routes and route actions that the same coverage run found at 0%. All eight now sit at 100% statements and 100% branches, across 131 new tests in 8 new suites. The suite is 559 files / 9,223 tests.
-
-| Route | Test file |
-|---|---|
-| `app/api/v1/chats/[id]/actions/export-markdown.ts` | `__tests__/unit/app/api/v1/chats/[id]/actions/export-markdown.test.ts` |
-| `app/api/v1/chats/[id]/actions/merge.ts` | `__tests__/unit/app/api/v1/chats/[id]/actions/merge.test.ts` |
-| `app/api/v1/chats/[id]/actions/recall-replay.ts` | `__tests__/unit/app/api/v1/chats/[id]/actions/recall-replay.test.ts` |
-| `app/api/v1/chats/[id]/qtap-target/route.ts` | `__tests__/unit/app/api/v1/chats/[id]/qtap-target/route.test.ts` |
-| `app/api/v1/chats/creation-progress/route.ts` | `__tests__/unit/app/api/v1/chats/creation-progress/route.test.ts` |
-| `app/api/v1/documents/route.ts` | `__tests__/unit/app/api/v1/documents/route.test.ts` |
-| `app/api/v1/settings/data-retention/route.ts` | `__tests__/unit/app/api/v1/settings/data-retention/route.test.ts` |
-| `app/api/v1/system/home/route.ts` | `__tests__/unit/app/api/v1/system/home/route.test.ts` |
-
-As before, the tests pin behavior that is easy to break silently rather than smoke-testing the happy path:
-
-- `export-markdown` gathers character names from three sources — participants, custom announcers, and Carina answerers — and must exclude the Brahma sentinel, which is not a real character. Characters dropped by `findByIds` (broken vault) are absent from the name map rather than throwing, and a non-ASCII transcript filename is RFC 5987-encoded.
-- `merge` rejects a self-merge and an explicitly empty allowlist before it touches a repository, and reports "already present" as a 400 no-op — the case where `applyChatMerge` posted no bubbles.
-- `recall-replay` sanitizes its own body: a zero, negative, fractional, or string `turnIndex` is dropped rather than passed through, an oversized `limit` clamps to 100, and the cheap-LLM anchor falls back to the first available profile when the participant's profile is missing or deleted.
-- `qtap-target` builds its resolver context from the chat's project and *deduped* participant character ids, dispatches between mount-backed and on-disk byte sources, and maps both `ENOENT` and `SOURCE_NOT_FOUND` to a 404 rather than a 500.
-- `creation-progress` replays a buffered backlog to a late subscriber, closes immediately when that backlog already ends in `done`/`error`, arms the keep-alive only when the stream stays open, and tears its subscription down on both client abort and consumer cancel. These run against the real in-memory bus.
-- `documents` keeps project-scoped rows out of the standalone picker (they have no project context to resolve against), de-duplicates on scope + mount + path so the same filename in two stores stays two entries, and treats both recent-history writes as best-effort — an open and a rename each still succeed when history tracking throws. Rename runs the real `computeRenameTarget`, so separator, traversal, and empty-title rejections are live.
-- `data-retention` merges the request body over current settings instead of replacing them, so an empty body cannot silently reset the window to the schema default.
-
-`data-retention`, `documents`, `merge`, and `export-markdown` exercise the real Zod schemas rather than stubs, so validation drift surfaces as a test failure.
-
-No production code changed.
-
-#### Test coverage for eight previously untested modules
-
-Release-checklist coverage pass. A coverage run over the 95 source files added since 4.7.0 found 43 at 0% and 3 under 50%. This closes the `lib/` subset — eight modules, from 0%/low to 99.1% statements and 89.1% branches overall. 117 new tests; the suite is 551 files / 9,092 tests.
-
-| Module | Was | Now | Test file |
-|---|---|---|---|
-| `lib/api/content-disposition.ts` | 33.3% | 100% | `__tests__/unit/lib/api/content-disposition.test.ts` |
-| `lib/config/feature-flags.ts` | 0% | 100% | `__tests__/unit/lib/config/feature-flags.test.ts` |
-| `lib/navigation/workspace-redirect.ts` | 0% | 100% | `__tests__/unit/lib/navigation/workspace-redirect.test.ts` |
-| `lib/services/chat-message/request-helpers.ts` | 0% | 100% | `__tests__/unit/lib/services/chat-message/request-helpers.test.ts` |
-| `lib/pascal/llm-consult.ts` | 47.7% | 100% | `__tests__/unit/lib/pascal/llm-consult.test.ts` |
-| `lib/memory/recall-replay.ts` | 0% | 99.6% | `__tests__/unit/lib/memory/recall-replay.test.ts` |
-| `lib/memory/fold-episode-pass.ts` | 24.6% | 99.1% | `__tests__/unit/lib/memory/fold-episode-pass.test.ts` |
-| `lib/services/home-data.service.ts` | 0% | 97.3% | `__tests__/unit/lib/services/home-data.service.test.ts` |
-
-The tests pin behaviour that is easy to break silently: the workspace flag opts out only on the exact string `'0'` (`'false'` and `''` leave it on); the redirect helper is a true no-op when the flag is off and drops empty params rather than emitting bare keys; `recall-replay` dates a replayed turn from that turn's own clock rather than wall-clock now, runs the old path with every episodic signal inert, and widens the head only for a retrospective turn; `fold-episode-pass` never throws into the fold on any failure path and its fragment linking is union-preserving on both sides; `llm-consult` converts every failure — no profiles, a thrown provider, a hung provider hitting the 60s timeout — into a reason rather than an exception, and reroutes only a dangerous chat; the home dashboard keeps help chats off, blends three activity clocks for project ordering, and sorts characters favourite-then-chat-count-then-name.
-
-No production code changed.
-
-#### Custom-tool definitions load through the canonical mount reader
-
-`readToolFile` in `lib/pascal/custom-tools.ts` hand-rolled its own storage dispatch: `readDatabaseDocument` for database stores, a bare `fs.readFile(path.join(mount.basePath, relativePath))` for everything else. It now calls `readMountFileBytes` (`lib/mount-index/read-file.ts`), the canonical reader that already handles every storage shape — filesystem, Obsidian, database documents, database blobs.
-
-Two effects beyond the deduplication: definition reads now go through `resolveFsAbsolute`, so a `.tool.json` path can no longer resolve outside its own store; and blob-stored definitions on database mounts are readable, where the old direct `readDatabaseDocument` call would have missed them. The list side is unchanged — `Tools/` is still enumerated live off disk on purpose, because edits inside a mount don't reliably touch the mount index.
-
-The load loop's "deleted between list and read" race skip now also recognises `FileOpError` with code `SOURCE_NOT_FOUND`, the reader's equivalent of `ENOENT`.
-
-Tests: the three Pascal suites that stubbed `readDatabaseDocument` now stub `readMountFileBytes`, and `custom-tools-discovery.test.ts` gains a filesystem-backed-store case plus a booby-trapped `fs.readFile` that fails loudly if definition reads ever go back to touching the disk directly.
-
-#### A failed properties.json read no longer wipes a project's settings
-
-On a real instance, a project lost `defaultAlertCharactersOfLanternImages`, `color`, `icon`, `defaultImageProfileId`, `defaultRoleplayTemplateId`, `defaultAgentModeEnabled`, `defaultAvatarGenerationEnabled`, and `storyBackgroundsEnabled` from its store. The visible symptom was that the Lantern generated backgrounds for a chat and never announced them: `isLanternImageAlertEnabled` walks chat → project → OFF, the chat's own override was null, and the project default was gone.
-
-Root cause in `lib/database/document-store-overlay.ts` (the engine behind both the project and group stores): `readProperties` caught every error and returned `null`. Its two callers read `null` as "no file yet, seed from the raw row," and after the 4.7 cutover that row carries no property values at all. So a single transient store failure reset the whole settings bag to schema defaults — and because the no-default optionals then serialize to nothing, the damage was invisible in the file and compounded through every later write.
-
-`readProperties` now returns `null` only for a genuinely absent `properties.json` (a `DatabaseStoreError` with code `NOT_FOUND`) and throws the entity's unavailability error when the file exists but is unreadable, malformed, or fails schema validation. It takes an optional entity id so failures name the project or group, and logs at `error` on both refusal paths.
-
-Both callers get the safer behavior:
-
-- `applyWriteOverlay` now propagates instead of writing a defaults-seeded bag, so a partial patch can never flatten the keys it didn't name.
-- `backfillProjectStores` / `backfillGroupStores` route the throw to their existing per-entity catch, so a store they merely failed to read is counted as an error and skipped rather than "healed" by overwriting all four overlay files — the more destructive form of the same bug, since that path also blanks `description.md`, `instructions.md`, and `state.json`.
-
-New tests in `__tests__/unit/lib/projects/project-store-write-overlay.test.ts`: untouched keys survive a single-key patch; unreadable, unparseable, and schema-invalid bodies all throw and write nothing; only a genuine `NOT_FOUND` seeds defaults; store-resident keys are stripped from the DB-bound patch.
-
-#### Read-your-writes detector compares tables, not repositories
-
-The job child's read-your-writes diagnostic warned once per autonomous-room turn about a condition that could not happen: `connections.findApiKeyByIdAndUserId` (a `SELECT` from `api_keys`) read after a buffered `connections.incrementTokenUsage` (a counter bump on `connection_profiles`). The detector's grouping key was the repository object, and the connections repository fronts both tables, so every turn that made more than one provider call logged a false positive — the first call buffers the counter bump, later calls re-resolve an API key.
-
-The grouping key is now the table a method implies, via a `TABLE_GROUP_RESOLVERS` map in `lib/background-jobs/child/child-repositories-proxy.ts` (currently one entry: connections methods containing "ApiKey" resolve to `api_keys`, the rest to `connection_profiles`). Repositories without a resolver are treated as a single table, exactly as before. The warning message now reads "same table" and its context carries a `table` field. Add a resolver entry when a new repository fronts multiple tables.
-
-No behavioural change beyond the log: the buffered counter bump has no in-job reader. The one genuine read-your-writes lag on that path — `llmLogs.getTotalTokenUsageForRun` reading a turn behind its own buffered `llmLogs.create` — is unrelated, still detected, and already compensated by the monotonic `Math.max` clamp in `autonomous-room-turn.ts`.
-
-New tests in `__tests__/unit/background-jobs/child-repositories-proxy.test.ts`: cross-table silence, same-table warning on both of the connections tables, per-`(jobId, readMethod)` dedup, and unmapped-repo behaviour.
-
-#### Export a chat as a readable Markdown transcript
-
-New **Export Markdown** button in the chat sidebar's Organize drawer (`GET /api/v1/chats/[id]?action=export-markdown`). It renders the conversation as a single deterministic Markdown file — the readable record of what was said, not a data-interchange format. Included: the chat title, the opening scenario (with `{{char}}`/`{{user}}` expanded), every participant/user message (active swipe only), Pascal roll announcements, Carina answers (Brahma Console answers under the name "Brahma"), user-inserted announcements (Staff, character, or custom voice), the Host's continuation/merge notices linking the chat to conversations it continues or absorbed, and whispers (marked). Excluded: SYSTEM/TOOL messages, Staff housekeeping (memory whispers, image announcements, time marks), and anything sent to LLMs as prompts.
-
-Each message renders under a `## Speaker — timestamp` heading. Timestamps use the chat's own clock: fictional time when the chat runs one (offset from `fictionalBaseRealTime`, falling back to the chat's creation time for configs that predate anchor stamping), in the chat's resolved timezone and configured format (DATE_ONLY/TIME_ONLY are promoted to FRIENDLY so the transcript keeps full timestamps). Output is deterministic — the same chat state produces a byte-identical file.
-
-Supporting changes: `calculateTimestampAt` extracted from `calculateCurrentTimestamp` in `lib/chat/timestamp-utils.ts` (translate an arbitrary real instant onto the chat clock); `buildContentDisposition` deduplicated into `lib/api/content-disposition.ts` (was copy-pasted in two files routes); the sidebar button uses the Electron-aware `triggerUrlDownload`. New tests: `__tests__/unit/lib/export/markdown-transcript.test.ts` plus `calculateTimestampAt` cases in the timestamp-utils suite.
-
-On a real instance, the jobs child logged a steady stream of `Query vector dimension mismatch` warnings (`storedDimensions: 1024, queryDimensions: 258`). Root cause: the corpus was embedded under an old TF-IDF profile (258-d vectors, most still in the legacy raw-Float32 blob format — 1032 bytes / 4 = the telltale 258), and switching the default to OpenAI text-embedding-3-large (1024-d) in July never triggered a re-embed. The re-embed trigger only fired when an *already-default* profile's provider or model was edited; making a *different* profile the default fired nothing. The measured damage: ~19.7k of ~27.6k memories (33 characters), 888 conversation chunks, and 27 mount chunks were invisible to vector search — every cosine scan silently skips mismatched entries — and the housekeeping merge pass, which searches with each stored entry's own vector, warned once per stale entry per sweep. `embedding_status` claimed 15k memories EMBEDDED because those rows dated from the old profile and nothing invalidated them.
-
-Fixes, in layers:
-
-- **Profile switch now forces the re-embed** (`app/api/v1/embedding-profiles/[id]/route.ts` PUT): a profile *becoming* the default, or a default profile's provider/model/dimensions changing, invalidates all embeddings and enqueues `EMBEDDING_REINDEX_ALL` (BUILTIN goes through refit as before). Changing only the Matryoshka truncation enqueues the local re-apply when narrowing, the full reindex when widening.
-- **New startup self-heal** (`lib/startup/reconcile-embedding-dimensions.ts`, instrumentation Phase 3.7): every boot, checks every embedding-bearing table (`memories`, `vector_entries`, `vector_indices` meta, `conversation_chunks`, `help_docs`, `doc_mount_chunks`) against the default profile's target dimension. Non-conforming `vector_entries` are deleted outright (derived data, already invisible to search; the re-embed recreates them) and index meta is snapped to target. Non-conforming chunks on STALE chats are NULLed to the cold-tier state instead of re-embedded (the reopen path heals them on demand). Everything else recoverable enqueues a `mismatched-dim` reindex — deduped against one already pending, excluding rows FAILED for the default profile, excluding orphans (deleted chats, NULL characterId) so a row the reindex can't reach can't re-trigger the sweep every boot. COUNT-only on a conforming corpus. Skipped for BUILTIN defaults (their dimension is the fitted vocabulary size).
-- **`EMBEDDING_REINDEX_ALL` coverage gaps closed** (`lib/background-jobs/handlers/embedding-reindex.ts`): a new Phase 4 re-embeds document mount chunks (enabled mounts) — previously the reindex never touched them. Character enumeration now uses `memories.findDistinctCharacterIds()` instead of the characters repository, whose vault-failure semantics silently drop characters and would leave their memories permanently stale. Stale chats are skipped in the chunk phase (both scopes) so a reindex can't re-embed the cold tier the maintenance sweep just cleared. `mismatched-dim` scope skips entities FAILED for the profile.
-- **Housekeeping merge pass** (`lib/memory/housekeeping.ts`): entries whose stored vector doesn't match the index dimension are skipped quietly (counted, logged once) instead of warning per entry per sweep.
-- `EMBEDDING_DIM_SQL` (format-aware blob-dimension SQL) moved into `lib/embedding/float32-conversion.ts` next to the byte layout it depends on; `reapply-profile.ts` imports it.
-
-New tests: `__tests__/unit/lib/startup/reconcile-embedding-dimensions.test.ts` (real SQLite: raw + quantized legacy blobs deleted, meta snapped, NULL/FAILED/orphan counting, stale-chat NULLing, reindex dedupe, BUILTIN skip, clean-corpus no-op) and `lib/background-jobs/handlers/__tests__/embedding-reindex.test.ts` (mismatched-dim filtering, FAILED exclusion, stale-chat skip, mount-chunk phase, vault-independent character fan-out).
-
-Note for existing instances: the first restart after this change will queue a re-embed of every stale row on the paid default profile (~20k rows on the measured instance — roughly cents to a few dollars with OpenAI embedding pricing, once).
-
-#### Characters can recall what happened today
-
-On a real instance, two characters could not recall a mission from the previous day, though every memory existed with correct embeddings and `occurredAt` values. The explicit `search` tool found them; only the automatic per-turn recall failed, and the models role-played the silence as amnesia. Two independent causes, fixed together.
-
-First, the cheap-LLM turn distillation (`extractMemorySearchKeywords`) returned `retrospective: false, timeRange: null` for a turn where the user said "I mean the mission **today**". Its prompt examples were all "remember when we… / last week you said…", so a same-day reference read as present tense to a small model. With that flag false, the entire episodic recall path was inert — no temporal flip, no time window, no multi-probe.
-
-- New pure module `lib/memory/day-references.ts` resolves the common English day references (`today`, `this morning`, `last night`, `yesterday`, `day before yesterday`, `N days ago` for N ≤ 14, `this week`, `last week`, plus future-pointing `tomorrow`/`next week`) against the **server-local** calendar. Timezone was the crux: the user spoke at 21:44 CDT July 28, which is 02:44 UTC July 29, and a UTC-day resolution of "today" contains none of the mission. Quilltap is self-hosted, so server-local is user-local; the module uses local `Date` accessors throughout and never `getUTC*`.
-- `extractMemorySearchKeywords` (`lib/memory/cheap-llm-tasks/memory-tasks.ts`) merges the resolver's answer into the parsed LLM result, so all three consumers (proactive whisper, dynamic head, `recall-replay`) inherit it with no per-caller wiring. A past-pointing reference overrides any LLM-supplied range — the model's ranges carry the same UTC-day bias — and forces `retrospective: true`. A future-only reference changes nothing. The scan reads only the last 4 messages (the prompt still sees 20), and runs only on realtime timelines.
-- The prompt's TODAY line rendered its date and weekday from UTC; it now renders from the local clock, so the model's own resolutions agree with the resolver's. The `retrospective` and `timeRange` instructions gained same-day examples.
-- `occurredWithin` is no longer gated on the `retrospective` flag in `pre-compute.service.ts`, `context-manager.ts`, and `recall-replay.ts`: a resolved window is useful either way, and the two-stage filter in `searchMemoriesSemantic` (hard filter only when enough hits survive, else a bounded soft boost) makes it starvation-safe. The flag still gates the temporal flip, anti-repetition suspension, and the multi-probe block.
-
-Second, even with detection working, recency carried almost no weight. The ranking blend is `0.75·cosine + 0.25·(importance × 0.5^(days/30))`, so a one-day-old memory outscores a twelve-day-old one by ~0.05 — far less than a single targeting-tag multiplier. Roughly 75% of the mission's memories were tagged `temporal: moment` (×0.7), while stale evergreen memories stacked `narrow✓ · ctx✓ · present↑` ≈ ×1.52 and took every whisper slot.
-
-- New `freshEventMultiplier` in `lib/memory/recall-tags.ts`: a memory whose event time (`occurredAt ?? createdAt`) is within 24h takes ×1.6, within 48h ×1.35. Unconditional by design — it is the safety net for every turn the retrospective classifier misses, including non-English chats. Missing clock, missing/unparsable event time, and future event times all pass through at ×1.0.
-- Echo guard: memories extracted from the *current* chat are skipped. They are already in the transcript, and boosting them floods the handful of whisper slots with restatements of the last few turns.
-- `RecallContext` gains `currentChatId` and `nowMs`, populated at all three build sites. `recall-replay` uses the **replayed turn's** clock, not wall-clock now, so replaying an old turn reproduces what recall would have done then.
-- The explicit `search` tool path (`search-scriptorium-handler.ts`) passes no `recallContext` and is untouched — it already worked.
-- New tests: `lib/memory/__tests__/day-references.test.ts` (28 cases, written to pass in any host timezone since Jest copies `process.env` and TZ cannot be pinned per file), `lib/memory/cheap-llm-tasks/__tests__/memory-search-day-reference.test.ts` (9 merge cases including the exact live failure), fresh-boost cases in `lib/memory/__tests__/recall-tags.test.ts`, and window-forwarding cases in the pre-compute suite.
-
-Constants are starting values in the tuning-expected tradition of `RECALL_MULTIPLIERS`; verify with `quilltap recall-replay <chatId> --turn N --char <id>` before tightening. Spec: `docs/developer/features/episodic-recall-day-references-and-fresh-boost.md`.
-
-#### Embedding outcomes actually land in embedding_status, and permanently-failed chunks stop re-rendering every boot
-
-On a real instance, the embedding pipeline logged 156 "marked failed" lines per boot and completed ~67k `EMBEDDING_GENERATE` jobs — yet `embedding_status` held zero FAILED rows and its EMBEDDED count never moved. The initial suspicion was the job child's write-buffering pipeline dropping the writes; that was wrong. The buffered `embeddingStatus.markAsFailed` / `markAsEmbedded` calls replayed fine on the parent — and then silently did nothing, because both methods were find-then-update: they looked up the row for `(entityType, entityId, profileId)` and returned `null` when it was missing. Nothing creates those rows anymore — the enqueue-time `upsertByEntity` calls were removed with the dead `scheduleEmbedding` helper and the reindex batch-insert refactor — and every surviving row on the measured instance referenced a *deleted* profileId, so every single mark call was a no-op. The chunk embedding BLOBs in the same write batch landed normally, which is what pointed the finger away from the IPC layer.
-
-- `markAsEmbedded` and `markAsFailed` (`lib/database/repositories/embedding-status.repository.ts`) now upsert: they create the status row when none exists for the entity/profile pair. Both take a required `userId` (the schema requires one to mint a row); the `EMBEDDING_GENERATE` handler (`lib/background-jobs/handlers/embedding-generate.ts`) passes `job.userId` at all 13 call sites.
-- With FAILED rows landing, the startup render/embed reconcile (`lib/startup/reconcile-conversation-rendering.ts`) can finally exclude permanently-unembeddable chunks. Its only guard was `LENGTH(content) BETWEEN 1 AND 131072`, but a chunk can sit under that transport cap and still exceed the embedding model's token context (>8,192 tokens ≈ ~31k chars for text-embedding-3-large) — those fail deterministically, so their chats re-rendered and re-attempted embedding on every boot (76 active chats / ~156 chunks on the measured instance). Condition (B) now also requires no FAILED `embedding_status` row for the profile a re-embed would actually use (default, else first — the same selection the render handler makes). No profile resolvable → the exclusion disarms and behavior is unchanged.
-- New regression tests: `__tests__/unit/lib/database/repositories/embedding-status-mark-upsert.test.ts` (create-when-missing, update-when-present, and the different-profile-row case that masked the live failure) and three new cases in `__tests__/unit/lib/startup/reconcile-conversation-rendering.test.ts` (FAILED exclusion in the scan SQL, sentinel bind with no profile, exclusion disabled when profile resolution throws).
-
-Verified read-only against a dogfood copy of the affected instance: the new scan SQL runs on the real schema, and simulating landed FAILED rows for the >31k-char chunks drops 75 chats from the incomplete set. This repo is the v5 port's behavioral oracle; the files changed are `lib/database/repositories/embedding-status.repository.ts`, `lib/background-jobs/handlers/embedding-generate.ts`, and `lib/startup/reconcile-conversation-rendering.ts`.
-
-#### Startup no longer re-embeds every cold-tiered chat
-
-Every boot, the startup render/embed reconcile (`lib/startup/reconcile-conversation-rendering.ts`) re-rendered and re-embedded the entire cold tier, and the next daily maintenance sweep threw the vectors away again. The two subsystems disagreed about what NULL means: the stale-chat cache collapse deliberately NULLs `renderedMarkdown` and chunk embeddings for chats with no played message inside the retention window (recovery is on-demand, when the chat is next opened), while the reconcile read exactly that state as pipeline damage. On a measured real instance the loop had embedded 8,762 chunks exactly six times each (worst chunk: 54 times), leaving 85% of `conversation_chunks` unembedded between swings — with the bill going to the paid default embedding profile on every restart, roughly $2 per boot at that instance's size.
-
-- The reconcile now filters its scan through the same shared `isStale` gate and `resolveStaleChatDays()` window the maintenance sweeps use, and skips stale chats: for them, cold is the desired state. A chat whose staleness can't be determined is also skipped — the reopen path (`lib/scriptorium/cold-chunk-reembed.ts`) re-embeds any visited chat regardless, so skipping is recoverable while healing risks the loop.
-- Active chats with genuinely missing embeddings (embedder outage mid-conversation, a killed render job) are still healed at boot exactly as before.
-- `isStale` (`lib/background-jobs/maintenance/collapse-stale-chat-assets.ts`) takes `Pick<ChatMetadata, 'id' | 'updatedAt'>` now — the two fields it reads — so the raw-SQL scan can call it without hydrating full chat rows. No behavior change.
-- The reconcile result and completion log gain a `skippedStale` count.
-- New regression tests in `__tests__/unit/lib/startup/reconcile-conversation-rendering.test.ts`: a stale chat in the scan result is skipped, and a failed staleness check skips rather than heals.
-
-Found by a quilltap-v5 dogfood measurement pass against a copy of real data. Full diagnosis (including why the DEAD-job population and the token-cap hypothesis were ruled out): `docs/developer/found-bugs.md`, Bug 6.
-
-Follow-up, same family: reading a cold chat without playing a message re-embedded it on open, and the next sweep — still seeing no played activity — discarded those fresh embeddings, re-billing every read/sweep cycle. `clearEmbeddingsForChat` (`lib/database/repositories/conversation-chunks.repository.ts`) now takes an optional `olderThan` cutoff and the sweep passes its staleness cutoff: an embedding written inside the retention window (the reopen re-embed stamps `updatedAt`) survives, so a merely-read chat stays semantically searchable for a full window from the visit and is only cold-tiered again once it has gone unvisited that long. New tests in `__tests__/unit/lib/database/repositories/conversation-chunks-clear-embeddings.test.ts`; `help/data-retention.md` documents the warmth window.
-
-#### A custom tool run from the composer rolls as your own character
-
-Running a shared or global custom tool from the composer's Custom Tools button tested the **first participant's** fact sheet, not the character the operator is playing. In a chat created leading with an LLM character, a metadata-gated table therefore dealt someone else's branch — plausibly, with a well-formed result and no error. The only record of what was consulted was `pascalMeta.metadataTested`, which no screen shows.
-
-- `handleList` in `app/api/v1/chats/[id]/custom-tools/route.ts` emits one row for a tool every participant resolves to the same file, and has to record a perspective on it because POST reads that character's fact sheet for `when.metadata` and their groups for `$state`. It took `sightings[0]` — `loadPerspectives` walks `chat.participants` in stored array order and did not prefer the operator's own `controlledBy: 'user'` character.
-- New `preferOperator` picks the operator's own played character instead: the one named by `activeTypingParticipantId` first, then their remaining user-controlled participants in stored order. Removed participants are not candidates.
-- When none of the operator's characters is a candidate — an all-LLM room, or a tool whose `availableWhen`/`withheldWhen` gate their character did not pass — the row falls back to stored order as before, but is now **labelled** with the character it will run as, using the same `characterLabel` the per-variant listing already uses. Silently succeeding as whoever passes a gate you failed was the sharpest edge of this bug. A one-character room stays unlabelled; there is nothing to disambiguate.
-- POST's `asCharacterId`-less fallback uses the same preference. It consults no fact sheet either way (that path deliberately rolls against `{}`), so this only decides which definition of a shadowed name gets dealt.
-- Unaffected, and deliberately unchanged: a character rolling mid-turn via `run_custom`, which reads `context.characterId`; and a tool that resolves differently per character, which still lists one labelled row per variant and runs as the character on its label.
-- New: `__tests__/unit/app/api/v1/chats/custom-tools-perspective.test.ts` (10 cases). Checked against the pre-fix code: six of them fail there.
-
-Found by a quilltap-v5 dogfood walk rather than by its differential harness — the harness could not have found it, because v5 ports the same logic line for line and both sides agree. v5 records it as finding #30 and must take the same change in the same round. Detail: `docs/developer/found-bugs.md`.
-
-#### Import can read its own export of a document-store blob over 3 MB
-
-Importing a `.qtap` export that carried a document-store attachment larger than `BLOB_CHUNK_BYTES` (3 MB) failed with `doc_mount_blob_chunk received without preceding doc_mount_blob`. The export was written by Quilltap itself and reported no error.
-
-- The chunk accumulator in `lib/import/quilltap-import-stream.ts` is a pre-sized sparse array (`new Array(chunkCount)`), and the completion test used `Array.prototype.every`, which skips holes and therefore returned `true` as soon as the first chunk landed. The importer joined what it had — holes render as `''`, so the blob was silently truncated — pushed the result, and deleted the accumulator. The next chunk then arrived with nothing to join and threw.
-- The completion test now counts arrivals against `chunkCount` instead. A genuinely short stream reaches the end-of-stream truncation error that already existed at the bottom of the function and was unreachable because of this bug; it names the blobs and the chunks received vs. expected.
-- Blobs at or under 3 MB are a single chunk and were never affected.
-- Reader-side only. The writer is untouched and its bytes do not change, so archives stay readable in both directions.
-- `BLOB_CHUNK_BYTES` gains a comment recording why it must stay a multiple of 3: chunks are base64-encoded separately and rejoined encoded, so only the last may carry padding. The writer's module header said "~4 MB chunks" where it meant 3 MB raw; corrected.
-- New: `__tests__/unit/lib/import/quilltap-import-stream-blobs.test.ts` (7 cases — multi-chunk reassembly, interleaved blobs, truncation reporting, and the two throws that must still fire).
-
-Found by the same quilltap-v5 differential pass as the restore fix above; its `system_import_equivalence` case stops diverging and the `throw_ndjson_truncated_blob` entry comes off the expected-divergence list.
-
-#### Restore actually restores files and document stores
-
-Three defects in the restore path, all on the data-loss side, all fixed together — any one left standing keeps the others unobservable.
-
-- **Mount points and file links were rejected wholesale.** `dumpMountIndexTable` (`lib/backup/backup-service.ts`) is a raw `SELECT *`, so the archive carries SQLite storage types: `includePatterns`/`excludePatterns` as JSON text and `enabled`/`allowEmbed`/`allowCharacterRead`/`allowCharacterWrite` as INTEGER 0/1. The repository schemas demand `string[]` and `boolean`, so every `doc_mount_points` and `doc_mount_file_links` row was refused. Failures were per-row warnings and the restore still reported success; the damage showed up later as unreachable character vaults, project stores and group stores. Fixed on the **restore** side (new `lib/backup/restore/mount-index-coercion.ts`, applied at steps 22a and 22d) so archives users already hold are repaired — a backup-side fix would leave every existing archive unrestorable. The coercion tolerates already-correct input: JSON parsed only when the value is a string, booleans coerced only when the value is a number.
-- **The file lookup gated on `backupFormat === 2`.** The storageKey layout landed in format 2 and modern manifests declare 4, so every archive newer than the one that test was written for fell through to the pre-format-2 layout it does not use, and no file was found. The gate is a floor (`>= 2`) now, and the `triedPaths` diagnostic derives from the same predicate rather than restating it. No other `backupFormat ===` comparisons exist in the tree.
-- **The files phase ran before anything could receive the bytes.** Files were step 5 of the dependency-ordered list. At that point a project-bound file has no project store (projects restore at 13) and a project-less file has no Quilltap Uploads mount (`deleteUserData` truncates `doc_mount_points`; the `instance_settings` pointer survives and dangles until 22a). The block now runs as step 22a-bis, immediately after the mount points are back. Ordering only — no write behavior changed, and the block's internals are byte-identical. The order was correct for an in-place restore over a populated instance, which is why this survived; it failed exactly on the fresh or wiped target that restore exists for.
-- New: `__tests__/unit/lib/backup/mount-index-coercion.test.ts` and `__tests__/unit/lib/backup/restore-archive-file-lookup.test.ts`.
-
-Found by the quilltap-v5 native port's differential harness, which runs every ported unit against v4's real `lib/` code. The v5 side asserts these divergences in both directions, so its `system_restore_state` differential will now report the upstream fix and needs its divergence entry retired. Plan, fix sites, and a known residual case for second-generation archives: `docs/developer/found-bugs.md`.
-
-#### Docs: 4.8.0 release notes cover the work that landed after they were drafted
-
-`docs/releases/4.8.0.md` was written on 2026-07-20; nineteen commits landed after it. One passage had become factually wrong and several user-visible features were missing.
-
-- **Corrected:** the math section stated that single-dollar math is deliberately disabled, which the single-`$` promotion fix reversed. It now describes the marker test, the currency carve-out, and the bare-symbol rule.
-- **Corrected:** "Upgrading from 4.7" enumerates migrations by name and was missing `add-episodic-memory-fields-v1` and `anchor-fictional-clock-base-v1`. Both are now documented with what they backfill.
-- **Added:** the episodic recall overhaul (event time, narrative time, entities, episodic vs. semantic, the fold-time episode pass and dated Timeline, retrospective retrieval, recall-on-reference, the `search`/`read_conversation` additions, the anti-destruction policy changes, `recall-replay`) as a new subsection. The existing "Recalls More Aptly" subsection covers only the ranking rework and was the sole memory coverage.
-- **Added:** the Story's Clock timeline switch plus the frozen fictional-clock and timezone fixes; Pascal's `availableWhen` / `withheldWhen` tool gating and the Workbench's gate control; the two-phase composer run dialog and the state-tinted roll announcement; per-character Starting Outfit defaults, `canChooseOutfit`, the full picker roster and the Play As restriction; the themeable thinking indicator with Madman's Box's small caps and button fix; the Self-Dressing / Outfit Creation persistence fix under Selected Fixes.
-- **Framing:** the thesis paragraph now names four bodies of work with memory as the third; the frontmatter description, the closing paragraph, and the memory section header were updated to match.
-
-`pubDate` and the sign-off date are left at 2026-07-20 — that is a release-timing decision. Not written up: the lint-rule tightening, debug-log prune, dead-code sweep, DRY refactors, docs-freshness passes, Workbench backdrop theming, and the `.qtap` ephemeral-state strip (all internal or release hygiene), and the workspace deep-link commit (the notes already promised that behavior; the commit made it true). Docs-only; no code changed.
-
-#### Pascal's announcement bar carries the outcome's state
-
-A roll's `state` (`success` / `partial` / `failure` / `info`) tinted the outcome bubble but not the bar above it, which showed the generic importance dot — and Pascal's importance tier is `high`, so a successful roll wore the same red dot as a deleted file.
-
-- The bar (and, defensively, a collapsed chip) now takes the `qt-pascal-result` / `qt-pascal-result--<state>` accent already used by the Workbench's outcome rows and the proving bench's preview, so one outcome reads the same wherever it is shown.
-- The importance dot is replaced by a state dot filled with the solid `--qt-alert-*-fg` token; the alpha-thin `-border` tints used for the leading edge disappear at 8px. The state is also announced as visually-hidden text, so it is not carried by colour alone.
-- Keyed off the presence of a usable `pascalMeta.state`, not the `systemKind`: a roll record predating the field, or a state a future build introduces, falls back to the importance dot. Prospero's `custom-tool-error` chip carries no roll record and is untouched.
-- New in `_chat.css`: four `.qt-chat-announcement-dot-outcome-*` classes, plus compound `.qt-chat-system-bar.qt-pascal-result*` / `.qt-chat-announcement-chip.qt-pascal-result*` selectors that restate the existing accent at a specificity the wrappers' `border`/`padding` shorthands can't overwrite. No new tokens; bundled themes need no change.
-- **`@quilltap/theme-storybook` 1.0.49 → 1.0.50.** Its `qt-components.css` had no Staff-announcement block at all, so mirroring the accent meant filling the pre-existing hole first: the `--qt-chat-system-bar-*` and `--qt-chat-announcement-dot-*` tokens (light and dark), the `.qt-chat-system-bar*` / `.qt-chat-announcement-*` classes, and then the new outcome dots and compound accents. `Chat.tsx` gains two showcase sections — **Staff Announcements** (bar, packed chip row, three importance dots) and **Pascal Roll Outcomes** (all four states, bar and bubble together), the latter being the first time the storybook showed `qt-pascal-result` at all.
-
-#### Custom tools can be gated on the invoking character's metadata
-
-Outcome tables could already branch on `when.metadata`. A definition can now decide whether a character is offered the tool at all, via two new optional top-level keys — at most one per file.
-
-```json
-"availableWhen": { "metadata": { "toolAbilities": { "contains": "programmable" } } }
-```
-
-- **`availableWhen`** offers the tool only to an invoker whose `metadata.json` passes every test; **`withheldWhen`** withholds it from one that passes. Tests are written exactly as an outcome's `metadata` clause, and AND together.
-- **Metadata is the only subject, and operands must be literals.** A gate is evaluated before the roll, so there are no resolved parameters and no consult; `$param` and `$state` operands are load-time rejections here.
-- **Enforced at roster resolution**, so a withheld tool is absent from the `run_custom` description, absent from `GET /api/v1/chats/[id]/custom-tools`, and unrunnable by name through either entrance.
-- **Fail-soft, so the two clauses are not complements.** A key the character lacks never matches: an empty fact sheet fails every `availableWhen` and satisfies no `withheldWhen`. `withheldWhen: {x: {eq: true}}` and `availableWhen: {x: {neq: true}}` differ precisely on the character with no `x`.
-- **A gated-out definition does not claim its name** — not even as a `disabled` tombstone — so a farther tier may still supply one. A character-vault variant gated to qualifying characters plus a General-store fallback is now a working arrangement. The gate is evaluated before `disabled` for this reason.
-- Declaring both clauses is rejected at load: they are not complements, and the Workbench's single control cannot represent both.
-
-New modules: `lib/pascal/tool-gate.ts` (the evaluator, client-safe) and `lib/pascal/metadata-match.ts` — the fail-soft comparison table, now shared by the outcome evaluator and the gate rather than implemented twice. `RosterContext` gains `metadata`; all three callers pass the sheet they already hold, and a caller that doesn't triggers a lazy vault read only when a gated definition actually turns up.
-
-**Pascal's Workbench** gains a **Who may reach for it** section at the top of the recipe (Anyone / Only show if… / Do not show if…), a `gated` badge in the library, and a proving-bench line reporting whether the loaded fact sheet would have been dealt the tool — computed live for a hand-typed sheet, returned with the roll for a character's real one. The bench still deals either way: a gate decides who is offered a tool, not whether its author may test one.
-
-`collectToolVocabulary` now reports a gate's metadata keys alongside the table's, so the run dialog names what a tool reads without naming what opens the door.
-
-#### The composer's custom-tools popup is now a two-phase dialog
-
-The wand button in the composer gutter opened a 288px-wide upward popover with every tool's parameter form nested inside an accordion. Filling one out was cramped, and any click outside dismissed it. It now opens a cancellable modal (`components/chat/CustomToolRunDialog.tsx`).
-
-- **Two phases.** Phase one lists the roster — description, source store and path, a wrench to open the file on Pascal's Workbench, and a search box once there are more than six tools. Selecting a tool replaces the dialog body with that tool's form; "Choose another tool" returns to the list.
-- **What it remembers is unchanged in kind and wider in scope.** Parameter values and the privacy toggle are still held per tool for as long as the composer stays mounted; the selected tool is now remembered too, so reopening lands on the last tool used with its values intact. The selection is *derived* from the roster rather than stored, so a tool that is renamed, disabled, or shadowed between opens drops the dialog back to the picker instead of stranding it.
-- **New reference panel: "What this tool can quote."** Lists the placeholders the selected tool *actually uses* — every row is an occurrence in the definition's own outcome messages or oracle prompt, not merely something the format permits. A dice-form tool that never writes `{{dice}}` isn't offered it; a declared parameter appears only if some message quotes it back; a tool that quotes nothing gets no panel. It states explicitly that these belong to the definition's own messages and are *not* substituted into what the operator types, which is sent verbatim.
-- `GET /api/v1/chats/[id]/custom-tools` listings gain `references: { value, roll, dice, llm, params, metadata, state }`, derived by the new `collectToolVocabulary` (`lib/pascal/tool-vocabulary.ts`) from outcome messages, the `llm` prompt, `when.metadata` keys, and `$state` references anywhere in the definition. This is vocabulary, not odds: it names what a tool reads and says, never what it concludes. Roll specs and outcome tables remain withheld.
-- `CustomToolParamsForm` gains `layout="stacked"` — label, description, and declared bounds on their own lines. String parameters render as an auto-growing textarea (fits its content from one line to 224px, then scrolls) rather than a single-line input: nothing in the definition format declares an expected length, so the field sizes itself instead of guessing. Numbers keep a narrow number input. The default `inline` layout is unchanged, so the Workbench's proving bench is untouched.
-- Section panels in the dialog are explicit padded cards. They had been `border-t qt-border`, and since `.qt-border` sets all four sides that rendered as a box with no internal padding — text flush against the frame.
-- Panel order is form → **Roll privately** → reference panel: the privacy toggle is the last decision about the run, and the panel below it is reading matter rather than a control.
-- `CustomToolsDropdown.tsx` is replaced by `CustomToolsButton.tsx` (button + dialog). The now-unused `.qt-composer-gutter-dropdown` positioning class is removed from `_chat.css`.
-
-#### Fictional story clocks were frozen, and read the base in the wrong timezone
-
-Two bugs in `lib/chat/timestamp-utils.ts`, both visible as the Host announcing the same in-story moment on every turn.
-
-**The clock never advanced.** Fictional time runs 1:1 with the wall clock, measured from `timestampConfig.fictionalBaseRealTime`. Nothing ever wrote that field — its only writer, `initializeFictionalTime`, had no callers outside its own unit test. `calculateCurrentTimestamp` fell back to `new Date()`, measured ~0ms elapsed, and re-reported the configured base instant forever. Every fictional-time chat ever created was affected.
-
-- `ensureFictionalBaseRealTime(config, anchor?)` replaces the uncalled `initializeFictionalTime`. It stamps the anchor only when the clock is fictional, has a base, and is not already anchored — re-stamping a live chat would reset it to the base.
-- `POST /api/v1/chats` runs the resolved config through it. Chat creation is where a config stops being a default and starts being a running clock; Salon- and character-level defaults are deliberately left unanchored, since a default saved months ago carries no meaningful anchor.
-- Migration `anchor-fictional-clock-base-v1` backfills existing chats from each chat's own `createdAt` — the instant its base was chosen, so story time resumes where 1:1 tracking from chat creation would have put it rather than lurching. Only touches rows with fictional time on, a base set, and no anchor; unparseable configs are skipped rather than rewritten.
-
-**The base was read in the server's timezone.** `fictionalBaseTimestamp` is a zone-less `datetime-local` string, so `new Date("1550-07-25T10:15")` resolved it against the server's zone before rendering it in the story's. A base of 10:15 set for `Europe/Istanbul` displayed as 6:01 PM on an `America/Chicago` host — the two 1550 LMT offsets differing by ~7h46m. New `parseTimestampInTimezone(value, timezone)` anchors zone-less strings as wall-clock readings in the target zone, resolving iteratively because the offset depends on the instant being solved for (DST, and pre-standardisation LMT offsets carrying seconds). Strings with an explicit zone (`…Z`, `…+05:30`) pass through untouched.
-
-Known limitation, pre-existing and left alone: `CalculatedTimestamp.isoValue` truncates the UTC offset to whole minutes, so it is off by up to 59s for pre-standardisation timezones. Display formatting is unaffected.
-
-Both misleading strings in `TimestampConfigCard` are corrected — the card promised the clock "advances with each message" and would "advance based on message activity", neither of which it has ever done.
-
-#### Lint: the project-name misspelling rule now checks identifiers and comments
-
-`quilltap/no-quilltap-misspelling` only visited string literals and template chunks, so a misspelled *identifier* was invisible to it. It now also visits identifiers, private identifiers, JSX names, JSX text, and comments. `eslint-quilltap-plugin.js` is exempted from its own rule in `eslint.config.mjs` — the implementation has to spell the forbidden word in order to match it — which replaces the two inline disable comments that no longer covered enough of the file.
-
-The gap had been hiding a real test bug. Two "simulate restart" blocks in `__tests__/unit/lib/startup/dbkey.test.ts` deleted a misspelled variant of the `__quilltapDbKeyState` global, so they cleared nothing and left the previous state in place; the assertions passed, but not via the restart path they described. Both now delete the real global.
-
-#### Deep links that used to escape the tabbed workspace now open as tabs
-
-Several routes still rendered the legacy full-page shell when reached by direct URL (bookmark, address bar, or an unintercepted link), instead of redirecting into the tabbed workspace like `/salon/[id]`, `/aurora`, and the other cut-over routes:
-
-- **`/salon` (the all-chats list)** had no workspace representation at all — a new `salon-list` tab kind renders `SalonListView`, and the left rail's "Chats" item and the home page's "View all" link now open it as a tab instead of navigating away (which unmounted the workspace and killed any streaming conversation).
-- **`/prospero/[id]`, `/scriptorium/[id]`, `/aurora/groups/[id]`** now redirect into their singleton list tab drilled into the target detail. The list tabs accept an optional payload (`projectId` / `storeId` / `groupId`); in-workspace links to those paths are intercepted the same way.
-- **`/aurora/[id]/view`** now redirects into a `character-view` tab (the kind existed but the intent layer never accepted it), carrying the `?tab=` sub-tab and popping the new-chat modal for `?action=chat`. Bare `/aurora/[id]` became a server-side redirect to `/view` (was a client-side flash).
-- **`/salon/new`** redirects into the workspace and pops the new-chat modal (project/character/autonomous params preserved) instead of rendering the full-page form.
-- **`/salon/[id]/terminal/[sessionId]`** redirects into the workspace, opening the conversation's Salon tab plus a child terminal tab (the Salon is the portal source for the live PTY, so the terminal tab is never an empty husk).
-
-All the old pages still render when the workspace is disabled (`NEXT_PUBLIC_WORKSPACE_TABS=0`); the affected client pages were split into server redirect wrappers plus `*PageClient` bodies.
-
-#### The streaming quill is now a themeable icon
-
-`QuillAnimation` — the quill that rocks while a reply is awaited, while tokens stream, and while a tool call is outstanding — hard-coded `<Image src="/quill.svg">` and defined its keyframes in a styled-jsx `global` block, so themes could change neither the glyph nor the motion. It now renders `<Icon name="thinking">` and carries the new `.qt-thinking-indicator` class.
-
-- **New icon: `thinking`** (registry entry #85), mask mode, default asset `public/images/icons/thinking.svg` — a new 24×24 line-art quill in the existing icon style, replacing the 125 KB full-colour brand illustration at this call site. Deliberately a separate name from `brand`: a theme that swaps the brand mark for a wordmark should not find that wordmark rocking in the Salon.
-- **Mask mode means it tints.** The indicator now inherits `currentColor`, so the `qt-text-secondary` classes already present at three call sites — and the composer status strip's per-stage colours — reach it for the first time.
-- **New class `.qt-thinking-indicator`** (`_chat.css`) owns the motion, parameterized by `--qt-thinking-duration`, `--qt-thinking-easing`, `--qt-thinking-origin`, `--qt-thinking-angle-rest`, and `--qt-thinking-angle-lean`. Themes can retune those or re-declare the class for a different animation entirely.
-- **The quill now pivots on its nib rather than its centre.** `--qt-thinking-origin` defaults to `12.5% 87.5%` — (3,21) of the glyph's 24×24 viewBox, the point that would be touching the page — so the nib holds still and the feather swings above it, instead of the whole quill wobbling around its middle. At the upright extreme the tip paints ~8px above the 48px indicator's layout box; nothing clips it, and no call site needed adjusting. A theme overriding the glyph must move the origin to that glyph's own nib.
-- Added a `prefers-reduced-motion: reduce` branch, which the old animation lacked.
-- The wrapper element changed `<div>` → `<span>`, valid where the small variant renders inline inside streamed prose.
-- `QuillAnimation` gained a `label` prop (default `"Writing…"`, matching the old `alt`); the composer status strip and the pending-tool-call summary now pass `label={null}`, since both sit inside already-labelled regions and were being announced twice.
-- `@quilltap/theme-storybook` 1.0.49 lists `thinking` in its Icons story. `ICON_INVENTORY.md` gains a section on the two hooks; `THEME_PLUGIN_DEVELOPMENT.md` documents the override recipe.
-
-**Madman's Box (1.1.7) is the first theme to use both hooks.** It maps `thinking` to `icons/brand.svg` — its own quill inside a circle that never quite closes, the same drawing as the brand mark — and replaces the rock with a slow 6s linear full revolution, resetting `--qt-thinking-origin` to `center center` because that glyph's ring is centred on the box rather than pivoting from a nib. The theme's existing global reduced-motion rule already covers the new animation.
-
-#### Madman's Box: small-caps headings, and buttons that stop shouting
-
-Headings (`h1`–`h3`) used `text-transform: uppercase`, which flattened capitals and lowercase into identical glyphs — "Charles Sebold" was indistinguishable from "CHARLES SEBOLD". They now use `font-variant-caps: small-caps`, so capitals keep their full height and lowercase renders as small capitals. Raleway ships no `smcp` table (its only OpenType features are `liga`, `kern`, and `lnum`), so browsers synthesize the small caps; heading weight went 300 → 400 because synthesized small caps read light next to full-size capitals. Heading letter spacing tightened from 0.14em to 0.1em to suit the narrower glyphs.
-
-The theme's button rule was keyed to the `button` element, but most buttons in the app are `<Link>`s wearing `.qt-button`. The rule therefore uppercased only the few real `<button>` elements and left their neighbors untouched, which was visibly inconsistent within a single row — the homepage quick actions rendered "NEW PROJECT" beside "Start a Chat", and "Continue Last" would have flipped to uppercase in its disabled state. The rule is now keyed to `.qt-button` and no longer uppercases, so buttons throughout the theme render their labels as written. Theme bumped to 1.1.6.
-
-#### Salon: timeline-mode switch in the chat sidebar ("The Story's Clock")
-
-The per-chat `timelineMode` flag from the episodic recall overhaul ('realtime' | 'narrative', NULL reads as realtime) previously had no UI and could only be set via the API or CLI. The chat sidebar's Chat card now has a "The Story's Clock" selector with Real time / Story time options, persisted through the existing chat PUT route (`timelineMode` was added to `updateChatSchema`). Updated `help/episodic-memory.md`, which said a switch was on its way.
-
-#### Episodic recall overhaul: memories learn when and where things happened
-
-Characters could not answer "remember that place we visited last week?" — the memory system had no concept of an episode. This overhaul adds one, end to end:
-
-- **Episodic spine (schema).** Memories gain `occurredAt` (ISO event time, distinct from the write clock), `narrativeTime` (free-text in-story time for fictional timelines), `entities` (proper nouns of the episode), and `kind` (`semantic` | `episodic`). Chats gain `timelineMode` (`realtime` | `narrative`). Migration `add-episodic-memory-fields-v1` adds the columns, indexes `occurredAt`, and backfills event time from each memory's source message (falling back to the memory's own `createdAt`). All new fields ride `.qtap` export/import.
-- **Extraction knows the clock.** The per-turn extractor now receives the current date/time and the chat's timeline mode, can emit EVENT memories (`kind: "episodic"` with `when` + `entities`, earning one extra candidate slot), and relative phrases like "last spring" are resolved server-side against the turn's timestamp. A deterministic date/proper-noun fallback fills anchors the model omits. Reinforcement can now upgrade an episodic memory's anchors when a retelling supplies better ones.
-- **Fold-time episode pass.** On the existing summary-fold cadence, a cheap-LLM pass consolidates the folded window into 0–2 coherent, dated episode records per present character, linked to that window's per-turn fragment memories for one-hop expansion. The fold summary itself gains an append-only, dated **Timeline** section (capped ~30 lines, oldest coarsened first), turning vault conversation summaries into a dated episodic archive.
-- **Time- and entity-aware retrieval.** The per-turn recall distillation additionally emits `retrospective`, an absolute `timeRange`, and `entities` (all inert on parse failure). Retrieval consumes them: a two-stage event-time window (filter first, bounded ×1.3 boost fallback — never fewer results than before), literal entity anchoring into the candidate pool, and up-to-3-probe embedding union on retrospective turns. On retrospective turns the `temporal: past` multiplier flips from 0.85 to 1.15, `moment` stops being penalized, and the anti-repetition penalty is suspended (an immediate re-ask no longer buries the memory being asked about). Vault conversation-summary search now reads `firstMessageAt`/`lastMessageAt` from frontmatter, filters/boosts by time range, and renderers print conversation dates.
-- **Recall-on-reference (fourth cadence).** A retrospective turn gets an enlarged dynamic head (600 tokens / 10 entries, up from 200/5) and a scoped mini-recap whisper (`retrospective-recall`): a dated Relevant Past Conversations list with `read_conversation` UUIDs, spam-guarded by a signature ring buffer and deduped against the standing on-fold list. Dynamic-head entries now carry `[3 days ago]`-style age labels computed from event time, plus in-story time when present.
-- **Deep-dive tools.** Removed the dead `memory-search` tool that shadowed the canonical Scriptorium `search` name. `search` gains `since`/`until` (applied to memories via `occurredAt ?? createdAt` and to conversation hits via chat timestamps) and `aboutCharacter`; memory results now return `occurredAt`, `narrativeTime`, `kind`, and the source `conversationId`. `read_conversation` gains `interchange_start`/`interchange_end` for slicing long transcripts. Tool instructions now state the anti-confabulation norm: search, then read the conversation, and say "I don't recall" rather than inventing specifics.
-- **Stop destroying episodes.** The memory-compression prompt no longer instructs dropping exact dates (it now preserves dates attached to events). The memory gate embeds a `(when: … · place: …)` anchor line and downgrades near-duplicate/reinforce decisions to insert-related when event times differ by more than 7 days — distinct occasions both persist; housekeeping's `mergeSimilar` honors the same guard. Episodic rows get a +0.10 housekeeping protection bonus.
-- **Replay harness.** New `quilltap recall-replay <chatId> [--turn N]` CLI (wrapping `POST /api/v1/chats/[id]?action=recall-replay`) replays a turn's recall and prints the full candidate table — cosine, blend, every multiplier fired, final score, head selection — old path vs. new path side by side, resolving the clock against the replayed turn's own date.
-- Also: jest now runs inside Claude Code agent worktrees (the worktree-exclusion patterns are skipped when the root itself is a worktree), and stale comments describing the old 0.4/0.6 ranking blend and pre-overhaul gate thresholds were corrected.
-
-#### New Chat: smarter per-character Starting Outfit defaults
-
-Characters gained a `canChooseOutfit` boolean in their vault `properties.json` (absent means false). It drives the default Starting Outfit selection in the New Chat dialog, which is now decided per character instead of using one blanket default:
-
-- Continuation chats still default every character to "Same as last conversation" (unchanged).
-- An LLM-controlled character with `canChooseOutfit: true` now defaults to "Let character choose".
-- Otherwise the character defaults to "Use defaults" only when they actually have a usable default outfit (at least one non-archived default wardrobe item). A character with no default outfit configured instead defaults to "Compose outfit" and opens with its section expanded.
-
-Each character's collapsed "Starting Outfit" header now shows the selected option ("Defaults", "Composed", "Dress Themselves", "Undressed", or "Same as Last") next to the name, so the choice is legible without expanding the section.
-
-`canChooseOutfit` is editable from the character's Wardrobe tab on the Aurora page (both the detail view and the edit view), as a checkbox just above the "Open wardrobe" button. It saves immediately to the vault. The character PUT route (`PUT /api/v1/characters/[id]`) now accepts the field in its request schema.
-
-#### Fix: Self-Dressing and Outfit Creation character toggles now persist
-
-The Aurora character editor's "Self-Dressing" and "Outfit Creation" dropdowns (the `canDressThemselves` and `canCreateOutfits` wardrobe-permission flags) silently failed to save. The character PUT handler validates the request body with a Zod schema that strips undeclared keys, and those two fields were never added to the schema, so their values were dropped before reaching the database — even though the UI showed a success toast. Both fields are now declared in the update schema and flow through to the character row. They are real DB columns, not vault-managed fields, so no migration or vault change was needed. The other tri-state values (`null` = inherit the global default, `true`/`false` = per-character override) are preserved.
-
-#### New Chat: full character roster in the picker; Play As limited to the cast
-
-The "Select Characters" list in the New Chat dialog now shows every character, including default-user (user-playable-by-default) personas that were previously hidden from it. The "Play As (Optional)" dropdown in Character Customization now offers only characters that are in the cast, instead of also pulling in default-user personas that were not added. To play as a persona, add it to the cast from the picker first, then select it in Play As. Reverting a persona back to "Chat as yourself" now keeps that character in the cast under LLM control (it is no longer removed).
-
-#### Docs: API.md now covers every v1 route; README documents the workspace and Pascal
-
-Release documentation-freshness pass. `docs/developer/API.md` was missing sections for a number of live `/api/v1/` routes; all are now documented, and the table of contents was updated to match. New sections: Groups (full CRUD, membership, and store-linking — previously only Group State was covered), a tiered Scenarios section (general/project/group), Character Photos, the user Photo Gallery, chat-scoped message send/stream plus the `[messageId]` actions, Text Replacement Rules, project mount-points and wardrobe, the `chats/[id]/qtap-target` streamer, and six System endpoints (home, autonomous-rooms, browse-directory, conversation-summaries, image-aesthetics, startup-status). Also documented the item endpoints for plugins, themes, and help-docs, and the wardrobe avatar-preview/transfer routes. `README.md` gained a Workspace section (the tabbed two-pane shell) and Pascal the Croupier / custom-tools coverage in the Gaming section. Docs-only; no code changed.
-
-#### Docs: Documented the `file-verify` subcommand in the CLI package README
-
-Release CLI docs pass. `packages/quilltap/README.md` was missing a section for the `file-verify` subcommand (it was the only subcommand absent from the package README; `CLI.md` and all three shell-completion scripts already covered it). Added a File Verification section describing the command, its `--all` / `--stall-ms` / `--json` flags, the top-level-only scope, and the macOS-only caveat. Docs-only; no code or CLI behavior changed this cycle.
-
-#### Fix: .qtap export no longer carries ephemeral Commonplace Book state
-
-Release backup/export completeness pass. The `.qtap` chat export spread the whole chat row, which pulled in two ephemeral per-chat fields: `commonplaceRecallHistory` (the Commonplace Book recall anti-repetition ring buffer) and `commonplaceSceneCache` (the per-target scene-state emission cache). Both are instance-local, regenerable UX state that should not travel between instances; `commonplaceRecallHistory`'s schema contract already declared it out of scope, and `commonplaceSceneCache` is now documented the same way. Both are stripped at the export writer. Instance backup/restore is unaffected and still preserves both fields. No schema change: `qtap-export.schema.json` never listed either field, and the export now matches.
-
-#### Maintenance: Themed the Pascal's Workbench dialog backdrops
-
-Release `qt-*` theme-class pass. The Workbench's destination picker and save-conflict dialog used a hard-coded `bg-black/40` backdrop; both now use the standard `qt-dialog-overlay` class, so themes control the backdrop color (and the dialogs sit at the standard dialog z-index). No new `qt-*` utilities were needed; all other components changed since 4.7.0 already use themed classes.
-
-#### Maintenance: Pruned release-scaffolding debug logging
-
-Release debug-logging pass. Removed 47 ceremonial `logger.debug` calls added during 4.8 development — happy-path "did X" narration (roster resolved, standalone document opened/saved/renamed/deleted, creation-progress stream lifecycle, merge started, home-dashboard payload build, `state.json` seeded/written, etc.) across 24 backend files in the chat, API-route, Pascal, services, and mount-index paths. Kept the ~23 diagnostic debug logs that fire in non-obvious branches (refusals, missing config/state, "did not match", dropped writes). Dropped the now-unused `logger` imports in five files and removed four empty blocks / unused vars left behind. No behavior change.
-
-#### Maintenance: Dead-code sweep — removed superseded qtap:// link chain
-
-Release dead-code pass (knip). Removed the original `qtap://` document-link renderer `QtapDocLink` and its private support chain (`QtapDocContext`/`useQtapDoc`, plus the `qtapDocOpener` memo and `QtapDocContext.Provider` in the Salon view). It was fully superseded by `QtapLink`/`QtapLinkContext`/`QtapLinkProvider`, which is what the message renderer already uses. No behavior change. Updated `knip.json` to ignore the transitive test-only `@anthropic-ai/sdk` dependency and the legitimate `ps`/`tasklist`/`du` runtime binaries. Kept the two in-progress SVAR file-manager files flagged by knip (pre-built ahead of their wiring phase).
-
-Behavior-preserving DRY/single-source refactors across the backend, no functional change:
-
-- `rng` tool bounds now import the shared dice constants from `lib/pascal/dice-notation.ts` instead of restating the literals.
-- `lib/memory/memory-weighting.ts` extracts `referenceTimeMs()`, sharing the `max(createdAt, lastReinforcedAt)` decay-reference calculation across its three call sites.
-- `isVisibleConversationalTurn` is exported once from `core-whisper-trigger.ts`; the byte-identical copy in `skip-signal.ts` was removed (both stay client-safe).
-- Wardrobe tool handlers share `findEquippedSlots`, `notifyWardrobeChanged`, `wardrobeItemNotFoundMessage`, and `formatWardrobeMutationResults` via `wardrobe-handler-shared.ts` instead of per-handler copies.
-- `image-generation-handler.ts` shares `buildCheapLLMConfigFromSettings` across its three cheap-LLM config blocks.
-- `message-formatter.ts` extracts `buildNamePrefixedContent`; `cheap-llm.ts` extracts `selectionFromProfile` for its three identical selection blocks.
-- `turn-manager/state.ts` extracts `advanceSpokenThisCycle`, shared by the after-message and after-skip cycle updates.
-- `vault-overlay/parsers.ts` extracts a generic `parseJsonVaultFile<T>`; the four JSON parsers delegate to it.
-- `database-store.ts` imports `detectNativeText` from `path-utils.ts` instead of keeping a duplicate file-type detector.
-- `whisper-handler.ts` resolves each participant's character once instead of re-querying to build the available-names list.
-- Chat participant action handlers share `resolveParticipantCharacterName` from `helpers.ts` instead of six copy-pasted lookups.
-
-#### Fix: Single-dollar math from models now renders
-
-Models routinely ignore the system-prompt steering toward `$$...$$` and emit standard single-`$` inline math (`$\mathcal{P}$`, `$T_{CMB}$`), which the renderer dropped as literal text because single-dollar parsing is disabled to protect dollar-amount prose. `normalizeMathDelimiters` (shared by the client and server renderers, `lib/markdown/math.ts`) now promotes a single-`$...$` span to `$$...$$` when — and only when — its interior carries a LaTeX marker (a backslash-command, a `_`/`^` script, or braces). Currency amounts and paired prose amounts (`He slid $50 ... then $20`) carry no such marker and are left untouched; the promotion runs inside the existing code/`$$`-region skip, and a rejected pair releases its closing `$` so a leading currency amount can't consume a following formula's opening delimiter. A bare single token (`$K$`) carries no marker of its own and is promoted only when a marker span shares its line — so a symbol renders alongside the formula it belongs with, while a bare token standing alone stays literal (letter-anchored, so a lone `$5$` never qualifies). The system-prompt note (below) stays as belt-and-suspenders steering.
-
-#### Maintenance: OpenRouter plugin on @openrouter/sdk 0.13
-
-Bumped the OpenRouter provider plugin (`qtap-plugin-openrouter`) from `@openrouter/sdk` 0.12.79 to 0.13.66, matching the root. Updated `getAvailableModels` for 0.13's paginated `models.list()` (models now under `page.result.data`, iterated across pages) and narrowed the non-streaming `chat.send()` result to `ChatResult` for the new union return type. The `chat.send`/`fromChatMessages`/streaming surfaces are otherwise unchanged.
-
-#### Maintenance: Dependency updates
-
-Ran `npm update` across the root project, all packages, and all distributed plugins. Notable in-range bumps: `openai` 6.44 → 6.48, Next.js 16.2.9 → 16.2.10, TanStack Query 5.101.0 → 5.101.2, Storybook 10.4.6 → 10.5.2, plus patch bumps to katex, jsonrepair, tar, ws, tsx, eslint, postcss, playwright, and others. All 14 plugins rebuilt.
-
-`@openrouter/sdk` moved 0.12.79 → 0.13.66 (used only by the pricing fetcher). Its `models.list()` now returns a paginated async-iterable with models under `page.result.data` (was `response.data`); `fetchOpenRouterPricing` was updated to iterate pages.
-
-#### Improvement: Characters are told how to write math
-
-Every character's system prompt now carries a universal math-notation note (appended in `buildSystemPrompt`, independent of the selected roleplay template) telling the model to wrap LaTeX in double-dollar `$$...$$` — the only delimiter the renderer recognizes — and not to use single-dollar `$x$`, quotes, or backticks. Without it, models defaulted to single-`$`/quote habits and their formulas rendered as literal text. The cache-determinism golden hash was updated for the new prompt content.
-
-#### Feature: Cascading state — chat → project → group → general
-
-Persistent state (Pascal's subsystem) extends from two tiers to a four-tier cascade. Merge is shallow, top-level, narrowest-wins: `{ ...general, ...group, ...project, ...chat }`.
-
-- **General (instance-wide) state** is new: a `state.json` document at the root of the "Quilltap General" mount (`instance_settings.generalMountPointId`), seeded idempotently at startup (`ensureGeneralStateFile`, instrumentation PHASE 3.4b — creates `{}` when absent, never heals edited content). Accessors `readGeneralState`/`writeGeneralState` in `lib/mount-index/general-state.ts` (`{}`-graceful, warn-on-corrupt). No migration.
-- **Group state** now has an API, tool access, and UI (it already persisted via the group store overlay but was wired into nothing).
-- New shared resolver `lib/state/state-cascade.ts` (`resolveStateCascade` + `resolveGroupForContext`), replacing the two duplicated `mergeState` helpers. The group tier merges only when exactly one group applies; with 2+ it reports `ambiguous` and is skipped from the merged view (reachable only by naming a group). Group scope is the responding character's memberships for the LLM/Pascal paths and the union across active character participants for the API/UI view. Pure path helpers extracted to `lib/state/state-paths.ts`.
-- **`state` tool** gains `context: 'group' | 'general'` and an optional `group` (name or id) parameter. Fetch with no context returns the merged cascade; set/delete default to chat. Underscore user-only guard applies uniformly across all tiers.
-- **API:** chat `get-state` gains `groupState?`, `generalState?`, `groupTier`; new group `get-state`/`set-state`/`reset-state` actions; new `GET/PUT/DELETE /api/v1/settings/general-state`.
-- **UI:** `StateEditorModal` handles `chat | project | group | general`, shows inherited group/general layers and an ambiguous-groups notice; "Group State" button in the Aurora group editor; "General State" card in Settings → Chat.
-- **Pascal `$state`:** custom tools can reference persistent state via `{ "$state": "path", "fallback": <literal> }` (fallback required — types the ref at load, guarantees run-time resolution never fails) in roll fields, comparator operands, and parameter defaults, plus `{{state.path}}` in messages and the `llm` prompt. Resolved per-entrance from the merged cascade (character scope for `run_custom` and the manual popup when a character is named; a mock `state` object in the Workbench preview/audit and proving bench). `persist` (writing state back) stays deferred.
-
-#### Feature: LaTeX math rendering (KaTeX)
-
-Chat messages, help documents, and Scriptorium/file Markdown previews now typeset LaTeX math with KaTeX, on both the client renderer and the server pre-render pipeline (kept in sync). Supported delimiters: `$$...$$` inline and block, plus the `\(...\)` / `\[...\]` forms LLMs commonly emit, which are normalized to `$$` form before parsing (in a shared `lib/markdown/math.ts` helper) because CommonMark strips `\(` as a character escape. Single-dollar math (`$x$`) is deliberately disabled so prose with dollar amounts ("He slid $50 across the table") is never mangled into equations. Math inside code spans and fenced code blocks is left alone; invalid LaTeX renders the raw source in red rather than failing the message. Wide display equations scroll horizontally inside the message instead of stretching it. Server-side roleplay pattern post-processing skips KaTeX subtrees so patterns like `{thoughts}` or `*action*` can't corrupt rendered math markup; those HTML post-processing functions moved to an import-safe `lib/services/markdown-postprocess.ts` (re-exported from the service) so the new behavior is unit-testable.
-
-#### Feature: Custom-tool outcomes can test substrings with `contains`/`ncontains`
-
-Custom-tool `when` tests gain two comparator keys, `contains` and `ncontains`, testing whether a string holds (or lacks) a substring. The substring is a non-empty string literal or a `$param` reference to a string parameter, so one input can be searched for inside another (e.g. whether the LLM consult's answer mentions `params.searchTerm`). Valid on `params` (string parameters only, both sides checked at load), `metadata`, and `llm` subjects; rejected on the bare value and `roll`, which are always numbers. Matching follows each context's `eq` precedent: exact and case-sensitive on `params`/`metadata` (fail-soft on metadata — a key that is absent or holds a non-string declines the row, including under `ncontains`), trimmed and case-insensitive on the consult's answer. Pascal's Workbench offers the two comparators on string-capable subjects with a text-only operand widget; the published JSON Schema, reference specimen, roster description (`run_custom` renders them as "contains" / "does not contain"), and help docs are updated.
-
-Pascal the Croupier joins the Staff tab of the Insert Announcement dialog, so an operator can post a bubble in Pascal's name and avatar. Added to the client staff list, the `StaffSender` type in the announcer writer, and the server-side `staffId` enum. (Suparṇā was already selectable but missing from the help doc's roster; corrected.)
-
-#### Feature: Custom tools can ask an LLM for a generated result
-
-Custom-tool definitions gain an optional `llm` block: a prompt template (same placeholder families as outcome messages — value, roll, dice, params, metadata), a required author-written `errorMessage`, and an optional `maxOutput`. When present, every run renders the prompt and poses it to the instance's cheap utility model after the roll and before the outcome table. The result is a pair `{ ok, output }`: the model's trimmed answer on success (capped at `maxOutput` characters, default 8,000, up to 100,000 — the call's token budget scales with the cap so long-form consults aren't starved; `errorMessage` is never truncated), or the author's `errorMessage` on any failure (provider error, 60-second timeout, empty answer, no model configured). A failed consult never fails the run — the outcome table branches on it instead.
-
-- New `when.llm` test subject: the six comparators against the answer (eq/neq compare trimmed and case-insensitive, trailing `.`/`!` forgiven; ordering comparators apply when the answer parses as a number and decline the row fail-soft otherwise) plus an `ok` boolean key testing whether the consult succeeded. Load-time validation rejects `llm` tests on a tool with no `llm` block.
-- New `{{llm}}` message placeholder rendering the output (the answer, or the errorMessage after a failure).
-- The consult resolves the standard cheap-LLM selection per call (including Concierge uncensored rerouting for dangerous chats) via a new `lib/pascal/llm-consult.ts`, injected into `executeCustomTool` (now async) as an `llmInvoke` seam. Logs under a new `CUSTOM_TOOL_CONSULT` LLM-log type. Job-child safe, so autonomous-room rolls consult too.
-- `pascalMeta.llm` records the rendered prompt, `ok`, `output`, the technical failure `reason`, and provider/model. Row schema, export schema, and DDL updated.
-- Pascal's Workbench: a "consulted oracle" form section (prompt + error line, both required while enabled, plus an optional answer-cap field), consult-answer and consult-succeeded condition chips, `{{llm}}` in the message insert menu, an oracle card on the proving bench (scripted answer / silence / live single-roll consult; the audit never calls live and deals against the scripted answer or silence), consult details on the test-roll debug line, and an "oracle" badge in the library.
-- The published JSON Schema mirrors the new block and subject (with the documented cross-item divergence: it cannot see that an `llm` test requires an `llm` block); the annotated reference specimen demonstrates both.
-- `run_custom`'s roster preamble tells models some tools consult a separate model server-side; revealed odds render `llm` clauses, and a tool with a consult is flagged — the prompt itself is never shown to scene models.
-
-#### Feature: Pascal's Workbench — a visual editor for custom tools
-
-Custom tools were hand-authored `Tools/*.tool.json` files with no UI. Pascal's Workbench (`/custom-tools`, also a workspace tab, left-rail entry, and links from Settings → Chat → Custom tools, the composer popup, and Scriptorium file rows) adds:
-
-- A library view listing every definition in every enabled store — valid or broken — with store/attachment badges (General, project, group, character vault, unattached), state chips, cross-store name-collision advisories, and open/duplicate/delete actions. Broken files show the loader's own rejection reason and open straight into repair mode.
-- A form builder that can only produce schema-valid output: identifier-coerced name field with title slug suggestion, parameter cards (rename rewrites all references atomically; delete lists reference sites and breaks loudly), range/dice roll forms with literal-vs-`$param` toggles and a live range readout, and an ordered outcome cascade with a pinned catch-all row, AND-composed condition chips over value/raw-roll/params/metadata subjects, duplicate subject+comparator blocking, and a message editor with a placeholder insert menu (unknown placeholders warn without blocking; `{{metadata.*}}` is never flagged).
-- A proving bench: single test rolls and a 10,000-draw outcome audit, both executed server-side through the same `executeCustomTool`/`matchesWhen` core live chats use, plus a fact-sheet card (pick a character or hand-type a JSON object) for metadata-gated rows and a live JSON preview of the exact bytes a save would write.
-- A JSON mode with debounced validation and unknown-top-level-key passthrough (`persist` etc. round-trip untouched), and a repair mode that can save a still-invalid file back to itself after an explicit confirm.
-- A save flow using the existing mount-points file routes (no second write path): destination picker grouped by attachment with per-store duplicate-name blocking, `Tools/<name>.tool.json` naming with an optional write-then-delete file rename when a tool's name changes, and mtime conflict detection with reload-theirs/overwrite-mine resolution.
-- New API resource `/api/v1/custom-tools`: GET library, GET `?action=destinations`, POST `?action=preview`, POST `?action=audit`. The chat roster GET now includes `mountPointId` per tool. New server helpers `listAllCustomTools`, `simulateOutcomes`, and `lib/pascal/workbench.ts`; `loadToolsFromMount` is exported.
-- Refactors: dice-notation parsing split into `lib/pascal/dice-notation.ts` (pure, no `crypto`) so the tool schema is client-safe and the browser validates with the same Zod schema the loader uses; the composer popup's parameter form extracted to a shared `CustomToolParamsForm` used by both the popup and the bench.
-- Help: new `help/pascals-workbench.md`; `help/custom-tools.md` cross-links it.
-
-#### Fix: mount-index case-repair test loaded the SQLite mock in CI
-
-The new `mount-index-case-repair` unit suite tried the real SQLite binding via a nested `packages/quilltap/node_modules` copy that only exists after a full local install. In CI that path is absent, so the loader fell through to a bare `require('better-sqlite3-multiple-ciphers')`, which the Jest `moduleNameMapper` redirects to the no-op mock — every query returned empty and 8 tests failed. It now requires the root `better-sqlite3` alias by absolute path (bypassing the mapper), matching the `quantize-embeddings` suite. Test-only change.
-
-#### Docs: Pascal's Workbench spec covers the metadata test subject
-
-The custom-tool builder spec (`docs/developer/features/custom-tool-builder.md`) was written before character `metadata.json` shipped. Updated it to cover the fourth outcome-test subject: a Metadata condition chip with a free-text key input, all six comparators (ordering ones noted as fail-soft at run time), metadata placeholders in the message editor's insert menu (never warning-underlined as unknown), a fact-sheet card on the proving bench (pick a character or hand-type a JSON object) with a `metadata` field on the preview/audit request bodies, fail-soft rules in the implementer checklist, and metadata comparators in the serialization bijection tests.
-
-#### Docs: Pascal custom-tools spec absorbs the metadata test subject
-
-The parent custom-tools spec (`docs/developer/features/pascal-custom-tools.md`) now documents the `when.metadata` test subject, the `{{metadata.<key>}}` template family, `pascalMeta.metadataTested`, the fail-soft run-time rules, and the roster secrecy rule — all shipped earlier by the character `metadata.json` feature but never woven into the parent spec. Its stale "not yet implemented" status line was corrected to shipped. Both annotated reference specimens (`docs/developer/CUSTOM_TOOL_SPEC.json` and `CUSTOM_TOOL_SPEC_DICE.json`) gained outcome rows demonstrating metadata tests: a boolean `eq`, a numeric ordering comparator, the fall-through for characters lacking a key, and verbatim rendering of placeholders for missing keys.
-
-#### Docs: character `metadata.json` spec marked complete
-
-The spec moved from `docs/developer/features/` to `features/complete/`, with its status line updated to implemented (shipped).
-
-#### Fix: document-store names and paths are one case-insensitive namespace
-
-Database-backed vaults compared paths case-insensitively when reading but enforced uniqueness case-sensitively when writing, so `Lore` and `lore` could exist as sibling folders (and `Notes.md` beside `notes.md`), with readers silently resolving one and shadowing the other. Store names had no uniqueness at all — two stores could share the exact same name.
-
-- Sibling folders and files in database-backed stores can no longer differ only by casing: the unique indexes on `doc_mount_folders` and `doc_mount_file_links` are now `COLLATE NOCASE`. A repair pass runs at every startup — not just once — so collisions introduced by editing the database out-of-band are also caught: the newer of two colliding rows is renamed with a ` (2)` suffix (subtree paths and links repaired with it) and the rename is logged. The pass also verifies the indexes' actual definitions (a same-named non-unique stand-in is replaced) and catches non-ASCII case-collisions that SQLite's ASCII-only NOCASE tolerates.
-- Folder resolution is case-preserving: writing to `lore/new.md` when `Lore` exists reuses `Lore` and files under it, instead of minting a second folder. Re-writing an existing document under a different casing updates it in place and keeps its stored name. Filesystem-backed stores still adopt on-disk casing.
-- Case-only renames (`notes.md` → `Notes.md`, `lore` → `Lore`) now work everywhere — they used to be rejected as "destination already exists" on some paths.
-- Fixed a hazard where force-copying a file onto a case-variant of its own path deleted the source before copying.
-- Store names are now unique case-insensitively. Creating or renaming a store to a name a peer already holds (in any casing) returns a 409; auto-provisioned stores and character vaults suffix ` (N)` instead. Existing duplicate names are suffixed at startup (oldest keeps the name). Characters that share a name now get distinct vault names.
-
-#### Feature: `metadata.json` — a per-character fact sheet, and custom tools that can test it
-
-Every character vault gains an optional `metadata.json` at its root, alongside `properties.json`: one JSON object of arbitrary user-authored keys with any JSON value.
-
-```json
-{ "hasAnsibleAccess": true, "clearanceLevel": 3, "faction": "Ordo Aurum" }
-```
-
-- **The file.** Keys are the user's own — no reserved names, no schema, no size limit beyond the usual document-store ones. The only requirement is that the file hold an object, not an array or a scalar. It hydrates onto the character as `character.metadata`, so any code path holding a hydrated character can read `character.metadata?.["key"]`.
-- **Not a keystone, and no migration script.** An absent file hydrates as `{}`; so does an unparseable one, with a warning to the log. Only `properties.json` can declare a vault broken. New vaults are seeded with `{}`, and the startup character-vault backfill seeds an empty `metadata.json` into every already-linked vault that lacks one — an existence check, not a parse, so a file holding invalid JSON is never "healed" into an empty one. Managed-field projection writes the file only when the character actually carries `metadata`; a caller without it (like the backfill's repopulate path, which reads raw rows that have no such column) leaves the file alone rather than clobbering a real fact sheet with `{}`.
-- **Writable managed field.** `metadata` joins `MANAGED_FIELDS`, so repository and API writes route to the vault file like `pronouns` or `title`; there is no `characters` column and no DDL change. A patch **replaces** the whole object rather than merging keys — one field owns one file, so PUT-the-object is the coherent semantics, and a merge would make deleting a key impossible. `properties.json` merges only because five fields share it.
-- **User-driven, and only user-driven.** No generation system reads or writes it: not character creation, not summon-from-lore, not the optimizer. It is never injected into a system prompt or character context. A character with `systemTransparency: true` can read and edit the file through the ordinary `doc_*` tools, like any other vault document; an opaque character cannot see it. No new access machinery.
-- **The file manager is the editing surface.** There is no form for it in the Aurora editor; the plumbing for one exists.
-
-Custom tools are the first consumer. Both additions are backward compatible.
-
-- **`when.metadata`** — a fourth outcome-test subject, symmetric to `params`: `{ "gt": 0.60, "metadata": { "hasAnsibleAccess": { "eq": true } } }`. Same six comparators, ANDed the same way, `$param` operands included, so `{ "metadata": { "clearanceLevel": { "gte": { "$param": "required" } } } }` is an opposed check against what the character carries. Keys are any non-empty string, not the `params` identifier grammar — `metadata.json` is hand-authored and `hasAnsibleAccess` is an ordinary key there.
-- **Missing keys fail soft, and never throw.** A metadata comparator whose key is absent, holds a non-primitive, or holds a type the comparator can't sustain simply does not match: the row is passed over and evaluation falls through to the mandatory catch-all, with a debug log. This is the deliberate difference from `params`, whose keys are declared in the file and so can be validated at load. Metadata keys name something on a character the file has never met, so load-time validation checks only the comparator's shape and its `$param` operands. A table branching on a key must still deal sensibly to the character who lacks it. Note that absence is not inequality — `neq` on an absent key does not match either — and `{ "eq": null }` is not expressible.
-- **`{{metadata.key}}`** — a fourth template family in outcome messages, rendering primitives the way `{{params.name}}` does. An absent key, or one holding a list or object, is left verbatim as the placeholder, like any unknown placeholder.
-- **The roster never enumerates metadata.** The `run_custom` description gains one sentence saying tables *may* consult the invoking character's metadata, and nothing more — keys and values are per-character and often the point of the table. Tables with `revealOdds: true` render their `when` clauses as they always have, metadata clauses included; `revealOdds: false` is how an author keeps a condition secret.
-- **Who rolled.** The LLM path loads the rolling character's hydrated sheet; a broken vault lands on the existing Prospero error bubble. The manual popup rolls with the sheet of the character the run names, which the popup always does. A run naming nobody rolls against an empty sheet and lands on the catch-all.
-- **`pascalMeta.metadataTested`** records the keys the winning outcome consulted and their values at roll time — only those keys, primitives only, so the transcript shows what the table saw without publishing the whole sheet. Additive JSON in an existing nullable column; no migration.
-
-Export/import round-trips `metadata` both as an `ExportedCharacter` field and as the vault document itself, with the existing managed-field precedence. SillyTavern export omits it; it is Quilltap-native. Both published JSON Schemas (`qtap-custom-tool.schema.json`, `qtap-export.schema.json`) are updated, and the Zod/JSON-Schema agreement test covers the new grammar.
-
-#### Fix: Staff whispers to characters honor the All Whispers toggle again
-
-The custom pseudo-tools work (`61ec90bd`) exempted every `systemSender` message from the Salon's whisper filter so that Pascal's private rolls would stay visible to the operator. That was too broad: it also unhid every other Staff whisper addressed to a character, so the Commonplace Book's memory-recall whispers, Carina's answers, and the Librarian's and Host's targeted messages all rendered whether or not All Whispers was on.
-
-- The exemption is now limited to `pascal` and `prospero` — private rolls and private Run Tool results, which exist for the person running the table and are excluded from every character's context either way.
-- Every other Staff whisper follows the same rule as a character-to-character whisper: hidden unless All Whispers is on, or the human is its author or one of its targets.
-- The filter moved out of `SalonView` into `app/salon/[id]/whisper-visibility.ts` and has unit tests, including one that pins the Commonplace Book case that regressed.
-- Display only. What a character can see was always decided server-side from `targetParticipantIds`; showing or hiding a message here never changed anyone's context.
-
-#### Feature: custom tools get a display title, and outcomes can test more than the value
-
-Two additions to the `Tools/*.tool.json` format. Both are backward compatible — existing definitions load and behave exactly as before.
-
-- **`title`** — an optional display name, max 80 characters. Pascal announces it, the composer popup lists it, and the roster sorts on it, so `scan_hawking_radiation` reads as "Scan Hawking Radiation". Omit it and the title is derived from the name (underscores and hyphens to spaces, each word capitalized); write one when that derivation isn't what you'd have said. The model never sees the title — it still calls tools by `name`, so there is no second string for it to pass by mistake. `pascalMeta.tool` still records `name`, and because the title is interpolated when the message is posted, editing a title later does not rewrite past announcements.
-- **Multi-subject `when`** — an outcome test may now name three subjects, all of which must hold: bare comparators still test the final value, `roll` tests the raw pre-transform draw, and `params` tests what the tool was called with. So `value > 1 && params.scale > 12` is `{ "gt": 1, "params": { "scale": { "gt": 12 } } }`. Comparator operands may also be a `{ "$param": "difficulty" }` reference instead of a literal, which is the opposed check. `eq`/`neq` on a `params` subject accept strings and booleans; ordering comparators still require numbers on both sides. Still no OR, no nesting, and no expression grammar — the evaluator stays eval-free.
-- **`roll`** earns its keep when a multiplier or offset has moved the value away from what was drawn: a raw draw in the bottom 2% is a fumble whatever it was later scaled by, and no test on the value could say so.
-- **Stricter, and more legible, load errors.** Nested objects in a definition (`when`, comparators, outcome entries, the roll range, `$param` refs) now reject unknown keys instead of dropping them, so a misspelled comparator like `gt3` is a load-time rejection rather than a test that silently never fires. Unknown **top-level** keys are still tolerated, which is what reserves room for future keys. An outcome that tests an undeclared parameter, orders a string, or compares a parameter against the wrong type is likewise rejected at load. Rejection messages for `when` and `roll` used to read `Invalid input` — Zod reports that at a union and buries the real complaint in its branches — and now name the actual problem.
-- The published JSON Schema at `public/schemas/qtap-custom-tool.schema.json` is hand-synced with the Zod schema and had no drift guard. A test now checks both against one corpus and asserts they agree; the one intentional divergence (JSON Schema cannot express the trailing catch-all rule, or that a `$param` resolves) is asserted explicitly. Both annotated specimens in `docs/developer/` cover the new keys, and every outcome in them was verified reachable by execution.
-
-#### Change: a custom-tool outcome is now just the result — no croupier's voice, no roll, no trace of who ran it
-
-Pascal's announcement is the tool's title and whatever the `.tool.json` says to display, and nothing else:
-
-> 🎲 **Scan Hawking Radiation** — The detector registers a faint whisper of something.
-
-- **The croupier's narration is gone.** A manual run used to read "At *name*'s behest, Pascal spins the wheel: …". A manual run's announcement is now byte-identical to the one a character's roll produces, so nothing in the transcript records that the operator was the one who reached for the tool. (`pascalMeta.invokedBy` still does, for audit.)
-- **The italic `*(rolled 14)*` suffix is gone.** What a roll says is the author's to decide: put `{{value}}` or `{{dice}}` in the outcome message to have the number read out. Nothing is lost — the full roll record (raw draw, dice faces, transform, matched outcome) still persists in `pascalMeta`, and the rolling model still receives `value` and `state` from `run_custom`.
-- **A manual run no longer publishes the parameters you chose.** It used to post a second message in your voice — "*I ran `unlock` (scale: 1).*" — listing any parameter moved off its default. That put the operator's hand on the scale into every character's context, where a model could read what you set to arrange the outcome. `?action=run` now returns `messages: [pascalMessage]`.
-- **`opaqueContent` is once again identical to `content`.** The separate neutral body existed to keep the name "Pascal" out of an opaque character's context; with the framing gone there is no persona to strip, which is the position Suparṇā and Carina are already in. Both bodies are still populated in lockstep.
-- **The message bar names the tool.** The header chip read "● PASCAL · ROLL OUTCOME" — the machinery, and something random happening. It now reads "● PASCAL · SCAN HAWKING RADIATION": the tool's display title, or its name when the roll predates the new `pascalMeta.toolTitle` field. This is a Salon label only; `systemKind` never reaches a model's context.
-
-#### Fix: custom tools were invisible — missing from the tool list, and load errors were unreachable
-
-Two gaps that together made a custom tool impossible to find or diagnose.
-
-- **`run_custom` was missing from `GET /api/v1/tools`**, the hand-maintained catalogue behind the per-chat tool toggles, so the tool never appeared in any tool list. Now registered under `utility`. Note this catalogue is hand-maintained with no drift guard — it lists 40 of the 58 registered tool definitions, the rest being deliberately non-toggleable (agent/console-only tools like `run_sql`, `terminal_*`, `memory_search`).
-- **The composer gutter button only rendered when at least one tool loaded successfully**, but load errors ride in the same payload. A user whose only `Tools/*.tool.json` was malformed therefore got no button, no error badge, and no sign the file had been seen — the diagnostic was hidden exactly when it was needed. The button now shows when there is a runnable tool *or* a failed definition, and the dropdown distinguishes an empty table from a broken one before listing the file and the reason.
-
-Reminder of the rules that reject a definition, since all three are easy to hit at once: `outcomes` must be an **array**; `name` must be lowercase (`^[a-z][a-z0-9_-]{0,63}$`); every outcome needs a `state`.
-
-#### Feature: custom pseudo-tools — Pascal's table (`run_custom`)
-
-User-defined chance mechanics. A custom tool is a single JSON document matching `Tools/*.tool.json` at the root of any document store: a named action with parameters, a random roll, and an ordered table of outcomes mapping the roll to a message and a semantic state. Both the LLM (via one `run_custom` tool) and the user (via a composer popup) can run them. Spec: `docs/developer/features/pascal-custom-tools.md`.
-
-- **Tamper-evident by construction.** The roll executes server-side with crypto-strength randomness and the outcome persists as a message the model did not author (new `systemSender: 'pascal'` — the Croupier's first synthetic messages). A model cannot narrate a failure into a success, and regenerating a reply does not re-roll. The full roll record — raw value, transform, dice faces, which outcome matched — is kept in a new `pascalMeta` column.
-- **Two roll forms.** A numeric range with an optional transform (`value = raw * multiplier + offset`, rounded last), or dice notation (`3d6+2`, `1d20`, `2d10-1`). Numeric fields accept a `{ "$param": "name" }` reference to a declared parameter; run-time values are clamped to declared bounds before use.
-- **No expression evaluation anywhere.** Outcome tests are AND-composed comparator objects (`{ "gte": 0.3, "lte": 0.6 }`), not strings — there is no grammar to parse and nothing to inject. The last outcome must be a `true` catch-all, checked at load time, so a coverage gap is structurally impossible rather than a run-time surprise; an earlier catch-all is rejected as unreachable.
-- **Tiers and shadowing.** Definitions resolve through the existing five-tier pool (character → participant → group → project → global); the nearest tier wins on a name collision, `"disabled": true` suppresses an inherited tool, and a same-tier collision resolves deterministically by mount id. Tools are read from both database-backed and on-disk stores.
-- **Resolved per call, never cached across turns.** A `.tool.json` added, edited, or deleted mid-chat takes effect on the next LLM call and the next popup open; a new chat gets its full roster on turn one with no initialization step.
-- **Whispered rolls.** A private run is whispered to the rolling character alone via `targetParticipantIds`; a private manual run hides the outcome from every character. Relatedly, **any message with a `systemSender` now always renders for the human user** regardless of the "show all whispers" toggle — this instance is single-user and the operator is never the one being surprised. Commonplace Book recall whispers benefit from the same fix.
-- `revealOdds: false` hides the roll spec and outcome table from the model's tool roster, but the `.tool.json` remains an ordinary document a character with read access can open. For genuinely secret odds, put the file in a store the character cannot read.
-- Failures are reported by Prospero (`systemKind: 'custom-tool-error'`), never by Pascal — Pascal only announces genuine outcomes. New setting Settings → Chat → "Custom tools" (default on). Published JSON Schema at `public/schemas/qtap-custom-tool.schema.json` for editor completion. Docs: `help/custom-tools.md`.
-
-#### Fix: the Help Guide is browseable again
-
-Every category in Help → Guide showed `(0)` topics and could not be opened, and no document would load. When help docs moved into the database, their IDs became UUIDs, but the Guide's category lists, the `Related Pages` links between documents, and the welcome card all identify documents by the slug derived from the filename (`character-creation`). Nothing matched, so every category resolved to an empty list and the reader's fetch 404'd.
-
-The slug is now a first-class field on a help document, derived from its path in one place (`lib/help/help-doc-slug.ts`) rather than computed and discarded in the sync. `/api/v1/help-docs` returns it alongside the database ID, and `/api/v1/help-docs/[id]` accepts either identifier, so existing callers that hold a UUID keep working.
-
-#### Fix: help docs added after the first sync now reach the database
-
-A help doc written after the initial sync never appeared in the Guide. `ensureHelpDocsSynced()` only ran when the `help_docs` table was completely empty, and the only other sync trigger is a full embedding reindex, so eleven docs that shipped in the repo — including `answer-confirmation`, `brahma-console`, `custom-tools`, and `post-office` — had no row at all. It now also syncs when a Markdown file on disk has no row yet, which costs a directory scan rather than a read of every file; `syncHelpDocs()` already skips unchanged docs by content hash. Edits to an already-synced doc are still picked up only by a full `syncHelpDocs()` call.
-
-#### Fix: help docs deleted from disk are pruned, and new ones get embedded
-
-Two gaps left by the sync fix above.
-
-A doc removed from `help/` kept its database row and stayed in the Guide forever, because the sync only ever added and updated. Rows whose file is gone are now deleted, along with their embedding-status rows. The sync trigger scans for divergence in both directions — a file with no row, or a row with no file — since a deletion on its own would otherwise never start a sync and the prune would be unreachable. Both directions come out of the same directory listing, so the trigger still reads no file contents.
-
-Separately, nothing enqueued a `HELP_DOC` embedding outside a full reindex, so a newly synced doc appeared in the Guide but stayed invisible to `help_search`. Any doc without an embedding is now queued through the normal pipeline after a sync; per-entity dedup keeps this from duplicating a reindex's jobs. The sync also reads the table once and indexes by path instead of issuing a `findByPath` per file, which the prune needed anyway.
-
-#### Fix: writing a help doc could corrupt its embedding
-
-Updating any `help_docs` row could silently destroy its embedding and make the doc vanish from help entirely. `lib/database/manager.ts` registers the known embedding BLOB columns when it builds a backend, "regardless of which repository is accessed first" — but `help_docs` was not on that list. It alone relied on `HelpDocsRepository` registering the column lazily and then remembering it on the instance. A repository outlives the backend it first ran against (a reconnect, or a dev-server reload), so the stale flag left the fresh backend with no blob handling for `help_docs`, and both directions broke without an error:
-
-- **Writes:** `documentToRow` only converts a `Float32Array` to a `Buffer` for a registered blob column. Unregistered, the embedding reached `JSON.stringify` and persisted as an index-keyed object (`{"0":..,"1":..}`) of TEXT.
-- **Reads:** `hydrateRow` only applies `parseLegacyEmbeddingText` to a registered blob column, so those rows then failed Zod validation and were dropped from `findAll()` — the doc disappeared from the Guide and from help search.
-
-This is where the "legacy" JSON-text embeddings came from. They were not legacy: an unregistered blob column was minting them on every write, and the previous fix (read-side recovery plus the every-boot repair in `lib/startup/repair-text-embeddings.ts`) treated the symptom, which is why the corruption kept coming back and looked historical. `help_docs` is now registered at backend init alongside `memories`, `vector_entries`, and `conversation_chunks`, and the repository re-asserts registration on every `getCollection()` instead of caching it — merging an already-registered column is a no-op. Existing mis-stored rows still convert losslessly to BLOB at the next startup, with no re-embedding needed. Regression test: `__tests__/unit/lib/database/repositories/help-docs-blob-registration.test.ts`.
-
-#### Docs: annotated custom-tool reference specimens
-
-Two valid, copy-pasteable `Tools/*.tool.json` templates in `docs/developer/`, linked from `help/custom-tools.md`.
-
-- `CUSTOM_TOOL_SPEC.json` exercises every key of the range roll form: all four parameter types with bounds and defaults, `$param` references on `multiplier` and `offset`, the multiply/offset/round transform, all six comparators including an AND band, all four outcome states, the `{{value}}`/`{{roll}}`/`{{params.*}}` placeholders, and the mandatory trailing catch-all. Each field's `description` explains what it demonstrates.
-- `CUSTOM_TOOL_SPEC_DICE.json` covers what the other structurally cannot, since `roll` is either a range object or a dice string but never both: dice notation, the `{{dice}}` breakdown, `revealOdds: false`, and `defaultVisibility: "whisper"`.
-
-Both are validated against the live Zod schema, and every outcome in each is verified reachable.
-
-#### Fix: tools now accept numbers the model quoted
-
-Models often send tool arguments as strings — `{"type": "6"}` rather than `{"type": 6}`. Every tool rejected that outright, so the call simply failed and the character was told its perfectly sensible request was invalid. All 28 numeric arguments across the 18 tools that take one now accept a numeric-looking string: `rng` (`type`, `rolls`, `modifier`), `memory_search`, `search_scriptorium`, `web_search`, `run_sql`, `help_search`, `image_generation`, `list_images`, `submit_final_response`, `terminal_read`, `upsert_annotation`, `delete_annotation`, and the `doc_*` family.
-
-Only strings are converted, and only when they parse to a finite number. Bounds still apply afterward, so a quoted `"1001"` fails a 1000 maximum exactly as `1001` does, and `"6.5"` fails an integer check exactly as `6.5` does. `true`, `null`, `[]`, and `""` are still rejected rather than coerced — the standard `z.coerce.number()` would silently turn them into 1 or 0, trading a rejected call for a wrong result, which is the worse failure. Floats (`confidence`, `minImportance`) and negatives (`terminal_read`'s `start`/`end`) work as before. String enums such as `flip_coin` are unaffected.
-
-The published tool schemas are byte-identical — models are still told `integer`, with the same bounds and defaults. This is a runtime leniency only; it forgives a model for not having listened. Helper: `lib/tools/llm-number.ts`.
-
-#### Fix: dice notation now honors its modifier
-
-Typing `3d6+2` or `2d10-1` in a message previously rolled the dice and silently discarded the modifier — the only dice pattern in the codebase captured count and sides and nothing else. Dice parsing and rolling now live in one shared module (`lib/pascal/dice.ts`), used by the `rng` tool, the prose auto-detector, and Pascal's custom tools alike.
-
-- The `rng` tool gained an optional `modifier` parameter, so a model can roll `3d6+2` directly. Its result line only changes when a modifier is present.
-- The prose auto-detector honors a modifier written closed-up (`3d6+2`). Spacing still disambiguates: `2d6 - 1 apple` remains a plain 2d6 roll next to unrelated prose, as before.
-- Bounds are unchanged (2–1000 sides, 1–100 dice; modifier within ±1000), and out-of-range notation is still skipped rather than clamped.
-
-#### Docs: spec for custom pseudo-tools (Pascal the Croupier)
-
-New feature spec at `docs/developer/features/pascal-custom-tools.md`. Users will be able to define chance-based pseudo-tools as `Tools/*.tool.json` documents at any document-store tier (character/participant/group/project/global, nearest tier wins); each defines parameters, a random roll (numeric range or dice notation reusing the existing dice roller), and an ordered outcome table mapping the roll to a message and a semantic state. A single `run_custom` LLM tool and a composer popup both execute them server-side; outcomes post as tamper-evident synthetic messages from a new `systemSender: 'pascal'`, with optional whispered (hidden) rolls. Roster is re-resolved on every LLM call so mid-chat definition changes take effect immediately. Spec only — no code changes yet.
-
-#### Fix: strip a trailing "nothing to add" line from an otherwise real turn
-
-Weak models sometimes narrate a genuine turn — a gesture, an observation, a real contribution — and then append `[NOTHING TO ADD]` as a final line. That is not a pass, so the message is kept, but the dangling sentinel line should not survive into the transcript.
-
-`detectSkipSentinel` (`lib/chat/turn-manager/skip-signal.ts`) now checks the last non-empty line in addition to the first. When the first line is real prose and the message ends with a lone sentinel line, it returns `{ skip: false, cleaned }` with that trailing line removed, exactly as it already did for a sentinel-plus-prose message led by the sentinel. The orchestrator's existing `detection.cleaned` path carries the stripped text through to display, persistence, and memory, so the `[NOTHING TO ADD]` line never reaches any of them. A bare sentinel (a real pass) and a mid-sentence mention of the phrase are unaffected.
-
-#### Feature: database size reduction — stale-chat tidying, cold-tier embeddings, int8 quantization
-
-Three coordinated changes shrink the main database (spec: `docs/developer/features/db-size-reduction-spec.md`) without discarding anything needed to re-read a conversation or re-run memory extraction. Message text, attachments, memories, and summaries are never touched.
-
-- **Configurable stale-chat retention window.** New instance setting `dataRetention.staleChatDays` (1–3650 days, default 30) with a "Data Retention" card on Settings → Chat and a `GET/PUT /api/v1/settings/data-retention` route. A chat is stale when it has had no *played* message (user or character; Staff whispers don't count) for that many days. The existing generated-image collapse and both new sweeps below all resolve staleness through the same `resolveStaleChatDays()`, so they can never disagree.
-- **Stale-chat cache collapse.** The daily maintenance sweep now NULLs regenerable/discardable columns on stale chats: `chats.compressionCache` and `chats.renderedMarkdown`, plus `chat_messages.rawResponse`, `reasoningContent`, `reasoningSegments`, `renderedHtml`, and `debugMemoryLogs`. All UPDATEs are guarded (`IS NOT NULL`) so re-runs are no-ops, and raw SQL is used so `updatedAt` is never bumped. `content`, `opaqueContent`, `thoughtSignature`, `attachments`, `contextSummary`, and `chats.state` are never touched. New module `lib/background-jobs/maintenance/collapse-stale-chat-caches.ts`.
-- **Cold-tier conversation-chunk embeddings.** The same sweep NULLs `conversation_chunks.embedding` on stale chats (chunk `content` is kept, so keyword search still works). Opening a cold chat automatically re-enqueues per-chunk `EMBEDDING_GENERATE` jobs through the standard pipeline (`lib/scriptorium/cold-chunk-reembed.ts`; debounced in-process, deduped per entity in the queue). The chat-card Scriptorium badge remains the manual full re-render/re-embed. While cold, a chat won't surface in semantic search until re-indexed — documented in the new `help/data-retention.md`.
-- **int8 embedding quantization.** Embedding BLOBs (`memories`, `conversation_chunks`, `vector_entries`; also new writes to `help_docs` and `doc_mount_chunks`) now use a self-describing quantized format (magic `0xEB`, versioned, int8-symmetric with a per-vector scale; float16 supported as a documented fallback) — roughly 4× smaller than raw Float32. The codec (`lib/embedding/float32-conversion.ts`) is header-aware on read, so legacy raw-Float32 blobs stay readable forever; all search code consumes hydrated arrays and is unchanged. One-time batched migration `quantize-embeddings-v1` re-packs existing rows (idempotent, resumable, progress-reported). Codec tests assert per-element error ≤ scale, mean cosine ≥ 0.999 (int8) / ≥ 0.9999 (f16), and top-10 retrieval overlap ≥ 0.95 on a clustered synthetic corpus.
-- Deletes and NULLs free pages inside the file; run `npx quilltap db optimize` (server stopped) to actually shrink it. **Take a backup before upgrading across `quantize-embeddings-v1`** — quantization is one-way (exact Float32 recovery requires re-embedding).
-
-#### Change: nudging a character is now a persisted Host announcement
-
-Nudging a character to speak previously showed a client-only "_Name_ was asked to speak" note that lived in React state and vanished on reload. It is now a real Host announcement (`systemSender: 'host'`, `systemKind: 'nudge'`, `hostEvent.participantId`) posted server-side when the summoned turn begins and surfaced live over SSE, so the invitation is a permanent part of the transcript and the characters see it in context.
-
-- The Host posts "The Host turns to _Name_ … and invites them to take the floor"; an opaque-room variant carries persona-free steering so the summoned voice knows the floor is theirs.
-- The announcement renders as an amber (`medium`) announcement chip labeled "invited to speak", with content-inference fallback for any row missing the `systemKind` column.
-- Removed the now-orphaned ephemeral-message subsystem — the nudge was its only remaining user. Deleted `EphemeralMessage`/`EphemeralMessages` and their state plumbing across the Salon view, streaming, and turn-management hooks.
-
-#### Fix: answer-confirmation amendments now stay in the current conversation
-
-When the answer-confirmation check flagged a character's reply and the character's own model was asked to correct it, the correction pass received only the draft reply plus the reference material (recalled memories and lookup results). It had no view of the actual conversation. When the reference material quoted an older conversation the character had read via `read_conversation`, the model would treat that old exchange as the live scene and rewrite its reply into it — producing an amendment that answered the wrong conversation.
-
-The re-affirmation pass is now given a compact transcript of the recent live conversation (`buildRecentConversationContext` in `answer-confirmation.service.ts`) plus the character's name, and the prompt is rewritten to require a minimal, in-scene correction: same addressee, same moment, same tone, changing only the details that conflict with the facts. The reference block is now explicitly labeled background knowledge rather than the conversation. The transcript filters out Staff/system-sender whispers, tool bubbles, and silent messages, and the pass degrades gracefully when there is no prior dialogue.
-
-#### Feature: characters can pass a turn when they have nothing to add
-
-In group chats, every LLM character is now given a per-turn option to pass instead of being forced to reply with filler. On any turn except the very first character turn of the chat, a character may respond with the single line `[NOTHING TO ADD]`; the Host then posts a short "nothing to add" note and the rotation moves on to the next speaker. If a character has been addressed or mentioned since it last spoke, its turn note warns it to answer rather than pass.
-
-- Scope: the feature applies only to genuine group scenes — chats with more than two active character participants, or with at least two LLM-driven characters. A one-on-one (a lone human plus a single character) is excluded entirely.
-- New per-chat toggle **Turn Skipping** in the Chat Sidebar's Visibility drawer (shown only in qualifying group chats). Default is on; `turnSkippingEnabled` is a nullable chat column where NULL/true = on.
-- A pass is recorded as a Host message (`systemKind: 'turn-pass'`, `hostEvent.participantId`) — no new message-sender or state columns. Turn-state, the stall guard, and the client all recompute passes from history.
-- Stall guard: when every other active character has passed since the last substantive message, the next speaker is forced to speak (the skip option is withheld). The same rule powers the human case — the Salon **Skip** button now posts a Host "nothing to add" note, and is hidden (and refused server-side with a 400) when everyone else has already passed.
-- Nudged or queued characters are never offered the skip option (they were explicitly summoned); the Continue button's algorithm-picked speaker is.
-- Applies to autonomous rooms: a pass consumes a turn from the run budget (already the case — every job counts as a turn), and the stall guard bounds all-skip loops.
-- New migration `add-turn-skipping-field-v1`. `.qtap` export/import round-trips `turnSkippingEnabled` and the turn-pass Host messages.
-
-#### Feature: copy a conversation's UUID from the header or the Organize drawer
-
-The header of a Salon chat now has a small copy button just after the conversation title that puts the chat's UUID on the clipboard, and the title itself is now a direct link to the conversation's Salon URL. The Chat Sidebar's Organize drawer has the same copy button at the top, before Rename. Both buttons flash a check-mark for a moment after copying. New shared component `components/chat/CopyChatIdButton.tsx` (inline icon variant for the header, full palette-button variant for the sidebar), built on the existing `useCopyToClipboard` hook.
-
-#### Feature: a status dialog while a new conversation is assembled ("The Green Room")
-
-Starting a fresh conversation — or continuing one elsewhere — fires a single blocking `POST /api/v1/chats` and then navigates into the Salon. That request quietly does a lot of slow work before it returns: resolving the cast, running a per-character LLM "choose what to wear" step, compiling identity stacks, backfilling continuation history, and seeding the opening scene. The wardrobe step is usually the longest part (one cheap-LLM call per character set to "have them choose"), and until now none of it was visible — the app just sat there.
-
-A blocking, non-dismissable status dialog now appears the moment creation begins. It shows a live status line, and for each character choosing an outfit via LLM it shows a "consulting the wardrobe for _Name_" panel that resolves into the decided four-slot outfit (top / bottom / footwear / accessories). A scrolling activity log runs beneath. The dialog can't be dismissed while creation runs; it closes on its own once the conversation is ready for input. Only on failure does it offer a Close button.
-
-- Progress travels on a side-channel so the create request keeps returning JSON as before. The client sends a correlation id (`progressId`) with the POST; the handler publishes milestones and wardrobe results to an in-memory bus (`lib/chat/creation-progress.ts`) keyed by that id; the dialog subscribes over SSE at `GET /api/v1/chats/creation-progress?id=…`. The bus buffers events per id and replays them on connect, so a subscriber that attaches a beat late loses nothing. Fully backward compatible: with no `progressId`, creation behaves exactly as before.
-- Scope: fresh starts and "Continue Elsewhere" only (both go through the create endpoint). Autonomous-room creation and per-message turns are unaffected — the per-turn window already narrates itself inline in the composer.
-
-#### Fix: character replies no longer block for minutes describing a generated image
-
-When a character responds on a non-vision model (e.g. DeepSeek) and a recently generated image is in context — a fresh avatar, a story background, or a `generate_image` result — the orchestrator has to turn that image into text the model can read. It did this by sending the image to the configured vision profile on every turn, inline, with no caching. On the first turn after an avatar was generated this added minutes of latency: in one observed case a `glm-4.6v-flashx` description call blocked a reply for nearly three minutes while the actual response model needed only eleven seconds.
-
-Images Quilltap generated already carry the exact prompt that produced them (`FileEntry.generationPrompt` / `generationRevisedPrompt`), which is the most faithful description available. The fallback now reuses that persisted text (and a stored `description` for already-described uploads) and skips the vision call entirely. The vision model is only invoked for genuinely unknown images — user uploads that haven't been described yet. This takes the whole vision round-trip off the reply path for self-generated images.
-
-- The image-description fallback call is now recorded in `llm_logs` as an `IMAGE_DESCRIPTION` entry (it was previously invisible, so its latency and token use couldn't be diagnosed), runs under a 60-second hard timeout (a slow or degraded describer can no longer wedge a reply), and downsizes the image to the description provider's size limit before sending. All logging is best-effort and never blocks description generation.
-
-#### Fix: bare-topped character avatars crop at the collarbone instead of tripping image moderation
-
-A character with a bare upper body (e.g. an "Active Nudist" wardrobe) could not get an avatar generated on a SFW image provider: the head-and-shoulders prompt emitted "topless" wardrobe wording and cropped low enough to put a bare chest in frame, so the provider rejected it on content moderation. Avatar prompts for a bare-topped character now crop tighter — a close-up headshot at the collarbone with bare shoulders, chest and torso out of frame — and omit the "topless"/"naked" wording entirely (the same way lower-body slots are already omitted for portraits). Bare shoulders and neck are unremarkable to image providers; a bare chest is what gets refused, and the tighter framing keeps it out of the picture. Above-the-collar accessories are still described; clothed characters are unaffected.
-
-#### Improvement: Document Mode change diffs are now real, minimal unified diffs
-
-The diff shown when a Document Mode file is edited (the Librarian's save announcement in chat, and the diffs the `doc_*` edit tools attach to their notes) is now a proper git-style unified diff instead of a homegrown approximation. The old algorithm walked both versions with a fixed 3-line lookahead window, so any change that shifted or re-aligned content further than three lines apart was reported as a wholesale block of removals followed by a block of additions, and hunks carried no surrounding context — the result read nothing like an actual `diff`.
-
-The Myers shortest-edit-script diff now lives in a shared `lib/doc-edit/line-diff.ts` primitive. `generateUnifiedDiff` in `lib/doc-edit/unified-diff.ts` builds on it, grouping the edits into hunks with up to three lines of unchanged context on each side, coalescing nearby edits into one hunk and splitting distant ones apart — exactly as `git diff` does. Unchanged lines stay as ` ` context, only genuinely changed lines get `-`/`+`, hunk headers report correct `@@ -start,count +start,count @@` ranges, and truly-empty content is treated as zero lines (so creating or emptying a file no longer churns a phantom blank line). A safety fallback emits a coarse whole-file hunk for pathologically large, wholly-dissimilar inputs. The exported function signatures and output contract are unchanged, so callers and the autosave notification format are unaffected.
-
-The in-editor change gutter (the thin bars beside edited blocks in Document Mode) now shares the same treatment. It previously compared blocks by position — baseline block *N* against current block *N* — so inserting or deleting a paragraph near the top shifted every block below it and lit the entire remainder of the document as "changed." It now derives the marked blocks from the shared line diff (via `changedBlockIndices`), so only blocks that are genuinely new or modified are flagged; blocks that merely shifted position stay unmarked, and a deletion marks nothing (it has no counterpart block to sit on, just like a unified diff's `-` line).
-
-#### Fix: stale-chat image cleanup now ignores Staff announcements
-
-The daily maintenance sweep that collapses a stale chat's superseded story-background and avatar images decided "stale" from the chat's `lastMessageAt` (falling back to `updatedAt`). But personified-feature / Staff messages (Lantern, Aurora, Host, Prospero, Carina, Concierge, Commonplace Book, Ariel, Suparṇā, Librarian) persist as `type: 'message'` rows and also bump `lastMessageAt`, so a whisper into an otherwise-quiet chat (e.g. a Suparṇā mail-delivery announcement) reset the 30-day staleness clock and kept dead images around indefinitely. Staleness is now keyed off the last *played* message — one authored by a participant character or the human user — via the new `chats.getLastPlayedMessageAt(chatId)`, which excludes any message carrying a `systemSender`. It falls back to `updatedAt` only when a chat has no played messages at all. No backfill needed: the sweep recomputes staleness from live data on each run.
-
-- New repository method `getLastPlayedMessageAt` does an indexed single-row lookup (`type = 'message' AND systemSender IS NULL`, newest first) so the daily sweep doesn't load and validate every chat's full transcript.
-
-#### Fix: renaming a Document Mode file now updates the recent-documents list
-
-Renaming a file while editing it in Document Mode now keeps the recent-documents history in sync in both entry points. Previously, standalone Document Mode (opened from the left sidebar, no chat) renamed the file on disk but left its `chat_documents` tracking row pointing at the old path, so the renamed file showed the old name in the Open Document picker's recents and 404'd when reopened. The standalone rename handler now updates the tracking row. The Salon rename path, which already updated its own chat's row, additionally sweeps any other chats' (or the standalone) rows that still reference the old path, so the shared recent list stays consistent everywhere.
-
-- Both paths reuse `chatDocuments.renameFilePathInStore(scope, mountPoint, oldPath, newPath, newDisplayTitle)` — the same chokepoint the `doc_move_file` tool uses. Updates are best-effort: the rename has already succeeded on disk, so a tracking failure is logged and never fails the request.
-
-#### Fix: run_sql handler tests no longer pick up the Jest SQLite mock in CI
-
-The `run-sql-handler` unit suite (a real-binding suite) broke in CI after `better-sqlite3-multiple-ciphers` was added to the unit Jest `moduleNameMapper`: its driver loader's bare `require('better-sqlite3-multiple-ciphers')` fallback started silently returning the mock, whose statements never report `readonly: true`, so the handler's fail-closed guard rejected every query (16 failures). The loader now prefers path-based requires (which bypass `moduleNameMapper`), probes each candidate with a prepared `SELECT 1` to confirm it is a real binding, and throws a clear error instead of silently running against the mock.
-
-Documents opened from the left sidebar's Document Mode (no chat) are now tracked in the recent-documents history, so they appear in the Open Document picker's recents like chat-opened documents do. Previously these opens recorded nothing, so they never showed up as recent.
-
-- Standalone opens now write a `chat_documents` row under a reserved sentinel `chatId` (`STANDALONE_CHAT_ID`), which the cross-chat recents query already reads. Reopening the same file reactivates and bumps its existing row. Tracking failures are logged and do not block the open.
-
-#### Feature: standalone Document Mode from the left sidebar
-
-The left sidebar now has a Document Mode button (file-plus icon, above Settings) that opens the Open Document dialog without a chat. Selected documents open as standalone workspace tabs with the full Document Mode editor — no Librarian announcements and no conversation is notified of edits. (Opens are recorded in recent-documents history under a sentinel chatId; see the 4.8-dev fix above.)
-
-- The picker in chat-less mode always "looks everywhere" (every enabled store; the toggle is hidden), hides the project-library shortcut, and lists recent documents across all chats (project-scoped recents are omitted since there is no project context to resolve them).
-- New `document-standalone` workspace tab kind. Reopening the same file focuses its existing tab; tabs persist across reloads and reopen their file. Blank documents update their tab payload once the server names them so reloads don't mint duplicates.
-- Outside the workspace, the button funnels through `/workspace?open=document-standalone&…`.
-- New chat-less API route `/api/v1/documents` with actions: `accessible-stores` (GET), `recent-documents`, `open-document`, `read-document`, `write-document`, `rename-document`, `delete-document`.
-- Refactor: extracted the chat-agnostic document mechanics (operator path resolution, existence probe, untitled-name picking, mtime-checked read/write, rename/delete file moves, store listing) from the chat document actions into `lib/documents/operator-doc-actions.ts`; the chat route now delegates to it and keeps only chat-specific concerns (chat_documents rows, documentMode flag, Librarian announcements).
-
-#### Docs: new GEMINI.md for AI agent context
-
-Added `GEMINI.md` to the project root. This file provides a comprehensive overview of the project's architecture, key conventions, and terminology, tailored for use by AI developer assistants. It is generated by analyzing the codebase and incorporates key details from `README.md` and `CLAUDE.md` to provide deep, actionable context.
-
-#### Fix: surfaced `qtap://` URLs now open reliably across chat content and announcements
-
-`qtap://` links are now clickable and interactive wherever chat markdown/text surfaces them, including staff announcements (Librarian, Lantern, Aurora, etc.).
-
-- Added shared `qtap://` link handling that resolves target type and opens text documents in Document Mode, images in the fullscreen image viewer, and shows a warning toast for unsupported file types.
-- Added linkification of bare `qtap://` literals in chat-rendered markdown/text (not only pre-marked markdown links), with inline/fenced code excluded.
-- Fixed a no-op click path where `open-document` returned `200` server-side but the UI did not surface/focus the opened document; the client now reconciles and focuses the opened document row/tab immediately.
-- Replaced the qtap link emoji prefix with the built-in themeable icon system (`Icon name="file"`).
-
-#### Fix: unit tests no longer load native SQLite bindings
-
-Stabilized the Jest split between unit and integration coverage so native SQLite/SQLCipher bindings are only loaded by integration tests.
-
-- Unit Jest now mocks both module specifiers: `better-sqlite3` and `better-sqlite3-multiple-ciphers`.
-- Native-binding suites were reclassified to `*.integration.test.*` and excluded from unit discovery.
-- Integration Jest now includes those reclassified suites explicitly.
-
-#### Feature: Document Mode now shows and copies each document's qtap URL
-
-In Salon Document Mode, the header area now includes a short URL line between the title/actions row and the editor toolbar. It shows the current `qtap://` URI for the open document and updates automatically when the document is renamed.
-
-- Added a compact `qtap://` URL row under the document header controls.
-- Added a copy icon button that writes the current URL to the clipboard.
-- Added a green success toast when URL copy succeeds.
-
-#### Feature: Document Mode rich Markdown now shows YAML frontmatter as metadata
-
-In Salon Document Mode, Markdown files with YAML frontmatter now render that frontmatter as a read-only "Document Info" key/value table in rich mode instead of showing raw `---` delimiters and YAML lines inside the editor surface.
-
-- Rich mode now edits only the Markdown body content.
-- Source mode still shows and edits the full raw document bytes, including frontmatter.
-- Array-like frontmatter values render as individual chips for clearer scanning.
-- Frontmatter values render as plain text in the table (no Markdown formatting inside metadata values).
-
-#### Fix: Lexical editors now render with solid (non-transparent) backgrounds
-
-Applied an explicit opaque background to shared Lexical editing surfaces so editor panes no longer show transparency in any theme.
-
-- Chat composer Lexical contenteditable now paints an explicit base background.
-- Document Mode's Lexical editor area now paints an explicit base background.
-- Source-mode textareas used alongside Lexical editors (Document Mode and reusable markdown Lexical editor) now use the same opaque base background.
-
-#### Fix: non-Salon footer now uses the header background and stays opaque on Home
-
-Updated the shared app footer styling so non-Salon pages render the footer with the same background treatment as the page toolbar/header, and pinned its stacking context above fixed homepage background overlays. This prevents the Home page background image layer from visually bleeding through the footer in themes that use transparent main containers.
-
-#### Feature: wardrobe item move/copy across General, projects, groups, and users
-
-Added `Move` and `Copy` actions to the wardrobe row menu in the Wardrobe dialog.
-
-- `Move` and `Copy` now open a destination picker with General, all projects, all groups, and all users (character wardrobes).
-- `Copy` always generates a new wardrobe item UUID in the destination.
-- `Move` preserves the existing item UUID and removes the source item after a successful write.
-- Added a new transfer API at `/api/v1/wardrobe/transfers` for destination discovery and move/copy execution.
-- Fixed a 400 regression where project/group destinations were incorrectly rejected as `Invalid destination`.
-
-#### Fix: character wardrobe item deletion always failed with "not found"
-
-The character-scoped wardrobe DELETE route still checked item existence against the `wardrobe_items` SQL table, which was emptied when wardrobe storage moved to the vault. Every delete attempt failed with "Wardrobe item not found" even though the item was still listed (list/GET/PUT already read the vault correctly). The existence check now uses the same vault-aware lookup as GET/PUT.
-
-#### Fix: Lexical markdown editors no longer auto-escape markdown punctuation on export/save
-
-Lexical markdown export paths were writing escaped punctuation (for example `\*`, `\_`, `\~`, and `\``) even when the author intended normal markdown delimiters. This changed bytes in saved drafts/documents and in imperative markdown reads.
-
-- The shared Lexical markdown bridge now strips those export-time escapes by default.
-- Applies to asterisks, underscores, backticks, and tildes.
-- Covers Document Mode, markdown-form editors that use the shared bridge, and chat-composer markdown export paths (including draft persistence and imperative `getMarkdown()` reads).
-
-#### Fix: forward profile provider parameters (e.g. DeepSeek thinking mode) uniformly
-
-Extended the previous fix so *every* text-LLM call in `lib/` — cheap-LLM and direct — forwards its selected profile's provider parameters on `sendMessage` / `streamMessage`. Previously, several utility flows built minimal requests and silently dropped `thinking` / `reasoning_effort` from the chosen profile, causing reasoning models to burn their token budget on hidden reasoning and return empty content.
-
-- `profileParams(profile)` is now a shared exported helper in `lib/llm/cheap-llm.ts`.
-- Fixed direct-call paths: Concierge gatekeeper (danger classification), image-description fallback, wardrobe image analysis, character-voiced announcer, auto-configure (both the analysis call and its cheap-LLM JSON cleanup), character wizard (all field generation + physical descriptions + wardrobe items + vision), character optimizer, AI import, external-prompt generator, initial greeting.
-- Outfit-appropriateness chooser (`chooseLLMOutfit`) was already routed through the shared harness and picks up the fix automatically.
-- Main chat / regenerate / swipe path was already forwarding these — unchanged.
-
-#### Fix: cheap-LLM tasks now forward provider parameters (e.g. DeepSeek thinking mode)
-
-Cheap-LLM tasks (memory extraction, summaries, titles, answer confirmation, etc.) built a minimal request in `sendToProvider` and never forwarded the selected profile's provider-specific parameters. So a profile set to DeepSeek **Thinking Mode = Disabled** still reasoned: DeepSeek fell back to its model default (reasoning on for `deepseek-v4-flash`), which spent the whole completion budget thinking and returned empty content — surfacing as failed/blank cheap-LLM results (e.g. answer-confirmation checks resolving to "Unvetted").
-
-- `CheapLLMSelection` now carries `profileParameters`, populated from the chosen profile at every selection site (user-defined, global default, cheap-flagged, Ollama, and the uncensored/re-affirmation paths).
-- `sendToProvider` forwards `profileParameters` on every `provider.sendMessage` call, so `thinking` / `reasoning_effort` (and other allowlisted provider extras) take effect. The task pipeline still controls temperature and max-tokens at the top level; providers only apply their allowlisted extras, so this doesn't override the cheap-task sampling settings.
-
-#### Feature: answer confirmation (Salon consistency check + re-affirmation)
-
-Before a character's tool-using Salon reply is saved, an optional cheap-LLM consistency check compares the reply against what the character was told this turn (its last Commonplace Book whisper) and what it looked up (in-scope read-tool results: `search`, `read_conversation`, and the `doc_*` content-read family). The check only runs when there is something to check — a whisper and/or an in-scope read-tool result.
-
-- Consistent → the reply is saved with `confirmed: true`.
-- Inconsistent → the character's own model is shown the discrepancies and asked to stand by the reply (`confirmed: false`) or rewrite it. A rewrite is saved as the shown reply (`confirmed: true`, `confirmationRevised: true`); the original text is kept in `confirmationOriginalContent` for the logs.
-- Check errored/timed out, or the turn was user-driven (impersonation) → `confirmed: null` (could-not-verify).
-- Feature off / nothing to check → no confirmation fields written.
-
-The Salon status bar shows `Confirming…` during the check and `Requesting affirmation of questionable results…` during the re-affirmation. Each checked message carries a small badge (Vouched / Amended / Stood by / Unvetted) that reveals the discrepancy notes on hover. The first reply streams live and is replaced in place if the re-affirmation rewrites it (a deliberate, visible transparency swap).
-
-- Gate: global default OFF, with per-project and per-chat overrides. A project set to ON enables its chats automatically; a chat's own override always wins. Global toggle in Settings → Chat; per-project toggle in the Prospero project's Model Behavior card; per-chat toggle in the Salon sidebar's Visibility section.
-- New columns: `chat_messages.{confirmed, confirmationChecked, confirmationRevised, confirmationNotes, confirmationOriginalContent}`, `chats.answerConfirmationOverride`, `chat_settings.answerConfirmationSettings` (migration `add-answer-confirmation-columns-v2`). Per-project override rides in the project's `properties.json`. All fields ride in `.qtap` exports.
-- Scope: normal Salon chats only — not help chats, the Brahma Console, or Carina calls. Silent turns are skipped. The re-affirmation runs at most once (no loop). The regenerate/swipe path is not yet covered.
-
-#### Fix: the workspace header now tracks the active (focused) tab
-
-The contextual header (Salon project link, character avatars, chat title, cost summary) did not update when switching tabs: with several chat tabs kept alive at once, all of them wrote to the single global header and the last one to mount won, so the header showed stale content and never changed on tab activation. Switching to a non-Salon tab left the previous Salon header in place.
-
-- Each tab's injected toolbar content is now isolated in a per-tab registry (`TabToolbarProvider` wraps every mounted tab view), so kept-alive tabs no longer clobber each other.
-- A new `WorkspaceToolbarBridge` surfaces the *focused* pane's active tab's content into the single global header. Activating a different tab regenerates the header; a tab that injects nothing (e.g. Home) clears it; in a split, the header follows whichever pane has focus.
-- Removed the never-wired per-pane `PaneToolbar` (and its dead `.qt-pane-toolbar` styles) that this replaces.
-
-#### Fix: an unknown tab kind no longer discards the entire saved workspace layout
-
-The persisted workspace validator rejected the whole saved state if any single tab had a `kind` not in its allow-list, silently wiping the user's tab layout on reload. The allow-list was also missing several real tab kinds (`profile`, `about`, `generate-image`, `character-new`, `character-edit`, `settings-wizard`), so having any of those open at reload triggered the wipe.
-
-- The allow-list (`TAB_KINDS` in `lib/workspace/workspace-persistence.ts`) now covers every `TabKind`, guarded by a compile-time exhaustiveness check so a future kind can't be forgotten.
-- Deserialization is now resilient: a malformed or unknown-kind tab drops only itself (dangling pane references are cleaned up by the existing prune step) instead of failing the whole parse. Layouts from a newer/older build survive a reload with just the unrecognized tabs removed.
-
-#### Fix: clicking a character name in the Salon header now opens a workspace tab
-
-Clicking a character's name in the Salon conversation header navigated the whole browser to the full-page character view, tearing down the workspace (and any streaming conversation) instead of opening the detail view as a tab.
-
-- `/aurora/<id>/view` (and legacy `/characters/<id>/view`) now maps to a new `character-view` workspace tab kind, so the workspace link interceptor opens it in place rather than routing away. The tab is keyed by character id (each character gets its own detail tab) and persists across reloads. Its "back" action closes the tab.
-- `CharacterDetailView` accepts an `initialTab` so the header's `?tab=conversations` deep-link still selects the Conversations sub-tab when opened as a tab (where the URL param isn't available).
-
-#### Fix: thinking output silently empty on claude-sonnet-5 (and Opus 4.7+/Fable/Mythos)
-
-After fixing the two 400 errors below, extended thinking on Sonnet 5 stopped showing up in the Salon at all — no error, just nothing. Adaptive thinking on this model family defaults `thinking.display` to `"omitted"`: the response still includes thinking blocks, but their text comes back empty unless the request explicitly asks for `display: "summarized"`.
-
-- `qtap-plugin-anthropic` now sends `thinking: {type: 'adaptive', display: 'summarized'}` for the new-generation model family, in both `sendMessage` and `streamMessage`, so `reasoningContent` capture works again. Older models (fixed-budget thinking) are unaffected.
-
-#### Fix: claude-sonnet-5 (and Opus 4.7+/Fable/Mythos) chats failed with two separate 400s
-
-Selecting `claude-sonnet-5` as a chat's model failed every message with a 400 from Anthropic. Two breaking API changes on the new model generation, both unhandled by the provider plugin:
-
-- `` `temperature` is deprecated for this model `` — the plugin always sent a `temperature` (or `top_p`) value unless extended thinking was enabled, but Sonnet 5, Opus 4.7+, and Fable/Mythos reject sampling parameters (`temperature`/`top_p`/`top_k`) outright, independent of thinking.
-- `` "thinking.type.enabled" is not supported for this model `` (hit after turning on extended thinking) — the plugin always sent fixed-budget thinking (`{type: 'enabled', budget_tokens}`), but the same model family removed it; they require `{type: 'adaptive'}` instead, which has no token budget to set.
-
-`qtap-plugin-anthropic` now detects the new-generation model family (Sonnet 5, Opus 4.7, Opus 4.8, Fable 5, Mythos 5, Mythos Preview) by ID prefix and, for those models, omits `temperature`/`top_p` entirely and switches extended thinking to `{type: 'adaptive'}` — in both `sendMessage` and `streamMessage`. Bumped `qtap-plugin-anthropic` to 1.0.45 and rebuilt.
-
-#### Fix: token-budgeted autonomous rooms now pace their run across turns
-
-A `chatType: 'autonomous'` room with a per-run token budget (`budgetMaxTokens`) used to spend most of that budget on a single turn. Context compaction sized each turn against the *model's* context window (often very large), so one turn could carry ~200k+ tokens of history — nearly the whole run budget — and the run exhausted after a turn or two. The per-run budget was resetting to zero correctly at run start; the problem was that nothing connected that budget to how much context each turn was allowed to build.
-
-- The autonomous turn handler now derives a per-turn context cap from the run budget — `remaining_run_budget / turns_left` — and passes it down through the message pipeline. The context manager clamps its model-derived `maxAvailable` to that cap before computing the history and memory fold targets, so the whole context budget shrinks proportionally and the run spreads across multiple turns.
-- `turns_left` reuses `budgetMaxTurns` when the room also sets a turn budget (the two budgets cooperate); otherwise it targets a default of 6 turns per run. The cap is floored at 16k tokens so a nearly-spent run still ships a usable final turn instead of a starved one.
-- No effect on regular Salon chats, regenerate/swipe, or autonomous rooms without a token budget — the cap is only set for token-budgeted autonomous turns.
-- New helper `computeAutonomousContextCap` (`lib/background-jobs/handlers/autonomous-room-turn.ts`), threaded via `SendMessageOptions.autonomousContextCap` → `buildMessageContext` → `buildContext`. Covered by new unit tests.
-
-#### Fix: tag-prefix / line-prefix roleplay chips no longer collapse paragraphs
-
-A roleplay template whose lines are tagged with a speaker prefix (e.g. `[WIFE] …`, the "Covenant RP" template) rendered every paragraph as one continuous run with no blank-line separation. The line-scoped `tagPrefix`/`linePrefix` rules apply a roleplay chip class (`qt-roleplay-1`, `qt-chat-ooc`, etc.) directly to the block element (`<p>`/`<li>`/heading) by design, but the shared chip geometry forced `display: inline` — written assuming those classes only ever land on inline narration spans. On a block that collapsed all the paragraphs into a single inline run, erasing the paragraph breaks.
-
-- Block-level elements carrying a roleplay chip class now keep normal block flow (`display: block`; list items keep `display: list-item`), so paragraph breaks survive. Inline narration/dialogue/monologue spans are unchanged.
-- Fixed in both chip families: `qt-roleplay-1..4` / semantic chips (`app/styles/qt-components/_roleplay.css`) and the legacy `qt-chat-narration` / `qt-chat-ooc` / `qt-chat-inner-monologue` classes (`app/styles/qt-components/_chat.css`).
-- CSS-only; affects both the client renderer (`MessageContent.tsx`) and the server pre-renderer (`markdown-renderer.service.ts`) uniformly, since both land the line class on the block element.
-
-#### Dev: export autonomous-room budget functions for the Rust port harness
-
-Exported `checkBudget`, `computeBudgetProgress`, and their result/binding types (`BudgetCheckResult`, `BudgetVerdict`, `BudgetExhausted`, `MilestoneBinding`) from `lib/background-jobs/handlers/autonomous-room-turn.ts`. The quilltap-v5 differential port harness imports the real budget-math functions to check the Rust port for equivalence. The exports carry `@port-oracle-export` comments so a dead-code or unused-export sweep won't strip them — they have no importer within this repo. No behavior change.
-
-#### Fix: editing/deleting a message no longer scans the whole account
-
-The per-message endpoints (`PUT`/`DELETE`/`POST ?action=reattribute` on `/api/v1/messages/[id]`) located a message by loading and re-validating **every message in every chat** the user owns, then saved by deleting all of the target chat's messages and re-inserting them one at a time. On a large instance (hundreds of chats, tens of thousands of messages) backed by a slow or network-mounted database, a single edit could take many seconds, time out, or fail with a bare "Failed to update message" and nothing useful logged.
-
-- Messages are now located with a single indexed lookup on the message id (`chats.findChatIdForMessage`) plus an ownership check, instead of an account-wide scan.
-- Edit and re-attribute now update the one affected row via `updateMessage`; delete removes only the targeted ids via `deleteMessagesByIds`.
-- This also fixes a latent data-loss bug: the old clear-and-rewrite path rebuilt the chat from the *validated* message set, so editing or deleting any message in a chat that contained a separately-corrupted message would silently drop the corrupted row.
-- Salon UI: after a successful edit the message now shows the new text immediately. The save handler read `content` off the top level of the `{ message: … }` response (always `undefined`), so the edited bubble blanked until a full reload; it now reads `message.content` (falling back to the submitted text) and maps over the current message list instead of a stale closure.
-
-#### Docs: refresh BACKGROUND_JOBS_CHILD.md to match current handlers
-
-Brought `docs/developer/BACKGROUND_JOBS_CHILD.md` back in line with the code after the 4.6 autonomous-room work and the configurable-concurrency change. Handler count corrected from 18 to 24; added audit rows for `autonomous-room-turn`, `autonomous-run-start`, `autonomous-room-schedule-tick`, `autonomous-room-announce`, and `regenerate-conversation-summaries`; renamed the `wardrobe-announcement` row. Documented the `shutdown-ack` IPC message and the three added host-RPC methods (`writeConversationSummaryToVaults`, `removeConversationSummariesFromVaults`, `startScheduledAutonomousRun`). Corrected the concurrency section: the global cap is read live from the `maxConcurrentJobs` instance setting (4 is only the fallback default), not a fixed value. Docs only — no code change.
-
-#### Z.AI plugin: Reasoning Effort option, glm-5.2 defaults to `high`
-
-Added a **Reasoning Effort** connection-profile option to the Z.AI (GLM) plugin, mapping to Z.AI's `reasoning_effort` request parameter. It only takes effect on glm-5.2 (and newer generations — glm-5.3, glm-6, revisioned ids like `glm-5.2-0626`); it is never sent to glm-5.1, glm-5, glm-5-turbo, the 4.x line, or vision models.
-
-- The editor exposes only the distinct levels — `(model default)`, Minimal, High, Max — because Z.AI's scale is coarse (low/medium fold up to high; xhigh folds to max).
-- **glm-5.2 now defaults to `high` effort instead of the API default `max`.** GLM-5.2 thinks compulsorily (thinking defaults to enabled server-side), so a profile left at "(model default)" was previously burning output tokens at the most expensive `max` setting. The plugin now sends `reasoning_effort: 'high'` whenever thinking is not explicitly disabled and no explicit effort is set, curbing runaway thinking-token usage out of the box. Choosing Disabled thinking, or an explicit effort, overrides the default.
-- Note: effort is not a hard token cap — reasoning still counts against `max_tokens`, and hitting the ceiling yields `finish_reason: "length"`. Pair a lower effort with a sane `max_tokens` for the robust fix.
-- Plugin `qtap-plugin-z-ai` bumped to 1.1.14.
-
-#### Any participant can be switched between user-typed and an LLM
-
-The connection-profile dropdown now appears on every participant card in the Salon sidebar, including the seat you are currently typing as ("You"). Previously the active user seat showed only a "You" badge with no control, so you couldn't hand it off to an LLM without first switching your "Speaking As" selection to another character. The dropdown's "User (you type)" option still reclaims any LLM-driven character for manual control. Switching your only user-controlled seat to an LLM leaves an all-LLM chat (still supported; you can rejoin by impersonating). No data-model change — this was a UI gate; the `controlledBy` field and all turn/impersonation logic already supported the transition.
-
-#### Consistent message-send options across both send endpoints
-
-The two POST endpoints that drive the Salon — `/api/v1/messages?chatId=` (main composer) and `/api/v1/chats/[id]/messages` (whisper dialog) — now build their `handleSendMessage` options from one shared helper, so the forwarded payload fields can't drift apart.
-
-- `/api/v1/messages?chatId=` previously dropped `targetParticipantIds` (whisper targeting) and the scrubbed browser `User-Agent` (used by character tools like curl). Both are now forwarded, matching the other endpoint.
-- `speakingAsParticipantId` now reaches the orchestrator uniformly from both routes in both send and continue mode (previously the whisper route omitted it in continue mode).
-- Option-building and the SSE response wrapper are centralized in `lib/services/chat-message/request-helpers.ts`; future fields added to `sendMessageSchema` only need wiring in one place.
-
-#### Regenerate now replaces in place and keeps the right character
-
-Reworked message Regenerate (swipe), which was a legacy path that bypassed the chat engine and broke in multi-character scenes.
-
-- The regenerated response is now attributed to the **same character** whose message you regenerated. Previously the new variant was saved with no participant, so it showed the wrong character's name and avatar (and in a chat with multiple user-controlled characters, often the first one).
-- Regenerate now runs through the same context engine as a normal turn, so the new response gets the character's real system prompt, multi-character attribution, and memory — instead of a stripped-down raw prompt.
-- The new version replaces the old one **in place** as a swipe variant, with the original kept one swipe away. Previously the original's swipe grouping was never saved, so the regeneration showed up as a separate, stray message rather than an alternative.
-- A swipe group now shows its newest variant by default (the original stays accessible via the swipe arrows).
-- Regenerate is correctly limited to character messages — Staff/system announcements (the Host, Prospero, the Lantern, etc.) can no longer be "regenerated."
-
-#### "Speaking As" is now honored when you have two user-controlled characters
-
-Fixed a multi-character attribution bug: when a chat had more than one user-controlled character, a message you typed was always attributed to the *first* user-controlled participant, ignoring the "Speaking As" selector. The wrong character's name and avatar showed on the message, and the responding AI was told the wrong character had spoken.
-
-- The send path now resolves the human speaker from the active "Speaking As" selection (with the first user-controlled participant as the fallback), instead of always taking the first one. This is applied consistently across message attribution (who the message is saved as), the responder's system-prompt identity (who it thinks it's talking to), and the new-message label in the AI's context.
-- The composer now sends the active speaker explicitly with each message and regenerate, so attribution no longer depends on a separately-persisted chat field landing first.
-- The optimistic message bubble is attributed to the selected speaker immediately, so it renders with the right name and avatar before the server round-trip.
-- Private whispers now honor "Speaking As" too — a whisper sent while playing a second user-controlled character is attributed to that character, not the first one.
-- New shared helper `findActiveUserParticipant` replaces ad-hoc "first user-controlled participant" lookups in the three server resolvers; the deprecated `findUserParticipant` is no longer used on the send path.
-
-#### Commonplace Book recall is more on-topic
-
-Reworked the ranking math behind the per-turn "relevant memories" whisper so recall actually tracks what the scene is about, instead of resurfacing the same few high-importance memories every turn.
-
-- Relevance now leads the ranking. Candidates are scored `0.75·cosine + 0.25·rawWeight` (was `0.4·cosine + 0.6·effectiveWeight`), and the importance/recency term decays with age instead of being pinned to a permanent 70% floor. A stale "important" memory no longer outranks a genuinely on-topic one. The blend coefficients are centralized in `lib/memory/memory-weighting.ts` (`computeRankingBlend`) so all four ranking sites stay in sync. The 70% floor still governs housekeeping/protection — only retrieval ranking changed.
-- Added a real relevance floor. When nothing in memory clears a minimum cosine, the whisper now says nothing rather than emitting filler. The floor is provider-aware: a lower default for the local TF-IDF profile, a higher one for neural embedding profiles.
-- The per-turn search query is now sentence-shaped: a short recent-conversation window instead of a single one-line message, and when cheap-LLM distillation is on, a natural-language paraphrase of the moment instead of a bare keyword bag.
-- Added light anti-repetition: a memory whispered in the last few turns takes a bounded penalty so the same entry doesn't read as a stuck record. Tracked per chat in a new `chats.commonplaceRecallHistory` column (ephemeral; not exported).
-- A dimension-mismatch between the search profile and a character's stored index — which silently degrades recall to keyword text search — now logs a one-time actionable warning instead of failing over silently.
-
-#### Merge a conversation into another
-
-The Salon's Organize sidebar has a new "Merge In…" button — the inverse of "Continue Elsewhere." It folds another conversation's characters and summary into the current chat at the latest point, instead of forking forward into a new one.
-
-- Pick a recent conversation from a list showing who was involved and when it was last active (the latest user/character message time). Autonomous rooms and the current chat are excluded; the button is hidden inside autonomous rooms.
-- A confirm dialog lists the incoming characters with a per-character "Who joins" checkbox (all on by default) so you can gate exactly who comes across — not just rely on de-duplication — plus the same starting-outfit options as the new-chat/continuation flow (defaulting to "Same as last conversation"). Characters already present in the current chat are excluded automatically.
-- On merge, each incoming character joins as an LLM-driven participant (the source's user-controlled character is brought in as LLM-driven; the current chat keeps its own user character). The Host posts a recap at the latest point linking back to the source chat and carrying its summary, plus a back-link bubble in the source chat. Existing turns are not replayed.
-- New API action: `POST /api/v1/chats/[id]?action=merge-conversation` with `{ sourceChatId, characterIds?, outfitSelections }` (`characterIds` is the optional allowlist of who to bring across).
-
-#### Multiple open documents in Document Mode
-
-In the tabbed workspace, a chat can now keep several documents open at once, each in its own tab.
-
-- The composer's "Open Document" button no longer disappears once a document is open — use it to open additional documents. Each open document gets its own workspace tab (a child of the Salon tab), tracks its own unsaved changes, and autosaves independently.
-- Reopening a chat restores every document that was open (skipping any whose file was deleted). The set of open documents is tracked server-side in `chat_documents` (multiple `isActive` rows per chat are now allowed; previously only one).
-- The split/focus "maximize" toggle is hidden inside the workspace (a document is already its own maximizable tab); it remains on the legacy `/salon/[id]` route.
-- LLM document tools target a specific open document: `doc_focus` and `doc_close_document` take an optional `path` (with `scope`/`mount_point`) to name which document to act on, defaulting to the most recently opened. `doc_focus` results carry the target document's identity so the correct pane scrolls.
-- The legacy single-pane `/salon/[id]` route still shows one document (the focused one).
-
-#### Groundwork: Tabbed workspace (Phase 0 scaffold)
-
-Started the tabbed workspace feature (a two-pane shell of kept-alive tabs; see `docs/developer/features/tabbed-workspace.md`). These early phases add no user-visible behavior.
-
-- **Phase 0 (state scaffold).** Introduced the client state model and store: a pure reducer (`lib/workspace/`) for the open-tab set, pane assignment, active tab per pane, focused pane, and split ratio; localStorage persistence with shape validation and dead-tab pruning on hydrate; a `WorkspaceProvider`/`useWorkspace` store; and a development-only `/workspace` route that renders a single home tab. Gated behind a `WORKSPACE_TABS_ENABLED` flag (off by default) so nothing else in the app changes yet. Covered by 38 reducer/persistence unit tests.
-- **Phase 1 (view extraction).** Extracted each primary surface's page body into a reusable, props-driven view component (`HomeView`, `SalonView`, `AuroraView`, `ProsperoView`, `ScriptoriumView`, `SettingsView`, `FilesView`, `PhotosView`, `ScenariosView`, `SalonListView`) so the workspace can render them as kept-alive tabs. The existing routes now render these views through thin wrappers, so navigation and behavior are unchanged. The Salon's SSE streaming hooks and virtualized message list were not touched — only the component's entry signature (`chatId` prop instead of route params).
-- **Phase 2 (per-tab toolbar).** The previously global page toolbar can now be scoped per tab: a workspace-level registry tracks each tab's injected toolbar content, a `TabToolbarProvider` supplies the same context per mounted tab (so `usePageToolbar()` call sites are unchanged), and each pane renders its active tab's toolbar. The legacy global toolbar is untouched for the old routes.
-- **Phase 3 (two-pane host).** The `/workspace` route now renders the real two-pane tab host: every open tab is rendered at once as a flat, always-mounted list positioned by CSS grid column and hidden (never unmounted) when inactive — so a streaming Salon survives tab switches and the split untouched. Tabs can be selected, closed (closing the last resets to a single home tab), reordered, dragged between panes, and dropped onto a center zone to split; a draggable, keyboard-nudgeable divider resizes the panes. Added the `qt-workspace`/`qt-tab-strip`/`qt-workspace-divider` style family, a `/api/v1/system/home` endpoint (backed by a shared `home-data` service so the home tab and the `/` route compute identical data), and a keep-alive integration test that asserts no view remounts across tab switches or a split.
-- **Phase 4 (Terminal & Document tabs).** In the workspace, a conversation's Terminal Mode (Ariel) and Document Mode (the Librarian) open as their own tabs linked to the parent Salon tab, instead of splitting inside the chat. The live PTY and editor stay mounted inside the kept-alive Salon view and are portaled into their tabs, so they survive tab switches and can sit in the other pane beside the chat. Opening a mode spawns its tab; turning it off closes the tab; closing the tab turns the mode off; closing the Salon tab closes both children. The old in-chat `SplitLayout` is unchanged and still used by the legacy `/salon/[id]` route.
-- **Phase 5 (Brahma + Wardrobe tabs).** The Brahma Console and the Wardrobe can now open as workspace tabs, reusing their existing dialog bodies (an `asTab` rendering mode), so the logic isn't duplicated. The Wardrobe tab is the left-rail, browse/edit path (no "wearing now"); the chat-scoped Wardrobe keeps its dialog so it can still change what a character is actively wearing. Help stays a modal. (The narrow-pane Chat Sidebar auto-collapse is deferred to the polish phase.)
-- **Phase 6 (old-route redirects + app-level store, flag-gated).** When the workspace is enabled, it is the post-login landing surface and the workspace store lives in the root layout (which never unmounts across navigation). In-app navigation — the left rail and home-page recent-chat links — opens or focuses a tab in place rather than navigating, so the workspace and its live tabs are never torn down. Deep links and bookmarks to the legacy routes (`/`, `/aurora`, `/prospero`, `/scriptorium`, `/settings` with its `?tab=`/`&section=`, `/files`, `/photos`, `/scenarios`, `/salon/[id]`) still work: they redirect into `/workspace` with a transient `?open=` intent that the workspace applies after hydrating its saved layout (so the restored layout never clobbers the requested tab) and then strips. While the `WORKSPACE_TABS_ENABLED` flag is off (the default), everything renders exactly as before, so making the workspace the primary shell is a single flag flip once it has been reviewed.
-- **Workspace chrome + backgrounds.** Styled the workspace surfaces with the `qt-tab*`/`qt-workspace-*` class families using each theme's `--color-*` tokens, so the strip, divider, drop-zones, and panes read correctly across all themes; the active tab carries an accent border and top bar. Replaced the per-pane story/subsystem background layers (which, being viewport-fixed, overlapped in a split) with a single arbitrated workspace backdrop: a conversation with a background fills the screen; otherwise the active tab's background does; in a split, each pane's background dominates its side and crossfades across the divider. The Salon keeps its own original background treatment on its side. Help docs and the in-flight `WorkspaceProvider`/backdrop registries are covered; a reporter-loop regression test guards the backdrop registry.
-- **Phase 7 (theming pass).** Reworked the workspace accent so every accented surface (active tab, pane divider, split drop-zone) derives from one master token, `--qt-workspace-accent` (it falls back to `--color-primary`). Each of the six bundled themes now sets that single token to its own signature color — Madman's Box cyan, Art Deco and Great Estate gold, Earl Grey and Rains blue, Old School slate — and the previously hard-coded Madman's Box teal override was removed from app CSS in favor of the theme bundle. Added a Workspace story (and supporting CSS) to `@quilltap/theme-storybook` and documented the new hook in the `create-quilltap-theme` bundle template, so theme authors can preview and customize the workspace. Bumped the six bundled theme versions plus the two author-tooling packages.
-- **Phase 8 (polish).** Added keyboard shortcuts for the workspace, all namespaced under Ctrl/Cmd+Alt and inert while typing: next/previous tab (arrows, wrapping), jump to the nth tab (1–9), close the active tab (W), and toggle split (\\). The tab strip now scrolls the active tab into view when many tabs overflow a narrow pane, and a defensive empty-pane affordance covers any state where a pane has no resolvable view.
-- **Chat Sidebar narrow-pane overlay.** In a narrow split pane the Salon's chat sidebar no longer squeezes the conversation: it measures its container and, below a width threshold, defaults to the mini-avatar strip and expands as a click-away overlay (dismissed by an outside click or Escape) instead of an inline panel. Wide/full panes (and the legacy route) behave exactly as before. Completes the deferred Phase 5 item.
-- **Keep-alive navigation fixes.** Opening a tab from inside the workspace no longer reloads the whole workspace and interrupts a streaming Salon. Previously only the left rail and home recent-chat links opened tabs in place; every other in-app link to a tab-equivalent surface (the Settings button in the sidebar footer, autonomous-room badges, "continue last," chat cards, in-help links, etc.) hard-navigated to the old route, which redirected back and remounted everything. Added a single document-level link interceptor (`WorkspaceLinkInterceptor`) that catches any anchor whose href maps to a tab and opens it in place; it bails when a link already handled its own click, so the rail/recent-chat paths are unaffected. Added a `useWorkspaceNavigate` hook for programmatic navigations and used it for chat cards (which used `router.push`). The sidebar footer's Brahma Console and Wardrobe buttons now open their workspace tabs instead of dialogs when in the workspace (the in-chat Wardrobe stays a dialog).
-- **Detail-in-view drill-down.** Inside the Aurora, Prospero, and Scriptorium tabs, opening a character, project, document store, or character group now renders its detail in place (state-driven) instead of navigating to the detail route, so the workspace and a streaming Salon in the other pane stay mounted. Each detail page body was extracted into a shared, props-driven view (`CharacterDetailView`, `ProjectDetailView`, `DocumentStoreDetailView`, `GroupDetailView`) that the route still renders (with a router-based back) and the list view renders in place (with a state-based back); the detail views are lazy-loaded so the list bundles stay lean. The legacy routes are unchanged.
-- **New-chat opens a tab.** Creating a chat from within the workspace (a character's Chat button, the Aurora character chat action, continuation/change-of-venue) now opens the new conversation as a tab in place rather than navigating to it, so another pane's stream survives. The `useNewChat` post-create navigation routes through `useWorkspaceNavigate`.
-- **In-workspace new-chat modal.** The generic "Start a chat" / "New chat" entry points (home quick actions, project headers, empty states) no longer navigate to the full-page `/salon/new` form, which would leave the workspace. A new app-level `NewChatProvider` (mounted inside the workspace providers so its create flow opens a tab) renders the new-chat experience as a modal, and the link interceptor opens it for any `/salon/new` link in place. Autonomous-room creation still routes (no modal flow for it yet).
-- **Dialogs hover over the whole workspace (stacking fix).** A `fixed` dialog opened from inside a split pane (e.g. the Salon's "Continue Elsewhere" / New Chat modal) was trapped in that pane's stacking context, so the other pane painted over its far half. The content pane no longer establishes a stacking context (it keeps `position: relative` but drops its `z-index`), so such overlays escape to the workspace root and cover the entire viewport, as dialogs should — this fixes every dialog rendered inside a tab, not just new-chat. The New Chat modal is additionally portaled to the document root as belt-and-suspenders.
-- **Tabbed workspace is now the default (Phase 6 cutover).** The `WORKSPACE_TABS_ENABLED` flag now defaults on: the workspace is the post-login landing surface, its store lives app-level, and the legacy per-surface routes redirect into it carrying a `?open=` intent. Added redirects for the newer tab-equivalent routes (character edit/new, image generation, Profile, About, the provider wizard) and taught the intent handler to open those kinds (the character editor with its character id and sub-tab), so deep links and bookmarks land on the right tab. Bare detail URLs still render standalone (they have no tab kind and drill down in place). Set `NEXT_PUBLIC_WORKSPACE_TABS=0` to opt back out — everything then renders via the old per-surface routes, exactly as before.
-- **Remaining keep-alive navigation holes closed.** Several surfaces still hard-navigated out of the workspace — remounting it and interrupting a streaming Salon. Added workspace tab kinds for the character editor, the create-character form, the standalone image generator, the Profile and About pages, and the provider setup wizard, and mapped their routes (including the legacy `/characters/[id]/edit`) so the existing link interceptor opens them in place. A bare character-detail URL intentionally stays uninterceptable — it renders in place inside the Aurora tab. Made the remaining programmatic navigations keep-alive-aware too: the sidebar Profile/About menu, the in-app Help links (Guide and Ask), and the inline terminal's "pop out" button (now opens a Terminal tab parented to its conversation). Editor/creator tabs de-dupe per character, and finishing one (the character editor's Save/Cancel, the new-character form, the wizard) closes its own tab and returns focus to the kept-alive tab it was opened from — typically the Aurora grid or the character detail, still showing exactly where you left it. Autonomous-room creation now opens the new-chat modal in autonomous mode (≥2 LLM cast, no user character) instead of routing to the full-page form. The legacy routes are unchanged.
-
+### 4.9.0
+
+#### Fixed: a character no longer receives other characters' memories as their own (bug 122)
+
+A character's memory store holds what they remember about themselves and what they remember about
+everyone else in one place, told apart only by the memory's subject. Three of the four blocks that
+render memories into a character's context printed only the memory text, with no indication of whose
+life it described, and all three arrive under the heading "You remember the following entries that
+bear on this moment". A character with a long history therefore read other people's actions,
+relationships and physical history as autobiography.
+
+In the reported case a male character answered a question addressed to a female character, as that
+character — correctly and in her voice, using her children, her body and her past. Nothing errored:
+the turn completed and read well. The same memory appeared twice in one context block, correctly
+attributed under "You also recall about the others present" and unattributed as the character's own
+two sections above.
+
+Lines about another character now carry `About <Name>:` in all three blocks, matching what the
+inter-character block already did. The character's own memories are unchanged. A subject that
+cannot be resolved to a name still gets a prefix, so the line can never read as first-person.
+
+The effect was sharpest on cheap models and on connection profiles that send no per-character
+prefill, where nothing sits between those memories and the model's first word. It also applied to
+Carina answers and to character-voiced announcements, both of which recall against the whole store.
+
+#### Fixed: an attachment now reaches every character in the chat, not just the first to answer (bug 121)
+
+A file attached to a chat message was expanded into prompt text at request-assembly time and never
+stored. The message row kept the typed words and a file-id pointer, and nothing turned that pointer
+back into text, so only the first character to answer ever saw the file. In a six-character scene
+the document reached 1 of 13 model calls; every later turn in any chat, single- or multi-character,
+was equally blind. The attachment chip stayed visible in the UI throughout.
+
+The same defect applied to uploaded images. The only path that pulled attachments back out of
+history is filtered to `role: ASSISTANT` — it exists to carry Lantern backgrounds and avatars
+forward — and a user upload is a USER-role message.
+
+Attachments are now re-derived from the file when context is assembled, for each character that
+has not yet been shown them. The expansion runs through the same fallback pass the upload path uses,
+so text is inlined, an image is described for a provider without vision, and raw bytes are carried
+for a provider with it. A character is shown a given attachment once, on its first turn after the
+upload, so this costs nothing on later turns. The work happens before the context budget is
+computed, so the tokens are budgeted, compressed and trimmed like any other message content, under
+an 80,000-character per-turn ceiling that skips a file rather than truncating it.
+
+Nothing is written to the database, so existing chats are repaired as well, and the behaviour
+survives regenerate, swipe, import and restore.
+
+#### Changed: install the published `@quilltap/plugin-utils` 2.6.1 everywhere
+
+Follow-on to the dependency refresh below, now that 2.6.1 is on npm. The root and all fourteen
+plugins that depend on it declared `^2.6.0`, so the lockfiles kept resolving 2.6.0 and the app
+shipped the older copy — the same drift `b52b996c1` corrected for 2.6.0. All fifteen declaration
+sites now read `^2.6.1`.
+
+Every bundle is byte-identical: 2.6.1 changed only `PLUGIN_UTILS_VERSION`, which no plugin imports,
+so esbuild drops it. The fourteen plugins still take a patch bump with a matching `manifest.json`,
+because their shipped `package.json` changed even though their `index.js` did not.
+`qtap-plugin-builtin-embeddings` does not depend on plugin-utils and is untouched.
+
+`@quilltap/theme-storybook` 1.0.70 is published but has no consumer in this repo, so there is no
+range to move. `@quilltap/plugin-types` stays at `^2.6.0`, its current published version.
+
+#### Changed: dependency refresh across the app, the packages, and the plugins
+
+`npm update -S` at the root, in all five `packages/`, and in all fifteen `plugins/dist/` packages.
+No source changed; this is dependency movement only.
+
+Notable root bumps: `next` 16.3.0 → 16.3.4, `zod` 4.4.3 → 4.5.4, `openai` 7.4.0 → 7.10.0,
+`@openrouter/sdk` 1.2.32 → 1.2.106, `@tanstack/react-query` (and devtools, eslint plugin) 5.101.4 →
+5.102.8, `@tanstack/react-virtual` 3.14.10, `sharp` 0.35.3 → 0.35.4, `katex` 0.18.5, `mammoth`
+1.12.2, plus jest 30.5.1, jest-environment-jsdom 30.5.1, and assorted dev-tool patches.
+
+`@quilltap/plugin-utils` 2.6.0 → 2.6.1 (picks up `@quilltap/plugin-types` ^2.6.0) and
+`@quilltap/theme-storybook` 1.0.69 → 1.0.70 (Storybook 10.6.0). `packages/quilltap` took the `sharp`
+bump; its version is stamped at release. `packages/plugin-types` and `packages/create-quilltap-theme`
+had no dependency change.
+
+All fifteen plugins were rebuilt and fourteen took a patch bump. Seven of those declare no changed
+dependency of their own: anthropic, curl, default-system-prompts, google, mcp, ollama, and
+search-serper resolve `openai` and `@quilltap/plugin-utils` up to the root `node_modules`, so the new
+root versions changed their bundled `index.js`. A changed bundle shipped under an unchanged version
+would leave installed copies stale with no way to tell, so those were bumped too.
+`qtap-plugin-builtin-embeddings` rebuilt byte-identical and kept 1.0.18.
+
+The root `postcss` override was pinned at `^8.5.26` while the direct devDependency moved to
+`^8.5.28`, which npm rejects outright (`EOVERRIDE`) — a plain `npm install` failed until the two
+agreed. The override now reads `$postcss`, the same self-referencing form `sharp` and `pdfjs-dist`
+already use, so it tracks the direct dependency instead of drifting away from it on the next update.
+
+#### Fixed: `instances default --json` never worked, and CLI doc drift around it (bug 120, checklist item 12)
+
+Audit of the `quilltap` CLI's docs, shell completions, and help text against the commands the CLI
+actually accepts, covering everything that changed since the 4.8.4 merge-back. It turned up one
+real defect behind the paperwork.
+
+- **Bug 120.** `quilltap instances default --json` failed with `Unknown instance "--json"`. The
+  `default` arm of the dispatcher called `cmdDefault(rest)` with no options object, so the flag was
+  never read *and* never stripped — leaving it among the positionals, where it was taken as the
+  name of an instance to set. The arm now filters and reads together. The `list` arm this was
+  copied from is correct because `cmdList` has no positionals to corrupt.
+
+- `instances restore-key` (and its `rebuild-key` alias) is now in the CLI package's README. It was
+  documented in `CLI.md` and in `quilltap instances --help`, and completed by all three shells, but
+  the README an npm visitor reads had no mention of the one offline route back into an instance
+  whose `.dbkey` is lost or passphrase-locked.
+- `instances list --json` is documented in `quilltap instances --help` and in `CLI.md`, and is now
+  offered by the fish completion. bash and zsh already offered it; the help text has never named it.
+  `--names-only`, the sibling flag, stays undocumented on purpose — it is plumbing for the
+  completion scripts, and `CLI.md` now says so.
+
+`help/cli-instances.md` gains a `restore-key` section; it already documented `--json` on both
+`list` and `default`, a promise that is now true rather than aspirational. `docs docker-mounts`,
+the other command added this cycle, was already current everywhere.
+#### Tests: the restore field-fidelity guard now pins every 4.9/4.10 data-model addition (checklist item 10)
+
+Backup/restore completeness audit over the commits since the 4.8.4 merge-back. Every new table,
+column, and on-disk asset added this cycle is already covered by both backup and restore, and the
+only exclusions are the secrets (`api_keys`, `apiKeyId`, `.dbkey`) plus `help_doc_chunks`, which is
+rebuilt from the shipped `help/*.md` on every boot the way `help_docs` already was. No production
+code changed.
+
+`restore-field-fidelity.test.ts` claimed to pin the 4.9 cycle but covered only the three
+`connection_profiles` columns and the `hair` wardrobe slot. Added four cases for the additions that
+ride *inside* an existing column, where nothing else would catch a loss — a new column announces
+itself with a migration, but a new key in a JSON bag or a widened enum domain is invisible to every
+schema check:
+
+- `chats.conciergeOverride` restoring as `'UNCENSORED'` rather than narrowing back to `'OFF'`, which
+  would re-arm the classifier on a chat the operator had already ruled on.
+- `chat_settings.cheapLLMSettings.allowCheapFallback`, whose `false` default reads as the user having
+  declined a stand-in they opted into.
+- `image_profiles.parameters.loras` — the bag is unvalidated by design, so nothing downstream would
+  notice the reserved key going missing.
+- The `memoryRecall` instance-settings row (carrying `perTurnConversationSummaries`), upserted by raw
+  SQL rather than through a repository.
+
+Each case was mutation-tested against `restore.ts`: dropping the field fails that guard and no other.
+
+#### Changed: documentation-freshness sweep, second pass (checklist item 13)
+
+Second walk of the release checklist's documentation list, covering everything since the 4.8.4
+merge-back (`115539440`) and in particular the 46 commits that landed after the first sweep.
+
+- **README** — the Discord badge's colour field had been overwritten with the invite code
+  (`Discord-join-fnTPEZDE4`), so shields.io rendered it grey; restored to `5865F2` with the invite
+  left on the link. Added the three late headline features the features list had no entry for:
+  connection-profile understudies and tier stand-ins, LoRA adapters with the HuggingFace **Query**
+  button and provider-driven model options, and the Concierge's four states with the New Chat
+  form control.
+- **API.md** — added a v4.9-dev freshness note (realtime socket, fallback chains, LoRA and model
+  options, four-state Concierge, the scenario action, archivable rows) whose current chat-action
+  list supersedes the stale "current action set" in the v4.3 note. Documented fourteen live
+  `?action=` values that had no entry: `group-stores` and `outfit-summary` on chats; nine on
+  `/api/v1/memories` (`housekeep-sweep`; the `GET` and `PUT` forms of `embeddings`; the read/write
+  pairs for `housekeeping-config`, `extraction-limits-config`, `extraction-concurrency`,
+  `recall-config`, `backfill-embeddings` and `regenerate-all`; and the read-only
+  `character-memory-counts`); `semantic-search` on mount-points; `theme-preference` on the user
+  profile; and
+  `attach-mount-file` on chat files. `POST /api/v1/system/backup` was documented twice — an older
+  stub under System Backup & Restore and a fuller one stranded at the end of Background Jobs; they
+  are merged into the one entry, which now carries the `compact` body. Fixed the credentials
+  example, which still called the pre-2.8 `/api/characters`. Every `route.ts` path and every
+  `action === '…'` literal under `app/api/v1/` now appears in the document, and no endpoint heading
+  appears twice.
+- **CLAUDE.md** — two chokepoints from this cycle were undocumented. A chat's Concierge posture is
+  derived with `getConciergeState` and asked about with `shouldUseUncensoredRoute` /
+  `shouldShowDangerStyling` / `isClassifierOnDuty`, never by re-reading `conciergeOverride` and
+  `isDangerousChat`, and every transition goes through `applyConciergeFlip`. Provider fallback is
+  built by `lib/llm/fallback` — three attempts, no recursion, no stickiness — rather than
+  hand-rolled at a call site.
+- **About page** — the Lantern, Concierge and multi-provider bullets now carry LoRA adapters and
+  per-model options, the four-state per-chat control, and profile understudies.
+- **Release notes (4.9.0)** — the defect count said forty-six; fifty-four bugs (66–119) were fixed
+  in the cycle. Added two paragraphs covering the seven repairs that landed after the notes were
+  written (bugs 113–119).
+- **CHANGELOG** — the two `qt-*` sweeps of this cycle shared a heading verbatim; they are now
+  distinguished as first and second pass.
+- **help/** — `salon-host-introductions.md` navigated to `/salon` where its own `url` and every
+  other Salon page use `/salon/:id`; `help-chat.md` and `brahma-console.md` declared `url`s
+  (`/help-chat`, `/brahma-console`) that are not routes, corrected to the sidebar they actually
+  describe; `homepage.md` had no **In-Chat Navigation** section at all. All 120 help files now
+  carry a `url` whose value matches a `help_navigate(...)` call in the same file (the three
+  `url: *` pages excepted, having no single target).
+
+DEVELOPMENT.md was checked and needed nothing.
+
+#### Changed: published packages pinned to their released versions everywhere they are consumed
+
+`@quilltap/plugin-utils` 2.6.0, `@quilltap/plugin-types` 2.6.0 and `create-quilltap-theme` 2.0.19
+are on npm, but the root lockfile still resolved `@quilltap/plugin-utils` to 2.4.0, so the app
+shipped the older copy. The fifteen bundled plugins declared six different ranges between them
+(`^2.2.20` through `^2.6.0`).
+
+- Root `package.json` moves to `^2.6.0` / `^2.0.19` and the lockfile re-resolves.
+- Every plugin declares `^2.6.0` for both packages, with a patch bump and a matching
+  `manifest.json` version, and was rebuilt. Five bundles change — `anthropic`, `deepseek`, `mcp`,
+  `nanogpt`, `openai-compatible` — taking up the `buildRequestBody` refactor that landed in
+  plugin-utils 2.6.0. The other ten do not bundle the changed code and are byte-identical.
+- The stale `version` fields in the `plugin-types`, `plugin-utils` and `create-quilltap-theme`
+  lockfiles are corrected.
+
+Plugin SDK versions were held at what the committed bundles already carried (`openai` 7.4.0, 7.5.0
+for nanogpt; `@openrouter/sdk` 1.2.32). The plugins have no lockfiles, so a rebuild from a clean
+checkout otherwise floats them to the newest match — `openai` 7.10.0 and `@openrouter/sdk` 1.2.103
+at the time of writing.
+
+#### Removed: dead code found by the v4.9 release sweep (checklist item 5)
+
+Second knip pass of the v4.9 cycle, scoped to the commits since the 4.8.4 merge-back. This round
+also scanned two places knip cannot see: exports under `app/` (every file there is an entry
+point, so knip never reports its exports) and exports whose only remaining references are tests
+(the jest plugin treats test files as entry points). Full write-up in
+`docs/developer/DEAD-CODE-REPORT.md`.
+
+- Deleted three modules with no production importer: `lib/database/meta.ts` (the Mongo-era
+  `quilltap_meta` preferred-backend store; nothing else creates or reads that table),
+  `lib/sillytavern/persona.ts` (persona import/export, including the deprecated `importSTPersona`),
+  and `hooks/useNavbarCollapse.ts` (its navbar consumer went in 4.x). Their test suites went with
+  them.
+- Removed 34 unreferenced exports across 23 files, among them the Mongo relics `getDataBackend` /
+  `isMongoDBEnabled`, the never-adopted `handleProviderError` / `getUserFriendlyError`, the
+  Host's roster announcement builders (their poster was removed in the 2026-06-03 sweep) and the
+  `buildMultiCharacterContextSection` helper only they used, `getContextStatus` /
+  `getContextWarningLevel`, the three cost-tier helpers in `lib/llm/pricing.ts`, the
+  `publish` / `finish` / `fail` wrappers in `lib/chat/creation-progress.ts` (the emitter is the
+  live path), and two orphaned Zod schemas under `app/api/v1/`. Tests that existed only to cover
+  a removed symbol were pruned; tests that used one as scaffolding now call the underlying
+  primitive.
+- The LoRA scale bounds (`DEFAULT_LORA_SCALE`, `resolveLoraScaleBounds`) were dead in
+  `lib/image-gen/lora-support.ts` while the profile editor carried a byte-identical private copy.
+  The checklist-3 refactor moved them to a client-safe `lib/image-gen/lora-scale.ts`; this sweep
+  drops the re-export `lora-support.ts` kept for server-side callers, of which there are none.
+- Net: 56 files, −2,861 / +173 lines.
+
+#### Changed: release-checklist refactor pass over the 4.9 diff (DRY / SRP / chokepoints)
+
+A sweep over everything changed since 4.8.4 (324 commits, ~1250 files) folded copy-pasted logic
+back onto one owner each. Behaviour is unchanged except where noted under "Corrections" below.
+New single-source modules, with the duplicates they replaced:
+
+- `lib/llm/cheap-llm.ts` now owns `buildCheapLLMConfig` (moved out of the wardrobe module) and the
+  only `selectionFromProfile` (eight hand-built `CheapLLMSelection` literals removed);
+  `lib/llm/cheap-llm-user-selection.ts` owns the "default profile → `getCheapLLMProvider`" block
+  that seven handlers had inlined. `lib/llm/llm-json.ts` gained `parseLLMJsonObject`.
+- `lib/documents/operator-doc-http.ts` is the one HTTP mapping (read/write/rename/delete/recent)
+  for both the chat-scoped and standalone document routes; `writeDocumentFile` throws a typed
+  `DocumentConflictError` on an mtime mismatch instead of routes string-matching the message.
+- `lib/progress/operation-progress-sse.ts` is the one SSE relay for operation progress;
+  `lib/services/chat-message/autonomous-room-cron.ts` the one cron validator;
+  `pickWeightedRandom` in the turn manager backs both the opener pick and speaker selection.
+- `lib/wardrobe/{create-body,item-route-steps,resolve-container}.ts` back the character, general,
+  group, project and transfer wardrobe routes; both item routes import `updateWardrobeSchema`
+  instead of redeclaring it; `bySlot()` in `wardrobe.types.ts` replaces four per-slot builders;
+  the dialogs use `wardrobeItemUrl`/`encodeWardrobeContainer` instead of hand-built URLs.
+- `lib/pascal/placeholders.ts` classifies `{{…}}` placeholders once for the renderer, the effect
+  resolver, the vocabulary, three draft validators and the Workbench; `custom-tool.types.ts`
+  exports its comparator sets, `valueTypeOf`, and derives the top-level key list from the schema;
+  `prepareRoll`/`drawRoll`/`pickOutcome`, `compareOrdered`, `nextDraftId`, `parseDefinitionText`
+  and a shared `LiteralOperandField` remove the remaining pairs.
+- Turn manager: `getPresentCharacterSeats` and `hasWhisperTargets` replace six inline predicates.
+  Recall: `buildTurnRecallContext` / `buildRetrospectiveProbes` replace three copies (the replay
+  harness now shares production's code instead of mirroring it).
+- Almanack: `render.ts` is per-phase renderers over a `table()` helper (33 hand-written tables);
+  phase collectors own their `emptyXxx()` fallbacks; `db.ts` owns `inClause`/`mainCount`/`mountCount`.
+  `doc-edit-handler` dispatches through a registry; `state-handler` climbs one tier resolver.
+- Data layer: one `tableExists`, one `gcOrphanedFileRow`, one `nextUniqueMountPointName`,
+  `readDatabaseDocumentIfExists`/`deleteDatabaseDocumentIfExists` for the NOT_FOUND split, one
+  embedding-status upsert, one reindex enqueue loop, one memory-row builder, `runSweep` and
+  `forEachStaleChat` for maintenance, `resolveEpisodicAnchors` for the extractor and the fold pass.
+- Import/export/backup: `writeLibraryFileBytes` (restore, import, chat uploads), one create-options
+  computation per import kind, `chunkBase64`/`ChunkAccumulator` for blob chunking,
+  `isTextDocumentFileType` (four sets collapsed), `flipCharacterParticipants` in the archive service.
+  Migrations share `openEncryptedSqlite`/`openMountIndexDbIfPresent`/`openLlmLogsDbIfPresent`/
+  `addColumnIfMissing`; twelve 4.9 migrations are now a column table plus two lines.
+- Instance settings: `readJsonSetting`/`writeJsonSetting` behind five getters, and
+  `createInstanceSettingHandlers` behind the brahma-console, data-retention and taboo routes.
+- Client: `patchChat` (nine hand-rolled chat PUTs), `useOptimisticChatField`, `appendMessageOnce`,
+  `toTurnEvents`, `STAFF_AVATARS` beside `STAFF_DISPLAY_NAMES`, `TAB_KINDS` moved to
+  `lib/workspace/types.ts`, `normalizePanes`/`clampSplitRatio` shared by reducer and persistence,
+  `toAutonomousSettingsHint`, `useInTabDrilldown`, `CanChooseOutfitToggle`,
+  `BoundedNumberInstanceSetting` (data-retention and Brahma-console cards), `useJobFanOutStatus`
+  (the memory and summary fan-out cards now read through TanStack Query on `queryKeys.memories.*`),
+  `downloadFetchedFile`, `lora-scale.ts` (client-safe LoRA bounds), `scenarioOptionLabel`.
+  New query keys: `settings.dataRetention`, `settings.brahmaConsole`, `imageProfiles.optionsSchema`,
+  `system.conversationSummaryRegenerate`, `customTools.file`, `memories.*`.
+
+Corrections that fell out of collapsing the copies (each was a divergence between two sites):
+
+- Cheap-LLM priority-5 selections (current profile → cheapest model, and Ollama "use current
+  model") now carry `profileParameters`, so a profile's provider params reach the fallback path.
+  `isLocal` on the answer-confirmation and cheap-task selections is provider-derived (was `false`).
+- The export wizard's preview count uses `isFileExcludedFromExport`, so it no longer counts
+  archive bundles the writer refuses.
+- The chat-scoped document delete 404 body reads "File not found" (was "File not found not found").
+- API-key failure prose for Brahma one-shot and help chat is now the shared "No API key configured
+  for this connection profile".
+- A Workbench message with a bare family prefix (`{{params.}}`, `{{metadata.}}`, `{{state.}}`) is
+  reported as an unknown placeholder rather than a missing name; `{{params.toString}}` no longer
+  renders prototype function source. Rendered output is otherwise identical.
+- The character edit view's "choose their opening outfit" toggle now toasts on success like the
+  detail view; the new-character wizard's physical-description failure toast prefers the server's
+  error text; the Answer Confirmation settings row uses the shared toggle-row styling.
+- The self-inventory builder no longer wraps the standing-instructions resolver (which already
+  fails soft) in an empty catch.
+
+Left alone on purpose: the NanoGPT/DeepSeek/Z.AI providers still re-implement the
+`OpenAICompatibleProvider` base (a `packages/plugin-utils` change, publish-gated); the
+`StandaloneDocumentView` / `useDocumentMode` editor session; splitting `SalonView`; the two cheap-LLM
+task maps in `core-execution.ts` that have drifted (unifying them changes which chip lights);
+`executeCheapLLMTask`'s positional parameters; the wardrobe dialog's list loaders (their post-load
+state transitions are not a plain query).
+
+#### Fixed: Claude Opus 5 no longer gets sampling parameters it rejects
+
+`AnthropicProvider.SAMPLING_PARAMS_REJECTED_MODELS` listed Sonnet 5, Opus 4.7, Opus 4.8 and the
+Fable/Mythos families, but not `claude-opus-5`. Opus 5 removes `temperature`, `top_p` and `top_k`
+and rejects fixed-budget thinking, so a request carrying either returned a 400
+("`temperature` is deprecated for this model"). The Anthropic plugin lists models live through
+`client.models.list()`, so Opus 5 was selectable in a connection profile and every send against it
+failed.
+
+- Added `/^claude-opus-5(-|$)/` to the rejection list. The one flag gates both the sampling
+  parameters and the fixed-budget thinking branch, so both are now correct for Opus 5.
+- Plugin bumped to 1.0.55.
+
+#### Changed: qt-* theme utility sweep, second pass (checklist item 7)
+
+Reviewed the 164 `.tsx` files changed since the 4.8.4 merge (`115539440`) for hard-coded Tailwind
+that themes cannot reach. The sweep found no palette shades, hex values, `dark:` variants, or raw
+semantic fills (`bg-destructive`, `bg-success`, `hover:bg-primary`) on any added line; every
+variant-prefixed `qt-*` reference resolves to a hand-written escaped rule, and every `qt-*` class
+added to `app/styles/` in the range is already mirrored in `packages/theme-storybook`.
+
+One conversion: the "Allow a Similar-Tier Stand-In" checkbox added to
+`components/settings/chat-settings/CheapLLMSettings.tsx` copied its pre-existing "Fallback to
+Local" sibling's raw `className="rounded"`. Both now use `qt-checkbox`, joining every other
+checkbox in the settings tree and closing the last of the raw chat-settings checkboxes recorded as a
+gap in the previous sweep.
+
+`text-foreground` (and `hover:text-foreground`) stays raw, as before — it maps to the same theme
+token as `qt-text`, and Tailwind remains the house convention there.
+
+#### Changed: two v1 route handlers now use the shared `successResponse` helper (release checklist item 4)
+
+The `get-tags` action on `GET /api/v1/connection-profiles/[id]` and the default `GET /api/v1/wardrobe`
+listing returned via `NextResponse.json` directly. Both now go through `successResponse` from
+`@/lib/api/responses` like the rest of the v1 surface. No change to status codes or payloads.
+
+#### Added: test coverage for bugs 104 and 111 and sixteen new modules (checklist item 2, second pass)
+
+A second pass over checklist item 2, covering everything that landed after the first one. Audited
+all 50 bugs fixed since 4.8.4 (66-119) and all 66 source modules added in the same range. Eighteen
+test files added, 233 cases.
+
+- Regression tests for the two fixed bugs that had none. Bug 104 (Z.AI's private vision list
+  dropped images for `glm-5.3-flash`) asserts the plugin holds no opinion at all about which model
+  ids read pictures, since the host has already answered that question; ten of its fifteen cases
+  fail against the pre-fix provider. Bug 111 (a failed NanoGPT image generation logged nothing at
+  `error`) asserts the request body reaches the log on the failure path with key names only, so
+  `hf_api_token` stays out of it; three of its seven cases fail against the pre-fix provider.
+- First coverage for the sixteen new modules that had none: the two mount-index route factories
+  (`mount-wardrobe-route-factory.ts`, `scenario-item-route-factory.ts`), `message-attachment-adapter.ts`,
+  the two wardrobe container hooks, `wardrobe-container.ts`, `wardrobe-instructions-handlers.ts`,
+  `slot-guidance.ts`, `huggingface-repo-id.ts`, `lora-validation.ts`, `api-key-support.ts`,
+  `sanitize-pronouns.ts`, `query-params.ts`, `sqlite-errors.ts`, `sqlcipher-key.ts` and
+  `mount-index-guard.ts`.
+
+No source changed. Suite: 776 files, 11,978 tests, all passing (was 758 / 11,745).
+
+Bugs 87, 88, 112 and 119 turned out to be covered already, under tests that do not name their bug
+number. Bugs 89, 90, 100 and 102 remain guarded outside jest, as before.
+
+#### Fixed: one bad sub-step no longer kills a whole Refine-from-Memories run (bug 119)
+
+The character optimizer fans a character out into one LLM pass per concern — general fields, each
+scenario, each system prompt, physical description, wardrobe, aliases, proposed new prompts — and
+each pass asks for a JSON array of suggestions. A model that answers with a wrapper object
+(`{"suggestions": [...]}`), or with a single bare suggestion object, produces text `JSON.parse`
+accepts, so the parse guard never fired: `parseLLMJson<OptimizerSuggestion[]>` is a cast, not a
+check, and the object reached `.filter`. The resulting TypeError escaped the sub-step and aborted
+the entire optimization, surfacing in the modal as `q.filter is not a function` and discarding
+every sub-step that had not yet run.
+
+- `coerceSuggestionArray` normalises the parse result — an array passes through; a wrapper object
+  yields the first array under `suggestions`, `items`, `results`, `data` or `amendments`; a lone
+  object carrying a `field` key becomes a one-element array; anything else becomes an empty array.
+  A non-array answer now logs a warning naming the sub-step and how many suggestions were
+  recovered.
+- Each sub-step is wrapped so an unexpected throw is logged and skipped rather than ending the run.
+  A pass is self-contained and only appends to the suggestion list, and two other failure modes in
+  the same function already continued rather than aborting.
+
+#### Fixed: a describer's answer is now verified before it is believed (bug 116)
+
+`describeImageWithProfile` accepted whatever the vision model returned. A NanoGPT route for
+`deepseek/deepseek-v4-flash-vision-exp` accepted the `image_url` part, discarded it, and answered
+the instruction alone with 3175 characters about a tabby kitten; the picture was a warship. The
+response was persisted to `files.description`, from where it short-circuited the chat turn,
+`describe_image`, the gallery and exports permanently. Nothing threw, nothing logged above `info`,
+and the only post-hoc check in the function greps the text for refusal words — so a confident
+answer read as the healthiest possible result, with length taken as evidence of success.
+
+New `verifyImageReachedModel` runs before any content check and reads the two proofs the response
+already carried:
+
+- `attachmentResults.failed` — the plugin saying it did not send the bytes. This half would not
+  have fired on the live incident (the plugin did send) but is the detector for the neighbouring
+  failure class, and leaving it unread was bug 91's blindness one layer up.
+- `usage.promptTokens` — at or below what `IMAGE_DESCRIPTION_INSTRUCTION` costs by itself, the
+  model was billed for text and nothing else. The live call reported 38. The ceiling is derived
+  from the instruction at 2.5 chars/token, well below the 3.5–4.5 real tokenizers produce, and
+  cache-read tokens are added back first since every plugin normalises them out of `promptTokens`.
+
+Either verdict fails the attempt with an error naming the profile and falls through to the normal
+fallback chain. A missing `usage`, or `promptTokens: 0`, is treated as silence and not as evidence.
+
+#### Fixed: a chat upload's FileEntry recorded the hash of bytes that were never stored (bug 117)
+
+`uploadChatFile` hashed the input buffer and let the storage bridge transcode afterwards, so any
+bitmap converted to WebP produced a `files` row whose `sha256` named bytes that exist nowhere.
+`files` spoke input-hash while the mount index spoke stored-hash, and every join between them
+returned an empty result its caller read as "no such file": auto-descriptions never reached
+`doc_mount_file_links.description`/`extractedText` and were never chunked or embedded (the image
+was unsearchable), `describe_image` / `attach_image` could not resolve a mount-link uuid to its
+FileEntry, `keep_image` could not find a link's sister row, and link summaries reported zero
+linkers. In one live instance, 118 of 239 uploaded images; all 2541 generated images were correct,
+because `images-v2.ts` orders the same two operations the other way.
+
+`chat-files-v2.ts` now runs the bridge's own `transcodeToWebP` before anything is hashed — the
+shape `images-v2.ts` has always had — so one hash serves both upload dedup and the join, and the
+row records the bridge's returned `sha256` alongside its `mimeType` and `size`. The two sibling
+writers that recorded an archive's claimed hash over post-bridge bytes, `import-files.ts` and
+`restore.ts`, were corrected the same way.
+
+New migration `realign-file-entry-sha256-v1` repairs existing rows: for every `files` row with a
+`mount-blob:` storage key it reads the blob's own hash out of the mount index and writes it back,
+skipping rows already in agreement and logging rather than guessing when a blob is missing. This
+lifts the deliberate carve-out in `repair-files-mime-and-size-from-mount-blob-v1`, which left
+`sha256` alone because it was load-bearing for dedup; dedup now compares stored-bytes hashes on
+both sides, so the column can mean one thing.
+
+#### Fixed: the NanoGPT manifest said images were not forwarded, eleven versions after they were (bug 118)
+
+`plugins/dist/qtap-plugin-nanogpt/manifest.json` declared `attachmentSupport.supported: false` with
+an empty MIME list, unchanged since the plugin was added and contradicted by both the built plugin
+declaration and `lib/llm/attachment-support.ts`. No runtime effect — nothing reads the field — but
+it was the only one of eleven bundled manifests disagreeing with its own code, and the only copy of
+the declaration nothing gated. Manifest corrected to match the code (plugin 1.2.2, built output
+unchanged), and `image-transport.test.ts` now holds all three declarations together instead of two.
+The build stays authoritative; a manifest/build disagreement is a manifest bug, and now a failing
+test.
+
+#### Docs: filed bugs 116, 117 and 118 from one mis-described image upload
+
+An uploaded screenshot of a warship was stored with a 3175-character description of a tabby
+kitten, produced by the configured Image Description Profile and returned unchanged to a character
+that later called `describe_image`. Three defects, no code changes yet.
+
+**Bug 116** (High) — the describe path believes the model's answer without checking the image
+arrived. Quilltap sent the bytes correctly; the routed model discarded them and answered from the
+instruction alone, which the response reported as `promptTokens: 38`. `describeImageWithProfile`
+holds two disproofs and reads neither: `response.usage`, which it passes to the LLM log and drops,
+and `LLMResponse.attachmentResults`, which the provider plugin populates for exactly this purpose.
+The only check performed greps the response text for refusal words, so it catches a model that says
+it cannot see and never one that answers confidently. The result is written to `files.description`,
+which short-circuits every later reader permanently.
+
+**Bug 117** (Medium) — a chat upload's FileEntry records the hash of its pre-transcode bytes.
+`chat-files-v2.ts` hashes the input buffer, then the storage bridge converts the image to WebP and
+returns the stored bytes' hash, which is used for `mimeType` and `size` and discarded for `sha256`.
+Every join between `files` and the document store therefore fails for converted uploads: the
+description never reaches `extractedText`, chunks or embeddings, and `describe_image` /
+`attach_image` cannot resolve a mount-link uuid. `images-v2.ts` orders the same two operations
+correctly. In one live instance, 118 of 239 uploaded images are affected and all 2541 generated
+images are not. Needs a backfill migration.
+
+**Bug 118** (Low) — the NanoGPT plugin manifest still declares `attachmentSupport.supported: false`
+and "attachments are not forwarded", unchanged since the plugin was added and contradicted by both
+the built plugin declaration and `lib/llm/attachment-support.ts`. No runtime effect; nothing reads
+the manifest field. It is the only one of eleven bundled plugin manifests that disagrees with its
+code, and the only declaration `image-transport.test.ts` does not gate.
+
+#### Fixed: restored the inter-character memory timing log
+
+`buildContext` carried an empty `if (isMultiCharacter) { }` block. The chore that stripped every
+`logger.debug` call from the source emptied it, leaving the conditional plus two locals nothing
+read any more — `tInterStart` and `interCharacterLoadedCount`. Since debug logging has been
+restored elsewhere in the same file, the log is back rather than the block deleted: inter-character
+memory retrieval again reports its duration, loaded count, and included count.
+
+#### Fixed: a stalled cheap-LLM route could hold a turn for three minutes per character (bug 115)
+
+`buildContext` awaits `extractMemorySearchKeywords` to distill a memory-search query when no
+proactive pre-compute pass has one ready (first turn, continue mode, or an empty proactive result).
+The call blocks the turn with an empty composer, but named no latency tier, so it took the
+background budget of 90s plus the timeout retry a background pass is entitled to. On a cheap route
+that accepts requests and never answers, that is up to 180s of nothing per responding character —
+observed in a four-character room as a 7m16s turn, two of those waits and a turn pass, with no
+error logged and every background job reporting a clean finish.
+
+`extractMemorySearchKeywords` now takes a `latency` argument defaulting to `background`, and the
+`context-manager` call site passes `interactive`: 45s and no retry. The distillation is an
+optimisation over the recent-window query the branch already holds, so a lost pass costs recall
+quality rather than the turn. The proactive pass in `pre-compute.service.ts` and the `recall-replay`
+diagnostic keep the background budget, which is correct for both.
+
+This completes bug 107, which introduced the latency tier and applied it to the two other inline
+cheap calls — the compression cache miss and the memory recap — but not to this one. Regression
+tests cover both halves: that the argument leaves the call site, and the budget and retry
+arithmetic underneath, which bug 107 shipped untested.
+
+#### Added: the Concierge state can be chosen on the New Chat form
+
+The four-state Concierge control (Monitored / Flagged / Vouched Safe / Uncensored) could only be
+set after a chat existed, from the Salon sidebar. A conversation known in advance to be spicy had
+to be created Monitored, waited on, and then flipped — by which time the opening greeting had
+already gone out through the ordinary desk and might already have been refused.
+
+The New Chat form (both the modal and `/salon/new`) now carries a **The Concierge** dropdown above
+**Starting Scenario**, with the same four options in the same two optgroups as the sidebar and the
+same helper sentence underneath. The choice rides on `POST /api/v1/chats` as `conciergeState`, and
+the server applies it through the existing `applyConciergeFlip` chokepoint immediately after the
+system-prompt message and before any staff announcement or greeting — so the Concierge's bubble
+sits where the history says the state was set. "Continue Elsewhere" now seeds the picker from the
+source chat, so a change of venue keeps the conversation's posture.
+
+Greeting routing follows the chat rather than the global setting: `autoGenerateFirstMessage` now
+passes the fresh chat row to `resolveDangerousContentSettings`, and a Flagged or Uncensored chat
+generates its greeting on the uncensored provider first instead of only as a content-filter
+fallback. A Vouched Safe chat is never rerouted, even under a global `AUTO_ROUTE`, and an
+Uncensored chat reroutes even under a global `OFF`.
+
+Omitting the field (or sending `'monitored'`) produces exactly the request and the chat it always
+did. No schema, migration, export-schema or backup change.
+
+#### Changed: chat lists and Quick-hide follow the Concierge state, not the raw danger label
+
+The homepage's Recent Chats and every `ChatCard` list marked a chat with a red asterisk whenever
+its stored `isDangerousChat` label was true, and Quick-hide's "Dangerous Chats" toggle hid on the
+same raw label at four separate sites. Both predated the four-state Concierge control and were
+wrong in both directions.
+
+The mark is now derived from `getConciergeState` and appears for every state other than Monitored,
+in the same three tones the Salon header pill uses: red Flagged, grey Vouched Safe, blue
+Uncensored. Hovering it shows a Quilltap-drawn tooltip (not a native `title`, which is unreliable
+under the Electron shell) with the state's name, what it means, the classifier's categories when
+Flagged, and where to change it.
+
+Two behaviour changes follow:
+
+- A vouched chat with a preserved dangerous label loses its red asterisk, gains a grey one, and is
+  **no longer hidden** by "Dangerous Chats".
+- An uncensored chat gains a blue asterisk where it had nothing, and **is now hidden** by
+  "Dangerous Chats".
+
+"Dangerous Chats" now hides whatever takes the uncensored route — Flagged (the Concierge's verdict)
+and Uncensored (the operator's) — and the sidebar footer's hide affordance appears on that same
+set rather than on any chat carrying the label. The four inline filters that bypassed
+`shouldHideChat` now call it, so the rule lives in one place.
+
+Under the hood: list payloads (`EnrichedChatSummary`, `RecentChat`, `ChatCardData`, and the
+character-conversations and Prospero chat serialisers) carry a derived `conciergeState` plus
+`dangerCategories` instead of the raw pair, so no list reads the two stored fields again;
+`conciergeStateUsesUncensoredRoute(state)` in `chat-override.ts` is the one place naming the
+uncensored row, with `shouldUseUncensoredRoute` delegating to it; and a new
+`concierge-state-presentation.ts` is the single source for every word, icon and tone the four
+states wear — the list mark, the Salon header pill and the sidebar's helper text all read from it.
+No schema, migration, export-schema or backup change: `conciergeState` is derived at read time and
+`dangerCategories` already existed.
+
+#### Fixed: Uncensored chats enqueued a classification job every turn that the handler then discarded
+
+`triggerChatDangerClassification` gated on the resolver's mode and on the raw sticky label but
+never asked whether the classifier was on duty. A vouched chat was fine by accident (the resolver
+collapses it to `mode: 'OFF'`), but an uncensored chat resolves to `AUTO_ROUTE` on purpose and its
+preserved label is usually `false` or `null` — so every turn, from both the streaming finalizer and
+the message-edit route, enqueued a `CHAT_DANGER_CLASSIFICATION` job that the handler immediately
+threw away at its own guard. Harmless to the data, wasteful in the job child. The trigger now bails
+on `!isClassifierOnDuty(chat)` before any setting lookup.
+
+#### Fixed: the folders table accumulated a duplicate row per generated image
+
+Generating a character avatar or a story background into a project appended another row to the
+`folders` table for `/character-avatars/` or `/story-backgrounds/`, rather than reusing the row
+already there. In one instance that left 607 rows describing 24 folders, with 207 of them for a
+single project's `/story-backgrounds/`. Nothing was lost and the folder dropdown looked correct
+(it de-dupes by path), but the table grew without bound.
+
+The trigger was fixed in April: `FolderSchema.parentFolderId` was `.nullable()` without
+`.optional()` while the SQLite hydrator turns a NULL column into `undefined`, so every root-level
+folder failed validation on read and `findByPath` returned `null` — indistinguishable from "no
+such folder" to the six call sites that hand-rolled `findByPath` then `create`. What survived was
+the structure that let a bad read write 600 rows: no uniqueness constraint on a folder's identity,
+six copies of the guard, and a check-then-insert that is not atomic across concurrent background
+jobs (in the forked job child, a second job cannot see the first's buffered create at all).
+
+Folder creation now goes through one chokepoint, `FoldersRepository.ensureByPath`, with a unique
+index on `(userId, COALESCE(projectId, ''), path)` behind it; a lost race resolves to the row that
+won instead of adding another. The `collapse-duplicate-folders-v1` migration keeps the oldest row
+of each group, repoints any child folder whose parent it discards, deletes the rest, and creates
+the index. Restoring a backup taken before the collapse drops its duplicate folder rows quietly.
+Filed as bug 114.
+
+#### Fixed: Move to Project offered only the root folder for every destination
+
+The **Folder** dropdown in the Move to Project dialog listed `/ (Root)` and nothing else,
+whatever project you picked, even when the project plainly had folders. `FolderPicker` derived
+the folder list correctly on every render but then mirrored it into component state behind an
+"only if empty" guard. The derivation seeds Root unconditionally, before consulting any data, so
+the first render — with both queries still in flight — produced a one-entry list that satisfied
+the guard; the mirror was filled with the loading state and sealed against every update
+afterwards, including a change of destination. The mirror is gone: the list is a `useMemo` over
+the fetched files and folders, rendered directly, so it re-derives when the destination changes.
+The only state that remains holds folders created while the create-folder API was unreachable,
+scoped to the project they were created under. A successful folder creation now refetches instead
+of copying the previous render's snapshot. Filed as bug 113.
+
+Also in the same dropdown: nested folders were indented with ordinary spaces, which an `<option>`
+collapses, so a child folder rendered at the same visual depth as its parent. Now non-breaking
+spaces.
+
+#### Changed: The per-chat Concierge control is now a four-state
+
+The sidebar's per-chat Concierge switch grew from three states to four, separating who decided
+(the Concierge's classifier vs. the operator) from which route the chat takes (ordinary vs.
+uncensored providers). The select now groups its options under "The Concierge decides"
+(Monitored, Flagged) and "You decide" (Vouched Safe, Uncensored):
+
+- **Monitored** (formerly "Safe"): the classifier keeps watch and may auto-flip to Flagged.
+- **Flagged**: unchanged — the classifier's verdict, uncensored routing, danger styling.
+- **Vouched Safe** (formerly "Off-duty"): the operator vouches the chat safe. No classification,
+  no scanning, ordinary providers. Stored value unchanged (`conciergeOverride = 'OFF'`).
+- **Uncensored** (new): the operator asserts the chat is spicy without invoking the classifier.
+  Takes every uncensored route Flagged takes — uncensored text/image profiles, candid
+  story-background prompts, uncensored cheap-LLM tasks — with zero classification, zero scans,
+  zero announcements, and no danger styling. Works even when the global Concierge mode is Off.
+  Previously this corner of the 2x2 was unreachable: Off-duty dropped the uncensored profile IDs
+  entirely, so an operator-asserted spicy chat got concealed prompts on the default image profile.
+
+Under the hood, the overloaded `isChatActiveDangerous` predicate was deleted and its ~20 call
+sites split between three purpose-named predicates (`shouldUseUncensoredRoute`,
+`shouldShowDangerStyling`, `isClassifierOnDuty`); the two classifier gates that read the raw
+`conciergeOverride` column now go through the helper, so the new state cannot be reclassified out
+from under the operator. The API enum changed wholesale to
+`monitored | flagged | vouched | uncensored` (no wire value was reused with a new meaning). The
+Salon header pill now renders per state (red Flagged, grey Vouched Safe, blue Uncensored, nothing
+for Monitored), and every manual transition posts its own Concierge announcement, including the
+two new kinds. `scripts/concierge-tristate-test.sh` was renamed to
+`scripts/concierge-four-state-test.sh` and extended to walk all four states. Existing chats keep
+their exact behavior; a ledger-only migration records the widened column domain.
+
+#### Added: Query a LoRA against HuggingFace from the image-profile editor
+
+Each row in the LoRA Adapters panel now has a **Query** button beside its Source field. It fetches
+the repository's public metadata from HuggingFace and displays it: the base model the card names,
+whether the repository is tagged as a LoRA adapter, its `.safetensors` files, whether it is gated,
+its download and like counts, and the trigger phrase declared in `instance_prompt`. The adapter's
+name in the panel links to the model card in a new tab.
+
+A one-click button copies the declared trigger phrase into the row's Trigger Phrase field. Nothing
+else in the row is modified, and the Source field is never rewritten.
+
+The button is enabled only when a HuggingFace repository can be read out of the source — a bare
+`owner/name`, or any `huggingface.co` URL, including a link to a specific weights file. Weights
+hosted elsewhere have no repository to query and the button stays disabled.
+
+The panel deliberately makes no claim about whether the adapter will work with the selected model.
+That would require matching NanoGPT model ids against HuggingFace `base_model` strings, and a wrong
+"incompatible" warning on an adapter that works is worse than no warning. The facts are shown; the
+user decides.
+
+Two cases are called out in the panel because they have consequences:
+
+- A repository with more than one `.safetensors` file is ambiguous when named by bare `owner/name`;
+  the provider picks. Name the file directly to control which is used.
+- A gated repository needs a HuggingFace token. The panel states whether the selected model accepts
+  one — only the pruna `p-image` family does.
+
+A row's result is cleared when its Source is edited, so stale metadata is never shown next to a
+different address.
+
+New endpoint: `POST /api/v1/image-profiles?action=lora-metadata`. It is a POST because the optional
+`hf_api_token` is a credential and does not belong in a query string. The lookup runs server-side,
+so the browser never contacts HuggingFace directly. A failed lookup returns HTTP 200 with
+`ok: false` and a reason.
+
+A 401 from HuggingFace is reported as "missing or private", never as "does not exist". HuggingFace
+returns the same 401 for a nonexistent repository and a private one, on purpose; a 404 appears only
+once a token has been supplied.
+
+#### Documentation: why a working LoRA can still produce a tame story background
+
+Two help entries for a failure that raises no error. `help/image-generation-profiles.md` gains a
+troubleshooting section covering the three ways an adapter can be configured correctly and still
+do nothing: an adapter trained for a different base model than the profile points at, a missing
+trigger phrase, and a prompt that never asked for what the adapter was added to provide.
+
+`help/dangerous-content.md` spells out the two conditions the candid story-background draft
+requires. A chat must actually be flagged, which an Auto-Route score below the detection threshold
+will not do on its own, and the LoRA must be on the profile named under Uncensored Providers
+rather than on whichever profile the chat happens to use. It also describes how to tell the two
+failures apart afterward by reading the prompt stored on the finished image.
+
+#### Changed: a chat is now dated by when a character last spoke in it (bug 112)
+
+Every list, sort and card that shows a chat's date — the home dashboard, the Salon list, a
+project's conversations, a character's conversations, the merge picker, the Brahma Console —
+now shows the last time the user or an LLM posted content in it.
+
+Previously the date moved whenever anything about the chat changed. Because story backgrounds,
+context summaries, and every Staff announcement (Lantern, Aurora, Librarian, Concierge, Prospero,
+Host, Commonplace Book, Ariel, Carina, Suparṇā, Pascal) are stored as messages, a chat nobody had
+touched in months could jump to the top of the list dated moments ago, with nothing said in it.
+
+What counts as a character speaking:
+
+- **Counts:** messages from the user or an LLM character, including whispers to specific
+  participants.
+- **Does not count:** Staff announcements, announcement bubbles posted under a custom name, tool
+  results, and system events.
+
+Deleting the most recent message now moves the date back to the message before it. A chat where
+no character has ever posted is dated by when it was created.
+
+Existing chats are recalculated once on startup; the loading screen names the step. No data is
+changed other than this timestamp.
+
+#### Removed: two project background display modes that never worked
+
+The project **Story Backgrounds** mode selector offered four options; two of them could not produce
+an image under any circumstances.
+
+- **Project-generated background** read `project.storyBackgroundImageId`, a field written only by
+  the *Latest chat* path. Nothing ever generated a project-specific background — there is no such
+  generator. A project in this mode showed either nothing, or a stale image left behind from a
+  previous stint in Latest chat mode.
+- **Static uploaded image** read `project.staticBackgroundImageId`, which nothing anywhere writes.
+  The field is not accepted by the project update schema, and there is no upload control beside the
+  option. It was always a no-op.
+
+Both are gone from the selector and from the `backgroundDisplayMode` enum, which is now
+`latest_chat | theme`. The two remaining modes are unchanged.
+
+Projects still stored in a retired mode are read as **theme** — the same blank result they were
+already getting. The coercion happens in `ProjectPropertiesSchema` itself, because that schema is
+`.parse`d on every project read: narrowing the enum without it would have thrown on any project left
+in a retired mode rather than merely showing it no picture. The legacy-row mapper in the
+project-store cutover migration normalizes the same way, so an instance migrating from an older
+version lands on a valid value.
+
+The two image-ID fields are kept. `storyBackgroundImageId` is still written when a chat background
+is generated for a project in Latest chat mode, and both remain the natural storage should a real
+project-background generator or an upload control ever be built.
+
+#### Fixed: story backgrounds no longer paint absent characters into the scene
+
+The two places that queue a story background collected every character participant in the chat,
+including ones marked **Absent** and ones that had been removed (removal is a soft delete, so those
+rows are still in the chat). The prompt crafter is told to place each character it is given as a
+figure in the frame, so a character who had walked out of the scene was drawn standing in it, and
+the prompt's back-fill step then supplied their appearance to keep the image provider from
+inventing one.
+
+Both call sites now filter to participants who are actually present. **Silent** still counts as
+present — a silent character is in the room, just not speaking. If every participant is absent or
+removed, no background is generated at all rather than one of an empty room populated by ghosts.
+The scene-state tracker already filtered this way; the background generator now matches it.
+
+The prompt's back-fill step was closed off as well. It scans the finished prompt for workspace
+characters the crafter named but was not given, and appends their appearance so the image provider
+does not invent one. Its candidate pool is everyone who is not a payload participant — which, now
+that absent participants are excluded from the payload, is exactly where they land. A crafter that
+picked an absent character's name out of the transcript would have been handed their portrait to
+render, restoring by the side door the figure the filter had just removed. Absent and removed
+participants of the chat are now excluded from that pool too. A character with no connection to the
+chat is still enumerated, which is what the scan is for.
+
+#### Fixed: restoring a backup no longer dates every chat to the moment of the restore
+
+Restoring replays each chat's messages, and doing so stamped every chat with the current time. The
+whole restored history therefore arrived with the same date, in no meaningful order. Restore now
+recalculates each chat's date from the transcript it just wrote, so a restored instance sorts the
+way the original did.
+
+#### Fixed: a NanoGPT LoRA preset set without an adapter was silently ignored (bug 110)
+
+On an image profile in the `flux-lora` family, a value in the **LoRA Preset** field was dropped
+unless the LoRA adapter editor was also filled in. The generation still succeeded and was still
+billed; it just came back with none of the requested style, and nothing in the logs said so. The
+preset is now sent whenever the model's family understands it, adapter or no adapter. The
+HuggingFace token field keeps the old behaviour on purpose — it authorises fetching adapter weights,
+so it is only sent when there are weights to fetch.
+
+#### Fixed: failed image generations now log what was actually requested (bug 111)
+
+NanoGPT returns the same generic 400 for a bad LoRA source, an unreachable repository, an
+unsupported size and a filtered prompt. The plugin already recorded the composed request, but only
+at `debug`, which packaged instances do not keep — so all four looked identical in the logs. A
+failed image request now logs the model, size, LoRA dialect and the request keys it sent alongside
+the provider's message, at `error`. Key names only; no values, so credentials stay out of the log.
+
+#### Fixed: sliders now follow the theme
+
+Every `<input type="range">` in the app now uses one new `.qt-range` class. Previously the 15 sliders
+carried five different ad-hoc idioms, and the differences were visible:
+
+- Six sliders (both connection-profile sliders, all three context-compression sliders, and the
+  background-jobs concurrency slider) set no accent at all, so they rendered in the browser's default
+  system blue regardless of the active theme.
+- Two (`memory-editor`, memory housekeeping) set `appearance-none` with no replacement track or thumb
+  styling, which discards the filled portion of the track — the slider showed a flat grey bar with no
+  indication of its value relative to the range.
+- Both participant-card talkativeness sliders applied `qt-input`, a text-field style, wrapping the
+  control in an input border and padding box.
+
+`.qt-range` is token-driven (`--qt-range-accent`, `--qt-range-focus-ring`) and keeps sliders natively
+rendered on purpose: `accent-color` is what paints both the filled track and the thumb. Sliders also
+get a themed focus ring, which none of them had before. The class sets no disabled opacity — browsers
+already drop the accent on a disabled range, and several sliders sit inside `opacity-50` wrappers
+where a second 50% would compound to 25%.
+
+The class name was already in the tree: `CharacterOptimizerModal` referenced `qt-range` even though
+nothing defined it, so it silently resolved to nothing. `scripts/check-qt-classes.mjs` does not catch
+this, by design — it validates only the `qt-bg-`/`qt-text-`/`qt-border-`/`qt-shadow-` families, and
+bare component names are out of its scope because most are legitimate theme hooks.
+
+
+#### Added: LoRA adapters on image profiles, and per-model image options
+
+Image profiles can now carry LoRA adapters — a `loras` list of `{ source, scale, triggerPhrase }`
+stored in the profile's existing `parameters` bag. No schema change, no migration.
+
+A provider opts in by declaring `loraSupport` (per model on `getImageGenerationModels()`, or
+provider-wide on `getImageProviderConstraints()`); the host then shows the editor, caps the list, and
+passes it to `generateImage` as `ImageGenParams.loras`. A plugin that declares nothing never sees the
+key, so no other provider plugin changed. NanoGPT is the first consumer: it maps the canonical list
+onto whichever of three wire dialects the selected model family uses — indexed `lora_url_N`/
+`lora_scale_N` pairs, a single `lora_weights`/`lora_scale`, or `lora_url`/`lora_strength`. A
+LoRA-capable model whose dialect the static family table does not know gets the capability but no
+wire mapping, and logs a "family unknown" warning rather than posting a body the model would ignore.
+
+The image-profile editor's hand-written per-provider switch is replaced, for providers that implement
+the new `getImageProviderOptionsSchema` hook, by the same schema-driven `ProviderOptionsPanel` the
+connection-profile editor uses. The schema is fetched per model and refetched when the model changes,
+so NanoGPT's size list and image-count ceiling now come from that model's own advertised
+capabilities. `ProviderOptionField.appliesToModels` is now honoured by that renderer (exact id, `*`
+glob, or family prefix), which also gates fields on the LLM side. Providers without the hook keep the
+legacy panel.
+
+#### Fixed: image parameters reached chat generations and vanished everywhere else
+
+Five call sites built image-generation parameters independently, and three of them read exactly one
+key off the profile (`quality`). Anything configured on a profile therefore worked for `generate_image`
+in the Salon and was silently dropped for character avatars, story backgrounds, `POST /api/v1/images`,
+and the wardrobe's preview portrait.
+
+All five now go through one builder, `lib/image-gen/params-builder.ts`, which merges overrides over
+the profile's stored defaults (the previous merge semantics preserved key for key), resolves
+orientation, attaches the capped LoRA list, and forwards the residual parameter bag to the plugin as
+`profileParameters`. Side effects: those four paths now honour the profile's `negativePrompt`, `seed`,
+`guidanceScale` and `steps`, and the wardrobe preview resolves portrait through the provider's own
+mechanism instead of a hardcoded `1024x1792` that only OpenAI ever accepted.
+
+Malformed `parameters.loras` is now rejected with a 400 by the image-profile POST and PUT handlers
+before anything is written. A stored list that is over the selected model's cap is kept on the profile
+and flagged in the editor rather than deleted, so narrowing the model and widening it again loses
+nothing; capping happens at request time, and every capped or stripped adapter is named in the log.
+
+#### Fixed: a document edit missing its `find` argument was reported as "Text not found in file" (bug 108)
+
+`doc_str_replace` opened the file, handed an undefined `find` to the matcher, got zero matches back,
+and told the character its text was stale — advice that cannot help, because the fault was in the
+call. The character re-read the file, exactly as instructed, and repeated the same malformed call.
+
+The handler now checks its own arguments before opening the file and says which one is missing.
+`replace` is checked by type rather than truthiness, since an empty string is a legitimate deletion;
+without that check, an omitted `replace` wrote the literal string `undefined` into the document.
+`doc_insert_text` got the same treatment for `position` and `content`, where a missing argument threw
+a `TypeError` that surfaced as a file error.
+
+The dispatcher still passes unvalidated input through when a tool's schema parse fails. That behavior
+is deliberate — it is what lets a `qtap://` URI stand in for scope, mount point and path — and it is
+not the defect. The defect was that nothing downstream of it checked whether the arguments arrived.
+
+#### Fixed: curly punctuation in a document blocked edits that spelled it straight (bug 109)
+
+Models write curly quotes and em dashes when they write prose, and Quilltap stores what they write.
+A later turn would retype a sentence from that file with a straight apostrophe — models routinely
+normalize while retyping — and the exact-match edit would fail. Re-reading did not help, because the
+retyping came out the same way. Five valid edits were refused this way on one instance.
+
+The document tools now fall back to a typographic fold when the exact reading matches nothing at all:
+the quote family folds onto `'` and `"`, the dash family onto `-`, `…` onto `...`, and non-breaking
+and wide spaces onto a normal space. Exact matching still wins whenever it finds something, so a file
+holding both spellings resolves to the one the caller actually typed rather than becoming ambiguous.
+The replacement is written over the original span, so the passage ends up spelled the way the caller
+wrote it — and only that passage. When a match needed the fold, the tool now says so, so the model
+learns the file's punctuation differs from its own. `doc_grep`'s literal search folds unconditionally
+(a search for words is not a search for punctuation); its regex path is unchanged.
+
+Quilltap's own typography rules were not involved and did not change: quote curling runs only in the
+two markdown render pipelines, and the keystroke engine writes only dashes and ellipses, only into
+what a person is typing. No tool, export, or LLM-facing string is curled on its way past.
+
+#### Fixed: the uncensored reroute handed a vision model's message array to a text-only fallback (bug 106)
+
+When the Concierge is in Auto-Route mode and a provider refuses a turn, Quilltap retries the same
+provider and then reroutes to the configured uncensored profile. The reroute changed the model and
+kept the message array — and that array was built once, against the original profile, with the
+attachment question already answered for it. On a turn carrying an image, a vision-capable primary
+had correctly embedded the raw bytes, and the text-only substitute got them: `400 does not support
+image inputs`, then `Chain stopped: empty response`. The character said nothing at all. The
+configuration was correct on both sides; nothing had asked the substitute what it could read.
+
+Two changes. `resolveProviderForDangerousContent` now takes the turn's attachment MIME types and
+orders its scan by them — profiles that can carry the payload first, the rest behind. Ordered rather
+than filtered, because a described image beats no reroute at all when the only uncensored route on
+the instance is text-only. And the reroute now re-runs the attachment decision against the profile it
+actually calls (`adaptMessagesForProfile`, `lib/chat/message-attachment-adapter.ts`): an image a
+text-only substitute cannot read becomes its description, exactly as it would have if that profile
+had been the primary. A profile that can take the bytes gets the same array back untouched, so the
+common case costs nothing.
+
+Two things fell out of the diagnosis. The fallback chain's `needsVision` flag was computed from what
+the user *uploaded* rather than from what the message array ends up carrying, so a turn whose image
+had already been replaced by a description was still treated as vision-bearing and skipped
+understudies that could have answered it. And the question "can this profile receive this
+attachment?" had three independent spellings — the router asked it not at all, the describe-fallback
+and the fallback chain asked it differently — which is the drift that produced bugs 91, 97 and 104.
+All three now call `profileCanReceiveAttachment` in `lib/llm/image-transport.ts`.
+
+The failover suite built every history as `content: 'Hello'` with no attachments, which is the one
+shape that cannot expose this. It now has three cases that carry an `attachments` array.
+
+#### Changed: cheap-LLM budgets set from the measured distribution, and a lost pass no longer reports success (bug 107)
+
+The per-task cheap-LLM ceilings were round numbers sitting inside the distribution they were meant to
+bound. Across 1,971 completed non-compression cheap calls on a live instance, not one had ever taken
+more than 40,000 ms against a 40,000 ms provider budget, and three task types peaked within 600 ms of
+the wall. That is not a distribution, it is a censored one: the maxima were the budget, not the work.
+Compression showed the same against its own higher ceiling — p99 61.1s, max 67,733 ms, against
+70,000. In the first 60 hours after the `[CheapLLM] Task failed` log line existed, 81 passes were
+lost, every one of them `Request timed out.`
+
+Four changes:
+
+- The shared remote budget goes 45s → 90s, and compression's goes 75s → 120s. The shared tier's true
+  tail is unknown *because* it was censored, so the new number is set well clear of it rather than
+  just past the old wall — the point is to stop cutting the curve so the histogram can be re-read.
+- The ceiling now follows *who is waiting*, not only which task it is. A `CheapLLMLatencyClass`
+  (`background` or `interactive`) threads from the call site; everything that does not say is
+  `background`, which is what the great majority of cheap tasks are. Compression pre-computed after
+  the turn is delivered gets the 120s, while the synchronous inline call on a cache miss keeps 75s.
+  The same split applies to the shared tier: the memory recap and the two memory compressions are
+  awaited inline while a turn assembles, so they keep 45s rather than taking the new 90s. All of
+  these produce optional context — losing one costs the character some remembered flavour, not the
+  turn — so the generous budget would be spent in exactly the place it should not be.
+- A timed-out attempt gets one more go at a fresh socket. Only a timeout: a rejected key or a refusal
+  would fail identically the second time. Not on the interactive path either.
+- A cheap task lost to a timeout no longer looks like one that finished. `CheapLLMTaskResult` gains
+  `timedOut`, and six job handlers now fail rather than return on it — scene-state tracking, title
+  update, context summary, story background, and both memory extractors. Before this every job in the
+  window came back COMPLETED: 83 memory extractions and 99 scene-state passes, zero failures, over 45
+  passes that never happened. A failed job gets the existing backed-off retry and then goes DEAD with
+  the reason attached, which is a third attempt at the work and the first time the loss is visible.
+
+One consequence worth knowing: a memory-extraction job that throws discards the whole turn's buffered
+writes, so the retry re-runs it atomically with no duplicate memories — but the passes that did
+succeed are discarded along with the one that didn't. That is the right trade when the retry works,
+and worse data with better information when it doesn't. A provider timing out three times against a
+90s ceiling with a retry in front of it is a configuration worth seeing rather than absorbing.
+
+#### Added: provider/model fallback chains
+
+A connection profile can now name an understudy. When a call through a profile fails outright —
+rejected key, rate limit, network error, missing model, 5xx, empty response, moderation refusal —
+Quilltap tries the next candidate instead of failing the call. Before this, `runPrimaryStream`'s
+catch-all rethrew unconditionally, and every existing cross-provider fallback in the codebase keyed
+on content refusal rather than call failure.
+
+Two new columns on `connection_profiles` (migration `add-profile-fallback-fields-v1`):
+
+- `fallbackProfileId` — another profile to try. NULL = none.
+- `allowTierFallback` — permit ONE further auto-picked candidate of the same or better `modelClass`
+  quality. Defaults off; an auto-pick spends money at a provider the user did not choose.
+
+Each call is capped at three attempts: the profile, its understudy, one tier pick. Chains do not
+recurse — when A falls back to B, B's own `fallbackProfileId` is not followed — so an A→B, B→A cycle
+is legal config that simply stops. No stickiness: a successful fallback applies to that call only,
+so the next message tries the primary again.
+
+New engine at `lib/llm/fallback/` (`engine.ts`, `tier-picker.ts`, `types.ts`).
+A chain swaps the model but reuses the message array built against the primary, so on a turn carrying
+an image the raw bytes are already embedded in it. Handing that to a text-only stand-in is a
+guaranteed 400 — bug 106's shape, in the Concierge's uncensored reroute. Both chain steps therefore
+filter on vision when the turn has images: the tier picker requires `supportsImageUpload` plus
+`providerCanTransportImages`, and so, uniquely among the checks, does the *named* understudy. Every
+other user choice is honoured as made, danger-compatibility included; this one is an incompatibility
+rather than a preference. Re-running the attachment fallback for the substitute, which would let a
+text-only understudy take the turn with a description instead, is bug 106's fix and is not here.
+
+`classifyFallbackTrigger` maps a failure onto one of seven trigger classes and returns null for the
+non-triggers: token/content limits (own recovery path, and they would fail identically anywhere),
+tool-unsupported (already retried same-profile with tools stripped), Zod errors, and unattributed
+4xx. `pickTierCandidate` returns at most one candidate, excluding Courier profiles, profiles with no
+usable key, and anything below the failed profile's tier; it requires `isDangerousCompatible` in a
+dangerous-routed context and both `supportsImageUpload` and `providerCanTransportImages` for a vision
+call, and prefers a different provider (case-normalized) over a same-provider sibling of higher tier.
+
+Integrated at four call sites:
+
+- **Salon hard errors** — `runPrimaryStream`'s catch walks the chain via `restreamInto`, emitting SSE
+  `stage: 'failing-over'` per attempt. Only before the first content chunk: once prose has reached
+  the user, the partial is preserved as before rather than substituted. On exhaustion the error names
+  every profile that was asked and how each declined.
+- **Salon empty responses** — the chain runs third, after the existing same-profile retry and the
+  uncensored reroute, both of which answer their own cases better. The uncensored profile carries its
+  own chain, which runs with `dangerous: true`.
+- **Cheap LLM** — `executeCheapLLMTask` re-issues against each stand-in with a fresh deadline. A
+  selection with a `connectionProfileId` uses that profile's chain; one without (local pick,
+  provider-cheapest synth) is governed by the new instance setting
+  `cheapLLMSettings.allowCheapFallback` and draws from `isCheap` profiles. Background work does not
+  toast — it logs the attempt trail and fails as before.
+- **Image description** — the describer's chain runs before the uncensored describer, then that
+  profile's own chain. Stand-ins must pass both vision checks. The attempt trail rides in
+  `processingMetadata.fallbackAttemptTrail`.
+
+UI: a **Fallback** section in the connection-profile editor (understudy dropdown excluding self and
+Courier profiles, tier-fallback checkbox, a soft warning when the target has no key yet, a nudge to
+set Model Class), and an **Allow a Similar-Tier Stand-In** checkbox in Cheap LLM settings.
+
+Also: `ChainConfig.maxRetries` / `retryDelayMs` in `turn-orchestrator.service.ts` were declared and
+never read; removed. Deleting a connection profile now nulls `fallbackProfileId` on every profile
+that named it.
+
+Both new fields ride through export, import, backup and restore. `fallbackProfileId` points at
+another row in the same table, so both id-rewriting paths remap it: `.qtap` import does so in the
+reconcile pass (a profile may name an understudy that appears later in the bundle), and
+new-account backup restore adds it to the `remapFields` list alongside `id` — without which every
+restored chain would point at a uuid the new account does not have. `seedLegacyConnectionProfileFields`
+drops a self-referential `fallbackProfileId` from a hand-edited archive.
+
+#### Fixed: the `restore-key` test suite failed on CI
+
+`packages/quilltap/lib/__tests__/dbkey-restore.test.js` pins the driver to the real SQLCipher
+binding (the suite's `better-sqlite3` mock would open a database under any key, which would make the
+pepper proof pass vacuously). It looked for that binding only at
+`packages/quilltap/node_modules/better-sqlite3-multiple-ciphers`, which exists in local development
+but not on CI, where only the root `npm ci` runs and the root `package.json` installs the same
+package under the alias `better-sqlite3`. The suite failed to load there.
+
+The mock factory now falls back to the root alias by absolute path — the same chain the
+`__tests__/unit/packages/quilltap/*.integration.test.js` suites already use. Absolute paths keep the
+root `moduleNameMapper` from intercepting the load and handing back the mock.
+
+#### Removed: Lima and WSL2 VM support
+
+Quilltap no longer builds, ships, or detects the managed Linux VM modes. `quilltap-shell` 4.2.0
+removed Lima (macOS) and WSL2 (Windows) from its side; this is the server half. The strongest
+isolation Quilltap offers is now Docker, or a virtual machine you build and manage yourself.
+
+Removed: the `lima/` directory (`wsl-init.sh`), `scripts/build-rootfs.mjs`, the `wsl2` stage in
+`Dockerfile.ci`, and the four rootfs steps in the release workflow. Releases no longer attach
+`quilltap-linux-amd64.tar.gz` / `quilltap-linux-arm64.tar.gz`. The Docker images (amd64 and arm64,
+plus the multi-arch manifest) and the standalone tarball — which the `quilltap` CLI and the Electron
+shell download and run — are unchanged.
+
+In the app: `isLimaEnvironment()` is gone from `lib/paths.ts`; `getPlatform()` no longer has a Lima
+branch; `EnvironmentType` (instance lock) drops `'lima'` and `'wsl2'`; the Almanack's `runtimeType`
+drops `'lima'`; `self_inventory`'s runtime mode drops `'vm'` and `'electron-vm'`; and the footer's
+`VM` / `Electron+VM` badges and the API's `isVM` field are gone.
+
+Host URL rewriting changed shape. `isVMEnvironment()` is now `isDockerEnvironment() ||
+QUILLTAP_HOST_IP is set`, and gateway resolution is two strategies instead of five:
+`QUILLTAP_HOST_IP`, then `host.docker.internal` in Docker. The `/proc/net/route` and `/etc/hosts`
+fallbacks existed only for Lima and were actively wrong for Docker — the bridge gateway they return
+does not reach services on the host's loopback. In a self-managed VM, `QUILLTAP_HOST_IP` is the
+supported route: it both enables rewriting and supplies the address. Same change in
+`@quilltap/plugin-utils` 2.6.0, which `qtap-plugin-mcp` 1.1.37 takes up — it is the one plugin that
+bundles `host-rewrite`, because MCP servers validate the Host header and need a custom fetch rather
+than a plain URL rewrite.
+
+`docs/WINDOWS.md` (a WSL2-only troubleshooting guide) is deleted. The README and the About page now
+describe the shell's three back ends — Direct (the Node server inside Electron), Docker, and Remote
+(any Quilltap URL, including a dev server or an `npx quilltap` instance) — instead of the old
+VM/Docker toggle.
+
+#### Added: `quilltap instances restore-key` rebuilds a lost or locked `.dbkey`
+
+The `.dbkey` file only wraps the pepper; the pepper is the actual SQLCipher key. Anyone holding the
+pepper could therefore always rebuild the wrapper, but the only way to do it was the server's
+`POST /api/v1/system/unlock?action=store` — which reads the pepper from the environment and requires
+a running server. That covers a lost key file and nothing else: a forgotten passphrase leaves the
+server at the locked screen accepting only the passphrase it no longer has, with no offline route in.
+
+`npx quilltap instances restore-key <name>` writes the key file with the server down. The pepper
+comes from `ENCRYPTION_MASTER_PEPPER` or a hidden prompt, never a flag (a command line lands in shell
+history and in `ps`). Before writing, it opens every encrypted database in the data directory with
+the candidate pepper and refuses if any fails — a `.dbkey` holding the wrong pepper is worse than
+none, because the server unwraps it, hands SQLCipher a key that decrypts nothing, and reports an
+intact database as corrupt (or, with the env var also set, exits fatally on the hash mismatch). The
+proof cannot be waived while an encrypted database exists to check; `--force` only covers a fresh or
+still-plaintext instance. It is lock-gated like `maintenance run`, since a running server caches both
+the pepper and the effective passphrase in memory. An existing key file is backed up to
+`quilltap.dbkey.bak-<timestamp>`, and `minServerVersion` — which `version-guard.ts` patches into the
+same file for the Electron shell — is carried across the rebuild. A registered instance's stored
+passphrase is updated to match.
+
+It does not re-encrypt character ARCHIVE bundles, which are keyed on the passphrase rather than the
+pepper; only the server's Change Passphrase card rewrites those, and the command says so when the
+passphrase changes.
+
+New `packages/quilltap/lib/dbkey.js` mirrors the `.dbkey` format and the write-side PBKDF2 constants
+from `lib/startup/dbkey.ts` (the CLI is plain Node and cannot import it). `db-helpers.loadDbKey` and
+`instances.verifyPassphrase`, which each carried their own copy of the unwrap, now use it.
+`__tests__/unit/lib/startup/dbkey-cli-format.test.ts` drives real files through the CLI and server
+implementations in both directions so the mirror cannot drift.
+
+#### Removed: the Salon's hidden desktop message actions
+
+`MessageDesktopActions` rendered a hover toolbar above every message bubble and a row of text
+buttons (Edit, Delete, Resend, Regenerate, Re-attribute, swipe arrows) below it. Both containers
+had been unconditionally hidden since the icon action bar replaced them: `_chat.css` set
+`display: none !important` on `.qt-chat-desktop-hover-actions` and
+`.qt-chat-message-desktop-actions`. The component was still constructed and its handlers still
+threaded through `MessageRow` for every non-editing message in a chat.
+
+Deleted the component, its render site in `MessageRow`, and the three `display: none !important`
+rules — including `.qt-chat-desktop-timestamp`, which had no markup left to hide. No behavior
+changes: the visible controls are `MessageActionBar`, which is untouched, and every prop the
+removed component took is still consumed by the action bar. The classes had no
+`@quilltap/theme-storybook` mirror, so nothing to remove there.
+
+#### Fixed: message action buttons and the verdict badge now use Quilltap's own tooltips
+
+Every control at the bottom of a Salon message named itself with the HTML `title` attribute, so the
+label came from the OS tooltip widget: it needed about a second of motionless hovering, vanished at
+the smallest pointer movement, would not come back without leaving and re-entering, and truncated
+long text. Under the Electron shell that was bad enough that the answer-confirmation badge — whose
+`title` held the discrepancy notes and the pre-revision text — was effectively unreadable.
+
+New `components/ui/Tooltip.tsx` draws the bubble instead: a portal on `document.body` positioned from
+script, so it clears every stacking context and sits above dialogs. It opens after a 200 ms hover or
+immediately on keyboard focus, flips from top to bottom when the viewport is tight, clamps to the
+screen edges, follows the anchor while the page scrolls, and closes on Escape. Passing `pinnable`
+makes a click hold it open; `interactive` lets the pointer enter it to scroll or select the text.
+
+The action bar's eleven buttons now use it, each with an explicit `aria-label` (a tooltip is not an
+accessible name). The confirmation badge is pinnable and renders structured content — verdict,
+summary, "What looked off", "Originally written" — and is now a real button, so it takes keyboard
+focus and answers hover the way the icons beside it do; it was previously the only control in the row
+with no hover state at all. Its full text stays on the badge's accessible name for screen readers.
+
+New `qt-tooltip*` classes in `_surfaces.css` and the badge's hover/focus rules in `_chat.css`, both
+mirrored into `@quilltap/theme-storybook`. Unit tests cover dwell-to-open, close-on-leave,
+pin-survives-leave, Escape, and each badge state.
+
+#### Fixed: one malformed connection profile no longer aborts a whole `.qtap` import (bug 105)
+
+Importing a bundle whose `connectionProfiles` array held a record with a non-string `provider` (a
+hand-edited or third-party-authored `.qtap`) failed the entire import with `(seeded.provider ??
+"").toUpperCase is not a function` and wrote nothing.
+
+The 4.9 legacy-field seeding was called at the top of the import loop's body, outside the per-item
+`try` that wraps the rest of the iteration, and the helper's `??` guards only `null`/`undefined` — a
+number, boolean, object or array reached `.toUpperCase` and threw past the loop to the import's outer
+catch. Two changes: the helper now tests `typeof provider === 'string'`, so junk input seeds
+`supportsImageUpload: false` instead of throwing, and the call moved inside the per-item `try`, so any
+future failure there names the bad profile in a warning and the rest of the bundle imports. The
+backup restore path already try-wrapped its whole per-profile body and needed no change.
+
+Regression tests on both halves: four junk-provider cases on the helper, and an import test asserting
+a bundle with one malformed record beside a healthy one warns by name and imports the healthy one.
+
+#### Added: an outfit pull-down above the slot rows, and slot pickers that list garments only
+
+The outfit composer — the chat-start Starting Outfit panel and both dressing columns of the wardrobe
+dialog — now opens with a `Wear an outfit…` pull-down above the five slot rows. It lists every
+composite in the character's wearable pool, title-sorted, with the slots each claims and whether it
+replaces them. Picking one goes through the same flag-driven equip path the slot pickers use, so an
+additive bundle layers, one marked `replace` sweeps its slots first, and either way it dissolves into
+its component garments as it lands.
+
+The per-slot `+` pickers no longer offer composites. A three-slot ensemble previously appeared once
+per slot it covered, pushing the garments actually meant for the slot down the list; it now appears
+exactly once, in the pull-down. Single-slot composites are included there too — it is their only
+route on. A multi-slot *leaf* (a dress typed `["top","bottom"]`) is not a composite and stays in the
+slot pickers.
+
+New `lib/wardrobe/composed-outfits.ts` holds the split (`selectComposedOutfits` / `selectGarments`,
+both built on the existing `isBundle`), with unit tests. New component
+`components/wardrobe/outfit-quick-pick.tsx`; it renders nothing when the pool holds no composites.
+
+#### Changed: compression gets its own cheap-LLM budget, and cheap-task failures reach the server log
+
+Every cheap LLM task shared one 45s deadline (40s handed to the provider). Compression does not fit
+that shape: it carries the whole conversation history, so it sends the largest prompt of any cheap
+task and sits at the slow end of the distribution normally, not as a stall. Measured over three days,
+compression supplied 13 of the 34 cheap calls that finished within five seconds of the provider
+budget — more than any other task type — with a mean around 2.5x the cheap-task mean. The three
+compression task types (`compress-conversation-history`, `compress-system-prompt`, `compress-memories`)
+now get 75s; everything else keeps 45s, and local providers keep their existing 180s regardless of
+task. Deliberately short of doubling: compression is pre-computed off the turn's critical path when a
+cached result exists but falls back to a synchronous inline call when it doesn't, and there the
+operator waits out the whole budget.
+
+A failed cheap-LLM task now logs a warning naming the task type, provider, model, chat and character.
+The deadline path already logged when Quilltap's own timer fired, but a provider giving up on its own
+budget arrived as an ordinary provider error: the plugin logged "NanoGPT API error in sendMessage"
+without saying which task died, and the loss was legible only in the per-message memory debug logs.
+Added unit tests pinning the per-task budgets, the default for every other task, and the local
+provider's exemption.
+
+#### Fixed: Z.AI dropped images for GLM 5.3 and any model without a `v` in its id (bug 104)
+
+The Z.AI plugin kept its own list of which GLM models read pictures, matching only ids with a `v`
+immediately after the generation number (`glm-4.6v`, `glm-5v`). Z.AI's 5.3 line reads images without
+one, so `glm-5.3-flash` failed the regex: every attachment was dropped before the wire with "Selected
+Z.AI model does not support image input" — while the connection profile's `supportsImageUpload` flag
+had already asserted the opposite and suppressed the describe-fallback. A story background or avatar
+was therefore never seen by the character, and the Salon raised a warning toast on every turn that
+followed one.
+
+Plugin 1.1.24 deletes `VISION_MODEL_PATTERNS` and `isVisionModel` and drops the vision branch from
+`buildUserContent`, leaving the MIME check and the missing-data check as the only ways an attachment
+can fail; `formatMessages` loses its now-unused `model` parameter. Whether the model reads images is
+the host's question, answered by `supportsImageUpload`; whether the transport can send them is the
+plugin's, answered by the MIME list. This matches the shape NanoGPT adopted for bug 91.
+
+#### Fixed: batch memory deletion no longer fails on very large batches
+
+`deleteMemoriesWithUnlinkBatch` resolved doomed memory ids to their characters with a single
+`SELECT ... WHERE id IN (...)`, binding one SQL variable per id. Past SQLite's variable limit
+(32,766 in current builds, 999 in older ones) the query throws "too many SQL variables", so a
+full-wipe restore or a large character cascade on an instance with tens of thousands of memories
+failed instead of deleting. The resolve query and the repository's `bulkDelete` (whose `$in`
+filter expands the same way) now chunk ids 900 at a time via a new shared `chunkArray` helper
+(`lib/utils/chunk.ts`). Added unit tests pinning the chunked query shapes with 2,000-id batches.
+
+The replace-mode restore / delete-all-data path (`lib/backup/restore/delete-service.ts`) deleted
+memories with per-row `repos.memories.delete` calls in a loop — the last remaining bypass of the
+`deleteMemoriesWithUnlinkBatch` deletion chokepoint. It now collects every doomed memory id and makes
+one batch call. In the full-wipe case the chokepoint's neighbour scrub is a no-op (every neighbour is
+itself in the doomed set), so the change also collapses N per-row deletes into per-character bulk
+deletes. Added a regression test asserting the direct repository delete is never hit.
+
+#### Changed: refactor sweep over everything touched since 4.8.0 (checklist item 3)
+
+Reviewed all 524 non-test TypeScript files changed since 4.8.0 for duplication, SRP, YAGNI, and
+encapsulation leaks, then applied the confirmed findings. Behavior is preserved throughout — same
+strings, status codes, wire bodies, and log lines. Highlights, grouped:
+
+- **Route factories.** The byte-near-identical group/project scenario item routes (292/290 lines each)
+  are now thin configs (48/46) over `lib/mount-index/scenario-item-route-factory.ts`; the four
+  group/project wardrobe routes (671 lines combined) collapse to 154 over
+  `mount-wardrobe-route-factory.ts`. The `?action=instructions` GET/POST pair, copy-pasted across four
+  wardrobe routes, lives once in `lib/wardrobe/wardrobe-instructions-handlers.ts`. Scenario
+  create/update/rename Zod schemas single-sourced in `scenarios-common.ts`; two wardrobe routes'
+  local schemas replaced with the existing `createWardrobeSchema`.
+- **Hooks.** `useProjectScenarios`/`useGeneralScenarios` (~200 duplicated lines) are now one
+  `useScenarioMutator(basePath)`. `useChatSettings`'s ~23 copy-pasted PUT-and-mutate handlers share one
+  `patchChatSettings` helper. New shared `useChatSettingsQuery`, `useRealtimeFallbackPoll`, and
+  `useAutonomousRoomAction` hooks replace five ad-hoc settings-query types, three hand-rolled
+  socket-down polls, and a duplicated optimistic mutation.
+- **Wardrobe/tools.** Wear/take-off handlers share `finalizeWardrobeMutation`; equipped-slot rendering
+  (with the hair "never report empty" rule), the shared-item refusal message, and the equipped-slot
+  probe are single-sourced in `wardrobe-handler-shared.ts`; the photo handlers' triplicated vault guard
+  is one helper. Generic cheap-LLM parsing (`stripCodeFences`, `parseLLMJson`) moved out of the
+  1,400-line `ai-import.service.ts` into `lib/llm/llm-json.ts` (eight importers re-pointed);
+  `sanitizePronouns` to `lib/characters/sanitize-pronouns.ts`.
+- **Data layer.** `resolveDefaultOutfit` (three call sites, all reaching the same unreachable-fallback
+  path) deleted in favor of the existing `buildDefaultOutfit`. New `classifySchemaColumns` and
+  `requireMountIndexDb` helpers replace eleven and nine verbatim blocks across the repositories. The
+  characters/store-backed `_create` overrides (~30 duplicated lines each) are now `toPersistedRow` +
+  `createErrorMessage` hooks on the base repository. The dead `getPreserveIdsCreateOptions` became the
+  real one, used at 14 import sites. Title cleanup and the help-chat/normal-chat title twins in
+  `cheap-llm-tasks` collapsed into `cleanTitle` and two parameterized implementations.
+- **Runtime.** Outfit description and appearance-resolution flattening deduped between the chat context
+  manager, scene-state tracking, story-background, and image generation; job-dispatcher id probes fold
+  into `job-topics.firstIdArg`; the SQLCipher key pragma is one `applySqlcipherKey` across six sites;
+  tab-refetch asks `topic-map` for the character key triple; duplicate `getDbKeyPath` and the dead
+  `enrichMany`/`unsetAllDefaults` middleware utilities deleted.
+- **Components.** AI-wizard's four-times-repeated character-data shape is one `WizardCharacterData`;
+  optimizer field maps, the field-hint key lookup, and the "Written as:" example render moved into
+  their chokepoints; scenario option mapping, the wizard save-physical-description/save-scenarios
+  blocks, and the size-only image-provider parameter markup deduped; wardrobe URL literals now go
+  through `wardrobe-container`; the emoji/unicode picker wrappers deleted in favor of one
+  `CharPickerToolbarButton`.
+- **Plugins/packages.** `@quilltap/plugin-utils` 2.5.0 (needs `npm publish`): OpenAI-compatible
+  send/stream now share one `buildRequestBody`. NanoGPT 1.1.1: base URL and image MIME list
+  single-sourced (the bug-97 pattern). Ollama 1.0.46: think-parameter retry and request build deduped.
+- Also: legacy `useMessageStreaming` hook deleted (pre-Salon leftover with duplicate types); routes
+  now use `conflict()`/`created()` helpers instead of hand-rolled `NextResponse.json`; a scenarios
+  route stopped bypassing middleware-supplied repositories (this also fixed a latent crash — the
+  refactor pass's one live-bug catch: general-scenario POST referenced `repos` without destructuring
+  it after an earlier edit).
+
+Known tiny deviations, all judged harmless and noted in review: the four chat-title sites gain a
+second trim (a title like `"My Title "` now cleans fully); two views' console-only error-log formats
+unified; group scenario options' object key order shifts. Deliberately left alone: the two
+image-description-profile handlers in `useChatSettings` (three-way deviation from the pattern),
+`BrahmaConsoleSettings`/`DataRetentionSettings` (pre-existing twin, barely in the diff), the typeahead
+insert helpers (docblock names a planned consumer), `validateProviderConfig`'s api-key default
+disagreement (a behavior decision, not a refactor), and the plugin embedding-provider/image-entry
+dedups (would grow plugin-utils' public API for two consumers each).
+
+Verified: `npx tsc` clean; full unit suite green (725 suites / 11,237 tests, tool-schema snapshot
+unchanged); `npm run lint` clean. Net: roughly 2,800 lines removed across 134 modified files, plus
+the new shared modules.
+
+#### Added: 4.9.0 release notes, and a documentation-freshness sweep (checklist item 13)
+
+Walked the seven files checklist item 13 names, against the 67 commits of the 4.9 cycle
+(`0cd769f3..HEAD`).
+
+`docs/releases/4.9.0.md` did not exist and now does — the production release notes for 4.9.0, matching
+the version in `package.json`, drafted from the CHANGELOG in the pattern of `docs/releases/4.8.0.md`.
+It leads on realtime, the wardrobe work, archivable scenarios and garments, the Documents search chip,
+mid-chat scenario changes, and prompt person consistency, and carries an Upgrading section covering the
+three new migrations, the `PROMPT_CACHE_STRUCTURE_VERSION` 3 - 4 roll, the reverse-proxy requirement
+for the WebSocket upgrade, and the new `NANOGPT` key type. **The human should review it before the
+release** — `tag-for-release` asks whether the developer would rather write a minor release's notes
+themselves, and this was drafted rather than asked.
+
+Three genuine drifts in `docs/developer/API.md`, all found by diffing the documented paths against
+`app/api/**/route.ts`:
+
+- `GET /api/v1/embedding-profiles/models` is not a route. The three real actions
+  (`?action=list-providers`, `?action=list-models`, `?action=fetch-models`) are now documented, including
+  what `fetch-models` does for a provider whose plugin implements no `getAvailableModels`.
+- `PATCH /api/v1/user/profile/avatar` is not a route either; it is `?action=set-avatar` on the profile
+  route, the only action that verb accepts.
+- `/api/v1/settings/brahma-console` (GET/PUT) was undocumented entirely.
+
+Everything else matched: 131 of the 132 route files were already documented, and the only "documented
+but missing" path left is `GET /api/v1/system/realtime/stream`, which is the realtime WebSocket and has
+no `route.ts` by design.
+
+Smaller fixes:
+
+- `README.md` — the realtime interface and shared clock, the Documents search chip and where a result
+  opens, mid-chat scenario changes, per-wardrobe dressing instructions and the all-container Wardrobe
+  dialog, outfit-with-components transfers, archivable scenarios and garments, anti-chorus discipline,
+  per-turn conversation summaries, and `describe_image` plus the two-question image transport check. The
+  version badge was already current.
+- `docs/developer/DEVELOPMENT.md` — `lib/realtime/` and `server.ts` added to the project structure, and
+  the Linting section now documents `scripts/check-qt-classes.mjs` (the third `npm run lint` gate, added
+  this cycle with bugs 100/102) and notes that `lint:fix` does not run it.
+- `CLAUDE.md` — the same `qt-*` guard as a standing rule under Themes.
+- `app/about/AboutView.tsx` — the provider list was missing DeepSeek, Z.AI, and NanoGPT; added, along
+  with a Key Features bullet for the live interface. The version there reads from `package.json` and was
+  already current.
+- `.claude/commands/update-documentation.md` — two links pointed at `features/artifacts.md` and
+  `features/qt-docs-auto-embed.md`, both of which moved into `features/complete/`. Every one of the 80
+  document links in that file now resolves.
+
+`docs/CHANGELOG.md` needed nothing: all 67 commits of the cycle are recorded, in plain voice. Its
+`### 4.9-dev` heading is renamed to `### 4.9.0` by `tag-for-release` itself, so it is correct as it
+stands on a dev branch. The help set needed nothing either — every user-visible commit this cycle
+carried its `help/*.md` update, and all 120 help files have `url` frontmatter with a matching
+`help_navigate(...)` (the seven apparent mismatches are the deliberate ones: `url: *` for the
+everywhere-surfaces, `/salon/:id` for a pattern, and `/` for the two floating panels that are not routes).
+
+#### Fixed: restore let the table DEFAULT decide two connection-profile settings (bug 103, checklist item 10)
+
+Audited every data-model addition since 4.8.4 against backup and restore. All of them ride along
+correctly, but the audit turned up a defect in the mechanism that makes that true.
+
+Restore rebuilds a row by spreading the archive record, which is what lets a *new* column ride along
+with no restore change — and is exactly why a column the archive is **older than** got no answer at
+all. An absent key is absent from the INSERT column list, and SQLite fills it from the table DEFAULT.
+`connection_profiles.multiCharacterPrefill DEFAULT 1` turned the `[Name]` prefill on for every profile
+in a pre-4.9 backup, Anthropic included, where 4.6+ rejects an assistant tail and every multi-character
+turn then 400s. `supportsImageUpload DEFAULT 0` did the mirror image to a pre-4.3 backup and stripped
+vision from the profiles that had it. Both columns' migrations backfill thoughtfully, but a migration
+runs on the upgrade path only.
+
+New `lib/llm/connection-profile-legacy-fields.ts` seeds the columns an older archive cannot carry:
+`supportsImageUpload` from the frozen historic provider map, `multiCharacterPrefill` as an explicit
+`null` — the documented "never chosen" state — so `profileUsesNamePrefill()` resolves the provider
+default. Both `restore.ts` and `import-profiles.ts` call it, so a backup ZIP and a `.qtap` bundle
+carrying the same profile now land the same row; import's private copy of the provider set is gone.
+A key the archive did carry is never touched, a stored `false` and a stored `null` included. The
+provider set is matched case-insensitively — `ProviderEnum` is a plugin-supplied `z.string()`, not a
+closed enum, so the exact-case check the inline version used would have missed a lowercased `openai`.
+
+Tests: 16 cases for the helper, and a 4.9 block in `restore-field-fidelity.test.ts` (the three
+seeding cases fail against the pre-fix restore, plus pass-through coverage for `multiCharacterPrefill`
+and the `hair` slot in `chats.equippedOutfit`). Suite: 725 files, 11,234 tests, all passing
+(was 724 / 11,213).
+
+Docs: `docs/BACKUP-RESTORE.md`'s "What's Included" list was several cycles stale — it omitted document
+stores, instance settings, chat settings, text replacement rules, Document Mode state and the whole
+embedding family, and still advertised the `wardrobe_items` and `outfit_presets` tables dropped in 4.7
+and 4.5. Rewritten, with the exclusions stated and their reasons. `help/system-backup-restore.md` and
+`help/connection-profiles.md` gained the same corrections in the user's voice. DDL.md now documents
+`Wardrobe/instructions.md` and the scenario `archived` frontmatter key, both added this cycle.
+
+#### Verified: published packages and consistent installs (checklist item 9)
+
+Audited every package under `packages/` that changed since 4.8.4 and confirmed each is
+version-bumped, published to npm, and consistently referenced by everything that consumes it. No
+code changed in this pass: the one defect it found, the OpenAI-Compatible plugin's undeclared
+`@quilltap/plugin-types`, is recorded under checklist item 8 below, which landed the same fix.
+
+- All four changed packages are bumped and published: `plugin-types` 2.5.8, `plugin-utils` 2.4.0,
+  `theme-storybook` 1.0.64, and the `quilltap` CLI at 4.9.0-dev.75 (the CLI publishes automatically
+  at release). Every bump landed in the same commit as its content change, so no package shipped
+  source ahead of its version, and nothing awaits a manual `npm publish`.
+- Root `package.json` is current, and after a clean install all 15 plugins resolve plugin-utils
+  2.4.0 and plugin-types 2.5.8. The committed bundles already carry the current 2.3.0/2.4.0 APIs.
+- The older caret ranges some plugins declare (`^2.2.20`, `^2.5.6`) are accurate floors — those
+  plugins use no 2.3.0+ API — so they were left alone rather than tightened into a minimum they do
+  not actually require.
+- A full `npm run build:plugins` rewrites seven bundles, but every drifted section is third-party
+  float: `openai` `^7.4.0` now resolving 7.5.0, plus `@openrouter/sdk` and an MCP URI-template
+  dependency. No Quilltap package code differs, so the rebuild was left out. Plugins carry no
+  lockfiles, so any rebuild picks up whatever the carets resolve to that day.
+- `plugin-types` 2.5.8 and `theme-storybook` 1.0.64 are published with no CHANGELOG entry of their
+  own; 2.5.8 ships new public API (`supportsThinking`, `thinksByDefault`, `ThinkingTurnRule`).
+
+#### Removed: leftover debug logging (checklist item 6)
+
+Swept every `.ts`/`.tsx` change since 4.8.4 for logging added during development and removed one
+line: the per-publish `Realtime publish coalesced` debug print in `lib/realtime/bus.ts`.
+
+It fired on every `publishRealtime` call that landed inside the 250 ms debounce window. Job status
+transitions pump that path from `job-dispatcher.ts` and `activity-registry.ts`, so an
+`EMBEDDING_REINDEX_ALL` sweep of 1000 jobs emitted one `publish queued`, 999 `publish coalesced` and
+one `publish flushed`. The surviving `publish flushed` line already reports the same total once per
+window, and with logs rolling every 2-3 MB the per-absorb copy only evicted real diagnostics. The
+`coalesced` counter itself stays, since `flushed` reads it.
+
+Nothing else was pruned. The remaining new debug logs are structured, guarded and bounded (once per
+flush or per connection, not per publish), which is what the logging convention asks for. Every
+`console.*` added since the release is in client paths at `error`/`warn` level, matching the
+existing convention in 145 other files, so there was no backend `console.*` to convert.
+
+#### Fixed: OpenAI-Compatible plugin declares the plugin-types it requires (checklist item 8)
+
+`qtap-plugin-openai-compatible` shipped a bundle that emits a runtime
+`require("@quilltap/plugin-types")`. The plugin's own source imports that package for types only, but
+`@quilltap/plugin-utils` imports it for real, and esbuild marks it external — so the require survives
+into the bundle. The plugin's `package.json` never listed it. It resolved anyway, but only because npm
+pulls it in transitively through `@quilltap/plugin-utils` and hoists it somewhere Node's upward walk
+reaches: the same luck-based resolution that broke Mistral installs. A strict (pnpm-style)
+`node_modules` layout would have failed the load with MODULE_NOT_FOUND.
+`qtap-plugin-default-system-prompts` externalizes the same package and declares it properly; this one
+is now consistent with it. Dependency metadata only — no change to the bundle. Plugin 1.0.42.
+
+Audited the other fourteen distributed plugins in the same pass. No reach-ins anywhere: no `@/lib`, no
+`@/` alias, no relative path escaping a plugin directory, in sources, bundles or build configs. Every
+`./types` barrel is a thin re-export of `@quilltap/plugin-types`. `@quilltap/plugin-utils` is bundled
+by all fifteen (externalized by none). Cache-read tokens are excluded from `promptTokens`/`totalTokens`
+in every provider that folds them into the prompt count, and correctly *not* excluded in Anthropic,
+which reports `input_tokens` separately from `cache_read_input_tokens`. The Anthropic new-generation
+model-ID prefix branch is intact. The remaining undeclared bare requires in other bundles
+(`ajv`/`ajv-formats` under MCP, `google-auth-library` under Google, `zod` under OpenRouter) are
+transitive dependencies of declared packages or app-provided externals, and are already accounted for
+by the standalone tarball's `pruneRedundantPluginModules`.
+
+#### Changed: qt-* theme utility sweep, first pass (checklist item 7)
+
+Reviewed the 118 `.tsx` files changed since 4.8.4 for hard-coded Tailwind that themes cannot reach,
+and converted 20 sites across 15 files.
+
+Sixteen were solid semantic fills — `bg-destructive`, `bg-success`, `hover:bg-primary` — swapped to
+their `qt-bg-*` equivalents. These read the same token either way, so nothing moved on screen; the
+point is consistency, since `qt-` already carried the overwhelming majority of these call sites
+(`bg-destructive` was 8 Tailwind against 62 qt). `ChatCard.tsx:268` and `TaskFilters.tsx:140` were
+each the odd branch of a ternary whose siblings were already `qt-`.
+
+Two were genuinely unthemeable and do shift slightly:
+
+- `CharacterHeader.tsx:139` — the avatar placeholder was `bg-gray-300 dark:bg-slate-700`, a new
+  inline copy of the pattern in `lib/avatar-styles.ts`. Now `qt-bg-muted`, matching
+  `--qt-avatar-bg`, which is what every other avatar in the app already resolves to.
+- `image-gallery.tsx:176` — `bg-black bg-opacity-0 group-hover:bg-opacity-50` became
+  `qt-bg-overlay-medium`, matching `GenerateImageView.tsx:315`. The `bg-opacity` pair was redundant
+  with the `opacity-0`/`group-hover:opacity-100` fade on the same element, hover alpha goes 0.5 to
+  0.6, and the value is now theme-controllable via `--qt-overlay-medium-bg`.
+
+Both checkboxes in `memory-recall-card.tsx` moved from raw `border-input text-primary
+focus:ring-primary` to `qt-checkbox`, joining 40 existing adopters at the same rendered size.
+
+Added `.hover\:qt-bg-primary` and `.hover\:qt-bg-success`, the missing solid-fill siblings of the
+existing `.hover\:qt-bg-destructive`. Tailwind generates no variants for classes declared inside
+`@layer utilities`, so each hover form has to be written by hand or it is inert. Mirrored into
+`packages/theme-storybook` (1.0.65). The bundled themes need no edits — all six already define the
+`primary` and `success` tokens these rules read.
+
+`text-foreground` was left alone. It maps to the same token as `qt-text`, but Tailwind is the house
+convention there by 376 uses to 73, so converting the seven in scope would only make them the
+inconsistent ones.
+
+Two pre-existing gaps are recorded but out of this item's scope, both unchanged since 4.8.4:
+`lib/avatar-styles.ts` hard-codes the avatar chrome app-wide, and eleven more raw checkboxes remain
+under `components/settings/chat-settings/`.
+
+#### Fixed: CLI shell completions missed four documented flags (checklist item 12)
+
+Audited the CLI's command surface against `--help`, [CLI.md](developer/CLI.md), the package README,
+and the three completion templates. The command modules themselves are unchanged since 4.8.4 — only
+`bin/quilltap.js` (native-module linking) and the completion templates moved this cycle — but four
+flags that `--help` documents were reachable by typing and invisible to tab-completion:
+
+- `docs docker-mounts --format args|json` — missing from bash, zsh, and fish. bash also needed it in
+  `vf_docs`, its value-flag list, or `--format json <TAB>` would have read `json` as the verb.
+- `docs --uri` and `docs --base64` — missing from fish.
+
+`completion-coverage.test.js` guarded only the top-level subcommand surface, so none of this failed a
+build. It now also asserts that every long flag named in a subcommand's own `--help` is offered by all
+three templates, and cross-checks bash's `vf_*` value-flag lists against zsh's `:value:` specs. Removing
+any one of the four flags again fails the suite.
+
+Docs: the package README gained the `docs docker-mounts` verb (shipped in 4.8.4 with no README entry)
+and a rewritten "What gets completed" section covering the flag-anywhere parsing and positional
+store-name completion added in the bug 101 fix.
+
+Both guards originally compared flags by substring, which passes for a flag that is not there when
+another flag has it as a prefix — `--max` reads as present when only `--max-nodes` is listed. They now
+match whole tokens, and the help-function pattern tolerates reformatting rather than asserting on
+whitespace.
+
+#### Removed: dead code sweep (checklist item 5)
+
+Ran knip over the repo and removed 11 unused exports across 9 files. knip's raw output is mostly
+intentional surface, so each candidate was scored by whole-repo reference count and then confirmed
+by hand before deletion.
+
+- `useAvatarDisplayContextOptional` (`components/providers/avatar-display-provider.tsx`) — the last
+  of the `use*Optional` context hooks; the other three went in an earlier sweep.
+- `readJsonFileOptional` (`lib/backup/restore/json-stream.ts`), `joinFolderPath`
+  (`lib/files/folder-utils.ts`), `standaloneTabPayload` (`lib/documents/open-document-in-chat.ts`).
+- `createApiLogger` and `createRepositoryLogger` (`lib/logging/create-logger.ts`) — the two members
+  of the logger family with no callers; the other three are used 373 times between them.
+- `databaseFolderHasContents` (`lib/mount-index/database-store.ts`) — no production caller; its only
+  references were five `jest.mock` stubs, removed with it.
+- `GROUP_WARDROBE_FOLDER` and `PROJECT_WARDROBE_FOLDER` — unused one-line aliases of
+  `SHARED_WARDROBE_FOLDER`.
+- `resolveSharedWardrobeTiersForProject` and `noSharedWardrobeTiers` (`lib/wardrobe/shared-tiers.ts`)
+  — superseded by the per-character loop the module documents for that case.
+
+Two flagged constants were deduplicated instead of deleted. `HAIR_PHYSICAL_BOUNDARY` and
+`HAIR_PHYSICAL_DESCRIPTION_NOTE` (`lib/wardrobe/slot-guidance.ts`) were duplicated verbatim as inline
+literals in `lib/services/character-field-semantics.ts` — the exact divergence that module exists to
+prevent — so the semantics file now interpolates them. The strings are byte-identical, verified by
+expanding the patched file back to literals and diffing against HEAD, so no prompt text changed and
+no identity-stack version bump is owed.
+
+Two knip "unused file" reports were false positives and are now handled in `knip.json`:
+`jest.integration.config.ts` (invoked by two `package.json` scripts via `--config`) is listed as an
+entry, and `__tests__/helpers/lexicalPluginHarness.tsx` (imported by four live suites) is ignored.
+
+`docs/developer/DEAD-CODE-REPORT.md` records the full round, including the symbols kept with reasons.
+
+#### Added: release-checklist test coverage (checklist item 2)
+
+Audited every bug fixed since 4.8.4 (bugs 66-102, all 37) and all 55 source modules added in the
+same range. 29 bugs already had regression tests; 50 of the new modules already had coverage.
+Nine test files added, 70 cases:
+
+- Regression tests for the four fixed bugs that had none: bug 77 (tool-execution notice pinned above
+  the composer), bug 83 (V8 Sparkplug worker segfault), bug 94 (`attachmentResults` ledger never
+  displayed), bug 99 (gallery modal controls painted over by the page toolbar).
+- First coverage for five new modules: `lib/file-storage/digest-policy.ts`, `lib/realtime/ws.ts`,
+  `lib/database/repositories/help-doc-chunks.repository.ts`, `app/aurora/shared/save-generated-wardrobe.ts`,
+  and `components/chat/ChatScenarioControl.tsx`.
+
+Two behaviour-neutral extractions were needed to make bugs 77 and 94 testable, both following the
+pattern `resolveToolResultErrorText` already set in the same file: the tool-execution notice's state,
+timer, and callbacks moved out of `useSSEStreaming.ts` into a new `useToolExecutionStatus.ts`, and the
+failed-attachment toast sentence became an exported `buildFailedAttachmentWarning`. The hook's public
+surface is unchanged.
+
+Suite: 724 files, 11,213 tests, all passing (was 715 / 11,143).
+
+Bugs 89 and 90 remain without unit tests by design — 89 lives in the CLI bin's native-module linking
+and only misbehaves against a real install tree; 90 is guarded at build time by
+`scripts/assert-standalone-portable.mjs`. Bugs 100 and 102 are guarded by `scripts/check-qt-classes.mjs`
+in `npm run lint`.
+
+#### Added: realtime interface updates (WebSocket push + shared clock)
+
+Implements `docs/developer/features/complete/realtime-updates.md`. Two separate causes of a stale
+screen, two separate mechanisms.
+
+**Server state changing — push it.** A single multiplexed WebSocket at
+`/api/v1/system/realtime/stream` carries invalidation hints (`{v, topic, id?, at}`, ~40 bytes) to every
+open tab. Hints never carry data: the client maps a topic onto `queryClient.invalidateQueries`, so the
+REST API stays the single source of truth and a reconnect is just "invalidate everything and refetch."
+
+- `lib/realtime/bus.ts` — parent-process fan-out singleton (`globalThis`-backed, so it survives dev
+  HMR) with a mandatory 250 ms trailing-edge debounce per topic+id. Verified live: 12 concurrent
+  enqueues arrive as one frame. Publishing from the forked job child is a no-op; the child's changes
+  reach the bus through the existing IPC.
+- `lib/realtime/ws.ts` + a second branch in `server.ts`'s `upgrade` listener, anchored so Next's own
+  HMR/dev-RSC upgrades still fall through. `scripts/build-standalone-overlay.mjs` emits the new handler
+  alongside the terminal one so it exists in the tarball.
+- Publish points: `enqueueJob` / `enqueueMemoryExtractionBatch` / `cancelJob`, successful
+  `claimNextJob`, `markCompleted` / `markFailed`, activity-registry span start and end plus
+  `applyChildActivityDelta`, the autonomous-room run-state transitions, and — for entity topics —
+  `topicsForCompletedJob` on job completion and `topicsForWriteBatch` inside the dispatcher's
+  post-commit `dispatchInvalidations`, which sees every background-job write after it lands.
+- Client: `lib/realtime/client.ts` (one socket per tab, 1 s → 30 s jittered backoff, 30 s ping,
+  visibility-aware), `lib/realtime/topic-map.ts` (topic → query-key prefixes; unknown topics ignored so
+  an older tab survives a server upgrade), and `RealtimeProvider`, which invalidates every mapped
+  prefix on connect as the catch-up for anything missed while disconnected.
+
+**Polling is now the fallback, not the mechanism.** Every migrated site keeps its original cadence
+wired but gated on socket health via `useRealtimeRefetchInterval` / `useRealtimeTopic`: toolbar queue
+chips (now a TanStack query on `queryKeys.system.jobs`, adaptive 1.5 s/8 s retained as fallback),
+autonomous-room badges and card, tasks queue, story background (both the 30 s passive sweep and the
+3-minute active loop), the memory-backfill / memory-regenerate / summary-regenerate cards, the
+character conversations tab's Scriptorium watch, and the Salon's avatar watch. `StartupProgress` and
+`useHealthCheck` deliberately keep polling. Measured on a live instance: zero background fetches in a
+10 s idle window that previously cost at least one.
+
+**Auth hardening.** `lib/realtime/upgrade-auth.ts` is now the single gate for both WebSocket handlers:
+live session, not locked, and same-origin. It replaces the terminal handler's "a session-ish cookie
+exists" fallback, which proved nothing — Quilltap sets no session cookie, so it accepted any request
+carrying any cookie. Browsers do not apply CORS to WebSocket upgrades, so the origin check is what
+actually keeps another site from opening a socket against a localhost instance; a missing `Origin`
+(non-browser clients) is still allowed.
+
+**The clock advancing — tick it locally.** `hooks/useNow.ts` is a shared, boundary-aligned ticker: one
+timer per granularity regardless of how many components subscribe, ticks just after each minute /
+second / local-midnight boundary so every "4m ago" on screen flips together, inert during SSR, and
+paused for sub-minute granularities while the tab is hidden. Adopted by the tasks queue, the merge
+picker, `ChatCard` (day granularity, for the Today → Yesterday rollover), `StartupProgress`, and the
+autonomous-room budget readout, which drops its bespoke 1 s interval. `StartupProgress`'s private
+`formatRelativeAge` moved into `lib/format-time.ts`; `formatRelativeDate` and `formatChatListDate` take
+an optional `nowMs`.
+
+**User-visible change:** the tasks queue's "Auto-refresh (5s)" toggle is now "Fallback polling (5s)" —
+same switch, honest name. Documented in `help/system-tasks-queue.md`.
+
+#### Fixed: the toolbar activity chips now count the whole job
+
+The **Mem / Emb / Sum / Dgr / Img** chips in the page toolbar only ever counted rows in the
+`background_jobs` table, and only the job types someone had remembered to list. Everything else was
+invisible. Three of the four image-generation paths are not jobs at all — the Lantern's
+`generate_image` tool, the wardrobe avatar preview, and `POST /api/v1/images?action=generate` — so
+those ran start to finish without **Img** moving. Nine job types belonged to no chip
+(`MEMORY_HOUSEKEEPING`, `CARINA_MEMORY_EXTRACTION`, `EMBEDDING_REAPPLY_PROFILE`,
+`CHARACTER_HEADSHOULDERS_BACKFILL`, `WARDROBE_OUTFIT_ANNOUNCEMENT`, and others). Per-message Concierge
+classification and every inline embedding call showed up nowhere.
+
+What changed:
+
+- **Chip membership is now exhaustive by type.** `JOB_TYPE_ACTIVITY` in
+  `lib/background-jobs/activity-kinds.ts` is a total `Record<BackgroundJobType, ActivityKind | null>`,
+  so adding a job type without assigning it a chip is a compile error. Deliberate omissions are spelled
+  `null`. The nine unassigned types now have chips.
+- **Non-job work registers with an activity registry** (`lib/background-jobs/activity-registry.ts`).
+  The three inline image paths, the Concierge classifier, the embedding service, the memory gate, and
+  every cheap-LLM task now count for their full duration. A chip is lit from the first token of prompt
+  crafting until the result lands or fails.
+- **Reading an image counts as image work.** Vision calls — the wardrobe image analyzer, the character
+  wizard's image description, the chat attachment describe-fallback, and the `describe-attachment`
+  cheap-LLM task — light **Img**, the same as generating one.
+- **Counting is re-entrant by kind.** A job handler is attributed to its own kind without adding a
+  count, so inline work of the same kind collapses into the job row instead of doubling it. Work of a
+  *different* kind still nests and counts: a Concierge check inside an image generation ticks **Dgr**
+  up and back down inside the **Img** span.
+- **Inline work inside job handlers counts too.** The forked job child mirrors its activity spans to
+  the parent over a new `activity` IPC message. The mirror is zeroed when the child exits, so a crash
+  mid-span cannot pin a chip above zero.
+- **Polling is now a heartbeat.** The chips previously polled only after a client called
+  `notifyQueueChange()` and stopped the moment counts hit zero, so server-initiated work (autonomous
+  rooms, scheduled housekeeping, a wardrobe change enqueuing an avatar) never appeared. They now poll
+  on their own — 1.5s while busy, 8s while idle. `notifyQueueChange()` remains as an instant kick but
+  nothing depends on it.
+- **Work that starts and finishes between two polls now blips.** The API returns a monotonic
+  `startedByKind` counter and the chip pulses when it advances. Spans under 250ms (a cached
+  classification) do not register, so the chips do not flicker.
+
+Two hot-path queries were rewritten as indexed `COUNT(*)`s to make heartbeat polling affordable:
+`getStats` read and Zod-validated *every* row in `background_jobs` (completed jobs inside the retention
+window included), and the active-count query hauled every active row with its payload JSON. The new
+`getActiveCountsByKind` runs one count per chip.
+
+`GET /api/v1/system/jobs` now always returns `activeByKind` and `startedByKind`; the per-type
+breakdown (`activeByType`) is opt-in via `?includeByType=true` since it costs a full read.
+
+
+#### Added: the search bar searches every document store
+
+The global search bar (⌘K) gained a **Documents** type, with its own filter chip alongside Chats,
+Characters, Messages, Tags and Memories. It matches file names, relative paths, and extracted document
+text across every enabled document store — character vaults included — and shows the store name, the
+document's path, and a highlighted snippet of the match. One result per document: a file-name match
+outranks a match buried in the text, and both outrank nothing. Implements
+`docs/developer/features/complete/global-search-documents.md`.
+
+Clicking a document result opens it in Document Mode, and where it opens depends on what you were doing.
+If a Salon is focused, the document opens *in that conversation*, exactly as the composer's document
+picker would — the Librarian announces the open and the chat sees later saves. Otherwise it opens in
+standalone Document Mode, which is attached to no conversation and announces nothing, ever. A
+middle-click or "open in new tab" always takes the silent standalone route, because that is what the
+result's own link points at.
+
+Details and limits:
+
+- Vaults belonging to archived characters are never searched. An archived character is a tombstone, and
+  surfacing its files would offer a way back into it.
+- Documents marked `character_read: false` **are** searched. That flag hides a document from characters,
+  not from you.
+- Only documents Document Mode can open are searched (Markdown, text, JSON, JSONL), so every result is
+  clickable. PDFs, Word files, images and other binaries are not searched, and neither is a file whose
+  text extraction hasn't finished.
+- The search is substring matching, like every other type in the bar — not semantic search. `%` and `_`
+  typed into the box match themselves rather than acting as wildcards.
+- The list of search types now lives in one place (`components/search/types.ts`) instead of three; the
+  route, the filter chips, and the result groups all read it.
+
+#### Added: archivable scenarios and wardrobe items
+
+Scenarios and wardrobe items can now be archived instead of deleted. An archived entry disappears from
+every list, dropdown, and picker by default; each listing surface gained a "Show archived" checkbox that
+reveals it (badged) and still lets you select it. Archiving hides, it does not forbid — with one exception:
+the outfit-selection LLM at chat start never receives archived garments, in any tier, with no parameter and
+no override. Implements `docs/developer/features/archived-scenarios-and-wardrobe.md`.
+
+Scenarios use an `archived: true` frontmatter key across all four scopes — general, project, group (files in
+a `Scenarios/` folder) and character (vault `Scenarios/*.md`). The key is omitted entirely when a scenario is
+active; a hand-written `archived: true` with nothing else works. An archived scenario can never win
+default-conflict resolution or be auto-selected in the New Chat dialog, even when it is being listed.
+Existing chats are unaffected: `resolveScenarioBody` ignores the flag, so a chat whose scenario was archived
+mid-life keeps its scenario text.
+
+Wardrobe archiving already existed in the persistence layer with no way to reach it. The four item routes
+(character, general, project, group) now accept `archived: boolean`, translated to `archivedAt` by one shared
+helper — archiving is idempotent and does not reset an existing timestamp — and `repos.wardrobe.unarchive`
+finally has a caller. The four collection routes accept `?includeArchived=true`; project and group wardrobe
+lists previously returned archived items unconditionally and filtered client-side. Archive/Restore is in the
+Wardrobe dialog's per-item menu and on the project wardrobe card. A worn garment archived mid-chat stays worn.
+
+Filtering is server-side throughout: the checkboxes change the fetch, not a client-side pass, so a picker that
+never passes the parameter is safe by construction. The two client-side filters that existed (the wardrobe
+dialog, the outfit composer) were removed rather than left as a second place for the rule to drift.
+
+Other changes in the same work:
+
+- Character scenario files now round-trip their `description` frontmatter. It was parsed on read but never
+  written back, so the next vault projection silently dropped it.
+- The New Chat dialog now passes group scenarios through to the form. `useNewChat` fetched them and
+  `NewChatForm` accepted them, but nothing connected the two, so the Group Scenarios optgroup never appeared.
+- `useProjectScenarios` and the character edit form's local `CharacterScenario` were duplicate declarations of
+  shared types; both now alias the canonical ones, so a new field can't be added to one and missed on the other.
+- The Almanack's Scriptorium table splits scenario counts into total and archived, matching what the wardrobe
+  row already did.
+- `qtap-export.schema.json` declares `WardrobeItem.archivedAt` and the character-scenario `archived` flag, both
+  of which previously survived only via `additionalProperties: true`.
+
+#### Added: feature plan for archivable scenarios and wardrobe items
+
+New spec at `docs/developer/features/archived-scenarios-and-wardrobe.md`: an `archived: true/false`
+frontmatter property on scenario and wardrobe-item files (absent = false). Archived entries are hidden
+from every list, dropdown, and picker by default; each listing surface gets a "Show archived" checkbox
+that reveals them and still lets the user pick them. The outfit-selection LLM at chat start never sees
+archived garments (already true today; the plan pins it with tests). Wardrobe archiving is already
+half-built in the persistence layer, so that half of the plan exposes existing plumbing (archive/unarchive
+via the item routes, `?includeArchived=true` on the collection routes); scenarios get the property from
+scratch across all four scopes. Docs only; no code changes yet.
+
+#### Added: feature plan for a Documents chip in the global search
+
+New spec at `docs/developer/features/global-search-documents.md`: extend the global search bar to
+keyword-search all enabled document stores (file names, paths, and extracted text), add a "Documents"
+filter chip, and open results in Document Mode — in the active Salon chat when one is focused (with the
+usual Librarian announcement), otherwise in the standalone, chat-free document view. Docs only; no code
+changes yet.
+
+#### Added: per-wardrobe dressing instructions for "Let Character Choose"
+
+Every wardrobe — a character's vault, a group's store, a project's store, and Quilltap General — can now
+hold an optional `Wardrobe/instructions.md`: second-person guidance ("you prefer to wear…") that is read
+when a character dresses themselves at chat start (or when joining a chat under the same mode). Resolution
+is nearest-tier-first: character, then group, then project, then General; the first non-blank file wins and
+the search stops there. The content is added to the outfit-selection prompt and influences nothing else.
+
+Edited from a new collapsible "Dressing Instructions" panel under the container selector in the Wardrobe
+dialog — and, for a character's own wardrobe, from the Wardrobe tab of their Aurora page — backed by
+`?action=instructions` GET/POST on the four wardrobe collection routes. The file is
+never treated as a garment: the shared wardrobe reader skips it by name (previously it would have been
+parsed as an invalid item and logged a warning on every read), the wardrobe folder projection sweep
+preserves it (previously any wardrobe write would have deleted it), a garment titled "Instructions"
+projects to `instructions-1.md` instead of overwriting it, and the Almanack's garment counts exclude it.
+
+#### Fixed: hover states across the app did nothing, and a lint guard so it can't happen again
+
+Hovering a character card, a table row in the Scriptorium, a dropdown item, or a solid Delete button did
+not change anything. `hover:qt-bg-muted` — the most-used state class in the app, on 73 elements — matched
+no CSS rule, and neither did 33 other `hover:`/`focus:`/`disabled:` forms. Tailwind v4 generates variants
+only for utilities it owns, and a class declared inside `@layer utilities` is not one of those, so
+`hover:qt-bg-muted` is not "`qt-bg-muted`, on hover" — it is a class name nobody defined. The same applies
+to opacity: `qt-bg-muted/50` (34 elements) is not `qt-bg-muted` at half strength. Every form the app uses
+has to be written out by hand, and most of them never were: 82 class names over 493 call sites in 170
+files.
+
+`app/styles/qt-components/_utilities.css` now carries the missing opacity steps for the muted, card,
+primary, destructive, success, warning, info and secondary backgrounds, the border and text opacity steps
+to match, the two surface colors the markup asked for (`qt-bg-input`, `qt-bg-secondary`), and a rewritten
+**STATE VARIANTS** section with all 34 state forms. Twenty-four places had invented a class name that was
+never part of the vocabulary — `qt-text-error`, `qt-text-sm`, `qt-surface-alt` and friends — and those were
+changed to the class that already existed rather than given a definition of their own.
+
+The part that matters longer than this release is `scripts/check-qt-classes.mjs`, now run by
+`npm run lint`. It holds every `qt-bg-*`/`qt-text-*`/`qt-border-*`/`qt-shadow-*` reference, and every
+variant-prefixed `qt-*` reference, against the rules the stylesheets actually define, and fails the build
+on one that resolves to nothing. Bugs 39, 100 and this one are the same defect found three times by three
+accidents; the guard is what makes it a build error instead of a fourth. Filed as bug 102.
+
+`@quilltap/theme-storybook` 1.0.63 mirrors all 79 new rules.
+
+#### Fixed: shell completion stopped working once a flag was on the line
+
+In zsh, `quilltap docs --instance Friday <TAB>` offered nothing at all — not the `docs` verbs, not even
+the flags. Each subcommand looked its verb up with a hard-coded `(( CURRENT == 2 ))`, which only holds
+when the verb sits immediately after the subcommand, so any flag typed first hid it. The top-level
+`_arguments` made it worse by claiming `--instance Friday` as a global option even when it appeared
+after `docs`, leaving the subcommand dispatch with an empty argument list.
+
+Every zsh function now hands its options and its positionals to a single `_arguments -C` call and
+branches on the parsed state, and the top-level positionals carry `(-)` so a flag typed after the
+subcommand stays with that subcommand. Bash had a milder version of the same bug: its scanner only knew
+that the *global* flags take a value, so `quilltap docs --limit 5 <TAB>` read `5` as the verb. It now
+tracks value-taking flags per subcommand, which also fixes `-o` (the valueless global `--open`, but
+themes' valued `--output`) and `memories -i` (`--ignore-case` there, not `--instance`).
+
+Store names now complete wherever a verb takes one — `docs ls`, `docs read`, both ends of
+`docs move`/`copy`/`link`, and `--mount` — in bash and zsh, and the lookup re-uses the `-i`/`-d`/
+`--passphrase` already on the line, so `docs --instance V4test ls <TAB>` lists V4test's stores rather
+than the default instance's. Names containing spaces or colons ("Project Files: The Estate") are quoted
+correctly instead of being chopped into separate candidates. fish, whose completions already survived
+flags, gains store names on `--mount` only.
+
+The new completion test handed the zsh template to `zsh -n` unconditionally, which broke CI: GitHub's
+ubuntu runner image has no zsh, so the check failed with `spawnSync zsh ENOENT`. The test now skips that
+one assertion where zsh is not installed, and CI's test job installs zsh so the check still runs there.
+
+#### Fixed: solid green and red buttons never set their own text color
+
+`qt-text-success-foreground` and `qt-text-destructive-foreground` appeared on fifteen elements and were
+defined in no stylesheet anywhere. They are the Tailwind utility names with a `qt-` prefix bolted on, so
+they matched no rule and each element painted its fill and then left the text whatever color it had
+inherited. The Set-as-avatar and Delete buttons on gallery thumbnails changed their background on hover
+but not their glyph; the green **Avatar** badge, the solid Chat and Delete buttons in Aurora and Prospero,
+and the file-delete confirmations all put a colored fill under unchanged text.
+
+`app/styles/qt-components/_utilities.css` now carries the rest of the family `qt-text-on-accent` started —
+`qt-text-on-primary`, `qt-text-on-success`, `qt-text-on-destructive` — plus the hover partners
+`hover:qt-text-on-accent`, `-on-primary`, `-on-success` and `-on-destructive`. Tailwind v4 generates no
+variants for classes declared inside `@layer utilities`, so each hover form has to be written out by hand;
+one that was never written is simply inert. All fifteen call sites now use the real classes, and the
+character gallery's new Download button moved from the raw `hover:text-primary-foreground` to
+`hover:qt-text-on-primary`. Filed as bug 100.
+
+`@quilltap/theme-storybook` 1.0.62 mirrors the eight new selectors and adds a "Foregrounds on filled
+surfaces" section to the `Surfaces` story, showing all four fills with their foregrounds and spelling out
+the naming trap: the classes are `-on-<fill>`, never `-<fill>-foreground`.
+
+#### Fixed: a character's Photo Gallery had no reachable way to download a picture
+
+The image detail view's top-right controls — Download, Copy, Save to my gallery, Close — were painted
+behind the sticky page toolbar and could not be clicked. `.qt-workspace` sets `isolation: isolate`, so
+everything a pane renders lives in that stacking context and the modal's `z-[60]` was no longer comparable
+with the toolbar's `z-30` in an ancestor context. Nothing was clipped or mispositioned; the buttons were
+laid out exactly where they belonged and `elementFromPoint()` at their centre returned the toolbar.
+`ImageDetailModal` now renders through `createPortal(..., document.body)`, the same fix bug 40 applied to
+the search dialog.
+
+The character gallery's thumbnails also gained the hover **Download** button every other image grid
+received in 4.9-dev; this grid was the one that was missed. It fetches the picture and hands it to
+`lib/download-utils.ts`, so the desktop shell gets its native save dialog, and it stops propagation so
+downloading doesn't also open the detail view. Filed as bug 99.
+
+#### A chat's scenario can be changed mid-conversation
+
+The Salon sidebar's Chat drawer gains a **Scenario** control. It offers the same four tiers the new-chat
+dialog does — project, general, group, and (when a single LLM character is present) character scenarios —
+plus a **Custom...** option that reveals a free-text box. Saving posts to the new
+`POST /api/v1/chats/[id]?action=scenario`, which rewrites `chat.scenarioText`, recompiles every
+participant's identity stack (the scene is baked into `{{scenario}}` there), and posts a Host announcement
+worded as a revision so the chat-start scene-setting further up the transcript reads as superseded rather
+than contradicted. Saving an empty custom scenario clears the scene; re-picking the scene already in force
+is a no-op with no announcement. The original scene-setting message is left in place.
+
+The control seeds itself from the chat's current scene: text matching a preset exactly preselects that
+preset, and anything else opens on **Custom...** with the text loaded for editing.
+
+Supporting changes:
+
+- The scenario precedence chain (character ID > project path > group path > general path, with free text
+  layered beneath whatever resolves) moved out of the chat-creation route into
+  `lib/chat/scenario-selection.ts`, so both surfaces resolve a selection identically.
+- The scenario dropdown itself moved into a shared `components/scenario/ScenarioSelect.tsx`; the option
+  types and `<option value>` tokens now live in `components/scenario/types.ts` and are re-exported from
+  `components/new-chat/types.ts`.
+- `GET /api/v1/chats/[id]` now projects `scenarioText` (it previously didn't), so the picker can open on the
+  chat's actual scene instead of always on **Custom...**.
+- The Markdown transcript export includes `scenario-change` notices in the body. The header prints whatever
+  scene is in force at export time, so without them a reader would see the story relocate unremarked.
+
+Note on scenario defaults: the frontmatter key is `isDefault: true`. A scenario file marked `default: true`
+is not recognized as a default, so no scenario pre-selects in the new-chat dialog and it opens on
+**Custom...** — worth checking if a default you expected isn't taking effect.
+
+#### Moving or copying an outfit can bring its components along
+
+Transferring a composite outfit used to move just the outfit, leaving its component references pointing at
+items that stayed behind — often unresolvable at the destination. The transfer dialog now prompts when the
+item is an outfit: moving offers to move the components, copy them (originals stay), or leave them; copying
+offers to copy them or not. The choice is all-or-nothing and covers nested composites transitively. Only
+components living in the same source container travel (shared-tier pieces are already reachable and stay
+put). When copies mint new IDs, the transferred outfit's `componentItemIds` (and those of any nested
+composites that travelled) are rewritten to the new IDs, and a post-write verification confirms every
+travelled reference resolves at the destination. Copying an outfit while moving its components is refused
+(it would strand the original), and any destination ID collision rejects the whole transfer before anything
+is written.
+
+Verifying the ID contract surfaced a latent vault bug, also fixed: composite references are stored as title
+slugs, and `buildSlugByItemIdMap` handed a colliding slug to whichever item came first in write order while
+the reader resolved it in filename order — so two same-titled items in one container could silently rewire an
+outfit's components on the next read. Ambiguous slugs are now assigned to nobody; every reference to a
+colliding item is written as an exact UUID. The transfer endpoint's post-write verification reads the outfit
+back from the destination and compares its component references against the plan, logging and reporting
+`unresolvedComponentIds` on any mismatch.
+
+#### The Wardrobe dialog browses and edits every wardrobe container
+
+The dialog's top dropdown now lists every place a wardrobe item or outfit can live — each character, Quilltap
+General, each project, and each group (the same roster the Move/Copy destination picker offers) — instead of
+characters only. Selecting a shared container shows exactly its contents with the full `⋮` menu (Edit, star as
+default, Duplicate, Move, Copy, Delete) and a `+ New Item` that creates directly in that container; the
+character-only fitting room, Wear buttons, and Import-from-image hide in that mode. In a character's view the
+old rule stands: items merged in from a shared tier elsewhere stay Move/Copy-only.
+
+Supporting changes:
+
+- New group wardrobe API (`/api/v1/groups/[id]/wardrobe` and `.../[itemId]`, GET/POST/PUT/DELETE), mirroring
+  the project routes — previously the group tier had no CRUD endpoints at all, so group items could only be
+  created by transfer.
+- The transfers API accepts an explicit `source: { scope, id }` alongside the legacy `sourceCharacterId`
+  probing, so moves/copies work when browsing a shared container; the transfer dialog also hides the item's
+  known current home from the destination list.
+- The item editor routes edits to the item's actual container. Previously any "shared" edit was sent to the
+  Quilltap General endpoint, which would have misfiled a project or group item (unreachable in the UI before,
+  latent bug regardless).
+- Duplicating an item now also copies its Portrait Cue (`imagePrompt`), which was silently dropped before.
+
+#### Creating a project with a blank description works again (bug 98)
+
+The create dialogs send `description: null` when the field is left empty, but the create schema's bare
+`.optional()` rejects null — so every name-only project create failed with a silent 400 (generic toast in
+Prospero, nothing at all from the homepage quick action, no server log line). The schema (moved to
+`app/api/v1/projects/schemas.ts`) now marks `description`/`instructions`/`color`/`icon` as
+`.nullable().optional()`, matching the update schema, with a regression test pinning the null/absent/string
+matrix. The homepage `QuickActionsRow` also gained the success/error toasts its Prospero twin already had.
+
+#### Every image gallery can download the picture on display
+
+An audit of the app's image viewers found several places where a full-size picture had no download affordance —
+a real problem in the Electron shell, where right-click → Save Image isn't available. Fixed:
+
+- The **My Photos** detail modal gained **Download** and **Copy** (copy-image-to-clipboard) buttons in its footer.
+- The **avatar selector / character-wizard image grid** (`components/images/image-gallery.tsx`) gained a hover
+  download button next to the existing delete button.
+- The **Scriptorium file table's** expanded detail row gained a **Download** button beside "Open bytes",
+  saving the file under its original name.
+- The **Generate Image** page and the **wardrobe avatar preview** already had downloads, but both hand-rolled the
+  anchor-click approach, bypassing `lib/download-utils.ts` — so in Electron they missed the native save dialog.
+  Both now go through `triggerDownload`.
+- The mount-point blob endpoint (`/api/v1/mount-points/[id]/blobs/[...path]`) now sends an inline
+  `Content-Disposition` with the original filename, so browser saves from an "Open bytes" tab get a proper
+  name instead of the path hash.
+
+All other full-size viewers (chat `ImageModal`, chat gallery, character gallery `ImageDetailModal`, file preview
+modal) already had download buttons wired through the shared Electron-aware helper; they're unchanged.
+
+#### OpenRouter vision profiles send images again (bug 97)
+
+OpenRouter's plugin declared `supportsAttachments: false` with no MIME types, a truthful statement when it was
+written and stale since bug 45 taught `provider.ts` to serialise `image_url` content-parts for JPEG, PNG, GIF and
+WebP. Bug 91 made that declaration load-bearing: `providerCanTransportImages` asks the plugin registry first, so in
+production every OpenRouter vision profile routed its images to the describe-fallback, and the describer guard
+refused an OpenRouter profile in the same sentence that recommended OpenRouter. Jest never saw it — with the
+registry uninitialised the predicate reads the static map, which was correct.
+
+`qtap-plugin-openrouter` 1.0.59 declares `supportsAttachments: true` and imports its MIME list from `provider.ts`'s
+now-exported `SUPPORTED_IMAGE_MIME_TYPES`, so the declaration the registry reads and the bytes the provider sends
+cannot drift apart again. The model-dependent caveat is unchanged and still the host's call: images only reach a
+profile whose "Supports image attachments" flag is ticked.
+
+New test `__tests__/unit/lib/llm/image-transport.test.ts` covers the registry-initialised branch that had no
+coverage, and loads every bundled plugin's **built** `index.js` to assert its declaration gives the same answer as
+the static map in `lib/llm/attachment-support.ts` — the drift that produced this bug now fails the suite. The
+describer guard's provider list also gained NanoGPT, which has transported images since plugin 1.1.0.
+
+#### Bug 97 filed: the OpenRouter registry entry denies the vision path its own provider implements
+
+Docs only, plus a two-character comment correction. Bug 91's transport predicate correctly asks the plugin registry
+first — and the registry's OpenRouter answer is stale: `qtap-plugin-openrouter/index.ts` still declares the
+pre-vision conservative `supportsAttachments: false` while `provider.ts` has serialised `image_url` content-parts
+for four MIME types since bug 45, and the client-safe static map agrees with the provider. In production (registry
+initialised) the stale `false` wins: every OpenRouter vision profile silently routes to the describe-fallback, and
+the bug-91 describer guard refuses OpenRouter profiles with a sentence that itself names OpenRouter as a provider
+that forwards images. In jest the registry is uninitialised, the static map wins, and the suite is green over a
+branch production never takes. Found by the quilltap-v5 port's differential, which runs the predicate in both
+configurations. The bug file (`docs/developer/bugs/bug-97-openrouter-registry-denies-vision.md`) documents the fix
+as a spec: flip the plugin's `attachmentSupport` to what `provider.ts` implements (comment-tied to
+`SUPPORTED_IMAGE_MIME_TYPES`, the NanoGPT 1.1.0 keep-in-step precedent), keep the model-dependent caveat in prose,
+and add a registry-initialised test so jest finally reads the production branch. Also corrected in passing: the
+`lib/llm/moderation-finish-reason.ts` docblock mis-numbered itself "(bug 94)" — it is bug 93.
+
+#### Chat titles and story backgrounds stopped working when the cheap model misspelled one key (bug 96)
+
+A group chat kept the title "Group Chat (6 characters)" for seven interchanges and never produced a story background.
+The cause was one JSON key. The title-consideration prompt asks for `suggestedTitle`; `deepseek-v4-flash` answered
+`needsNewTitle: true` and put a perfectly good title under `suggestTitle`. Reading the canonical key returned
+`undefined`, which was coerced to `null`, which the handler read as "no rename needed" — the same branch as a genuine
+decline. That branch advances the checkpoint cursor, so the retry moved from interchange 7 to 10, where an identical
+stumble would have burned that checkpoint too.
+
+The story backgrounds were the same bug. Background generation is queued only after a successful rename, using the new
+title as its scene context, so a rename that never lands takes the background with it. No
+`STORY_BACKGROUND_GENERATION` job was ever enqueued for the chat.
+
+Nothing about this was visible: the job reported COMPLETED, the LLM log held a well-formed response, the token spend
+appeared in the system events, and the cursor advanced exactly as a real decline would. It was also intermittent — the
+same model titled three other chats correctly the same afternoon.
+
+Both title parsers (regular and help-chat) carried the same 25 duplicated lines and now share one
+(`lib/memory/cheap-llm-tasks/title-verdict.ts`). It reads the canonical key first, then a short list of near-misses
+(`suggestTitle`, `newTitle`, `proposedTitle`, `title`) with a case- and separator-insensitive second pass, and the
+canonical key always wins when a model emits more than one. It logs a warning when it recovers a title from a
+non-canonical key, and both the parser and the job handler warn when a rename is requested with no readable title
+rather than burning the checkpoint silently. Unparseable output still resolves to "keep the current title".
+
+Known and unchanged: a chat whose title is already good still gets no story background, because generation hangs off a
+successful rename. That coupling is documented in the bug entry.
+
+#### Characters can now look at images, and images actually reach vision models (bugs 91-95)
+
+Five defects from one session, all downstream of an image a user shared that no character could see.
+
+**Images were silently dropped for four providers (bug 91).** A profile's "Supports image attachments" checkbox says the
+*model* can read pictures. It says nothing about whether the *plugin* can send them, and the NanoGPT, DeepSeek,
+OpenAI-Compatible and Ollama plugins all stripped every attachment before the wire. Only the first question was being
+asked, so ticking the box on a real vision model (`deepseek-v4-flash-vision-exp`, `zai-org/glm-4.6v`) turned off the
+description fallback *and* handed the bytes to a plugin that discarded them. The model got nothing and wrote a
+confident paragraph about the image anyway. Both questions are now asked, via a single predicate
+(`lib/llm/image-transport.ts`) reading the plugin registry: when the model sees but the plugin cannot send, the request
+routes to the description fallback instead of losing the image. The same check now guards describer selection — an
+Ollama describer would have described a picture it never received. NanoGPT plugin 1.1.0 learned to serialize
+`image_url`, so those profiles send images for real; DeepSeek, OpenAI-Compatible and Ollama route to the describer.
+
+**New `describe_image` tool (bug 92).** Characters had three image tools and all three were custodial: `keep_image`
+files a picture, `attach_image` shows it to the room, `list_images` reads the catalogue. None answers "what is in this
+picture?", so models reached for `attach_image` and got told to file the image first. `describe_image(uuid)` serves the
+description auto-describe already wrote at upload, or the generation prompt for a Quilltap-made image, or a fresh
+vision call — and does not require the image to be in the caller's album. `attach_image` is unchanged in function; its
+description and its not-found error now say plainly that it does not show the caller anything, and name
+`describe_image`. The Librarian's upload announcement was rewritten to say the same.
+
+**Provider refusals are reported as refusals (bug 93).** Z.AI returned `finish_reason: sensitive` with empty content —
+a moderation refusal — and the Salon said "this is a known issue with some providers, please try resending", which
+cannot work. Moderation finish reasons across Z.AI, OpenAI, Azure and Google are now recognized
+(`lib/llm/moderation-finish-reason.ts`, literal matching, no substring guessing) and the message names the provider,
+the model and the reason, and says resending will fail again.
+
+**Dropped attachments are visible (bug 94).** Plugins reported failed attachments in `attachmentResults`, which rode
+the SSE done event to a client that never read it. The Salon now raises a warning toast naming the plugin's own error.
+This is why bug 91 lasted as long as it did.
+
+**Attachments anchor to the user's message (bug 95).** Images were attached to the last `role: user` message, but staff
+whispers format as `role: user`, so on a regenerate the image landed on a "your response model is now X" bubble or a
+Prospero context memorandum — while the Librarian's announcement said the bytes rode with the user's message. After a
+tool call nothing matched and the attachments were dropped entirely, without a log line. A new
+`selectAttachmentAnchorIndex` prefers this turn's user input, then the last message whose source row was a genuine
+human turn, then the old rule as a floor.
+
+#### Standalone tarball is webpack-built again (bug 90)
+
+**Critical, and self-inflicted by the previous commit.** 4.9.0-dev.52 could not start **anywhere** — the tarball, the
+Electron shell, `npx quilltap`, and both Docker images. On macOS every SQLite connection failed with `slice is not valid
+mach-o file`; in the arm64 Docker image the same file produced dlopen's misleading `cannot open shared object file: No
+such file or directory` (the binary was present, but x86-64 on an aarch64 host). Both ended at "Migrations failed -
+cannot start server."
+
+The previous commit switched `release.yml` from `--webpack` to Turbopack to converge it with the other two `next build`
+call sites. The two bundlers do not produce interchangeable standalone trees. Turbopack copies externalized packages
+into `.next/node_modules/<pkg>-<contenthash>/` and rewrites requires to point at those copies; webpack's NFT output
+uses `node_modules/<pkg>`. `build-standalone-tarball.mjs` strips platform binaries by name against
+`<staging>/node_modules/<pkg>`, so it never saw the hashed copies — and the tarball stopped being platform-agnostic,
+carrying whatever the build host compiled. `build-app` runs once on x86-64 ubuntu, so the published artifact carried a Linux x86-64
+`better_sqlite3.node` and `pty.node` that won resolution over the correct binaries. Docker is hit for its own reason
+worth stating: `Dockerfile.ci` copies that single artifact into **both** the amd64 and arm64 images, on the sound
+premise that it is pure JS and each image rebuilds its own natives in `deps-prod`. Turbopack broke the premise, so the
+arm64 image shipped an x86-64 binary shadowing the aarch64 one it had correctly built.
+
+`--webpack` is now pinned at all three call sites (`release.yml`, `ci.yml`, `scripts/build-standalone-tarball.mjs`),
+each with a comment saying it is load-bearing and pointing at bug 90 — "this flag looks stale" is the exact observation
+that caused the regression. The `loadWebpackHook` failure that originally motivated Turbopack in `7cba1eb4` is handled
+by `scripts/standalone-server-bootstrap.js` (added four days later), which is why every webpack-built release from 4.5
+through 4.9.0-dev.51 ran correctly.
+
+New guard: `scripts/assert-standalone-portable.mjs` enforces the actual invariant rather than trusting a flag — **no
+native binary anywhere under `<standalone>/.next/`**, a bundler-internal subtree no consumer strips or replaces.
+(`<standalone>/node_modules/` stays exempt; Docker replaces it wholesale and the tarball strips it by name.) It runs in
+`build-app` before the artifact is uploaded, so it protects Docker and the tarball equally, and again before the tarball
+is written. Verified against the real broken dev.52 artifact extracted from `foundry9/quilltap:dev`, which it rejects.
+
+The strip has never covered the Turbopack layout, going back to `7cba1eb4` — local macOS builds hid it by compiling for
+the platform they ran on. Using Turbopack here in future needs the strip extended to walk `.next/node_modules/` plus a
+real build-on-Linux/run-on-macOS test, which nothing automated does today. Note that CI cannot catch this class of
+failure at all: run 32614939380 went green in 11m45s and produced a tarball that could not start on any Mac.
+
+#### CI/release pipeline cleanup, and the PDF rasteriser's missing native (bug 89)
+
+**Bug 89 — PDF rendering was broken on the `npx quilltap` path.** `build-standalone-tarball.mjs` strips every
+`@napi-rs/canvas-*` platform binary from the tarball, and `packages/quilltap` declares `@napi-rs/canvas` as a runtime
+dependency so npm installs a correct one — but `linkNativeModules` never linked it into the standalone tree. That tree
+lives in the download cache, far outside the npm package's `node_modules`, so Node's upward walk never reached the
+installed copy. `linkNativeModules` now has one shared `linkScopedPlatformSiblings` helper serving both
+`sharp`→`@img/sharp-*` and `@napi-rs/canvas`→`@napi-rs/canvas-*`; it walks back as many path segments as the wrapper's
+own name has, so scoped and unscoped wrappers both resolve. Docker was never affected — it ships the full production
+`node_modules`.
+
+**Releases were built with the wrong bundler.** `7cba1eb4` moved the standalone build off `--webpack` because its
+tracer misses `next/dist/compiled/webpack-lib`, which broke the Electron shell's embedded server. That fix lived only
+in the tarball script, which CI invokes with `--skip-build` — so every release since still shipped a webpack-traced
+tree while local builds and CI validated a Turbopack-traced one. `release.yml` now builds with Turbopack, matching
+`ci.yml` and the script.
+
+**A tag that disagrees with `package.json` is now a build failure.** The standalone tarball is named from
+`package.json`'s version, but the published CLI builds its download URL from the git tag. Diverge them and the release
+still goes green (the asset upload uses a glob) while every `npx quilltap` first run 404s. `build-app` now checks both,
+having absorbed the old `validate-tag` job — which was a whole runner spin-up for one regex.
+
+**Other pipeline changes:**
+
+- `lint`, `build`, and `test` no longer chain. Gating build and test behind lint bought nothing but latency; they now
+  run in parallel and return the complete picture in one round trip.
+- Both workflows get a `concurrency` group. Superseded PR runs cancel; branch pushes and releases never do.
+- `create-release` downloaded *every* artifact — including `app-build`, the whole traced standalone tree — to use four
+  files. It now pulls only the release assets.
+- `build-standalone-tarball.ts` and `build-rootfs.ts` are now plain `.mjs`. The release jobs that run them never
+  `npm ci`, so they were fetching an unpinned `tsx` from the registry mid-release.
+- The platform→Dockerfile-target mapping was stated in both `build-rootfs.ts` and the release matrix, with nothing
+  keeping them honest. It now lives only in `build-rootfs.mjs`, which the workflow queries with `--print-target`.
+- New composite actions `.github/actions/setup` (Node + `npm ci`, the one place the CI Node version is pinned) and
+  `.github/actions/discord-notify` (the ~45-line curl/jq block that was duplicated across both workflows).
+- Docker builds now use the GitHub Actions layer cache, scoped per arch, so `npm ci --omit=dev && npm rebuild` — which
+  compiles every native module from source — is not repeated from scratch each release.
+- Both workflows declare `permissions: contents: read`, with `create-release` escalating for itself. `release.yml`
+  previously granted `contents: write` workflow-wide.
+- Removed the dead "check if tests exist" guard and its four dependent conditional steps (the repo has 613 unit test
+  files). A green suite that produces no coverage summary is now a failure rather than a warning, since it means the
+  jest config is broken.
+
+#### NanoGPT prompt caching (plugin 1.0.3)
+
+The NanoGPT plugin now supports NanoGPT's prompt caching (https://docs.nano-gpt.com/api-reference/miscellaneous/prompt-caching).
+
+- New per-profile options under "Prompt Caching": **Enable Prompt Caching** (default off) and **Cache Duration** (5m default / 1h). When enabled, the request carries NanoGPT's body-level `promptCaching: { enabled, ttl }` helper, which auto-places `cache_control` breakpoints for Anthropic-routed (Claude) models. Other routes ignore the flag — OpenAI/Gemini upstreams already cache implicitly with no opt-in.
+- Cache usage is now extracted from responses in both dialects NanoGPT reports (Anthropic-style `cache_read_input_tokens`/`cache_creation_input_tokens`, OpenAI-style `prompt_tokens_details.cached_tokens`) and normalized into `cacheUsage`. Cache-read tokens are excluded from `promptTokens`/`totalTokens` per the house rule, so cached input is not charged against budgets; previously the plugin ignored cache counters entirely, so even implicit-cache hits were counted (and budgeted) as full-price input. The streaming final chunk also carries `rawProviderUsage` for cache-instrumentation diagnostics, matching the other provider plugins.
+- Audited the rest of NanoGPT's API-specifics docs against the plugin: extended thinking (`reasoning_effort` values, `delta.reasoning` with `reasoning_content` legacy fallback) and the streaming protocol (`stream_options.include_usage`, tool-call delta accumulation) already match the documented contract; no changes needed there.
+- Help: NanoGPT section of `help/connection-profiles.md` documents the new options.
+- Tests (`__tests__/unit/plugins/nanogpt-reasoning.test.ts`): the helper rides the body with the right TTL (and the option keys never leak verbatim), both cache-counter dialects normalize with reads excluded, and no-cache responses report no `cacheUsage`.
+
+#### The system prompt addresses the character consistently (person consistency)
+
+Implements `docs/developer/features/complete/prompt-person-consistency.md`. The assembled system prompt mixed grammatical person — the identity preamble says "You are {{char}}" while the aliases, pronouns, and physical-appearance blocks spoke *about* the character in the third person, and the pronouns block literally instructed the character to use its own pronouns "when referring to this character." All blocks whose referent is the speaking character are now second person, and author-carried fields get referent-fixing wrappers.
+
+- **Wording** (`lib/chat/context/system-prompt-builder.ts`, mirrored in `lib/help-chat/system-prompt-builder.ts`): aliases ("You also go by…"), pronouns ("Your pronouns are… Use them whenever you refer to yourself in narration"), physical appearance ("This is how you look — …", wrapper only; the body stays noun phrases because it is shared with the image pipelines), plus wrappers on manifesto ("The following you hold as true about yourself, without question."), personality ("The following is what you know about yourself. Others do not see it unless you show them."), and example dialogues ("This is how you speak."). Outward-facing renderers (public identity card, other-participants info, Host whispers) stay third person — their referent is someone other than the reader.
+- **Cache invalidation for old chats:** `chats.compiledIdentityStacks` is now a stamped envelope `{ version, stacks }` keyed to a new `IDENTITY_STACK_BUILDER_VERSION` constant colocated with `buildIdentityStack`. Reads require strict version equality; legacy bare maps, older, and newer stamps all read as stale and rebuild lazily through the existing read-through path (no migration). A stale map is discarded on merge, never blended into. A golden-hash table in `__tests__/unit/cache-determinism/system-prompt.test.ts` (`IDENTITY_STACK_GOLDENS`) makes forgetting the bump impossible in both directions. Shipped as version 1 (stamp only, output-neutral) then version 2 (this wording).
+- **No `PROMPT_CACHE_STRUCTURE_VERSION` bump** — wording within existing blocks, no layout change (per the bump policy in `lib/llm/cache-key.ts`).
+- **Generators:** `lib/services/character-field-semantics.ts` bucket definitions now each state who the field addresses, with worked examples (and the stray "unless she shares it" is now "unless they share it"); the AI Wizard's `FIELD_PROMPTS`, Summon From Lore's `CHARACTER_BASICS_PROMPT`, and the Character Optimizer's shared suggestion rules close their per-service gaps — the optimizer is explicitly told never to flip a field's form of address while rewording it.
+- **UI:** new shared `PromptFieldLabel` component (`components/prompt-fields/PromptFieldLabel.tsx`) with single-sourced hint copy (`components/prompt-fields/field-hints.ts`, the client mirror of `character-field-semantics.ts`). Character create/edit forms, the system-prompts editor, physical-description prompts, project and group instructions, roleplay templates, and the AI review panes (Wizard, Summon From Lore, Optimizer) all show a per-field "Written as: …" worked example in the field's correct form of address. This also converges the create/edit forms' previously divergent helper wording.
+- Both prompt goldens updated (`7517f7d9b496d20b` → `937ea8197a65d022`, `74c9b488b4a1517c` → `bc37032e92411263`) with reasons recorded inline; the new sentences are pinned by named assertions.
+- Deferred, filed separately: field-aware guidance for in-chat vault writes to managed fields (`docs/developer/features/vault-managed-field-write-guidance.md`).
+
+#### Tool reinforcement addresses the character directly (and stops saying "they CALLS them")
+
+The final block of the system prompt was written in the third person ("When Ariadne uses workspace tools, *she* CALLS them"), sitting immediately after several sections that address the character as "you" — including the identity preamble that opens the prompt. It is now second person: "When you use workspace tools, you CALL them."
+
+- The third person was inherited, not chosen. The block went in (`3f4d7a78a`) with literal `his/her` / `he/she` placeholders; the follow-up fix (`11c4d6c2d`) replaced them with the character's real pronouns, addressing the generic-pronoun problem rather than the person — and added the second-person identity preamble in the same commit, creating the disagreement.
+- Removing the pronoun lookup fixes a live grammar bug: `character.pronouns?.subject || 'they'` rendered "they CALLS them — they does not merely describe calling them" for every character with no pronouns recorded. Second person needs no pronoun.
+- Applied in both copies: `lib/chat/context/system-prompt-builder.ts` and `lib/help-chat/system-prompt-builder.ts`.
+- No `PROMPT_CACHE_STRUCTURE_VERSION` bump — wording change, no layout change (per the bump policy in `lib/llm/cache-key.ts`), and the block is a per-turn addition rather than part of the cached `compiledIdentityStacks`.
+- Both cache-determinism goldens updated (`bd27b1ca407d9901` → `7517f7d9b496d20b`, `911204033cd41164` → `74c9b488b4a1517c`) with the reason recorded inline. The sentence is now pinned by its own named assertion as well, so a regression to third person fails readably instead of only as a digest mismatch.
+- Plan for the remaining person inconsistencies: `docs/developer/features/complete/prompt-person-consistency.md`.
+
+#### Project and group instructions are standing prompts in the system prompt
+
+Projects and groups each have an optional `instructions` field ("the prompt"); it is now injected into the stable, cacheable part of the system prompt instead of riding along in whispers (projects) or going nowhere at all (groups, whose field existed but had zero consumers).
+
+- New `lib/chat/context/standing-instructions.ts` resolves the chat's project instructions plus the instructions of every group the *responding character* belongs to (per-character, mirroring the group document-store tier), renders them as a `[STANDING INSTRUCTIONS]` section, and hands the string to `buildSystemPrompt`, which places it between the Taboo section and the tool instructions — inside cacheable system block 1. Empty emits nothing, byte-for-byte; group sources sort by name for cache determinism; every lookup fails soft. The section is template-processed (`{{char}}`/`{{user}}`).
+- Carina one-off queries mirror the insertion (after the scenario, before "Reference Query"), keyed to the answerer's groups and the chat's project. Help and Brahma chats are structurally excluded (separate prompt builders). `self_inventory`'s prompt reconstruction includes the section.
+- The Prospero project-context whisper no longer carries `instructions` (description and the store roster remain) — it would have duplicated the system-prompt copy every reinjection interval.
+- Groups gain the missing plumbing: `instructions` accepted by `POST /api/v1/groups` and `PUT /api/v1/groups/[id]` (it was declared in `GroupSchema` and persisted as `instructions.md` but rejected by the request validators), and the group editor gets a "Group Instructions" Markdown (Lexical) editor matching the project settings card. Projects already had the editor.
+- `PROMPT_CACHE_STRUCTURE_VERSION` bumped 3 → 4 (structural prompt change; all provider caches roll cold once).
+- Tests: `standing-instructions.test.ts` (resolver, renderer, builder placement, empty-inert byte-identity); golden prompt hash unchanged. Docs: PROMPT_ARCHITECTURE.md §2/§4/§8/§13, help `groups.md` and `project-settings.md`.
+
+#### NanoGPT: suppress the gateway's reasoning echo (plugin 1.0.2, bug 87)
+
+On some routed paths NanoGPT re-emits the entire answer down the reasoning channel after the content stream ends, so a turn rendered its whole reply a second time inside a thinking fold anchored at the end of the message. Intermittent and gateway-side: identical requests minutes apart streamed clean, and token accounting shows the echo was never billed as model output. The plugin now holds post-prose reasoning while it remains a verbatim prefix of the streamed prose — if it diverges it's real thinking and commits in full; if it still mirrors the prose at stream end it's the echo and is dropped (from live chunks, the final chunk, and the raw response). Non-streaming responses drop `message.reasoning` when it equals the content exactly. Genuine pre-content reasoning is untouched. Tests added to `nanogpt-reasoning.test.ts`.
+
+#### NanoGPT gains thinking options (plugin 1.0.1)
+
+- New connection-profile options schema with **Reasoning Effort** (none / minimal / low / medium / high / xhigh), forwarded as NanoGPT's `reasoning_effort` parameter. Any value other than `none` requests reasoning; blank defers to the model.
+- `thinkingTurnRule` declared on the plugin so multi-character turns on a thinking profile anchor in prose instead of the `[Name]` prefill (bug 85's rule), with `anthropic/claude-sonnet-5:thinking` catalogued as thinks-by-default; uncatalogued `:thinking` picks rely on the explicit effort setting.
+- Fixed reasoning display: NanoGPT's main endpoint carries reasoning in `delta.reasoning` / `message.reasoning`, not the legacy `reasoning_content` the plugin was reading (which is now the fallback). Without this the thinking fold stayed empty for most routed reasoning models.
+- Tests: `nanogpt-reasoning.test.ts` (rule/schema partition, catalogue habits, both wire dialects); NanoGPT joins the options-schema snapshot test.
+
+#### NanoGPT is a bundled provider (chat, images, embeddings)
+
+New bundled plugin `qtap-plugin-nanogpt` (1.0.0) adds NanoGPT (nano-gpt.com), a pay-as-you-go gateway fronting 600+ chat models, 200+ image models, and two dozen embedding models behind one OpenAI-compatible API and a single new `NANOGPT` API key type.
+
+- **Chat:** OpenAI-compatible Chat Completions at `nano-gpt.com/api/v1` with streaming, tool calling, JSON response formats, and reasoning display — routed thinking models' `reasoning_content` streams into the Salon's thinking fold. Model list merges the live `/models` endpoint with a small curated static catalog (NanoGPT's `auto-model*` routers plus current flagships).
+- **Images:** the OpenAI-compatible images route with `b64_json` pinned (plus a URL-download fallback), following the honest Fetch Models contract: without a key you get the curated list; with a key the dedicated `/image-models` listing is queried and filtered to models whose capability flags say they generate images (edit-only and upscale-only entries excluded), and transport failures throw so the route can label the fallback. Provider-level orientation constraints (832x1248 / 1248x832 / 1024x1024), a parameters panel with common sizes, and provider badge/icon/fallback entries in the image-profile UI.
+- **Embeddings:** OpenAI-compatible `/embeddings` with live model discovery via `/embedding-models`. `NANOGPT` joins the embedding profile provider enum (schema, export JSON schema, UI types/metadata/badges, first-startup seed type). New `.qt-badge-provider-nanogpt` badge class; the whole `qt-badge-provider-*` family was mirrored into theme-storybook (1.0.61), which previously lacked it.
+- Tests: NanoGPT joins the image-orientation contract's provider-level list; new `nanogpt-image-provider-models.test.ts` covers the model-listing contract, b64 passthrough, and URL-download fallback.
+
+#### Image profiles can fetch models from the provider, honestly
+
+The image-profile editor gains a "Fetch Models" button (parity with connection profiles). Before, four of the five image-capable plugins "implemented" model listing by returning their hardcoded list even when handed an API key — only OpenRouter actually asked its API — and the form auto-fetched silently with no indication of where the list came from.
+
+- Each image provider now genuinely queries its provider when given an API key, filtered to models that actually produce images: OpenAI filters `/v1/models` to the `dall-e-*`/`gpt-image-*` Images-API families; Google pages the Gemini models list and keeps imagen models exposing `predict` plus gemini models with image output (video/text/embedding models excluded); Grok uses xAI's dedicated `GET /v1/image-generation-models` endpoint; Z.AI filters its `/models` list by the image-model pattern (unioned with the documented CogView/GLM-Image set, since that endpoint under-reports). Without a key, the plugin's curated list is returned unchanged.
+- On live-fetch failure the providers now throw instead of silently substituting the static list, so `?action=list-models` can label its response `source: 'provider'` or `'builtin'` (with the fetch error attached). The form shows which one you're looking at. Only genuinely live-fetched lists are cached in `provider_models`.
+- Google's Gemini-vs-Imagen routing now treats any `gemini*` model as a generateContent model, so live-fetched IDs (e.g. preview image models) don't fall through to the Imagen predict endpoint.
+- Providers that cannot produce images (Anthropic, DeepSeek, Ollama, OpenAI-compatible) are unchanged and stay out of the image-provider list.
+
+#### Z.AI is a first-class image provider
+
+The Z.AI plugin already shipped an image provider (CogView-4, GLM-Image), but the UI never wired it up and generation was broken end-to-end: Z.AI returns image URLs, while every Quilltap consumer reads only base64, so a generated image evaporated. The provider now downloads the URL and returns base64. The image-profile UI gains a Z.AI provider badge/icon, a parameters panel with Z.AI's recommended sizes, and a fallback provider entry. Help doc updated to list the providers Quilltap actually supports (and to stop claiming Midjourney/Stable Diffusion/ComfyUI support it never had).
+
+Plugin versions: openai 1.0.59, google 1.1.47, grok 1.0.51, z-ai 1.1.23, openrouter 1.0.58.
+
+#### The DeepSeek plugin can tell when it is thinking (bug 86)
+
+`isThinkingEnabled(body)` decided whether an outgoing request was a thinking request by looking for `thinking: { type: 'enabled' }` in the body it was about to send. That answers "what did we ask for?" when the question is "what will the model do?" — the V4 models reason with `parameters: {}`, which is the default state, so a profile that had never touched the thinking option was judged not to be thinking. `stripThinkingIncompatibleParams` never ran, and `temperature`, `top_p`, `frequency_penalty`, and `presence_penalty` were sent into a request that ignores them. DeepSeek discards them silently, so nothing errored.
+
+`willRunThinkingTurn(body)` replaces it and asks the two questions in the order the host's `evaluateThinkingTurn` asks them: the profile's explicit `thinking: enabled` / `disabled` first, then the model's own habit from `STATIC_MODELS.thinksByDefault`. No signature change was needed — both call sites already pass a body carrying `model`. The model lookup is an exact id match, matching the host, so a model DeepSeek serves that the static catalogue does not list contributes no habit and behaves as before.
+
+The plugin README claimed thinking mode was a `deepseek-v4-pro` feature reached through profile parameters, which is the belief that produced the predicate. It now says both V4 models reason by default and that `thinking` exists mainly to turn reasoning off, with a "Thinks by default" column in the model table. The connection-profile editor's own help text carried the same misapprehension and was corrected with it: "(model default)" means thinking is ON.
+
+Also added the migration test that should have shipped with bug 85: `retire-prefill-on-thinking-profiles-v1` now has coverage for what it clears (thinking-active DeepSeek and Ollama rows) and, more importantly, what it leaves alone — thinking-off profiles, uncatalogued models, other providers, rows already at 0, stored nulls, and unparseable `parameters`.
+
+#### DeepSeek thinking models stop 400ing on every character turn (bug 85)
+
+A chat on a DeepSeek profile using `deepseek-v4-flash` greeted you and then died on every turn after, with HTTP 400: "The `reasoning_content` in the thinking mode must be passed back to the API". The error text points at history; the cause is the trailing `[Name]` prefill.
+
+In a multi-character chat each reply is anchored to one character, either by appending an assistant message containing `[Character Name]` or by appending a prose instruction to the system prompt. `isMultiCharacterChat` counts one LLM seat as multi-character, so a plain one-character chat takes the anchor too. DeepSeek's thinking mode reads a request ending on an assistant message as a turn to continue and demands the `reasoning_content` that produced it — which a synthetic prefill has none of. The greeting escapes because `lib/chat/initial-greeting.ts` applies no anchor at all.
+
+The predicate deciding which anchor to use was provider-shaped (`PREFILL_HOSTILE_PROVIDERS`, holding `ANTHROPIC`) when the property is model-shaped. Two of the three known hostilities are thinking failures, not provider quirks: Ollama's chat template never opens the reasoning block behind a prefilled turn (bug 68), and DeepSeek 400s (this bug). Only Anthropic's is genuinely structural, so that one stays a provider rule.
+
+The prefill default now also asks whether the profile will run a thinking turn:
+
+- `ModelInfo` gained `supportsThinking` and `thinksByDefault`. The two are separate because providers differ — `deepseek-v4-flash` reasons with `parameters: {}`, while Anthropic and Ollama thinking is opt-in per profile.
+- `TextProviderPlugin` gained `thinkingTurnRule`, naming the `parameters` key that switches reasoning on or off and which values mean which. It is declarative rather than a predicate function because the connection-profile editor needs the same answer in the browser, where a server-side plugin closure can't be called; it serialises out through `/api/v1/providers`. DeepSeek and Ollama declare one; no other provider's behaviour changes.
+- `lib/llm/thinking-turn.ts` holds the one pure evaluator both sides run — an explicit profile choice wins, else the model's `thinksByDefault`, else no. `providerRegistry.profileRunsThinkingTurn()` joins it to the plugin table server-side.
+- `defaultMultiCharacterPrefill(provider, runsThinkingTurn)` returns false for a thinking profile. `profileUsesNamePrefill` is unchanged in spirit: a stored boolean still outranks every default, so ticking the box back on is honoured.
+- The profile editor re-seeds the checkbox when the model changes, corrects a stored-null row once the model list loads, and warns when the box is ticked on a thinking profile.
+- Migration `retire-prefill-on-thinking-profiles-v1` clears the stored `1` on existing DeepSeek and Ollama profiles that are running a thinking turn. Those rows got their `1` from the old provider default at creation, not from a user choice, and it outranks any default fix. Rows already at `0`, and profiles not running a thinking turn, are untouched. The migration carries a frozen copy of the two plugins' rules, because migrations run before the plugin registry is up.
+
+A non-thinking DeepSeek or Ollama profile keeps the prefill, which is the stronger anchor and what weak models need most — that was bug 68's stated objection to a blanket provider rule, and it is preserved rather than re-incurred.
+
+Two adjacent DeepSeek plugin defects found while investigating were filed separately as [bug 86](developer/bugs/fixed/bug-86-deepseek-thinking-detection.md) and are fixed below. Neither caused the 400.
+
+#### A failed image generation says what actually went wrong (bug 84)
+
+When `generate_image` failed, the notice above the composer read `Failed to generate image` and the toast read `Image generation failed: Unknown error` — every time, no matter the cause. Asking for an image in a chat with no image profile resolved is the common case, and the remedy is right there in the server's own sentence: `Image generation is not enabled for this chat`.
+
+The server had been sending that sentence all along. The SSE tool-result frame carries it in `error`, a sibling of `result`, specifically because `result` is null on failure. The Salon looked for it one level down at `result.error`, found nothing, and fell back to its generic strings — so the field had no reader anywhere in the app.
+
+The failure text is now resolved through one helper, `resolveToolResultErrorText`, which prefers the sibling `error`, keeps the old nested read as a fallback, and strips the executor's leading `Error: ` so the toast doesn't read "failed: Error: ...". Both the notice and the toast render the same resolved sentence.
+
+#### The intermittent jest worker segfault was V8's, not SQLCipher's (bug 83)
+
+For months, roughly one full `npm run test:unit` run in five ended with `A jest worker process ... was terminated by another process: signal=SIGSEGV` failing one arbitrary suite while every actual test passed, and a rerun always went green. It was assumed to be the known native-SQLCipher teardown flake fixed in June. A macOS crash report proved otherwise: the dying worker had no `better_sqlite3.node` loaded at all, and the faulting stack matched [nodejs/node#62393](https://github.com/nodejs/node/issues/62393) frame-for-frame — a V8 13.6 (Node 24) GC race where a mark-compact triggered inside Sparkplug's baseline prologue dereferences a junk frame slot. Upstream still reproduces it on Node 26, so the fix is the thread's proven workaround: disable the Sparkplug baseline compiler for test runs. The five jest scripts in `package.json` now launch `node --no-sparkplug node_modules/jest/bin/jest.js` (the flag isn't allowed in `NODE_OPTIONS`), and `jest.global-setup.js` appends `--no-sparkplug` to `process.execArgv` before any worker forks, so ad-hoc `npx jest` runs get protected workers too — jest-worker inherits the parent's `execArgv`. The integration config now shares that globalSetup, which also gives it the native-ABI self-heal. Nine consecutive full runs (half with a cleared transform cache) produced zero crashes; upstream's matrices report the same at larger sample sizes with no measurable wall-time cost. Also tightened while in there: `quantize-embeddings.test.ts` now closes its per-test in-memory database like every other real-binding suite. Filed as [bug 83](developer/bugs/fixed/bug-83-v8-sparkplug-worker-segfault.md).
+
+#### Group scenes stop turning into committee meetings
+
+In a multi-character chat, especially on weaker models, every character's turn converged on the same shape: open with a roll-call recap of what the previous speakers said, endorse all of it, claim "the one thing nobody has named yet," repeat the cast's coined phrases verbatim, and close by restating the group's action list. One observed chat had three characters in a row ending consecutive turns with the identical sentence. Three changes attack the loop:
+
+- **Group-scene discipline rules** now ride in the system prompt on every multi-character turn (both the `[Name]`-prefill and prose anchor routes). They forbid opening with a recap of other speakers, agree-then-add replies, reusing another character's metaphors or coined phrases, and restating the plan; they tell the character to speak only when it changes something, and to vary length instead of defaulting to a speech. The previous anchor only pinned *who* was speaking and said nothing about content, so the strongest style signal in context was the preceding chorus itself.
+- **The turn-skip note counts an echo as nothing to say.** The "you may pass" note now states that a reply which mostly restates, endorses, or rephrases what has already been said — even in the character's own voice — is not substantive, and the character should pass.
+- **"Recently addressed" now means directly addressed.** `isRecentlyAddressed` used to fire on any name mention since the character last spoke. Because every chorus turn named most of the cast in its recap, every character was permanently "addressed," so every turn note carried the "answer rather than pass" caution and nobody ever passed — the recap ritual and the skip mechanism fed each other. The check now requires a vocative position (name at a clause boundary followed by address punctuation: "Marion, …", "Greg?", "Amy —"), an `@`-mention, or a targeted whisper; possessives and mid-sentence citations ("Marion's point", "if Greg is ready") no longer count.
+
+#### The Commonplace Book can consult past conversations on every turn
+
+A character's vault holds a summary of every conversation it has taken part in, and the Commonplace Book searches that shelf to build the "Relevant Past Conversations" list a character sees. Until now that list was refreshed on three cadences only: the opening recap (chat start or character join), each summary fold, and retrospective turns that reference the past explicitly. Between folds the list stood still, so the conversation could wander several turns away from the past dialogues the character was still being pointed at.
+
+A new instance-wide setting — Settings → Memory → Recall Relevance → **Consult past conversations every turn** — re-runs that search on every turn and folds the fresh list into the consolidated whisper. It is off by default.
+
+The reason it can run per turn at all is that it costs no extra embedding call. `searchMemoriesSemantic` now reports the vector it embedded for the turn's memory search through a `captureQueryEmbedding` hook, and `searchVaultConversationSummaries` accepts that vector via `precomputedEmbedding` instead of embedding the same sentence again. The proactive pre-search path threads its vector through `runPreContextPreCompute` → `buildMessageContext` → `buildContext`, so the reuse holds on both memory paths. When no vector is available (memories skipped, no embedding profile, a failed embedding, or the degraded text-search fallback), the cadence sits the turn out rather than paying for a call of its own.
+
+The per-turn search is skipped on the turn the opening recap runs — the recap already carries its own freshly-searched list, and a second one would repeat it inside a single whisper. Otherwise the per-turn list is deduplicated against the standing fold-posted `relevant-conversations` whisper, and the retrospective mini-recap is now deduplicated against both — one conversation UUID is never listed twice to the same character in the same turn. List length ramps with the connection profile's context window (3 entries at 4K, 10 at 32K), the same ramp the fold cadence uses; the constants now live in `lib/memory/conversation-summary-search.ts` so the two cadences cannot drift apart.
+
+There is no chat-, project-, or character-level override: the setting is on for every conversation or off for every conversation.
+
+#### Local models with strict chat templates stop failing on every turn after the first (bug 82)
+
+A chat on a local Ollama or OpenAI-compatible server running a Qwen model would greet you and then never answer again. Every turn after the opening died with `Jinja Exception: System message must be at the beginning`, and because the failure was an HTTP 500 from the endpoint rather than an empty reply, it showed up as a toast and a server-log entry and nothing else.
+
+The context builder emits the head of a turn as up to three consecutive system messages on purpose: the persona prefix, the identity reinforcement, and the compressed-history summary, kept separate so a cache breakpoint on the first isn't invalidated by churn in the others. Hosted providers accept that. A local runtime doesn't answer for itself — it applies the model's own chat template, and the Qwen family (plus several Llama- and Gemma-derived templates) raises an exception on any system message after index 0, rejecting the whole request before a token is generated. The greeting sends one system message, which is why it worked.
+
+The leading run is now folded into a single message at request-build time, in the Ollama and OpenAI-compatible builders only, joined with blank lines so nothing is lost from the prompt. `@quilltap/plugin-utils` gained `collapseLeadingSystemMessages`, and `OpenAICompatibleProvider` gained an `acceptsRepeatedSystemMessages` flag that defaults to true — so hosted providers, including DeepSeek and every other subclass, send exactly the bytes they sent before, and their cache breakpoints land where they always did.
+
+#### An OpenAI-Compatible profile can hold an API key (bug 81)
+
+Pointing an OpenAI-Compatible profile at a hosted service — Together, Fireworks, Groq, DeepInfra, a vLLM behind auth, a corporate gateway — was impossible: the profile form showed no API Key field for that provider, and Settings → API Keys → Add New API Key didn't offer OpenAI-Compatible at all, so no such key could be created. The request went out unauthenticated and the endpoint returned 401.
+
+One flag, `requiresApiKey`, was answering two different questions: must this provider have a key, and may it have one? For every other provider those answers match. OpenAI-Compatible is the one that spans both worlds — an unauthenticated llama.cpp on localhost and a hosted endpoint behind a bearer token — so `false` was the only workable value, and `false` removed the provider from both key surfaces.
+
+Providers can now declare `acceptsApiKey` alongside `requiresApiKey`. Omitted, it means the same answer as `requiresApiKey`, so no existing plugin changes behavior; Ollama still offers no key field. OpenAI-Compatible declares `false`/`true`: the key field appears, unstarred and optional, and an OpenAI-Compatible key can be created in Settings → API Keys.
+
+The server side needed the same split. The chat, Brahma Console and help-chat paths all gated the key lookup on `requiresApiKey`, so even a key attached to an OpenAI-Compatible profile was dropped before the request left. They now go through one resolver that requires a key where a key is required and forwards one wherever a key is accepted; a profile naming a key that has since been deleted fails loudly instead of silently going out bare.
+
+#### Story background prompts stop concealing nudity when the image provider doesn't require it
+
+The story-background prompt crafter carries a "depicting intimate or unclothed states" section that teaches it to translate narrative nudity into cinematic concealment — a sheet draped where it's needed, a silhouette, foreground occlusion, a bath at a discreet level. That exists to get a prompt past image-provider moderation, and it was unconditional: baked into the system prompt constant, applied to every story background regardless of where the image was going.
+
+So a chat marked dangerous with a Concierge uncensored image profile configured got accurate per-character appearance text ("nude" — appearance sanitization already steps aside for exactly this case) fed into a crafter that then draped a sheet over it. The concealment was being applied to clear moderation the target provider does not perform.
+
+The intimacy guidance is now selected per call. `StoryBackgroundPromptContext` gains `uncensoredImageTarget`, and the crafter's system prompt is assembled from a shared head/tail plus one of two intimacy blocks: cinematic concealment (the default, unchanged wording) or candid depiction. The candid variant keeps every background-framing rule — figures toward the edges, environment primary, wide atmospheric shot, never an anatomical close-up — and both variants still refuse to re-dress a character the narrative undressed.
+
+The handler passes `isDangerousChat && hasUncensoredImageProvider`, the same signal `sanitizeAppearancesIfNeeded` already uses, so the two layers now agree. The empty-response retry that swaps in the uncensored text profile carries the flag through, instead of re-sending the concealment instructions to an uncensored model.
+
+Third case: when a standard provider accepts the prompt and then rejects the finished image on moderation grounds, the Concierge reroutes to the uncensored image profile — and that path was resending the already-concealed prompt verbatim. It now re-crafts the prompt candidly for the reroute target first. Best-effort: a failed re-craft keeps the existing prompt so the reroute still produces an image.
+
+Unchanged: the `generate_image` tool's prompt crafter, which never had concealment language; the avatar prompt builder, whose bare-chest handling is a framing constraint (crop at the collarbone) rather than prompt prose; and concealment as the default everywhere a moderated provider is the target.
+
+#### A project's story background follows its display-mode setting again (bug 80)
+
+A project set to "Latest chat background" (or "Project background", or a static upload) showed the theme's Prospero image instead. The setting saved correctly and the API returned the right image — only the page never painted it.
+
+The tabbed workspace replaced each view's own background layer with a single arbitrated backdrop, so two panes in a split can't paint over each other. Views report their background to it, and the old per-view layer is suppressed inside the workspace. The project detail view was never converted: it still set the CSS variable for a layer that is now hidden, and reported nothing. What painted instead was the projects list's subsystem background, which stayed registered under the tab even after you drilled into a project.
+
+The project detail now reports its background to the backdrop, falling back to the Prospero image when the project's mode is "Theme colors". The list's subsystem background moved into its own component that unmounts while a project is open, so exactly one background is registered per tab — which also fixes the deep-link case (opening a project straight into a new tab), where the two competing reporters used to resolve the wrong way.
+
+#### Avatar generation no longer crashes on chats older than the hair slot (bug 78)
+
+`equippedOutfit` is unconstrained JSON, and the hair slot was added without a migration: every slot key defaults to an empty array, so a chat row written before the slot existed is supposed to read back with `hair: []`. That held everywhere the value passed through the schema, and `getEquippedOutfit` was the one place it did not — it returned the stored object through a raw cast. The outfit resolver then indexed the missing key and handed `undefined` to `expandComposites`, which threw `rootIds is not iterable` and killed the avatar job.
+
+This hit any chat created before the hair slot that has something equipped — in practice every long-lived instance, since only chats made after the feature write all five keys. Two more readers behind the same call degrade quietly instead of crashing: the scene-state tracker and the context manager's live-outfit override both sit behind their own try/catch, so the model simply stopped being told what the character was wearing.
+
+Stored slot bags are now normalized in one place (`normalizeEquippedSlots` in `lib/schemas/wardrobe.types.ts`) on the way out of the column, which fixes the crash and the two silent readers together. A bag the schema refuses outright — a bad id in one slot — is salvaged key by key rather than discarded, so a repair never costs you clothing that was still legible. The resolver keeps an `?? []` of its own for callers that pass a slot bag directly, and the wardrobe-create tool now reads the post-equip state through the repository instead of off the chat row by hand.
+
+#### Import says so when it can't read the destination (bug 79)
+
+Repository reads answer a failure with a fallback value — `null`, `[]`, `false` — which is the right default when the alternative is a blank screen. The importers were consuming those values as facts about the destination ("no such row", "no collision") and committing writes on the strength of them. On a database that fails individual reads — a corrupt page, a missing table after a bad migration, a competing writer — an entity that *existed* read as *absent*, the import took the wrong branch and produced duplicates or skipped merges, and it reported success with nothing in its warnings.
+
+Import and import preview now run with those fallbacks suspended: a read that fails stays a failure, lands in the importer's per-item handler, and is reported by name. Partial progress still works the way it did — one unreadable entity is skipped rather than aborting the run — but the summary now names what was skipped and why.
+
+Five importers (tags, roleplay templates, and the three profile types) were only writing failures to the log, never to the warnings you see. They now report them like the others. So does the preserve-ids preflight, which refuses the whole import before anything is written and had been returning failure with no explanation at all — including when a character rehydrate uses it, which previously reported "unknown import error".
+
+#### Workspace tabs refresh their data when you navigate back to them
+
+The workspace keeps every open tab mounted (that's what lets a streaming Salon survive tab switches), which meant a tab you returned to still showed whatever it had loaded when you left — rename a character in their detail tab and the characters list behind it kept the old name until a full page reload.
+
+Now a tab refreshes its data sources every time it becomes the active tab again. The Home tab reloads its dashboard (recent chats, active projects, characters); the characters, chats, projects, Scriptorium, Files, Photos, Scenarios, Pascal's Workbench, Wardrobe, Profile, Generate Image, and Settings tabs all refetch what they display, including in-place detail views (a project or document store you've drilled into). Refreshes are silent — the current content stays on screen while fresh data loads, so nothing flickers back to a loading screen.
+
+Mechanics: each tab's subtree now knows its own visibility (`useOnTabActivated` in `components/workspace/workspace-tab-context.tsx`). TanStack Query reads are invalidated centrally from a per-tab-kind map (`lib/workspace/tab-refetch.ts`); views still fetching outside TanStack Query re-run their loads through the same hook with a new `silent` option so loading flags don't flip. Live surfaces (Salon conversations, terminals, Document Mode) and editors with unsaved state (character edit, the settings wizard, standalone documents) are deliberately left alone.
+
+#### An API key no longer follows a connection profile onto another provider (bug 76)
+
+Changing a connection profile's provider left the previously selected API key in form state, and the form sent it regardless. On a keyless provider (Ollama, OpenAI-Compatible) the API Key select isn't rendered at all, so saving failed with `API key provider does not match profile provider` — a message about a field that isn't on screen, with no way to clear it. On a different hosted provider the select re-rendered blank, because its options are filtered to the current provider, while Connect / Fetch Models / Test Message kept sending the old provider's key.
+
+The form now sends only a key the select could currently display: nothing when the provider requires no key, and nothing when the stored id isn't among the options listed for the current provider. This is the same `outboundBaseUrl` chokepoint bug 73 added, one field over (`outboundApiKeyId` in `useProfileForm`). Connect's own validation judges the same value, so a blank select reports "API Key is required for this provider" instead of probing with a hidden key. The save body always sends the field, `null` when nothing may leave, so a profile already saved with a mismatched key clears it on the next save instead of being refused forever.
+
+Two lists are treated as "not loaded" rather than as evidence: an unknown provider keeps its stored key, and an API-key list that hasn't arrived yet skips the displayability check entirely. The provider dropdown still doesn't clear the field, so switching back to the original provider restores the selection.
+
+#### New "hair" wardrobe slot
+
+The wardrobe gains a fifth slot, `hair`, alongside top/bottom/footwear/accessories. It holds a *hairdo*, not hair: braids, an updo, marcel waves, a severe bun, the occasional wig. A character's natural hair — colour, length, texture — stays in the physical description, where it has always lived. The distinction is stated the same way in every prompt that draws the wardrobe/physical line.
+
+Hair is threaded through every surface that knows about slots: the wardrobe tools (`wardrobe_create`, `wardrobe_update`, `wardrobe_wear`, `wardrobe_take_off`, `wardrobe_list`), the outfit-choosing LLM at chat start, all three AI character generators, the Character Optimizer, wardrobe-from-image analysis, avatar and Lantern scene prompts, the wardrobe dialogs and the Green Room preview (rose badge), and `.qtap` exports.
+
+Hair is deliberately not clothing:
+
+- **An empty hair slot is never reported.** Slots now carry a `reportWhenEmpty` property. Garment slots announce their vacancies ("topless", "barefoot") because a missing shoe is information; hair does not, because an empty hair slot means unstyled hair, not a bald character. Nothing — Aurora's announcements, scene state, image prompts, or wardrobe tool results — says anything about hair when the slot is blank.
+- **Nudity semantics ignore hair.** "Completely naked and unadorned", the "naked" collapse, and the deliberately-unclothed detector are all computed over clothing slots only. A naked character keeps their braids, and an outfit of nothing but a hairdo still counts as "chose nothing to wear".
+- **Avatars carry the hairdo** on both the dressed and bare-top branches.
+- **Undressing keeps the hairstyle** in the scene-state clothing summary unless the narrative explicitly takes it down.
+
+Hats remain accessories — a hat is worn over a coiffure.
+
+Two upgrade notes. Every chat's cached clothing summary is re-derived once after upgrade (the equipped-outfit hash now includes the hair key), a one-time cheap-LLM call per active chat. And a `.qtap` export containing hair items imports into *older* Quilltap builds with those items silently skipped; everything else comes through.
+
+No migration and no schema change: `equippedOutfit` is unconstrained JSON and every slot defaults to an empty array, so existing rows parse with `hair: []`.
+
+Internally, the duplicated slot lists are gone. `lib/schemas/wardrobe.types.ts` now holds one ordered slot list plus a metadata registry (`WARDROBE_SLOT_META`) carrying each slot's labels, badge class, clothing flag, and empty-reporting rule; the four UI label/badge maps, three local `SLOT_KEYS` copies, two `cloneSlots` copies, and five independent `validTypes` sets all read from it.
+
+#### Docs: removed the outfit-preset endpoints and fixed the equipped-outfit shape
+
+`docs/developer/API.md` documented six `/api/v1/characters/[id]/wardrobe/presets*` endpoints (list, create, read, update, delete, `?action=apply`) that no longer exist — outfit presets were retired when composite wardrobe items replaced them, and there is no `presets` route under `app/api/v1/characters/[id]/wardrobe/`. The section is now marked as removed and carries a mapping table from each old preset call to its current equivalent (the ordinary wardrobe routes, plus `POST /api/v1/chats/[id]?action=equip` for applying one), along with a pointer to the legacy-preset folding that import and backup restore still perform.
+
+The same region showed the pre-4.5 equipped shape — one UUID per slot, `null` when empty. Every slot has been an array of ids since 4.5 (slots layer; composites are stored as their own id and expanded at read time). The `GET /api/v1/chats/[id]?action=outfit` example now shows arrays and names `EquippedSlotsSchema` in `lib/schemas/wardrobe.types.ts` as the source of truth.
+
+`help/character-editing.md` still described a vault `Outfits/` folder of saved presets with a four-slot `slots` map; `vault-readers.ts` has not read that folder since the rework. The vault-folder paragraph now covers what `buildWardrobeItemFile` actually writes, including the previously undocumented `imagePrompt` and `componentItems` frontmatter keys and the composite `replace` flag, plus the cycle and unknown-reference handling. Both files were reconciled with the new `hair` slot on merge.
+
+#### The three character-generation systems now know every character bucket
+
+The AI Wizard, Summon From Lore, and the Character Optimizer ("Refine from Memories") previously shared only a partial map of the character data model — the vantage-point preamble covering manifesto/identity/description/personality/title — and each had its own blind spots beyond that. `lib/services/character-field-semantics.ts` now carries the complete taxonomy: new prose blocks for system prompts (`PROMPT_SEMANTICS`), properties/pronouns/aliases (`PROPERTIES_SEMANTICS`), the physical description (nothing removable), and the wardrobe (slots, imagePrompt vs description, composites, defaults), plus a composed `FULL_FIELD_SEMANTICS`. All three systems consume the shared blocks instead of ad-hoc wording.
+
+**AI Wizard** gains two new generatable fields: Properties (pronouns + aliases, with the same no-placeholder rule Summon uses) and First Message. Its context prompt now shows existing example dialogues, system prompt, first message, pronouns, and aliases (previously omitted even when present). Two bugs fixed: `wardrobeItems` was missing from the server-side request schema, so "Select all" failed the whole request with a validation error; and the wardrobe checkbox was absent from the field-selection step, making it unreachable. Generated properties persist via character PUT (staged into form state in the edit view); the generation preview renders wardrobe and properties results.
+
+**Wardrobe generation** (Wizard + Summon, shared in new `lib/wardrobe/generated-items.ts`) now produces items with `imagePrompt` visual cues, marks the everyday set `isDefault` so a summoned character starts dressed, and generates 1–2 composite outfits whose components are referenced by title and resolved to real item ids at persistence time (leaf items created first).
+
+**Summon From Lore**'s pronouns step now also extracts aliases; the review screen shows aliases and the wardrobe counts it previously omitted, and the step matrix includes the wardrobe step that was already running but never reported.
+
+**Character Optimizer** now sees the whole character: title, pronouns, aliases, first message, and the full wardrobe inventory join its context, so suggestions stop colliding with what's already on record. Two new suggestion passes: Wardrobe (add a memory-established garment as a proper structured item, or refine an existing item's description — never bodily features, never deletions) and Aliases (additions only, one per suggestion; pronouns are read-only). The apply flow persists both through the wardrobe endpoints and the character PUT, and the suggestions-file dossier groups them under their own headings.
+
+Help docs updated (`ai-character-import.md`, `character-optimizer.md`, `character-creation.md`); new unit coverage for the shared wardrobe helpers, composite assembly, and the new prompts.
+
+#### The Salon's image-generation notice now clears itself (bug 77)
+
+The `Generating image...` / `Successfully generated 1 image!` banner above the Salon composer had exactly one teardown — a detached `setTimeout` at the end of `sendMessage`'s terminal `onDone` — so any turn that finished another way (continue mode, an intermediate turn in a tool chain, an error) left it pinned above the composer for the rest of the session, with no way to close it. The notice now owns its own lifetime: a settled success/error status auto-dismisses after 6 seconds (timer held in a ref, superseded on each new status, cleared on unmount), turn boundaries drop only a `pending` status whose result never arrived, and the alert has a close button. Stopping a turn clears it immediately.
+
+#### Importing a `.qtap` no longer breaks composite outfits (bug 75)
+
+`importCharacterWardrobeItems` re-mints every wardrobe item id on import but passed `componentItemIds` through verbatim, so every composite outfit in an imported character kept references to ids that exist only in the export — equipping it cleared its slots and put nothing on, silently. The importer now pre-assigns the new ids, remaps composite references through the old→new map (dropping unresolvable ones with an import warning), creates leaf items before the composites that bundle them, and passes the pre-assigned id to `wardrobe.create`.
+
+#### Three MODERN sample prompts for high-context models
+
+The default-system-prompts plugin (1.1.17) gains three model-agnostic sample prompts written for modern 128K+ context models: `MODERN_GENERAL` (relationship-neutral — the character definition and story decide the dynamic), `MODERN_ROMANTIC` (romance-forward, with pacing discipline and guardrails against love-bombing and purple drift), and `MODERN_PLATONIC` (a companion prompt whose anti-romance guardrail is framed as character identity rather than a prohibition list, which holds up better over long contexts). All three lean on what current models do well — long-range callbacks, in-character refusal — and name the failure modes they drift into (assistant bleed, therapy-speak, echoing, uniform rhythm). The manifest's stale `promptCount` (10) was corrected to 21. `help/prompts.md` now describes the three groups of samples (MODERN, model-specific, GENERIC) and when to pick each.
+
+#### Model-specific sample prompts modernized
+
+The 16 model-specific prompts (CLAUDE / GPT5 / GPT4O / GEMINI / GROK / DEEPSEEK / MISTRAL / OLLAMA, companion + romantic) were rewritten around each family's dominant current failure mode rather than a shared anti-pattern list: Claude gets its assistant reflexes named as reflexes to override (caregiver swerve, tidy wrap-ups); GPT-5 gets an explicit output contract (no document structure, no closing offers, permission to be inefficient in the romantic register); GPT-4o gets anti-sycophancy discipline; Gemini gets a style governor against overwriting, "not X but Y" constructions, and long-context phrase looping; Grok gets wit calibration (sincerity without irony allowed); DeepSeek gets an escalation governor (pacing, metaphor budget, emotional continuity); Mistral gets pushed the opposite direction — initiative and interiority over flat economy; Ollama's stay short and imperative with a loop guard and updated sampler guidance. Every file now carries the never-write-{{user}} rule (previously missing from several), long-context callback guidance, and each model's structural dialect (XML tags for Claude/Gemini, `###` sections for DeepSeek). The GENERIC pair is unchanged; MODERN supersedes it for new characters.
+
+#### Connection profiles can be tagged (bug 74)
+
+Tagging a connection profile has never worked. `TagEditor` maps an entity type to an API base path, and the `profile` branch returned `/api/v1/profiles/<id>` — connection profiles are served from `/api/v1/connection-profiles`, and there has never been an `/api/v1/profiles` route. Every read and write 404'd. The read fails silently (the loader checks `res.ok` and simply doesn't set state), so the Tags section always looked empty; adding a tag created the tag but failed to attach it, with a generic "Failed to add tag" toast that gave no hint the URL was wrong.
+
+Two further layers were only visible once the path was corrected.
+
+The connection-profile GET had no `get-tags` action. It ignored the parameter and returned `{ profile: … }`, so `TagEditor` read `data.tags` as `undefined` and still showed nothing — with no error. It is now a real action returning `{ tags }`, and the GET refuses an unrecognised action with a 400 instead of falling through to the profile body. That leniency is exactly what hid this: a caller asking for something the route didn't implement got a 200 and the wrong shape. The POST on the same route was already strict.
+
+And `ProfileCard` rendered the wrong shape. `enrichWithTags` — used by the collection endpoint the card renders from — returns `{ tagId, tag }` envelopes, but the card read `tag.id` and `tag.name` straight off them, so both were `undefined` and a tagged profile drew an empty pill. `ConnectionProfile.tags` was typed `Tag[]`, which is not what the wire carries; `fetchJson<any>` meant nothing checked. The client type now declares the envelope and the card unwraps it.
+
+The last two are the same confusion twice: two tag shapes with no owner. Entity payloads carry `{ tagId, tag }`; `?action=get-tags` answers flat `{ id, name, visualStyle }` because that is what `TagEditor` and `TagBadge` consume. New `resolveEditorTags` in `lib/api/middleware/enrichment.ts` owns the flat projection, built on `enrichWithTags` so the batching and the "preserve the entity's own order" rule are stated once. The character route's `get-tags` moved onto it as well — those are the two answers `TagEditor` must read interchangeably — which also drops an N+1 there.
+
+Not fixed, deliberately: `TagEditor`'s `chat` branch has the same missing `get-tags` action on the chats route. Nothing in the codebase passes `entityType="chat"`, so building it would be speculative; the requirement is recorded in the bug file instead.
+
+#### A base URL no longer follows the profile onto a provider that hides it (bug 73)
+
+Selecting Ollama or OpenAI-Compatible in the profile editor fills the Base URL box with that provider's default. Selecting a hosted provider next hid the box but kept the value, and all four outbound sites sent it whenever it was truthy rather than when the provider takes one. The result was a profile that could not connect — Connect returned `Failed to validate connection to OpenAI` with a valid key, Fetch Models failed, and the save wrote `http://localhost:11434` onto the row — with the offending value not rendered anywhere on the provider it broke, and no gesture to clear it. Merely browsing the provider dropdown was enough to trigger it.
+
+`outboundBaseUrl()` in `useProfileForm.ts` is now the one answer to what may leave the form: `''` for a provider the list says takes none, the field's value otherwise. `handleConnect`, `handleFetchModels` and `handleTestMessage` read it instead of `formData.baseUrl`. A provider missing from the list is not evidence of anything — it hasn't loaded, or its fetch failed — so the stored value is kept there rather than clearing a working profile on a failed fetch.
+
+`buildRequestBody` drops its `if (baseUrl)` guard and always sends the key, carrying `''` for a provider that takes none. This is deliberate: the update handler gates on `baseUrl !== undefined`, so omitting the key would leave every already-poisoned row untouched. An empty string maps to NULL on both the create and the update path, which makes the next ordinary save the cure for a profile broken before this fix.
+
+Two further reads judged a provider by a base URL it may not own and were gated the same way — the edit-time model fetch (a stored row can still carry a stale URL until its first save) and the `supportsMimeType` / `getAttachmentSupportDescription` pair, which infer vision and attachment support partly from the endpoint.
+
+`handleProviderChange` is unchanged. The value stays in form state, so switching back to a provider that shows the field restores it; the stale URL is inert rather than destructive, and no rule is needed about whether a typed URL outranks an auto-filled one.
+
+Covered by `__tests__/unit/components/settings/profile-modal-base-url.test.tsx` — the real modal over the real hook, driven through the dropdown with `fetchJson` captured.
+
+#### Clearing a numeric provider option leaves it clear (bug 72)
+
+Every numeric field in the provider-options panel — Ollama's Request Timeout, the whole Sampling group, the OpenAI-compatible endpoint options — snapped back to its schema default the instant it was emptied, with the caret left after the restored value. Clearing `300` and typing `5` produced `3005`, and `3005` was stored and sent. The three behaviors were individually correct: an empty input emits `undefined`, `setParameter` treats `undefined` as delete-the-key, and `fieldValue` falls back to `field.default` when the key is absent. Clearing the field was self-canceling.
+
+`NumberField` now holds its own draft string and renders that. A half-typed number isn't a value the parameter bag can hold — `1.` and `-` both arrive as `''` — so an input that re-derives its display from what the host stored will fight the person typing. A `syncedFrom` companion records the prop the draft was last reconciled against and is set on every write-through to the value the host will hand back, so the component can tell its own echo from the parameter genuinely moving underneath it (a different profile, a schema swap). The simpler re-sync-when-the-prop-changes spelling reintroduces the bug for any field that had a stored value before the clear.
+
+`fieldValue` now returns `undefined` rather than `field.default` for number fields, and `NumberField` renders the default as the input's placeholder. An unset numeric option therefore shows an empty box with the default behind it in grey, instead of the default sitting in the box as though someone had chosen it. That closes the bug's second consequence: absent and explicitly-default no longer look identical, "leave blank for the default" is a state the user can see themselves reach, and a blank field round-trips as absent — so a later change to a plugin's default still reaches profiles that never set one. Every other control keeps the fallback as a real value; `EnumField` relies on it to preselect.
+
+Covered by five cases in `__tests__/unit/components/settings/provider-options-panel.test.tsx`, driven through a host that reproduces `ProfileModal`'s delete-on-`undefined` `setParameter`.
+
+#### Local providers send the profile's parameters, and OpenAI-compatible endpoints can call tools (bug 71)
+
+`connection_profiles.parameters` is free-form JSON: any key saves and reloads cleanly. Ollama read three of them and hardcoded the rest of its `options` object; the OpenAI-compatible provider never read the blob at all and declared no options schema. Everything else was dropped on the way to the wire without a log line, so no local model could be run at the sampling settings its own publisher specifies, and `reasoning_effort` — exposed on DeepSeek and Z.AI — was unreachable on the two providers where wall-clock control matters most.
+
+`applyProfileParameters(body, params, allowlist, normalize?)` in `@quilltap/plugin-utils` 2.3.0 is now the one mechanism. It is an exported function rather than a base-class method because only DeepSeek extends `OpenAICompatibleProvider` — Z.AI, OpenRouter and Ollama implement their providers directly and reach it by composition. Keys are allow-listed, never spread, so `model`, `messages`, `stream` and `tools` stay unreachable from a profile; `undefined`, `null` and the empty string omit the key. `OpenAICompatibleProvider` gained `profileParamAllowlist` (empty by default, so every subclass is byte-identical on the wire until it opts in) and an overridable `normalizeProfileParam`. DeepSeek and Z.AI dropped their hand-rolled copies of the same loop.
+
+**OpenAI-compatible** (plugin 1.0.40) gets its first provider options schema: Reasoning Effort, Top K, Min P, Repeat Penalty, Presence Penalty, Frequency Penalty, Seed, Reuse Cached Prompt. Reasoning Effort is **not** sent as a top-level key — it is folded into `chat_template_kwargs`, which is how `llama-server` reaches a Jinja template's arguments; a flat key parses fine and is never seen by the template.
+
+**Ollama** (plugin 1.0.43) widens `options` to `top_k`, `min_p`, `repeat_penalty`, `presence_penalty`, `frequency_penalty`, `seed` and the mirostat trio, and gains two top-level settings. **Keep Model Loaded** sets `keep_alive` per profile, so a large chat model can stay resident while a small utility model unloads at once; it defaults to sending nothing at all, which leaves any `OLLAMA_KEEP_ALIVE` on the server in charge. **Thinking Effort** appears when Enable Thinking is on and sends `think` as a level rather than a boolean. Both were measured against a live Ollama 0.32.1 rather than assumed: an unknown think level is rejected outright by the server, and `keep_alive: "-1"` is rejected as a duration while the number `-1` is honoured, so the numeric sentinels go out as numbers. `num_ctx` and the existing thinking/timeout keys now route through the same table, so there is one answer to what a profile may set.
+
+Separately, the OpenAI-compatible provider could never call a tool: its capability is `false` *and* its request bodies had no `tools` key. The capability stays `false` — an arbitrary endpoint is the conservative case — but it is now a default rather than a ceiling. It seeds a new profile's "Allow tool use" checkbox, which was already editable, and the provider now sends `tools`/`tool_choice` when the caller supplies tools and parses `tool_calls` back on both paths (index-keyed accumulation of streamed argument fragments). An endpoint that does not in fact support tools fails visibly rather than falling back silently.
+
+No migration and no export-schema change: `parameters` was already free-form JSON and already round-trips.
+
+#### Max Tokens and Top P from the profile are actually sent
+
+A connection profile stores its sampling knobs under the keys the editor writes: `temperature`, `max_tokens`, `top_p`. The Salon's streaming path read `modelParams.maxTokens` and `modelParams.topP` — camelCase names that do not exist in that blob — so two of the three came out `undefined` on every turn and the provider fell back to its own defaults. On Ollama that meant `num_predict: 4096` and `top_p: 1` regardless of what the profile said, and the profile card in Settings displayed figures that were never used.
+
+Regenerate/swipe read the same blob correctly, so the two paths disagreed: the original reply used the provider defaults and a regeneration of that same reply used the profile. The greeting path had the camelCase bug too, on both its normal and its Concierge-uncensored branch.
+
+`resolveSamplingParams` (`lib/llm/sampling-params.ts`) is now the one place that maps a parameters blob to the three `LLMParams` fields — canonical snake_case first, camelCase tolerated for a hand-edited or imported blob, absent knobs left undefined so nothing is invented. The streaming service, regenerate/swipe, the greeting path, and the image-description fallback all go through it. Do not read `parameters.max_tokens` at a call site again.
+
+Not to be confused with `resolveMaxTokens` in `model-context-data.ts`, which deliberately ignores `parameters.max_tokens`: that one sizes the context budget's response reserve, this one is the per-request generation cap on the wire.
+
+Covered by `lib/llm/__tests__/sampling-params.test.ts`. One consequence worth knowing: a profile carrying a large Max Tokens has been ignored until now and will be honoured from here on.
+
+#### Ollama profiles can set their own request timeout
+
+An Ollama turn was bounded by the shared 5-minute default in `@quilltap/plugin-utils` with nothing in the UI to change it. On a streaming call that budget covers only the wait for the first token — but loading a large model off disk and evaluating a long prompt both happen inside that silence. A 27B model on a 20k-token prompt, roused cold on a busy machine, ran 220–295 seconds per turn against a 300-second ceiling; the turn that finally crossed it died with `AbortError: This operation was aborted` and left no assistant message in the chat at all.
+
+The Ollama plugin (1.0.42) gains a **Request Timeout (seconds)** field on the connection profile, stored as `request_timeout_seconds` and applied by `resolveProfileTimeoutMs` to both the streaming first-byte timer and the non-streaming whole-request signal. Blank, absent, or unparseable falls through to 300, so nothing changes for a profile that never touches it. A caller-supplied `LLMParams.requestTimeoutMs` still wins, keeping the cheap-LLM task deadlines a hard ceiling.
+
+#### The context budget honors the profile's Max Context (bug 70)
+
+A profile whose model name isn't in Quilltap's lookup tables — any `hf.co/...` Ollama tag, any custom OpenAI-compatible endpoint — was budgeted at 8192 tokens no matter what Max Context said. Conversation history was trimmed to fit that figure on every turn, silently, and the only signal was a "Conversation is getting long" warning that fires exclusively when history has just been dropped.
+
+The window was resolved two different ways in the same function. `calculateContextBudget` used a model-name lookup (`getModelContextLimit`), which falls through to the 8192 OLLAMA/OPENAI_COMPATIBLE default for an unknown name; `calculateMaxAvailable`, 270 lines later, read `profile.maxContext` and saw the real value. One live turn resolved 8192 and 65536 seconds apart. The small figure won everywhere it did damage: it drove `systemPromptBudget`, `recentMessagesBudget`, and the remaining-budget math that feeds `selectRecentMessages`. Compression, working from the correct number, rightly did nothing — so the logs paired an apparent overage with `compressionApplied: false`, which reads like a compression failure and isn't one. The pre-send validation warning derived its limit from the same corrupt figure, so it confirmed the bad number instead of catching it.
+
+`resolveContextWindow(provider, modelName, profile)` in `lib/llm/model-context-data.ts` is now the single source of truth: the profile's `maxContext` wins, the name lookup is the fallback, and a zero or negative column falls through rather than producing a zero-token budget. `getRecommendedContextAllocation`, `getSafeInputLimit`, and `calculateMaxAvailable` all route through it, `calculateContextBudget` takes the profile, and `buildContext` passes `options.connectionProfile`. `external-prompt-generator.service.ts` had the same blind spot on the character-prompt path and now passes its profile too.
+
+For the reported 65536-token profile the budget goes from 8192 to 65536, the history allowance from roughly 1.5k tokens to 32768, and the spurious warning stops.
+
+Two adjacent gaps in the same accounting were fixed alongside it.
+
+**The builder and the validator now use one ceiling.** The builder filled to `totalLimit − responseReserve` while the pre-send check warned above `totalLimit − responseReserve − 10%`, so a context packed exactly as instructed could be reported as an overage. `computeSafeInputLimit` owns that formula now; `ContextBudget` carries `safeInputLimit` and `safetyMargin`, the builder's `remainingBudget` derives from it, and the orchestrator reads it instead of recomputing.
+
+**The budget now counts the whole payload.** Tool schemas ride alongside the message array and were never counted at all — thousands of tokens on a full roster, and on a small window more than the conversation. Agent-mode instructions and the tool-change notice were spliced in after the budget had been spent. All three are known before the context is built, so new `lib/services/chat-message/turn-extras.ts` builds and measures them in one place: the total is passed to the builder as `reservedOutgoingTokens` and held back from the message budget, the tool schemas are added to the pre-send estimate, and the same strings it built are spliced in rather than reconstructed at the splice site. `countToolSchemaTokens` measures the serialized form, so it works for both provider tool shapes, and returns 0 instead of throwing on a definition that won't serialize.
+
+One consequence: with the reservation subtracted, a large character on a small window can leave no room for history at all. That case now warns by name instead of silently sending a character with no memory of the exchange.
+
+#### Archived characters can be rehydrated again (bug 69)
+
+Rehydrating an archived character failed with "the bundle's decrypted content does not match its recorded digest — the bundle is corrupt". The bundle was fine; its database row was not.
+
+An archive bundle is written encrypted, but its `files` row records the digest of the *decrypted* content — that is the digest that survives a passphrase change and actually verifies the contents. The filesystem watcher knew nothing of that: it re-derives `sha256` and `size` from disk for any file that changes, and it saw the bundle land seconds after the row was created. From then on the row held the digest of the encrypted bytes, and the verification on rehydrate could never pass again. Archiving was effectively one-way. The boot reconciliation had the same hole on its size-mismatch path, which is exactly the case a re-encryption produces.
+
+Which rows may have their digest re-derived from disk is now decided in one place, `lib/file-storage/digest-policy.ts`, and both the watcher and the reconciliation ask it; archive rows keep their digest and still get their size corrected. For bundles already spoiled, rehydration self-heals: if the recorded digest is exactly the digest of the file as stored, the bytes are intact and the row is the damaged part — it is repaired, a warning is reported, and the rehydrate proceeds. Any other mismatch is still refused as corrupt.
+
+Verified live: archive → rehydrate now round-trips cleanly, and a row clobbered by the old code rehydrates with the repair warning.
+
+#### A send from the composer's raw-Markdown view no longer discards the edits (bug 67)
+
+The Salon composer's source toggle swaps a plain `<textarea>` in front of the Lexical editor, which stays mounted but hidden with its sync bridge suspended. The submit path read the editor handle unconditionally, so a message sent from the source view shipped the editor's pre-toggle document and every source edit was silently dropped — no error, and the composer cleared as though the send had worked.
+
+Which surface is authoritative now lives in one place, `app/salon/[id]/composer-source-mode.ts`. `resolveComposerSubmitText` sends the textarea's text while the source view is showing and the editor handle otherwise; `resolveComposerHasContent` gates the Send button on the same visible surface, instead of on a presence flag the suspended editor is no longer updating. Post-send clearing already covered both surfaces.
+
+Two adjacent gaps are unchanged and were not part of this fix: Ctrl/Cmd+Enter does nothing in the source textarea (the keyboard send lives in the hidden editor's plugin, so the Send button is the only send route there), and source-view edits are outside draft persistence, which is fed by the editor.
+
+Covered by `__tests__/unit/app/salon/composer-source-mode.test.ts`.
+
+#### The Archived badge shows on a chat's first load (bug 66)
+
+A chat seating an archived character showed no **Archived** badge in the participant sidebar. Two enrichment paths project the same character, and the character-archive work extended only one: the chat GET that the sidebar renders from goes through `getCharacterDetail`, which never carried `archivedAt`. It now does, on both of its return paths — including the chat-avatar-override return an archived seat with a wardrobe-generated avatar takes — and the enriched type declares the field so it cannot be dropped silently again.
+
+Verifying against a live instance turned up a second link in the same chain: `useParticipants` rebuilds each participant's character field by field for the sidebar card and dropped the tombstone again, so the badge could not light on any path, not just a fresh load. Both projections now carry it. The archived seat took no turns either way; the badge was the only casualty.
+
+#### Multi-character `[Name]` prefill is now a per-profile setting (bug 68)
+
+In a multi-character chat, every reply is anchored to the character whose turn it is by one of two routes: an assistant message prefilled with `[Character Name]` (the model structurally continues only that line; the tag is stripped downstream), or a prose instruction appended to the system prompt. Until now the route was hardcoded by provider — Anthropic got the prose branch because 4.6+ rejects a request ending on an assistant message, and everything else got the prefill.
+
+That was wrong for Ollama. Ollama's `think` support is implemented in the model's chat template, which opens the thinking block at the *start* of the assistant turn — so a prefill means the block is never opened and `message.thinking` comes back empty however the profile's **Enable Thinking** box is set. Reproduced against `localhost:11434` on `hf.co/unsloth/Qwen3.8-27B-GGUF:UD-Q4_K_XL`: identical request, no prefill → 470 thinking characters, with prefill → 0. The 8B shows the uglier variant — it reasons anyway, the opening tag is gone, and an orphan `</think>` leaks into the reply (caught by the think-parser's swallowed-tag rule). Other providers are unaffected because their reasoning arrives in a protocol field rather than a template artifact; in one instance's history, DeepSeek carried reasoning on 1742 of 5689 multi-character turns while Ollama managed 0 of 12.
+
+Connection profiles gain a `multiCharacterPrefill` column and an **Announce the speaker in multi-character scenes ([Name] prefill)** checkbox. Migration `add-profile-multi-character-prefill-field-v1` backfills existing rows to preserve today's behaviour exactly: Anthropic profiles off, everything else on. New profiles seed from the provider default, and switching provider on an unsaved profile re-seeds it. The hardcoded Anthropic branch in `context-builder.service.ts` is gone; the anchor is now applied by `applyMultiCharacterTurnAnchor`, and the setting is resolved through the single chokepoint `profileUsesNamePrefill` (`lib/llm/multi-character-prefill.ts`) — never read the column directly, because NULL means "never chosen" (a pre-migration row, or a profile imported from a pre-4.9 bundle) and resolves to the provider default. Ticking the box on an Anthropic profile is allowed but warned about in the editor, since it will 400 on every multi-character turn.
+
+The `finalizeMessageResponse()` truncation at the first foreign speaker tag remains the structural backstop on both routes, and single-character chats use neither.
+
+#### Generated opening greetings keep their reasoning
+
+`generateGreetingMessage` consumed the provider's stream reading `chunk.content` and nothing else, so a thinking model's reasoning while composing a greeting was discarded — one observed greeting cost 3620 characters of reasoning and rendered no thinking fold. The chunk loop now tracks `reasoningContent` (cumulative, so assignment rather than concatenation, matching the Salon's streaming contract), `GreetingResult` and `autoGenerateFirstMessage` carry it through all four generation attempts, and it is persisted onto the greeting message. Display only, like every other stored reasoning.
+
+#### Logs: background-job child debug lines no longer appear as info
+
+The parent process re-emits every log record the forked job child sends it, so all output lands in one `combined.log` with a single writer. That relay only handled `error`, `warn`, and `info`, and sent everything else — `debug` and `trace` — through `log.info`. Since most of the image pipeline, memory extraction, and autonomous turns run in the child, a large share of the file's `"level":"info"` lines were actually debug output, making level-based triage unreliable. The relay now maps `trace` and `debug` to their own levels and re-emits anything unrecognized at debug rather than info. Log volume is unchanged: the child inherits `LOG_LEVEL` through `fork` and already filters before sending.
+
+#### Ollama: Enable Thinking profile option, and `<think>` blocks routed to the thinking display
+
+The Ollama plugin (1.0.41) gains an **Enable Thinking** checkbox in the connection profile's provider options, default off. The setting maps to Ollama's top-level `think` request parameter on both streaming and non-streaming calls: off asks thinking-capable models (Qwen3, DeepSeek-R1, etc.) to answer directly — the clean-output mode you want for JSON-shaped work — and on lets them reason first. Older Ollama servers ignore the unknown field. If a model rejects the parameter outright (some cannot disable thinking), the request is retried once without it instead of failing.
+
+Reasoning now reaches the Salon's thinking fold from both channels Ollama uses. When the server parses the model's template, reasoning arrives on the separate `message.thinking` field, which the plugin previously dropped on the floor; it now streams into `reasoningContent` cumulatively, the same way DeepSeek's does. When the server *can't* parse the template — common with community GGUF imports — the raw `<think>...</think>` block leaks straight into the content stream; a new stateful splitter (`think-parser.ts`) recognizes those blocks even when a tag straddles streaming chunk boundaries, routes their text to the thinking display, and keeps them out of the visible message, the stored content, and tool-call parsing. Responses with no think blocks pass through byte-for-byte. An unterminated block at end-of-stream counts as reasoning.
+
+The splitter also handles the swallowed-opening-tag pattern, live-reproduced against `hf.co/Qwen/Qwen3-8B-GGUF:Q4_K_M`: in no-think mode that model reasons anyway, and Ollama eats the opening `<think>`, so the content arrives as untagged reasoning followed by an orphan `</think>` and then the real answer — which was corrupting cheap-LLM JSON tasks (memory extraction, summarization) pointed at it. A closing tag encountered before any think block and before any visible output now reclassifies everything ahead of it as reasoning, fully cleaning the non-streaming path cheap-LLM tasks use. Once real content has been emitted (or a real think block was seen), a stray closing tag stays in the content; mid-stream, content already emitted before the orphan tag arrives cannot be recalled.
+
+Covered by a new unit suite (`ollama-thinking.test.ts`: parser chop tests at several chunk sizes, native-channel streaming, the retry fallback, non-streaming extraction, the swallowed-open reproduction), and the Ollama schema joins the provider-options snapshot test.
+
+#### Ollama: Max Context now drives the server's context window, and the provider declares tool support
+
+Two follow-ups in the same plugin release (still 1.0.41):
+
+**`num_ctx` from Max Context.** An Ollama server allocates its own default context window (typically 4k–32k) unless the request carries `options.num_ctx` — the Modelfile rarely sets it. Quilltap, meanwhile, budgeted prompts against the profile's Max Context, so a profile set to 262144 against a server loading 32768 meant every long chat was silently middle-truncated by the server with no error anywhere. Verified live: the Qwen3.8-27B GGUF loaded at 32768 despite the model supporting 262144. Now `profileParams()` (`lib/llm/cheap-llm.ts`) injects `num_ctx` from the profile's Max Context for Ollama profiles, and the plugin forwards it on both streaming and non-streaming calls — the window Quilltap budgets against is the window the server actually allocates. An explicit `num_ctx` already in the parameters blob wins; profiles with no Max Context keep the server default, exactly as before. The eight call sites that built `profileParameters` inline from `profile.parameters` (Salon orchestrator, regenerate-swipe, greeting, answer-confirmation, image-description fallback, wardrobe analysis, uncensored extraction, announcer) were converted to the shared helper, so the injection — and any future per-provider parameter — applies uniformly. Note: changing Max Context on an Ollama profile now triggers a model reload on the next call (context size is a load-time property), and Max Context should be sized to fit RAM — the KV cache scales linearly with it.
+
+**Tool capability.** The plugin's `capabilities.toolUse` flips false → true. The provider has long forwarded native tool definitions and normalized `tool_calls`, and modern local models handle them (verified live on both Qwen3 GGUFs, including with thinking enabled). The flag's only effect is the profile editor's default for the *Allow tool use* checkbox on newly created Ollama profiles — it now defaults ticked; the checkbox remains the per-profile gate either way, and existing profiles keep their saved setting.
+
+#### Help search now matches sections, and the Guide's search box now reads the text
+
+Two separate reasons a search of the built-in help came back empty.
+
+**The Guide tab's search box only ever matched titles.** `HelpGuideTab` filtered the topic list on `doc.title.toLowerCase().includes(query)` and never touched the document body — the index shipped to the client carries titles and URLs only. Any term living in the prose ("describe", "uncensored", "timeout") returned nothing at all. Document content is far too large to ship with the index, so the match now runs server-side: `GET /api/v1/help-docs?action=search&q=…` does a case-insensitive substring pass over titles and content and returns matching slugs with a ~180-character snippet centred on the hit. The client debounces at 200 ms, keeps its instant title-only filter for the first keystroke, and shows the snippet under each topic so a body-text match explains itself. Results are tagged with the query that produced them, so a stale response can't leak into a newer query's filter.
+
+**`help_search` scored whole documents.** Help docs were embedded one vector per file. For a 700-line page spanning a dozen subsystems, that single vector is a smear that matches no specific question strongly, and the tool then handed the model the *first* 1000 characters of the file — a table of contents, never the answer. Both halves are fixed:
+
+- A new `help_doc_chunks` table holds section-level slices, rebuilt from disk whenever a doc's content hash changes (migration `create-help-doc-chunks-table-v1`). The slicing reuses the Scriptorium's Markdown-aware chunker at smaller targets (400–700 tokens, 100 overlap); each chunk is embedded with its document title and nearest heading prefixed, so "Uncensored fallback profile" carries the context of the page around it.
+- Chunk vectors are written by the same `HELP_DOC` embedding job that writes the whole-document one. That was deliberate: the reindex enqueue, the `embedding_status` bookkeeping, and the dimension reconcile all still count `help_docs` rows, and a chunk can never carry a dimension its parent doesn't. Chunks that already hold a vector are skipped, so a retried job is cheap; a single chunk's failure is logged and skipped rather than failing a job whose main work succeeded.
+- `HelpSearch.search` scores every chunk, keeps the best per document, and ranks each document by `max(docScore, bestSectionScore)` — the whole-document score stays in play so a broadly on-topic page isn't buried by an unlucky slicing, and docs with no chunks yet still rank. Results carry a `matchedSection`, and `formatHelpSearchResults` now leads with that section (1500 chars) followed by a shorter document excerpt (600) instead of 1000 characters from the top of the file.
+- Section scoring is wrapped so any failure — missing table, unreadable rows — falls back to whole-document scoring with a warning rather than breaking help search.
+
+`help_doc_chunks` joins the embedding sweeps that walk tables by name: `reapply-profile`'s `MAIN_DB_TABLES`, `repair-text-embeddings`' table list, and a full reindex's up-front embedding clear.
+
+Existing instances needed a backfill after all, which runtime verification caught: `ensureHelpDocsSynced` only re-syncs when the *set of paths* on disk diverges from the table, so an upgraded instance has every content hash matching, skips every file, and would have left the chunk table empty forever — section search silently never engaging. `backfillHelpDocChunks` now slices any already-synced document when the chunk table is empty (one count query per boot thereafter, not a scan — chunk rows carry embedding BLOBs) and enqueues the `HELP_DOC` jobs that fill the vectors, since the documents' own embeddings are already present and would otherwise enqueue nothing. Measured on a real instance: 588 chunks across 120 documents, embedded within a minute.
+
+While extracting the shared enqueue helper, `enqueueMissingHelpDocEmbeddings` briefly lost the try/catch around its repository lookup; restored, with its own log line.
+
+#### Docs: rewrote the image-description help, which was wrong on two points and silent on a third
+
+`help/chat-settings.md`'s "Image Description Settings" section described a version of the feature that no longer exists. It called the dropdown "Image Description Provider" (the UI says "Primary image description profile"), it claimed the blank option disabled image descriptions entirely (blank means auto-select, preferring a profile marked Cheap), and it never mentioned the uncensored fallback profile at all — a second dropdown in the same settings card, with real behavior behind it.
+
+The section now covers: what triggers the fallback path (the responding profile's vision checkbox being unticked, not the provider's identity); the reuse chain that skips the vision call entirely for generated images and for uploads that already carry a description; what the auto-select actually picks; the uncensored fallback and the refusal heuristic that invokes it; the `IMAGE_DESCRIPTION` entry in the LLM logs; and the one-minute timeout. The "Image descriptions missing" troubleshooting entry was rewritten to match, and now covers refusals and timeouts rather than only missing configuration.
+
+Also corrected the Cheap LLM section, which listed "Image descriptions" among the operations the cheap profile drives. Image description never consults `cheapLLMSettings` — it only prefers a profile marked Cheap when auto-selecting a describer.
+
+`help/help-chat.md` documents the Guide search box now reading document text rather than titles alone.

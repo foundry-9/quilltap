@@ -9,63 +9,110 @@ on:
       # - 3.2.0-beta.1
       - '[0-9]*.[0-9]*.[0-9]*'
 
+# Read-only by default. create-release escalates for itself; note that it also
+# authenticates with GH_RELEASE_TOKEN, so the grant is belt-and-braces.
 permissions:
-  contents: write
+  contents: read
+
+# Two tags pushed close together must not race for the same Docker manifest or
+# GitHub release. Never cancel a release mid-flight — a half-pushed multi-arch
+# manifest is worse than a queued one.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   DOCKER_IMAGE: foundry9/quilltap
 
 jobs:
-  validate-tag:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Validate tag format
-        run: |
-          TAG="${GITHUB_REF_NAME}"
-          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Tag '$TAG' is not valid semver-ish (expected 1.2.3 or 1.2.3-dev.21)"
-            exit 1
-          fi
-
   # ────────────────────────────────────────────────────────────────────────────
   # Shared JS build — runs once, produces platform-agnostic artifacts that
-  # every downstream job reuses.
+  # every downstream job reuses. Tag validation lives here rather than in a job
+  # of its own: it was a whole runner spin-up for one regex, and it has to
+  # happen before anything else builds either way.
   # ────────────────────────────────────────────────────────────────────────────
   build-app:
     name: Build application (shared JS)
-    needs: validate-tag
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'npm'
+      - uses: ./.github/actions/setup
 
-      - name: Install dependencies
-        run: npm ci
+      # Two checks, not one. The format check is obvious. The version check is
+      # not, and it guards a failure that surfaces only after release:
+      # build-standalone names the tarball from package.json's version
+      # (`quilltap-standalone-<version>.tar.gz`), while the published CLI builds
+      # its download URL from the git TAG — publish-npm force-writes the tag
+      # into the package. Let those diverge and the release still goes green
+      # (the asset upload uses a glob), but every `npx quilltap` first run 404s.
+      - name: Validate tag
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+
+          if [[ ! "$TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Tag '$TAG' is not valid semver-ish (expected 1.2.3 or 1.2.3-dev.21)"
+            exit 1
+          fi
+
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [[ "$TAG" != "$PKG_VERSION" ]]; then
+            echo "::error::Tag '$TAG' does not match package.json version '$PKG_VERSION'."
+            echo "::error::The standalone tarball is named from package.json but the CLI"
+            echo "::error::downloads it by tag, so this would publish a CLI that 404s."
+            echo "::error::Run scripts/update_version.sh and re-tag."
+            exit 1
+          fi
+          echo "✅ Tag $TAG matches package.json"
 
       - name: Build plugins
         run: npm run build:plugins
 
+      # --webpack is REQUIRED here, and reverting it will break every macOS and
+      # Windows install. See bug 90.
+      #
+      # Turbopack's standalone output copies externalized native packages into
+      # `.next/node_modules/<pkg>-<contenthash>/` and rewrites requires to point
+      # there. build-standalone-tarball.mjs strips natives by name from
+      # `<staging>/node_modules/<pkg>` and knows nothing about those hashed
+      # copies, so a Linux-built better_sqlite3.node / pty.node rides along
+      # inside a tarball that is supposed to be platform-agnostic — and wins
+      # resolution over the correct binary the launcher symlinks in.
+      #
+      # 4.9.0-dev.52 shipped exactly that and died on startup with
+      # "slice is not valid mach-o file". webpack's NFT output puts everything
+      # at `node_modules/<pkg>`, which the strip does catch.
+      #
+      # The loadWebpackHook failure that motivated the Turbopack move in
+      # 7cba1eb4 is handled by scripts/standalone-server-bootstrap.js (8183d6ec,
+      # four days later), which sets __NEXT_PRIVATE_STANDALONE_CONFIG so the
+      # hook is never reached. That is why webpack has shipped fine since.
+      # Keep this in step with ci.yml :: build and with
+      # scripts/build-standalone-tarball.mjs.
       - name: Build Next.js standalone
         run: SKIP_ENV_VALIDATION=true npx next build --webpack
+
+      # Gate the artifact before ANY consumer touches it. build-app runs once,
+      # on one x86-64 Linux runner, and this output goes to every target:
+      # Dockerfile.ci copies it into both the amd64 and arm64 images, and the
+      # tarball ships it to macOS, Windows and Linux. A build-host native that
+      # sneaks into .next/ rides to all of them and shadows the correct binary.
+      # That is bug 90, and it went green through the entire release.
+      - name: Assert the standalone tree is platform-portable
+        run: node scripts/assert-standalone-portable.mjs .next/standalone
 
       # Compile our custom server.ts and out-of-band entry points into the
       # standalone tree, then drop the bootstrap shim over Next's auto-generated
       # server.js. Without this, published Docker images run Next's default
       # standalone server (no WebSocket upgrade handler → no terminal in Docker)
       # and the forked background-job child loads raw .ts and crashes on @/.
-      # Mirrors scripts/build-standalone-tarball.ts; the prebuild artifact
-      # uploaded below is what Dockerfile.ci copies into the published image.
+      # Single source of truth for esbuild flags + child externals lives in
+      # scripts/build-standalone-overlay.mjs (also invoked by the local
+      # Dockerfile and scripts/build-standalone-tarball.mjs).
       - name: Compile custom server, terminal handler, and child entry
-        # Single source of truth for esbuild flags + child externals lives in
-        # scripts/build-standalone-overlay.mjs (also invoked by the local
-        # Dockerfile and scripts/build-standalone-tarball.ts).
         run: node scripts/build-standalone-overlay.mjs .next/standalone
 
       - name: Upload build artifacts
@@ -90,13 +137,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # install: false — this job never resolves project dependencies. The build
+      # scripts are plain .mjs precisely so that stays true (they used to be .ts
+      # and needed an unpinned `npx --yes tsx` fetched mid-release).
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: ./.github/actions/setup
         with:
-          node-version: '24'
+          install: 'false'
 
       - name: Download pre-built app
         uses: actions/download-artifact@v8
@@ -105,7 +154,7 @@ jobs:
           path: .
 
       - name: Build standalone tarball (skip next build)
-        run: npx --yes tsx scripts/build-standalone-tarball.ts --skip-build
+        run: node scripts/build-standalone-tarball.mjs --skip-build
 
       - name: Upload standalone artifact
         uses: actions/upload-artifact@v7
@@ -115,12 +164,14 @@ jobs:
           retention-days: 5
 
   # ────────────────────────────────────────────────────────────────────────────
-  # Docker + rootfs — builds Docker image from pre-built JS via Dockerfile.ci,
-  # pushes to Docker Hub, then exports the filesystem as a rootfs tarball.
-  # Combining Docker and rootfs in one job avoids a redundant image build.
+  # Docker — builds the image from pre-built JS via Dockerfile.ci and pushes it
+  # to Docker Hub, one arch per leg.
+  #
+  # Native modules (better-sqlite3, sharp, node-pty) are compiled inside
+  # Dockerfile.ci for Debian/glibc — on a NATIVE runner per arch, never QEMU.
   # ────────────────────────────────────────────────────────────────────────────
-  build-docker-and-rootfs:
-    name: Docker + rootfs (${{ matrix.arch }})
+  build-docker:
+    name: Docker (${{ matrix.arch }})
     needs: build-app
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -131,17 +182,17 @@ jobs:
       matrix:
         include:
           - arch: amd64
-            platform: linux/amd64
             runner: ubuntu-latest
-            rootfs_target: wsl2
           - arch: arm64
-            platform: linux/arm64
             runner: ubuntu-24.04-arm
-            rootfs_target: production
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
+
+      - uses: ./.github/actions/setup
+        with:
+          install: 'false'
 
       - name: Download pre-built app
         uses: actions/download-artifact@v8
@@ -158,6 +209,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # GitHub Actions layer cache, scoped per arch so the two legs never
+      # clobber each other. What it buys is the expensive layer: Dockerfile.ci's
+      # `npm ci --omit=dev && npm rebuild`, which compiles every native module
+      # from source. NOTE: the GHA cache is ~10 GB repo-wide and evicts LRU, so
+      # if these images ever crowd out other caches, drop cache-to here first.
       - name: Build and push to primary registry
         uses: docker/build-push-action@v7
         with:
@@ -168,38 +224,13 @@ jobs:
           tags: ${{ env.DOCKER_IMAGE }}:${{ github.ref_name }}-${{ matrix.arch }}
           sbom: true
           provenance: mode=max
-
-      # Build the rootfs target locally — shares buildx layer cache with the
-      # push steps above, so this is nearly instant (production layers cached,
-      # wsl2 adds only a few lightweight layers on top).
-      - name: Build rootfs image locally
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.ci
-          target: ${{ matrix.rootfs_target }}
-          load: true
-          tags: quilltap-rootfs:local
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-
-      - name: Export rootfs tarball
-        run: npx --yes tsx scripts/build-rootfs.ts --image quilltap-rootfs:local --platform ${{ matrix.platform }}
-
-      - name: Upload rootfs artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: rootfs-${{ matrix.arch }}
-          path: quilltap-linux-${{ matrix.arch }}.tar.gz
-          retention-days: 5
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
 
   push-docker-manifest:
     name: Push Docker multi-arch manifest
     runs-on: ubuntu-latest
-    needs: build-docker-and-rootfs
+    needs: build-docker
 
     steps:
       - name: Log in to Docker Hub
@@ -213,6 +244,7 @@ jobs:
 
       - name: Create and push manifests
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
 
           TAGS="${DOCKER_IMAGE}:${TAG}"
@@ -232,20 +264,30 @@ jobs:
     name: Create GitHub Release
     runs-on: ubuntu-latest
     needs: [build-standalone, push-docker-manifest]
-    if: ${{ !cancelled() && needs.build-standalone.result == 'success' && needs.push-docker-manifest.result == 'success' }}
+    permissions:
+      contents: write
     outputs:
       prerelease: ${{ steps.release-type.outputs.prerelease }}
 
     steps:
+      # fetch-depth 0 — the release-type check reads git history.
       - name: Checkout code
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Download all artifacts
+      - uses: ./.github/actions/setup
+        with:
+          install: 'false'
+
+      # Named, not a bare download-artifact: with no filter that drags in
+      # app-build too — the whole traced standalone tree, hundreds of MB — to
+      # use one file.
+      - name: Download standalone artifact
         uses: actions/download-artifact@v8
         with:
-          path: artifacts
+          name: standalone
+          path: artifacts/standalone
 
       - name: List artifacts
         run: find artifacts -type f | sort
@@ -253,6 +295,7 @@ jobs:
       - name: Determine release type
         id: release-type
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
 
           # Check if this is a clean x.y.z tag (no prerelease suffix)
@@ -290,12 +333,14 @@ jobs:
 
       - name: Build release notes
         id: release-notes
+        env:
+          IS_PRERELEASE: ${{ steps.release-type.outputs.prerelease }}
+          SHELL_URL: ${{ steps.shell-release.outputs.shell_url }}
+          SHELL_LABEL: ${{ steps.shell-release.outputs.shell_label }}
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
-          IS_PRERELEASE="${{ steps.release-type.outputs.prerelease }}"
           NOTES_FILE="docs/releases/${TAG}.md"
-          SHELL_URL="${{ steps.shell-release.outputs.shell_url }}"
-          SHELL_LABEL="${{ steps.shell-release.outputs.shell_label }}"
 
           # Build the installation section
           cat > /tmp/install-body.md <<INSTALL
@@ -307,8 +352,8 @@ jobs:
           [${SHELL_LABEL}](${SHELL_URL}).
           Download the release for your platform (macOS, Windows, or Linux).
 
-          The \`quilltap-linux-arm64.tar.gz\` and \`quilltap-linux-amd64.tar.gz\` rootfs
-          tarballs attached to this release are used by the shell's Lima (macOS) and WSL2 (Windows) VM modes.
+          The \`quilltap-standalone-*.tar.gz\` attached to this release is what the
+          desktop app and the \`quilltap\` CLI download and run.
 
           ### Node.js (any platform)
 
@@ -347,17 +392,17 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN }}
+          PRERELEASE: ${{ steps.release-type.outputs.prerelease }}
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
 
           PRERELEASE_FLAG=""
-          if [[ "${{ steps.release-type.outputs.prerelease }}" == "true" ]]; then
+          if [[ "$PRERELEASE" == "true" ]]; then
             PRERELEASE_FLAG="--prerelease"
           fi
 
           ASSETS=(
-            artifacts/rootfs-amd64/quilltap-linux-amd64.tar.gz
-            artifacts/rootfs-arm64/quilltap-linux-arm64.tar.gz
             artifacts/standalone/quilltap-standalone-*.tar.gz
           )
 
@@ -376,10 +421,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v6
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: ./.github/actions/setup
         with:
-          node-version: '24'
+          install: 'false'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Determine dist-tag
@@ -392,6 +436,9 @@ jobs:
             echo "tag=dev" >> "$GITHUB_OUTPUT"
           fi
 
+      # build-app has already proved the tag matches package.json, so this is a
+      # no-op in the normal case; it stays because the CLI's download URL is
+      # built from whatever version ends up here.
       - name: Set package version to match release tag
         working-directory: packages/quilltap
         run: npm version "${GITHUB_REF_NAME}" --no-git-tag-version --allow-same-version
@@ -406,7 +453,9 @@ jobs:
     name: Notify website of release
     runs-on: ubuntu-latest
     needs: [create-release, publish-npm]
-    if: always() && needs.create-release.result == 'success'
+    # The website should learn about the release even if the npm publish failed
+    # — but not if the run was cancelled.
+    if: ${{ !cancelled() && needs.create-release.result == 'success' }}
 
     steps:
       - name: Trigger website rebuild
@@ -423,29 +472,24 @@ jobs:
             }
 
   github-releases-to-discord:
+    name: Announce release on Discord
     runs-on: ubuntu-latest
     needs: create-release
+    # A failed announcement must never fail a release.
     continue-on-error: true
-    # Was tsickert/discord-webhook@v7.0.0, a JavaScript action stuck on the
-    # node20 runtime with no newer release to move to — the same dead end as the
-    # commit notification in ci.yml, and posting the embed with curl is the same
-    # cure. A failed announcement still must not fail a release, hence the
-    # continue-on-error above.
+
     steps:
-      - name: Notify Discord of release
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Build the release embed
+        id: embed
         env:
-          WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_RELEASE_URL }}
           VERSION: ${{ github.ref_name }}
           RELEASE_URL: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ github.ref_name }}
         run: |
           set -euo pipefail
-
-          if [ -z "$WEBHOOK_URL" ]; then
-            echo "::warning::DISCORD_WEBHOOK_RELEASE_URL is not set — skipping the release notification."
-            exit 0
-          fi
-
-          payload=$(jq -n \
+          payload=$(jq -nc \
             --arg version "$VERSION" \
             --arg release_url "$RELEASE_URL" \
             '{
@@ -456,18 +500,15 @@ jobs:
                 color: 5814783
               }]
             }')
+          {
+            echo "payload<<__PAYLOAD_EOF__"
+            printf '%s\n' "$payload"
+            echo "__PAYLOAD_EOF__"
+          } >> "$GITHUB_OUTPUT"
 
-          status=$(printf '%s' "$payload" | curl -sS -X POST \
-            -H 'Content-Type: application/json' \
-            --data-binary @- \
-            -o /tmp/discord-response.txt \
-            -w '%{http_code}' \
-            "$WEBHOOK_URL")
-
-          if [ "$status" -ge 200 ] && [ "$status" -lt 300 ]; then
-            echo "✅ Release notification sent (HTTP $status)"
-          else
-            echo "❌ Discord rejected the release notification (HTTP $status)"
-            cat /tmp/discord-response.txt
-            exit 1
-          fi
+      - name: Notify Discord of release
+        uses: ./.github/actions/discord-notify
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK_RELEASE_URL }}
+          payload: ${{ steps.embed.outputs.payload }}
+          description: release notification

@@ -189,6 +189,19 @@ All endpoints are at `/api/v1/system/unlock`. They are **unauthenticated** becau
 | `POST` | `?action=store` | `{ passphrase?: string }` | Persist an env-var pepper into a new `.dbkey` file |
 | `POST` | `?action=change-passphrase` | `{ oldPassphrase: string, newPassphrase: string }` | Re-wrap the pepper with a new passphrase |
 
+### Rebuilding a `.dbkey` Offline
+
+`npx quilltap instances restore-key` (`packages/quilltap/lib/dbkey-restore.js`) writes a `.dbkey` from the pepper with the server down — the recovery twin of `?action=store`, and the only route out of a forgotten passphrase, since a locked server accepts nothing but the passphrase it no longer has.
+
+The CLI is plain Node and cannot import this module, so `packages/quilltap/lib/dbkey.js` mirrors the file format and the write-side PBKDF2 constants. `__tests__/unit/lib/startup/dbkey-cli-format.test.ts` drives real files through both implementations in both directions; keep the two in sync.
+
+Two properties of that command exist because of the resolution logic above:
+
+1. **The candidate pepper is proved against every encrypted database before the write.** Case 1 exits the process on a hash mismatch and case 3 unwraps a wrong pepper without complaint, so a mis-keyed `.dbkey` presents as either a fatal boot or a corrupt-looking database. The proof is not waivable while an encrypted database exists.
+2. **Fields outside the wrapping are carried across.** `minServerVersion` is patched into this same file by `version-guard.ts` for the Electron shell's pre-launch check; a rewrap that rebuilt the JSON from scratch would take the version floor with it.
+
+It is lock-gated. A running server holds the pepper and the effective passphrase in memory (`passphrase-cache.ts`), and archive encryption reads the latter — a key file rewritten underneath it leaves both stale.
+
 ### Setup Flow Details
 
 After `?action=setup` generates a pepper and writes the `.dbkey` file:

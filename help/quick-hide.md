@@ -144,9 +144,17 @@ In addition to tag-based hiding, the quick-hide menu includes a **Content Filter
 
 ### Dangerous Chats
 
-When dangerous content handling is enabled (Detect Only or Auto-Route mode), chats can be classified as dangerous based on their content. The "Dangerous Chats" toggle lets you hide these chats from your sidebar, projects, and all-chats page.
+The "Dangerous Chats" toggle hides every conversation that takes the uncensored route, from your sidebar, your projects, and your all-chats page. It asks about the *road the chat is on*, not about anyone's opinion of it:
+
+- A chat the Concierge has **Flagged** himself goes behind the curtain — red mark, uncensored road.
+- A chat you have marked **Uncensored** goes with it — blue mark, same road, your own hand on the door.
+- A chat you have **Vouched Safe** stays put, whatever ancient and colourful classification it may still be carrying in its pocket. You gave your word, and the toggle takes it.
+- A merely **Monitored** chat stays put as well, being the ordinary case.
+
+Further particulars:
 
 - Toggle is available in the quick-hide menu under "Content Filters"
+- The eye icon appears in the sidebar footer only when some chat is actually on the uncensored road
 - Works independently of tag-based hiding
 - Your preference is saved across sessions
 

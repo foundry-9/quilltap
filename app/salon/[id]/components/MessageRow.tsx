@@ -19,7 +19,6 @@ import { resolveWhisperTargetLabel } from '../whisper-visibility'
 import { ThinkingBlock } from '@/components/chat/ThinkingBlock'
 import { MessageDesktopAvatar } from './message-row/MessageDesktopAvatar'
 import { MessageActionBar } from './message-row/MessageActionBar'
-import { MessageDesktopActions } from './message-row/MessageDesktopActions'
 import { getImageAttachments } from './message-row/helpers'
 import type { MessageAvatarInfo } from './message-row/types'
 import type { Message, TokenDisplaySettings, DangerousContentSettings, CharacterData } from '../types'
@@ -482,27 +481,6 @@ function MessageRowInner({
             </>
           )}
         </div>
-
-        {/* Desktop-only affordances (hover toolbar + text actions) */}
-        {!isEditing && (
-          <MessageDesktopActions
-            message={message}
-            viewSourceMessageIds={viewSourceMessageIds}
-            swipeState={swipeState}
-            showResendButton={showResendButton}
-            hasLLMLogs={hasLLMLogs}
-            participantData={participantData}
-            onCopyContent={onCopyContent}
-            onToggleSourceView={onToggleSourceView}
-            onViewLLMLogs={onViewLLMLogs}
-            onEditStart={onEditStart}
-            onDelete={onDelete}
-            onResend={onResend}
-            onReattribute={onReattribute}
-            onGenerateSwipe={onGenerateSwipe}
-            onSwitchSwipe={onSwitchSwipe}
-          />
-        )}
       </div>
       {/* Desktop avatar - user (right side) */}
       {message.role === 'USER' && shouldShowAvatars && messageAvatar && (

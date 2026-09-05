@@ -70,4 +70,27 @@ describe('useChatSettings — optimistic update', () => {
     // ...and no extra GET to settings/chat was issued (no revalidation).
     expect(countSettingsGets(mockFetch)).toBe(getsBefore)
   })
+
+  it.each([
+    ['handleImageDescriptionProfileChange', 'imageDescriptionProfileId'],
+    ['handleUncensoredImageDescriptionProfileChange', 'uncensoredImageDescriptionProfileId'],
+  ] as const)('%s PUTs the profile and applies the response without a revalidating GET', async (handler, field) => {
+    const { result } = renderHook(() => useChatSettings(), { wrapper })
+
+    await waitFor(() => expect(result.current.settings).not.toBeNull())
+    const getsBefore = countSettingsGets(mockFetch)
+
+    await act(async () => {
+      await result.current[handler]('profile-1')
+    })
+
+    const put = mockFetch.mock.calls.find(
+      ([url, init]: [string, RequestInit | undefined]) =>
+        url === '/api/v1/settings/chat' && init?.method === 'PUT'
+    )
+    expect(put).toBeDefined()
+    expect(JSON.parse(String((put![1] as RequestInit).body))).toEqual({ [field]: 'profile-1' })
+    expect((result.current.settings as unknown as Record<string, unknown>)?.[field]).toBe('profile-1')
+    expect(countSettingsGets(mockFetch)).toBe(getsBefore)
+  })
 })

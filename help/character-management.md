@@ -158,6 +158,14 @@ A few particulars of the ceremony:
 - **An interrupted rehydration loses nothing.** The character simply remains
   archived with the bundle intact; press Rehydrate again and it picks up
   where it left off, skipping whatever already made it back.
+- **A bundle sealed before 4.9.0 may report a mended record.** Every bundle
+  is checked against the fingerprint taken when it was sealed, and in earlier
+  versions the household's filing clerk was apt to overwrite that fingerprint
+  the moment the bundle reached the shelf — whereupon the ceremony refused to
+  proceed at all. Such a record is now examined, found to be the clerk's error
+  rather than the bundle's, quietly corrected, and the waking proceeds with a
+  note to that effect. A bundle whose contents genuinely fail their check is
+  still refused, as it must be.
 
 Should you prefer the character's effects without waking them, the command
 line still offers `quilltap db characters export <name>` to decant the

@@ -5,7 +5,8 @@
  *
  * Query parameters:
  * - q: search query (required, min 2 chars)
- * - types: comma-separated list of types to search (optional, defaults to all)
+ * - types: comma-separated list of types to search (optional, defaults to all):
+ *   chats, characters, tags, memories, messages, documents
  * - limit: max results to return (optional, default 20, max 50)
  * - offset: number of results to skip for pagination (optional, default 0)
  *
@@ -25,8 +26,20 @@ import {
   successResponse,
 } from '@/lib/api/responses';
 import type { SearchResult, SearchType, MatchPriority } from '@/components/search/types';
+import { ALL_SEARCH_TYPES } from '@/components/search/types';
+import { searchDocumentText } from '@/lib/mount-index/document-text-search';
 
-const VALID_TYPES: SearchType[] = ['chats', 'characters', 'tags', 'memories', 'messages'];
+/**
+ * Accepted `types` values — the same ordered list the dialog renders chips
+ * from, so the two can't drift.
+ */
+const VALID_TYPES: SearchType[] = ALL_SEARCH_TYPES;
+
+/**
+ * Documents matched before the scan short-circuits. Matches the message
+ * branch's cap; the route paginates over the merged result set.
+ */
+const DOCUMENT_SEARCH_LIMIT = 100;
 
 // Helper to determine match priority
 function getMatchPriority(value: string, query: string): MatchPriority {
@@ -234,6 +247,43 @@ export const GET = createContextHandler(async (req, context) => {
           });
           typesFound.add('memories');
         }
+      }
+    }
+
+    // Search documents across every enabled document store (if requested)
+    if (requestedTypes.includes('documents')) {
+      const { results: documentMatches } = await searchDocumentText(query, {
+        limit: DOCUMENT_SEARCH_LIMIT,
+      });
+
+      for (const doc of documentMatches) {
+        // The standalone deep link is the safe default: a middle-click or a
+        // no-JS open lands in chat-less Document Mode, which notifies no
+        // conversation of the open or of any later edit. The search UI's click
+        // handler upgrades to an in-chat open when a Salon is focused.
+        const url =
+          `/workspace?open=document-standalone&scope=document_store` +
+          `&mountPoint=${encodeURIComponent(doc.mountPointRef)}` +
+          `&filePath=${encodeURIComponent(doc.relativePath)}`;
+
+        allResults.push({
+          id: doc.linkId,
+          type: 'documents',
+          name: doc.fileName,
+          matchedField: doc.matchedField,
+          matchedValue: doc.matchedValue.substring(0, 200),
+          snippet: doc.snippet,
+          url,
+          matchPriority: doc.matchPriority,
+          createdAt: doc.updatedAt,
+          updatedAt: doc.updatedAt,
+          mountPointId: doc.mountPointId,
+          mountPointName: doc.mountPointName,
+          mountPointRef: doc.mountPointRef,
+          storeType: doc.storeType,
+          relativePath: doc.relativePath,
+        });
+        typesFound.add('documents');
       }
     }
 

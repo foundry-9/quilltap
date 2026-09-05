@@ -17,6 +17,9 @@ import { useGroupMembers } from '../hooks/useGroupMembers'
 import { useGroupMountPoints } from '../hooks/useGroupMountPoints'
 import { Icon } from '@/components/ui/icon'
 import StateEditorModal from '@/components/state/StateEditorModal'
+import MarkdownLexicalEditor from '@/components/markdown-editor/MarkdownLexicalEditor'
+import { PromptFieldLabel } from '@/components/prompt-fields/PromptFieldLabel'
+import { PROMPT_FIELD_HINTS } from '@/components/prompt-fields/field-hints'
 import type { Group } from '../../types'
 
 export interface GroupDetailViewProps {
@@ -29,7 +32,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [formData, setFormData] = useState({ name: '', description: '', color: '', icon: '' })
+  const [formData, setFormData] = useState({ name: '', description: '', instructions: '', color: '', icon: '' })
   const [membersExpanded, setMembersExpanded] = useState(false)
   const [storesExpanded, setStoresExpanded] = useState(false)
   const [showStateModal, setShowStateModal] = useState(false)
@@ -53,6 +56,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
         setFormData({
           name: g.name || '',
           description: g.description || '',
+          instructions: g.instructions || '',
           color: g.color || '',
           icon: g.icon || '',
         })
@@ -88,6 +92,7 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
         body: JSON.stringify({
           name: formData.name,
           description: formData.description || null,
+          instructions: formData.instructions || null,
           color: formData.color || null,
           icon: formData.icon || null,
         }),
@@ -169,6 +174,21 @@ export function GroupDetailView({ groupId, onBack }: GroupDetailViewProps) {
             rows={3}
             className="w-full px-4 py-2 rounded-lg border qt-border-default bg-transparent text-foreground text-sm resize-none"
             placeholder="Optional description of this group"
+          />
+        </div>
+
+        {/* Group Instructions — the group's standing prompt. The form only
+            renders after the group has loaded, so mounting on groupId is
+            enough for the editor to see the fetched value. */}
+        <div>
+          <PromptFieldLabel hint={PROMPT_FIELD_HINTS.groupInstructions} optional />
+          <MarkdownLexicalEditor
+            value={formData.instructions}
+            onChange={(value) => setFormData(prev => ({ ...prev, instructions: value }))}
+            remountKey={groupId}
+            namespace="GroupDetailView.instructions"
+            ariaLabel="Group instructions"
+            minHeight="14rem"
           />
         </div>
 

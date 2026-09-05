@@ -144,6 +144,22 @@ Click on a task to see more information:
 - Can be resumed
 - Progress saved
 
+### A Task That Never Heard Back
+
+Several of Quilltap's quieter offices — memory extraction, the scene-state tracker, chat titling, the running summary, story backgrounds — do their work by putting a short question to your cheap LLM and waiting a fixed interval for a reply. If no reply arrives inside that interval, the question is abandoned.
+
+There was a time when such a task simply shrugged and reported itself **Completed**, on the reasoning that nothing had gone *wrong* exactly. The reasoning was poor. No memory was formed, no scene was tracked, nothing was queued to try again, and the ledger showed a tidy green line where a hole in the record ought to have been. Ninety-nine scene-state passes came back complete over twelve that had never happened, and the operator had not a single indication of it.
+
+A pass that runs out of time now says so.
+
+- **It tries again first, at once.** A fresh connection is opened and the question put a second time. Most of the time this is the end of the matter and you will never know it happened.
+- **If the second attempt also runs out, the task is marked Failed**, with the office named in the error — *Cheap LLM task "scene-state-tracking" timed out* — and re-queued on the usual backing-off schedule. Should it exhaust its attempts it goes Dead, still carrying the reason.
+- **A model that merely declines is not treated this way.** A refusal, an unreadable answer, or a rejected key would arrive identically on every retry, and re-queuing them would spend the schedule learning nothing. Those still finish quietly, as before.
+
+The intervals themselves have been widened considerably — they were, it turns out, set inside the range of perfectly healthy work — so a Failed task of this kind now means something. Several in a row means your cheap-LLM provider is not keeping up, and is worth a look at the **Connection Profiles** page rather than a shrug.
+
+One note on memory extraction in particular: a turn is extracted as a single piece of work. If one character's pass runs out of time, the whole turn is re-run rather than patched, which is why you will not find duplicate memories after a retry.
+
 ## Controlling Tasks
 
 ### Pause a Task
@@ -309,6 +325,74 @@ Click on a task to see more information:
 - Check system health
 - Try restarting
 - Contact support if queue remains stuck
+
+## The live wire
+
+The Tasks Queue does not sit there going stale until you prod it. Quilltap keeps
+a slender private line open between the engine room and every window you have
+open — a speaking-tube, if you like — and the moment a task is entered, taken
+up, finished, or abandoned, word travels up it at once. The list you are looking
+at redraws itself within the same breath. Nothing is *sent* along the tube but
+the news that something has changed; the page then asks for the particulars
+through the ordinary channels, so what you read is always the genuine article
+and never a rumour.
+
+The same wire serves the chips in the toolbar, the autonomous-room badges, the
+progress readouts on the housekeeping levers, and the little status lamps beside
+a conversation being filed in the Scriptorium.
+
+**Fallback polling (5s).** Beneath the queue controls sits a switch by that
+name. It governs what happens when the wire is *down* — a server restarted
+beneath you, a network hiccup, a laptop lid closed and reopened. With it on, the
+page falls back to the old arrangement and asks for fresh figures every five
+seconds until the line is restored; with it off, the page waits quietly for the
+line to come back. Either way you lose nothing: the instant the wire is
+reconnected, every readout re-asks for the truth, so a spell of silence costs
+you a little delay and never a wrong number.
+
+There is nothing to configure beyond that switch, and nothing to restart. If you
+ever find a readout that seems becalmed, reloading the page is the whole of the
+remedy.
+
+### Clocks, not wires
+
+A phrase like *"4m ago"* goes out of date for an entirely different reason: not
+because anything happened at the engine, but because the clock on your wall
+moved. Those readings now advance on their own, all together, on the stroke of
+each minute — in the queue, on the conversation cards, wherever they appear —
+and a card that says *Today* becomes *Yesterday* at midnight without being
+asked. No line to the server is involved, and none is wanted.
+
+## The chips on the mantelpiece
+
+You need not open Settings to know whether the household is busy. A small row of
+chips sits in the page toolbar, wherever you happen to be — **Mem**, **Emb**,
+**Sum**, **Dgr**, **Img** — each bearing a count of the work of that kind
+presently in hand.
+
+| Chip | What it watches |
+|---|---|
+| **Mem** | the Commonplace Book — memories being formed, regenerated, or tidied away |
+| **Emb** | embeddings being minted, whether for the index or to answer a search you just typed |
+| **Sum** | summaries, titles, scene-state, conversation rendering — the quiet work after a turn |
+| **Dgr** | the Concierge, weighing content for danger |
+| **Img** | images, end to end: reading one with a vision model, deciding what a picture should contain, crafting the prompt, waiting on the provider, and landing the result |
+
+A chip counts the *whole errand*, not merely its queued portion. An image
+requested by a character lights **Img** from the first moment its prompt is
+being considered until the picture has landed (or failed) — and if the Concierge
+is consulted along the way, **Dgr** ticks up inside that span and back down
+again, quite as it should. Two things of the same kind at once read as `2`.
+
+Work that begins and ends between two glances would otherwise pass unnoticed, so
+a chip gives a brief double-blink to mark that something went through. A chip at
+rest is dimmed; it is never merely stale — the chips ride the same live wire
+described above, and light the instant work starts rather than at the next
+glance.
+
+Not everything appears here. Pure housekeeping the Estate performs on its own
+account is left off, and autonomous rooms keep their own [row of
+badges](autonomous-rooms.md) rather than crowding these.
 
 ## Best Practices
 

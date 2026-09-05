@@ -31,7 +31,7 @@ You may collapse the card mid-compilation and come back; the progress channel ke
 
 ### The Premises
 
-The vital statistics of the machine itself — Quilltap version, Node version, operating system and architecture, memory, runtime type (Docker, Lima, Electron, or plain Node), uptime, timezone and data directory. Then the three databases and their sizes (main, LLM logs, and the mount index — the last being where character content, wardrobe, photographs, mail and every document byte now live), whether they are behind a passphrase, the state of their physical backups, and how far up the migration ladder this installation has climbed.
+The vital statistics of the machine itself — Quilltap version, Node version, operating system and architecture, memory, runtime type (Docker, Electron, or plain Node), uptime, timezone and data directory. Then the three databases and their sizes (main, LLM logs, and the mount index — the last being where character content, wardrobe, photographs, mail and every document byte now live), whether they are behind a passphrase, the state of their physical backups, and how far up the migration ladder this installation has climbed.
 
 ### The Machinery
 

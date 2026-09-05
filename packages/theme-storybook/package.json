@@ -1,6 +1,6 @@
 {
   "name": "@quilltap/theme-storybook",
-  "version": "1.0.59",
+  "version": "1.0.70",
   "description": "Storybook preset and stories for developing Quilltap theme plugins",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -43,10 +43,10 @@
     "storybook": ">=8.0.0"
   },
   "devDependencies": {
-    "@storybook/react": "^10.5.8",
+    "@storybook/react": "^10.6.0",
     "@types/react": "^19.2.18",
     "react": "^19.2.8",
-    "storybook": "^10.5.8",
+    "storybook": "^10.6.0",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3"
   },
@@ -65,7 +65,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/foundry-9/quilltap-server.git",
+    "url": "git+https://github.com/foundry-9/quilltap-server.git",
     "directory": "packages/theme-storybook"
   },
   "homepage": "https://github.com/foundry-9/quilltap-server/tree/main/packages/theme-storybook#readme",

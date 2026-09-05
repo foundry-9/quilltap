@@ -29,6 +29,12 @@ export interface CheapLLMSettings {
   userDefinedProfileId?: string | null
   defaultCheapProfileId?: string | null
   fallbackToLocal: boolean
+  /**
+   * Whether a cheap route with no connection profile behind it may have a
+   * stand-in drafted from the user's `isCheap` profiles when it fails. Routes
+   * that do have a profile take their chain from that profile instead.
+   */
+  allowCheapFallback?: boolean
   embeddingProvider: EmbeddingProvider
   /** Optional override for image prompt expansion LLM - when set, uses this instead of global cheap LLM */
   imagePromptProfileId?: string | null

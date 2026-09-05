@@ -18,6 +18,7 @@ import { getRepositories } from '@/lib/repositories/factory';
 import { getCheapLLMProvider, CheapLLMConfig } from '@/lib/llm/cheap-llm';
 import { classifyContent } from '@/lib/services/dangerous-content/gatekeeper.service';
 import { resolveDangerousContentSettings } from '@/lib/services/dangerous-content/resolver.service';
+import { isClassifierOnDuty } from '@/lib/services/dangerous-content/chat-override';
 import { postConciergeDangerAnnouncement } from '@/lib/services/concierge-notifications/writer';
 import { createSystemEvent } from '@/lib/services/system-events.service';
 import { createServiceLogger } from '@/lib/logging/create-logger';
@@ -50,9 +51,10 @@ export async function handleChatDangerClassification(job: BackgroundJob): Promis
     return;
   }
 
-  // Off-duty: the operator has explicitly waved the Concierge off for this
-  // chat. A job may already be in the queue from before that flip — bail.
-  if (chat.conciergeOverride === 'OFF') {
+  // Vouched Safe / Uncensored: the operator has already returned the verdict
+  // for this chat. A job may already be in the queue from before that flip —
+  // bail.
+  if (!isClassifierOnDuty(chat)) {
     return;
   }
 

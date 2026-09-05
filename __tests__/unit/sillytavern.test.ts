@@ -7,7 +7,6 @@ import {
   exportSTCharacter,
   STCharacterV2,
 } from '@/lib/sillytavern/character'
-import { importSTPersona, exportSTPersona } from '@/lib/sillytavern/persona'
 import { importSTChat, exportSTChat, exportSTChatAsJSONL } from '@/lib/sillytavern/chat'
 import { parseSTFile } from '@/lib/sillytavern/multi-char-parser'
 
@@ -124,72 +123,6 @@ describe('SillyTavern Character Import/Export', () => {
 
       expect(result.spec).toBe('chara_card_v2')
       expect(result.data.creator).toBe('Quilltap')
-    })
-  })
-})
-
-describe('SillyTavern Persona Import/Export', () => {
-  const mockSTPersona = {
-    name: 'Test Persona',
-    description: 'A test persona',
-    personality: 'Curious and adventurous',
-  }
-
-  const mockInternalPersona = {
-    id: '789',
-    userId: 'user-456',
-    name: 'Test Persona',
-    description: 'A test persona',
-    personalityTraits: 'Curious and adventurous',
-    sillyTavernData: mockSTPersona,
-    avatarUrl: null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }
-
-  describe('importSTPersona', () => {
-    it('should import SillyTavern persona data', () => {
-      const result = importSTPersona(mockSTPersona)
-
-      expect(result.name).toBe('Test Persona')
-      expect(result.description).toBe('A test persona')
-      expect(result.personalityTraits).toBe('Curious and adventurous')
-      expect(result.sillyTavernData).toEqual(mockSTPersona)
-    })
-
-    it('should handle missing personality field', () => {
-      const minimalPersona = {
-        name: 'Minimal',
-        description: 'Description',
-      }
-
-      const result = importSTPersona(minimalPersona)
-
-      expect(result.personalityTraits).toBe('')
-    })
-  })
-
-  describe('exportSTPersona', () => {
-    it('should export persona to SillyTavern format', () => {
-      const result = exportSTPersona(mockInternalPersona)
-
-      expect(result.name).toBe('Test Persona')
-      expect(result.description).toBe('A test persona')
-      expect(result.personality).toBe('Curious and adventurous')
-    })
-
-    it('should preserve original SillyTavern data', () => {
-      const personaWithExtra = {
-        ...mockInternalPersona,
-        sillyTavernData: {
-          ...mockSTPersona,
-          custom_field: 'custom value',
-        },
-      }
-
-      const result = exportSTPersona(personaWithExtra)
-
-      expect((result as any).custom_field).toBe('custom value')
     })
   })
 })

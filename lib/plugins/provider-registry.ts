@@ -14,7 +14,7 @@
  * @module plugins/provider-registry
  */
 
-import type { TextProviderPlugin, TextProvider, ImageProvider, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints, ImageGenerationModelInfo, MessageFormatSupport, CheapModelConfig, ToolFormatType, EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
+import type { TextProviderPlugin, TextProvider, ImageProvider, ProviderMetadata, AttachmentSupport, ProviderConfigRequirements, ImageProviderConstraints, ImageGenerationModelInfo, ModelInfo, MessageFormatSupport, CheapModelConfig, ToolFormatType, EmbeddingProvider, LocalEmbeddingProvider } from '@quilltap/plugin-types';
 
 // Backward-compatible alias used throughout this file
 type LLMProviderPlugin = TextProviderPlugin;
@@ -23,6 +23,7 @@ import { rewriteLocalhostUrl } from '@/lib/host-rewrite';
 import type { PluginManifest } from '@/lib/schemas/plugin-manifest';
 import { extractPluginExport } from './dynamic-loader';
 import { AbstractProviderRegistry, type ProviderRegistryBaseState } from './abstract-provider-registry';
+import { evaluateThinkingTurn } from '@/lib/llm/thinking-turn';
 
 // ============================================================================
 // TYPES
@@ -329,6 +330,40 @@ class ProviderRegistry extends AbstractProviderRegistry<LLMProviderPlugin> {
     return model?.pricing ?? null;
   }
 
+  /**
+   * Whether a connection profile on this provider will run a thinking turn.
+   *
+   * Joins the two halves the plugin owns — its declared `thinkingTurnRule`
+   * (which `parameters` key switches reasoning on or off) and its model
+   * table's `thinksByDefault` flag — and hands both to the shared evaluator in
+   * `lib/llm/thinking-turn`, which is also what the profile editor runs in the
+   * browser. Never re-derive the answer at a call site (bug 85).
+   */
+  profileRunsThinkingTurn(
+    providerName: string | null | undefined,
+    modelName: string | null | undefined,
+    parameters: Record<string, unknown> | null | undefined
+  ): boolean {
+    if (!providerName) return false;
+    const plugin = this.getProvider(providerName);
+    if (!plugin) return false;
+
+    let model: ModelInfo | undefined;
+    if (modelName) {
+      try {
+        model = plugin.getModelInfo?.().find(m => m.id === modelName);
+      } catch {
+        model = undefined;
+      }
+    }
+
+    return evaluateThinkingTurn({
+      rule: plugin.thinkingTurnRule ?? null,
+      parameters: parameters ?? null,
+      model: model ?? null,
+    });
+  }
+
   // =========================================================================
   // HOT-LOADING (LLM-specific)
   // =========================================================================
@@ -573,6 +608,17 @@ export function getDefaultContextWindow(name: string): number {
  */
 export function getModelPricing(providerName: string, modelId: string): { input: number; output: number } | null {
   return providerRegistry.getModelPricing(providerName, modelId);
+}
+
+/**
+ * Whether a connection profile will run a thinking turn (bug 85).
+ */
+export function profileRunsThinkingTurn(
+  providerName: string | null | undefined,
+  modelName: string | null | undefined,
+  parameters: Record<string, unknown> | null | undefined
+): boolean {
+  return providerRegistry.profileRunsThinkingTurn(providerName, modelName, parameters);
 }
 
 /**

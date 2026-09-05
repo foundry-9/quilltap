@@ -10,11 +10,15 @@ import {
   getScenarioSuggestionPrompt,
   getSystemPromptSuggestionPrompt,
   getPhysicalDescriptionSuggestionPrompt,
+  getWardrobeSuggestionPrompt,
+  getPropertiesSuggestionPrompt,
   getNewSystemPromptsSuggestionPrompt,
+  coerceSuggestionArray,
 } from '@/lib/services/character-optimizer.service'
 import { createMockCharacter, createMockMemory } from '../fixtures/test-factories'
 import type { OptimizerAnalysis } from '@/lib/services/character-optimizer.service'
 import type { CharacterScenario, CharacterSystemPrompt, PhysicalDescription } from '@/lib/schemas/types'
+import type { WardrobeItem } from '@/lib/schemas/wardrobe.types'
 
 describe('buildCharacterContext', () => {
   it('includes character name', () => {
@@ -357,6 +361,64 @@ describe('per-item suggestion prompts', () => {
     })
   })
 
+  describe('getWardrobeSuggestionPrompt', () => {
+    const items: WardrobeItem[] = [
+      {
+        id: 'wi-1',
+        characterId: 'char-1',
+        title: 'Brass-Button Duster',
+        description: 'A worn leather duster.',
+        imagePrompt: null,
+        types: ['top'],
+        componentItemIds: [],
+        appropriateness: 'travel',
+        isDefault: true,
+        replace: false,
+        migratedFromClothingRecordId: null,
+        archivedAt: null,
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      },
+    ]
+
+    it('allows refinements by id and structured new items', () => {
+      const result = getWardrobeSuggestionPrompt(mockAnalysis, items)
+      expect(result).toContain('field="wardrobeItems"')
+      expect(result).toContain('wardrobeItem')
+      expect(result.toLowerCase()).toContain('refine')
+      expect(result).toContain(JSON.stringify(mockAnalysis, null, 2))
+    })
+
+    it('keeps bodily features out of the wardrobe and forbids deletions', () => {
+      const result = getWardrobeSuggestionPrompt(mockAnalysis, items)
+      expect(result.toLowerCase()).toContain('physical description')
+      expect(result.toLowerCase()).toContain('never propose deleting')
+    })
+
+    it('reports the count of active (non-archived) items', () => {
+      const archived: WardrobeItem = { ...items[0], id: 'wi-2', archivedAt: '2026-01-02T00:00:00Z' }
+      const result = getWardrobeSuggestionPrompt(mockAnalysis, [...items, archived])
+      expect(result).toContain('1 wardrobe item(s)')
+    })
+  })
+
+  describe('getPropertiesSuggestionPrompt', () => {
+    it('proposes alias additions only and keeps pronouns read-only', () => {
+      const character = createMockCharacter({ aliases: ['The Duchess'] })
+      const result = getPropertiesSuggestionPrompt(mockAnalysis, character)
+      expect(result).toContain('field="aliases"')
+      expect(result).toContain('The Duchess')
+      expect(result.toLowerCase()).toContain('never propose pronoun changes')
+      expect(result.toLowerCase()).toContain('do not propose removing')
+    })
+
+    it('handles a character with no aliases', () => {
+      const character = createMockCharacter({ aliases: [] })
+      const result = getPropertiesSuggestionPrompt(mockAnalysis, character)
+      expect(result).toContain('(none)')
+    })
+  })
+
   describe('getNewSystemPromptsSuggestionPrompt', () => {
     it('includes the analysis and guides system-prompt additions only', () => {
       const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis)
@@ -370,5 +432,51 @@ describe('per-item suggestion prompts', () => {
       const result = getNewSystemPromptsSuggestionPrompt(mockAnalysis)
       expect(result.toLowerCase()).toContain('do not propose new scenarios')
     })
+  })
+})
+
+describe('coerceSuggestionArray', () => {
+  const suggestion = {
+    field: 'personality',
+    currentValue: 'Reserved.',
+    proposedValue: 'Reserved, but quick to intervene.',
+    rationale: 'The memories show repeated intervention.',
+    significance: 0.8,
+    memoryExcerpts: [],
+  }
+
+  it('passes an array through untouched', () => {
+    const input = [suggestion]
+    expect(coerceSuggestionArray(input)).toBe(input)
+  })
+
+  it('unwraps a suggestions wrapper object', () => {
+    expect(coerceSuggestionArray({ suggestions: [suggestion] })).toEqual([suggestion])
+  })
+
+  it('unwraps the other wrapper keys models reach for', () => {
+    for (const key of ['items', 'results', 'data', 'amendments']) {
+      expect(coerceSuggestionArray({ [key]: [suggestion] })).toEqual([suggestion])
+    }
+  })
+
+  it('wraps a lone bare suggestion object', () => {
+    expect(coerceSuggestionArray(suggestion)).toEqual([suggestion])
+  })
+
+  it('returns an empty array for anything unusable', () => {
+    expect(coerceSuggestionArray(null)).toEqual([])
+    expect(coerceSuggestionArray(undefined)).toEqual([])
+    expect(coerceSuggestionArray('not json')).toEqual([])
+    expect(coerceSuggestionArray(42)).toEqual([])
+    expect(coerceSuggestionArray({ note: 'no amendments warranted' })).toEqual([])
+  })
+
+  it('never returns a value the array pipeline would choke on', () => {
+    // The bug: a non-array reached `.filter(...)` and aborted the whole run.
+    for (const input of [null, 'x', 7, { suggestions: [suggestion] }, suggestion, [suggestion]]) {
+      expect(Array.isArray(coerceSuggestionArray(input))).toBe(true)
+      expect(() => coerceSuggestionArray(input).filter(Boolean)).not.toThrow()
+    }
   })
 })

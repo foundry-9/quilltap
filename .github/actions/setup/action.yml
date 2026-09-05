@@ -1,0 +1,42 @@
+name: Setup Quilltap build environment
+description: >-
+  Node plus an npm-cached `npm ci`. The single place the project's Node version
+  is pinned for CI — change it here, not per job.
+
+  NOTE: this deliberately does NOT check out the repository. A local composite
+  action is loaded from the workspace, so the calling job must run
+  actions/checkout BEFORE it can reference this action at all.
+
+inputs:
+  node-version:
+    description: Node major version to install.
+    required: false
+    default: '24'
+  install:
+    description: >-
+      Run `npm ci` (with npm caching). Set to 'false' for jobs that only consume
+      pre-built artifacts and never resolve project dependencies.
+    required: false
+    default: 'true'
+  registry-url:
+    description: >-
+      npm registry to configure an .npmrc for. Only needed by jobs that publish.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    # The npm cache is only useful when we actually install; asking for it
+    # otherwise makes setup-node hash a lockfile it will never restore against.
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: ${{ inputs.install == 'true' && 'npm' || '' }}
+        registry-url: ${{ inputs.registry-url }}
+
+    - name: Install dependencies
+      if: inputs.install == 'true'
+      shell: bash
+      run: npm ci

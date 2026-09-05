@@ -17,6 +17,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 
+import { formatRelativeAge } from '@/lib/format-time';
+import { useNow } from '@/hooks/useNow';
+
 type ProgressTier = { current: number; total: number; unit: string };
 
 interface StartupEvent {
@@ -141,15 +144,11 @@ function formatTier(t: ProgressTier): string {
   return t.total > 0 ? `${t.current}/${t.total} ${t.unit}` : `${t.current} ${t.unit}`;
 }
 
-function formatRelativeAge(ts: number): string {
-  const seconds = Math.max(0, Math.round((Date.now() - ts) / 1000));
-  if (seconds < 2) return 'just now';
-  if (seconds < 60) return `${seconds}s ago`;
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}m ago`;
-}
-
 export function StartupProgress() {
+  // The event ages used to advance only as a side effect of the 1 s status
+  // poll landing. The shared clock makes them tick on their own, so a stalled
+  // step visibly stalls instead of looking freshly finished.
+  const nowMs = useNow(1_000);
   const [status, setStatus] = useState<StartupStatus | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const stoppedRef = useRef(false);
@@ -205,7 +204,7 @@ export function StartupProgress() {
     <div className="qt-pretheme-bg flex h-screen items-center justify-center p-6">
       <div className="qt-card flex w-full max-w-xl flex-col gap-4 p-8">
         <div className="flex flex-col gap-1">
-          <div className="qt-text-tertiary text-xs uppercase tracking-wide">
+          <div className="qt-text-secondary text-xs uppercase tracking-wide">
             Quilltap is starting up
           </div>
           <h1 className={`text-2xl ${isErrored ? 'qt-text-danger' : 'qt-text-primary'}`}>
@@ -235,7 +234,7 @@ export function StartupProgress() {
 
         {events.length > 0 && (
           <div className="qt-divider mt-2 border-t pt-3">
-            <div className="qt-text-tertiary mb-2 text-xs uppercase tracking-wide">
+            <div className="qt-text-secondary mb-2 text-xs uppercase tracking-wide">
               Recently
             </div>
             <ul className="flex flex-col gap-1 text-sm">
@@ -250,12 +249,12 @@ export function StartupProgress() {
                         : 'qt-text-secondary'
                   }
                 >
-                  <span className="qt-text-tertiary mr-2 tabular-nums">
-                    {formatRelativeAge(event.ts)}
+                  <span className="qt-text-secondary mr-2 tabular-nums">
+                    {formatRelativeAge(event.ts, nowMs)}
                   </span>
                   {event.prettyLabel}
                   {event.detail && (
-                    <span className="qt-text-tertiary"> — {event.detail}</span>
+                    <span className="qt-text-secondary"> — {event.detail}</span>
                   )}
                 </li>
               ))}
@@ -264,7 +263,7 @@ export function StartupProgress() {
         )}
 
         {fetchError && !status && (
-          <div className="qt-text-tertiary animate-pulse text-sm">
+          <div className="qt-text-secondary animate-pulse text-sm">
             Loading…
           </div>
         )}

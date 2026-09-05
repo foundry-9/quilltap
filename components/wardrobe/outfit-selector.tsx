@@ -21,7 +21,7 @@ import type {
   WardrobeItemType,
   EquippedSlots,
 } from '@/lib/schemas/wardrobe.types'
-import { EMPTY_EQUIPPED_SLOTS } from '@/lib/schemas/wardrobe.types'
+import { EMPTY_EQUIPPED_SLOTS, WARDROBE_SLOT_TYPES, WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 import { useCharacterWardrobeItems } from '@/lib/hooks/use-character-wardrobe-items'
 import { buildDefaultOutfit } from '@/lib/wardrobe/default-outfit'
 import { wearItemIntoSlots } from '@/lib/wardrobe/outfit-displacement'
@@ -101,7 +101,7 @@ function computeSyncInitialMode(
  */
 export type PreviousOutfitSummary = Record<
   string,
-  Partial<Record<'top' | 'bottom' | 'footwear' | 'accessories', Array<{ itemId: string; title: string }>>>
+  Partial<Record<WardrobeItemType, Array<{ itemId: string; title: string }>>>
 >
 
 export interface OutfitSelectorProps {
@@ -121,17 +121,6 @@ export interface OutfitSelectorProps {
   projectId?: string | null
   /** Existing chat (when adding a participant) — the project tier is derived from it. */
   chatId?: string | null
-}
-
-// ============================================================================
-// SLOT LABELS
-// ============================================================================
-
-const SLOT_LABELS: Record<WardrobeItemType, string> = {
-  top: 'Top',
-  bottom: 'Bottom',
-  footwear: 'Footwear',
-  accessories: 'Accessories',
 }
 
 // ============================================================================
@@ -161,7 +150,7 @@ interface CharacterOutfitSectionProps {
    * at the end of the source chat. Rendered as a small preview under the
    * "Same as last conversation" option.
    */
-  previousChatSlots?: Partial<Record<'top' | 'bottom' | 'footwear' | 'accessories', Array<{ itemId: string; title: string }>>> | null
+  previousChatSlots?: Partial<Record<WardrobeItemType, Array<{ itemId: string; title: string }>>> | null
   /** Project this chat will belong to — folds the project wardrobe tier into the picker. */
   projectId?: string | null
   /** Existing chat (when adding a participant) — the project tier is derived from it. */
@@ -207,12 +196,14 @@ function CharacterOutfitSection({
   } = useCharacterWardrobeItems(wardrobeNeeded ? character.id : null, { projectId, chatId })
   const wardrobeFetched = !loadingWardrobe && allWardrobeItems.length > 0
 
-  // Visible items: skip archived and items lacking any of the four slots
-  // (defensive — schemas already enforce non-empty types).
-  const wardrobeItems = useMemo(
-    () => allWardrobeItems.filter((i) => !i.archivedAt),
-    [allWardrobeItems],
-  )
+  /**
+   * Visible items. The composer never asks for archived garments, so the
+   * loader has already dropped them — no client-side pass here, which would
+   * only be a second place for the rule to drift. There is deliberately no
+   * "Show archived" toggle on this surface: it composes the opening outfit,
+   * the same job the LLM does, and an archived garment must never audition.
+   */
+  const wardrobeItems = allWardrobeItems
 
   const itemsById = useMemo(
     () => new Map(wardrobeItems.map((i) => [i.id, i])),
@@ -229,9 +220,7 @@ function CharacterOutfitSection({
     if (autoResolved) return
     if (!wardrobeItemsFetched) return
     const defaults = buildDefaultOutfit(allWardrobeItems)
-    const hasUsableDefault = (['top', 'bottom', 'footwear', 'accessories'] as const).some(
-      (slot) => defaults[slot].length > 0,
-    )
+    const hasUsableDefault = WARDROBE_SLOT_TYPES.some((slot) => defaults[slot].length > 0)
     const resolved: OutfitSelectionMode = hasUsableDefault ? 'default' : 'manual'
     /* eslint-disable react-hooks/set-state-in-effect -- a one-time latch that
        reacts to the async wardrobe load (guarded by wardrobeItemsFetched and
@@ -384,23 +373,20 @@ function CharacterOutfitSection({
 
   const previousChatPreview = (() => {
     if (!previousChatSlots) return null
-    const equipped = (['top', 'bottom', 'footwear', 'accessories'] as const)
+    const equipped = WARDROBE_SLOT_TYPES
       .map((slot) => {
         const items = previousChatSlots[slot] ?? []
         if (items.length === 0) return null
         return { slot, titles: items.map((i) => i.title) }
       })
       .filter(
-        (entry): entry is {
-          slot: 'top' | 'bottom' | 'footwear' | 'accessories'
-          titles: string[]
-        } => entry !== null,
+        (entry): entry is { slot: WardrobeItemType; titles: string[] } => entry !== null,
       )
     if (equipped.length === 0) {
       return 'Nothing equipped at the end of the source chat — defaults will be used.'
     }
     return equipped
-      .map((e) => `${SLOT_LABELS[e.slot]}: ${e.titles.join(', ')}`)
+      .map((e) => `${WARDROBE_SLOT_META[e.slot].label}: ${e.titles.join(', ')}`)
       .join(' · ')
   })()
 

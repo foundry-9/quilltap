@@ -261,7 +261,7 @@ export function ImportKeysDialog({
                   </p>
                 )}
                 {state.importResult.errors.length > 0 && (
-                  <p className="qt-text-error">
+                  <p className="qt-text-destructive">
                     {state.importResult.errors.length} error{state.importResult.errors.length !== 1 ? 's' : ''}
                   </p>
                 )}

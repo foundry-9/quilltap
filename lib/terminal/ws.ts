@@ -13,8 +13,8 @@
 
 import { IncomingMessage } from 'http';
 import type { WebSocket } from 'ws';
-import { getServerSession } from '@/lib/auth/session';
 import { logger } from '@/lib/logger';
+import { authenticateUpgrade, WS_CLOSE_POLICY_VIOLATION } from '@/lib/realtime/upgrade-auth';
 import { ptyManager } from './pty-manager';
 import type { WsClientMsg } from './types';
 
@@ -30,29 +30,11 @@ function extractSessionId(url: string): string | null {
 }
 
 /**
- * Extract session cookie from request headers
- * Returns null if not found or cookie header missing
- */
-function extractSessionCookie(req: IncomingMessage): string | null {
-  const cookieHeader = req.headers.cookie;
-  if (!cookieHeader) return null;
-
-  // Look for the session cookie (typically 'sessionid' or similar)
-  const cookies = cookieHeader.split(';');
-  for (const cookie of cookies) {
-    const trimmed = cookie.trim();
-    if (trimmed.startsWith('sessionid=') || trimmed.startsWith('next-auth') || trimmed.startsWith('__Secure-')) {
-      return trimmed.split('=')[1] || '';
-    }
-  }
-  return null;
-}
-
-/**
  * Handle WebSocket upgrade for terminal stream
  *
- * Validates session exists, authenticates via session cookie, subscribes to stream,
- * and wires message/close/error handlers.
+ * Validates the PTY session exists, authenticates the upgrade through the
+ * shared helper, subscribes to the stream, and wires message/close/error
+ * handlers.
  */
 export async function handleTerminalUpgrade(
   ws: WebSocket,
@@ -81,22 +63,13 @@ export async function handleTerminalUpgrade(
     return;
   }
 
-  // Attempt to authenticate via session.
-  // For raw IncomingMessage, getServerSession() may need cookies extracted differently.
-  // As a v1 fallback, we check for cookie presence — single-user mode means
-  // cookie existence is a reasonable auth check.
-  let isAuthenticated = false;
-  try {
-    const session = await getServerSession();
-    isAuthenticated = Boolean(session?.user);
-  } catch {
-    // getServerSession() may fail on raw IncomingMessage; fall back to cookie check
-    isAuthenticated = Boolean(extractSessionCookie(req));
-  }
-
-  if (!isAuthenticated) {
-    wsLogger.debug('[Terminal WS] Unauthorized session', { sessionId });
-    ws.close(1008, 'Unauthorized');
+  // Authenticate through the shared upgrade helper — live session, not locked,
+  // same origin. This replaced a "some session-ish cookie exists" fallback that
+  // proved nothing: Quilltap sets no session cookie, so it accepted anything.
+  const auth = await authenticateUpgrade(req);
+  if (!auth.ok) {
+    wsLogger.debug('[Terminal WS] Unauthorized upgrade', { sessionId, reason: auth.reason });
+    ws.close(WS_CLOSE_POLICY_VIOLATION, 'Unauthorized');
     return;
   }
 

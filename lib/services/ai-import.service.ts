@@ -11,18 +11,33 @@
 
 import { createLLMProvider } from '@/lib/llm';
 import { profileParams } from '@/lib/llm/cheap-llm';
+import { parseLLMJson } from '@/lib/llm/llm-json';
+import { describeGeneratedProperties, parseGeneratedProperties } from '@/lib/characters/generated-properties';
 
 import { initializePlugins, isPluginSystemInitialized } from '@/lib/startup';
 import { providerRegistry } from '@/lib/plugins/provider-registry';
 import { extractFileContent } from '@/lib/services/file-content-extractor';
 import { logLLMCall } from '@/lib/services/llm-logging.service';
 import { validateQtapExport } from '@/lib/validation/qtap-schema-validator';
-import { FIELD_SEMANTICS_PREAMBLE } from '@/lib/services/character-field-semantics';
+import {
+  FULL_FIELD_SEMANTICS,
+  PROMPT_SEMANTICS,
+  PROPERTIES_SEMANTICS,
+  PHYSICAL_DESCRIPTION_SEMANTICS,
+} from '@/lib/services/character-field-semantics';
+import {
+  WARDROBE_ITEMS_GENERATION_PROMPT,
+  sanitizeGeneratedWardrobeItems,
+  orderGeneratedItemsLeafFirst,
+  type GeneratedWardrobeItem,
+} from '@/lib/wardrobe/generated-items';
 import { logger } from '@/lib/logger';
 import packageJson from '@/package.json';
 import type { ConnectionProfile } from '@/lib/schemas/types';
 import type { RepositoryContainer } from '@/lib/repositories/factory';
 import type { QuilltapExport } from '@/lib/export/types';
+import { isCharacterAuthoredMessage } from '@/lib/chat/chat-activity';
+import type { ChatEvent } from '@/lib/schemas/types';
 
 // ============================================================================
 // Types
@@ -100,17 +115,14 @@ export interface AIImportStepResults {
     completePrompt: string;
     fullDescription: string;
   };
-  wardrobe_items?: Array<{
-    title: string;
-    description: string;
-    types: string[];
-    appropriateness?: string;
-  }>;
+  wardrobe_items?: GeneratedWardrobeItem[];
   pronouns?: {
     subject: string;
     object: string;
     possessive: string;
   };
+  /** Nicknames / alternate names extracted alongside pronouns in the properties step. */
+  aliases?: string[];
   memories?: Array<{
     content: string;
     summary: string;
@@ -155,19 +167,19 @@ Respond with JSON:
 }`;
 }
 
-export const CHARACTER_BASICS_PROMPT = `${FIELD_SEMANTICS_PREAMBLE}
+export const CHARACTER_BASICS_PROMPT = `${FULL_FIELD_SEMANTICS}
 
-Extract or generate the character's basic information from the source material. Use the vantage-point rule above to decide what belongs in IDENTITY vs DESCRIPTION vs PERSONALITY. Do NOT put the same content under two different fields, and do NOT put physical appearance into DESCRIPTION — physical appearance is generated separately and lives in physicalDescription.
+Extract or generate the character's basic information from the source material. Use the vantage-point rule above to decide what belongs in IDENTITY vs DESCRIPTION vs PERSONALITY. Do NOT put the same content under two different fields, and do NOT put physical appearance into DESCRIPTION — physical appearance is generated separately and lives in physicalDescription. Likewise, system prompts, pronouns/aliases, physical descriptions, and wardrobe are each extracted in their own later step — leave that content out of these fields.
 
 Respond with JSON:
 {
   "name": "Character's full name",
   "title": "A short epithet or title (2-5 words, like 'The Wandering Scholar')",
-  "identity": "1-2 paragraphs of public-knowledge / outside-view facts only — name, station, occupation, public reputation, signifying outward facts a stranger could plausibly know without having spoken to the character. Never internal motivation, never private mannerisms, never physical appearance.",
-  "description": "1-2 paragraphs of what someone who has interacted with the character would notice — behaviour, mannerisms, frequent verbal patterns, conversational tics. NOT physical appearance (that lives in physicalDescription). NOT the character's private inner monologue. NOT the public-facing reputation that already lives in identity. Write in third person, present tense.",
-  "manifesto": "The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Not a vantage-point field; nobody 'sees' the manifesto, it is the load-bearing truth the character is built on. Short, declarative, foundational. If a fact would be devastating to contradict, it belongs here.",
-  "personality": "1-2 paragraphs of the character's own self-knowledge — inner drivers of speech and behaviour, motivations, beliefs, emotional tendencies, things only the character knows about themselves unless they choose to share them. Never put outward behaviour someone else would observe here, and never put public-facing identity facts.",
-  "scenario": "1-2 paragraphs setting the default scene for interactions. Present tense, describing environment and relationship context. The scenario is the stage, not the actor — do not restate personality or appearance here."
+  "identity": "1-2 paragraphs of public-knowledge / outside-view facts only — name, station, occupation, public reputation, signifying outward facts a stranger could plausibly know without having spoken to the character. Never internal motivation, never private mannerisms, never physical appearance. Written about the character from outside, because only others ever read it: 'Ariadne is a research librarian at the Athenaeum.'",
+  "description": "1-2 paragraphs of what someone who has interacted with the character would notice — behaviour, mannerisms, frequent verbal patterns, conversational tics. NOT physical appearance (that lives in physicalDescription). NOT the character's private inner monologue. NOT the public-facing reputation that already lives in identity. Write in third person, present tense: 'She finishes other people's sentences and apologises afterwards.'",
+  "manifesto": "The basic tenets — the most important facts of the character's existence. The axiomatic core that every other field should remain consistent with. Not a vantage-point field; nobody 'sees' the manifesto, it is the load-bearing truth the character is built on. Short, declarative, foundational. If a fact would be devastating to contradict, it belongs here. Addressed to the character themselves, who is the only one who ever reads it: 'You do not lie to Charlie, not even kindly.'",
+  "personality": "1-2 paragraphs of the character's own self-knowledge — inner drivers of speech and behaviour, motivations, beliefs, emotional tendencies, things only the character knows about themselves unless they choose to share them. Never put outward behaviour someone else would observe here, and never put public-facing identity facts. Addressed to the character themselves, whose self-knowledge it is: 'You keep your worry behind your teeth.'",
+  "scenario": "1-2 paragraphs setting the default scene for interactions. Present tense, describing environment and relationship context. The scenario is the stage, not the actor — do not restate personality or appearance here, and address no one; the referent is the world: 'The reading room is empty at this hour, rain against the high windows.'"
 }
 
 If the source material clearly provides information for a field, extract and adapt it. If not, generate appropriate content that fits the character.`;
@@ -180,7 +192,9 @@ Respond with JSON:
   "exampleDialogues": "2-3 example dialogue exchanges showing the character's voice.\\nFormat:\\n{{char}}: [dialogue and *actions*]\\n{{user}}: [response]\\n{{char}}: [follow-up]\\n\\nSeparate exchanges with a blank line."
 }`;
 
-const SYSTEM_PROMPTS_PROMPT = `Create system prompts that instruct an AI how to roleplay as this character.
+const SYSTEM_PROMPTS_PROMPT = `${PROMPT_SEMANTICS}
+
+Create system prompts that instruct an AI how to roleplay as this character.
 
 Respond with JSON array:
 [
@@ -191,10 +205,12 @@ Respond with JSON array:
   }
 ]
 
-The main prompt should capture the character's essence from the source material. Include specific details about speech patterns, mannerisms, and reactions that make the character unique.`;
+The main prompt should capture the character's essence from the source material. Include specific details about speech patterns, mannerisms, and reactions that make the character unique. If the source material implies distinct interaction modes or model-specific needs, you may add 1-2 additional named prompts (isDefault false) tailored to them.`;
 
-const PHYSICAL_DESCRIPTIONS_PROMPT = `Generate physical descriptions of this character at varying detail levels for image generation.
-Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Focus only on the character's physical traits.
+const PHYSICAL_DESCRIPTIONS_PROMPT = `${PHYSICAL_DESCRIPTION_SEMANTICS}
+
+Generate physical descriptions of this character at varying detail levels for image generation.
+Do NOT include clothing, outfits, or accessories — those are handled separately by the wardrobe system. Describe the person as if nothing removable were part of the description; focus only on the character's physical traits. Include the character's natural hair (colour, length, texture) here, but not a styled hairdo — hairstyles are wardrobe items.
 
 Respond with JSON:
 {
@@ -206,35 +222,25 @@ Respond with JSON:
   "fullDescription": "Complete physical description in markdown format with sections: ## Overview, ## Face & Head, ## Body, ## Distinctive Features. No clothing section."
 }`;
 
-const WARDROBE_ITEMS_PROMPT = `Generate wardrobe items for this character based on the source material and their typical clothing and style.
-Each item must cover one or more slot types: "top" (shirts, jackets, dresses that cover the torso), "bottom" (pants, skirts, shorts), "footwear" (shoes, boots, sandals), "accessories" (jewelry, hats, belts, scarves, bags).
+// Wardrobe generation shares its prompt, item shape, and sanitizer with the
+// AI Wizard via lib/wardrobe/generated-items.
+const WARDROBE_ITEMS_PROMPT = `${WARDROBE_ITEMS_GENERATION_PROMPT}
 
-A single item can cover multiple slots — for example, a full-length dress would have types ["top", "bottom"].
+Ground every item in the source material where it describes the character's clothing and style; generate plausible items only where the source is silent.`;
 
-Generate 3-6 items that represent this character's typical wardrobe. Include a mix of everyday and situational items if the source material provides enough detail.
+const PROPERTIES_EXTRACTION_PROMPT = `${PROPERTIES_SEMANTICS}
 
-Respond with JSON array:
-[
-  {
-    "title": "Short descriptive name for the item",
-    "description": "A sentence or two describing the item's appearance in detail",
-    "types": ["top"],
-    "appropriateness": "casual, everyday"
-  }
-]
+Determine the character's pronouns and aliases from the source material.
 
-The "appropriateness" field is a comma-separated list of context tags describing when this item is appropriate (e.g., "casual", "formal", "combat", "sleepwear", "intimate").`;
-
-const PRONOUNS_PROMPT = `Determine the character's pronouns from the source material.
-
-If the source material clearly indicates pronouns, respond with JSON:
+Respond with JSON:
 {
-  "subject": "he/she/they/etc",
-  "object": "him/her/them/etc",
-  "possessive": "his/her/their/etc"
+  "pronouns": { "subject": "he/she/they/etc", "object": "him/her/them/etc", "possessive": "his/her/their/etc" },
+  "aliases": ["Nickname", "Alternate name"]
 }
 
-If the source material does NOT indicate pronouns, respond with JSON null (literally: null). Do not invent placeholders like "unknown", "n/a", or empty strings — return null instead.`;
+Rules:
+- If the source material does NOT clearly indicate pronouns, set "pronouns" to JSON null (literally: null). Do not invent placeholders like "unknown", "n/a", or empty strings — return null instead.
+- "aliases" lists only nicknames or alternate names the source material actually supports — names other people call the character. Do NOT include the character's primary name, and do NOT include their title/epithet. Use an empty array when there are none.`;
 
 const MEMORIES_PROMPT = `Generate memories that this character would have based on the source material. These are key facts, experiences, and knowledge the character should remember.
 
@@ -269,180 +275,6 @@ Create 5-8 messages showing natural conversation flow with the character's uniqu
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * Strip markdown code fences from LLM output before JSON parsing
- */
-export function stripCodeFences(text: string): string {
-  let cleaned = text.trim();
-  // Remove ```json ... ``` or ``` ... ``` (single source for every cheap-LLM JSON
-  // parser; the regex form tolerates both newline- and inline-delimited fences).
-  if (cleaned.startsWith('```json')) {
-    cleaned = cleaned.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-  } else if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```\s*/, '').replace(/\s*```$/, '');
-  }
-  return cleaned.trim();
-}
-
-/**
- * Attempt to repair truncated JSON from LLM output that was cut off
- * by maxTokens limits. Closes unclosed strings, arrays, and objects.
- */
-export function repairTruncatedJson(text: string): string {
-  let repaired = text.trim();
-
-  // If it already parses, return as-is
-  try {
-    JSON.parse(repaired);
-    return repaired;
-  } catch {
-    // Continue with repair
-  }
-
-  // Remove trailing comma (common at truncation point)
-  repaired = repaired.replace(/,\s*$/, '');
-
-  // Track bracket/brace depth to close unclosed structures
-  let inString = false;
-  let escaped = false;
-  const stack: string[] = [];
-
-  for (const ch of repaired) {
-    if (escaped) {
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\' && inString) {
-      escaped = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
-    if (inString) continue;
-
-    if (ch === '{') stack.push('}');
-    else if (ch === '[') stack.push(']');
-    else if (ch === '}' || ch === ']') stack.pop();
-  }
-
-  // If we're mid-string, close it
-  if (inString) {
-    repaired += '"';
-  }
-
-  // Remove any trailing key without a value (e.g. `"field":` or `"field": `)
-  repaired = repaired.replace(/,?\s*"[^"]*"\s*:\s*$/, '');
-
-  // Remove trailing comma again after cleanup
-  repaired = repaired.replace(/,\s*$/, '');
-
-  // Close all unclosed brackets/braces
-  while (stack.length > 0) {
-    repaired += stack.pop();
-  }
-
-  return repaired;
-}
-
-/**
- * Escape raw control characters (newlines, tabs, etc.) that appear *inside* a
- * JSON string literal. LLMs routinely emit a literal newline within a string
- * value instead of the `\n` escape sequence, which makes JSON.parse throw
- * "Bad control character in string literal". This walks the text with a small
- * string-aware state machine and escapes only the control characters that fall
- * inside a string, leaving structural whitespace between tokens untouched.
- */
-export function escapeControlCharsInStrings(text: string): string {
-  let result = '';
-  let inString = false;
-  let escaped = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-
-    if (escaped) {
-      result += ch;
-      escaped = false;
-      continue;
-    }
-    if (ch === '\\' && inString) {
-      result += ch;
-      escaped = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      result += ch;
-      continue;
-    }
-
-    const code = text.charCodeAt(i);
-    if (inString && code <= 0x1f) {
-      switch (ch) {
-        case '\n': result += '\\n'; break;
-        case '\r': result += '\\r'; break;
-        case '\t': result += '\\t'; break;
-        case '\b': result += '\\b'; break;
-        case '\f': result += '\\f'; break;
-        default: result += '\\u' + code.toString(16).padStart(4, '0'); break;
-      }
-      continue;
-    }
-
-    result += ch;
-  }
-
-  return result;
-}
-
-/**
- * Parse JSON from LLM output, handling code fences, truncated output,
- * and common formatting issues from LLM responses.
- */
-export function parseLLMJson<T>(text: string): T {
-  const cleaned = stripCodeFences(text);
-  try {
-    return JSON.parse(cleaned) as T;
-  } catch {
-    // LLMs commonly emit raw control characters inside string literals and/or
-    // truncate output at the maxTokens boundary. Escape control chars first,
-    // then repair any truncation before a final parse attempt.
-    const escaped = escapeControlCharsInStrings(cleaned);
-    try {
-      return JSON.parse(escaped) as T;
-    } catch {
-      const repaired = repairTruncatedJson(escaped);
-      return JSON.parse(repaired) as T;
-    }
-  }
-}
-
-const PRONOUN_PLACEHOLDERS = new Set([
-  '', 'unknown', 'n/a', 'na', 'none', 'null', 'undefined', 'not specified', 'not given', 'tbd',
-]);
-
-// Validate a parsed pronouns response. Returns the trimmed object if all three
-// fields are usable strings; otherwise returns undefined so the assembler stores null.
-// PronounsSchema requires non-empty strings ≤20 chars on subject/object/possessive,
-// so anything else would explode at character-create time.
-function sanitizePronouns(raw: unknown): { subject: string; object: string; possessive: string } | undefined {
-  if (!raw || typeof raw !== 'object') return undefined;
-  const obj = raw as Record<string, unknown>;
-  const fields = ['subject', 'object', 'possessive'] as const;
-  const cleaned: Record<string, string> = {};
-  for (const f of fields) {
-    const v = obj[f];
-    if (typeof v !== 'string') return undefined;
-    const trimmed = v.trim();
-    if (!trimmed || trimmed.length > 20) return undefined;
-    if (PRONOUN_PLACEHOLDERS.has(trimmed.toLowerCase())) return undefined;
-    cleaned[f] = trimmed;
-  }
-  return cleaned as { subject: string; object: string; possessive: string };
-}
 
 type LLMProvider = Awaited<ReturnType<typeof createLLMProvider>>;
 
@@ -586,6 +418,45 @@ function getSnippet(content: unknown, maxLength: number = 100): string {
 // ============================================================================
 
 /**
+ * Turn sanitized generated wardrobe items into export-shaped rows. Composites
+ * reference components by title in the generated shape; ids are minted here
+ * (leaf-first) so each composite's `componentItemIds` resolves to the ids of
+ * its components in the same batch.
+ */
+export function assembleWardrobeItems(
+  generatedItems: GeneratedWardrobeItem[] | undefined,
+  characterId: string,
+  now: string
+): Record<string, unknown>[] {
+  if (!generatedItems || generatedItems.length === 0) return [];
+
+  const ordered = orderGeneratedItemsLeafFirst(generatedItems);
+  const idByTitle = new Map<string, string>();
+  for (const item of ordered) {
+    idByTitle.set(item.title.toLowerCase(), crypto.randomUUID());
+  }
+
+  return ordered.map((item) => ({
+    id: idByTitle.get(item.title.toLowerCase()),
+    characterId,
+    title: item.title,
+    description: item.description || null,
+    imagePrompt: item.imagePrompt || null,
+    types: item.types,
+    componentItemIds: (item.components || [])
+      .map((title) => idByTitle.get(title.trim().toLowerCase()))
+      .filter((id): id is string => Boolean(id)),
+    appropriateness: item.appropriateness || null,
+    isDefault: item.isDefault === true,
+    replace: item.replace === true,
+    migratedFromClothingRecordId: null,
+    archivedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  }));
+}
+
+/**
  * Assemble a QuilltapExport from the generated step results
  */
 export function assembleQtapExport(
@@ -636,7 +507,7 @@ export function assembleQtapExport(
     controlledBy: 'llm',
     defaultAgentModeEnabled: null,
     partnerLinks: [],
-    aliases: [],
+    aliases: stepResults.aliases || [],
     pronouns: stepResults.pronouns || null,
     tags: [],
     avatarOverrides: [],
@@ -654,23 +525,7 @@ export function assembleQtapExport(
           updatedAt: now,
         }
       : null,
-    wardrobeItems: stepResults.wardrobe_items
-      ? stepResults.wardrobe_items.map((item) => ({
-          id: crypto.randomUUID(),
-          characterId,
-          title: item.title,
-          description: item.description || null,
-          types: item.types,
-          componentItemIds: [],
-          appropriateness: item.appropriateness || null,
-          isDefault: false,
-          replace: false,
-          migratedFromClothingRecordId: null,
-          archivedAt: null,
-          createdAt: now,
-          updatedAt: now,
-        }))
-      : [],
+    wardrobeItems: assembleWardrobeItems(stepResults.wardrobe_items, characterId, now),
     createdAt: now,
     updatedAt: now,
   };
@@ -744,9 +599,13 @@ export function assembleQtapExport(
       timestampConfig: null,
       lastTurnParticipantId: null,
       messageCount: chatMessages.length,
-      lastMessageAt: chatMessages.length > 0
-        ? chatMessages[chatMessages.length - 1].createdAt
-        : now,
+      // Only character-authored content dates the chat. An import is normally
+      // all USER/ASSISTANT, but route it through the one predicate rather than
+      // trusting "the last row" — see `lib/chat/chat-activity.ts`. Null when
+      // nothing qualifies, where readers fall back to `createdAt`.
+      lastMessageAt:
+        chatMessages.filter((m) => isCharacterAuthoredMessage(m as unknown as ChatEvent)).pop()
+          ?.createdAt ?? null,
       lastRenameCheckInterchange: 0,
       isPaused: false,
       isManuallyRenamed: false,
@@ -889,6 +748,16 @@ export function restampStructuralFields(data: QuilltapExport['data'], now: strin
           if (!isValidUuid(item.characterId) && isValidUuid(character.id)) {
             item.characterId = character.id;
             fixes++;
+          }
+          // Repair can rewrite componentItemIds wholesale; keep only entries
+          // that are real uuids so composites never carry dangling references.
+          if (item.componentItemIds !== undefined) {
+            const original = item.componentItemIds;
+            const filtered = Array.isArray(original) ? original.filter(isValidUuid) : [];
+            if (!Array.isArray(original) || filtered.length !== original.length) {
+              item.componentItemIds = filtered;
+              fixes++;
+            }
           }
         }
       }
@@ -1134,18 +1003,10 @@ export async function runAIImportStreaming(
           provider, apiKey, profile.modelName,
           charContext,
           WARDROBE_ITEMS_PROMPT,
-          { temperature: 0.7, maxTokens: 2000, ...llmOpts }
+          { temperature: 0.7, maxTokens: 3000, ...llmOpts }
         );
-        const items = parseLLMJson<Array<{ title: string; description: string; types: string[]; appropriateness?: string }>>(raw);
-        // Validate types
-        const validTypes = new Set(['top', 'bottom', 'footwear', 'accessories']);
-        stepResults.wardrobe_items = items
-          .filter((item) => item.title && item.types?.length > 0)
-          .map((item) => ({
-            ...item,
-            types: item.types.filter((t) => validTypes.has(t)),
-          }))
-          .filter((item) => item.types.length > 0);
+        const items = parseLLMJson<GeneratedWardrobeItem[]>(raw);
+        stepResults.wardrobe_items = sanitizeGeneratedWardrobeItems(items);
         onProgress({
           type: 'step_complete',
           step: 'wardrobe_items',
@@ -1159,37 +1020,32 @@ export async function runAIImportStreaming(
       }
     }
 
-    // Step 5: Pronouns
+    // Step 5: Properties (pronouns + aliases; step keeps its historical name)
     if (shouldRunStep('pronouns')) {
       onProgress({ type: 'step_start', step: 'pronouns' });
       try {
         const raw = await callLLM(
           provider, apiKey, profile.modelName,
           charContext,
-          PRONOUNS_PROMPT,
-          { temperature: 0.3, maxTokens: 100, ...llmOpts }
+          PROPERTIES_EXTRACTION_PROMPT,
+          { temperature: 0.3, maxTokens: 300, ...llmOpts }
         );
-        const parsed = parseLLMJson<unknown>(raw);
-        stepResults.pronouns = sanitizePronouns(parsed);
-        if (stepResults.pronouns) {
-          onProgress({
-            type: 'step_complete',
-            step: 'pronouns',
-            snippet: `${stepResults.pronouns.subject}/${stepResults.pronouns.object}/${stepResults.pronouns.possessive}`,
-          });
-        } else {
-          onProgress({
-            type: 'step_complete',
-            step: 'pronouns',
-            snippet: 'pronouns not derivable — left blank',
-          });
+        const props = parseGeneratedProperties(raw);
+        stepResults.pronouns = props.pronouns ?? undefined;
+        stepResults.aliases = props.aliases;
+        if (!props.pronouns) {
           logger.info('[AIImport] Pronouns not derivable from source — leaving null');
         }
+        onProgress({
+          type: 'step_complete',
+          step: 'pronouns',
+          snippet: describeGeneratedProperties(props, 'pronouns not derivable — left blank'),
+        });
       } catch (error) {
-        const msg = error instanceof Error ? error.message : 'Pronouns failed';
+        const msg = error instanceof Error ? error.message : 'Properties extraction failed';
         errors.pronouns = msg;
         onProgress({ type: 'step_error', step: 'pronouns', error: msg });
-        logger.warn('[AIImport] Pronouns step failed (non-fatal)', { error: msg });
+        logger.warn('[AIImport] Properties step failed (non-fatal)', { error: msg });
       }
     }
 

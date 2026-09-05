@@ -1,8 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { showSuccessToast, showErrorToast } from '@/lib/toast'
 import { getErrorMessage } from '@/lib/error-utils'
+import { apiFetch } from '@/lib/query/fetcher'
+import { queryKeys } from '@/lib/query/keys'
+import { readErrorText } from './hooks/api-error-text'
 
 interface HousekeepingConfig {
   enabled: boolean
@@ -26,61 +30,60 @@ const DEFAULT_CONFIG: HousekeepingConfig = {
   mergeSimilar: false,
 }
 
+const HOUSEKEEPING_CONFIG_URL = '/api/v1/memories?action=housekeeping-config'
+const CHARACTER_MEMORY_COUNTS_URL = '/api/v1/memories?action=character-memory-counts'
+
 export function MemoryHousekeepingCard() {
   const [config, setConfig] = useState<HousekeepingConfig>(DEFAULT_CONFIG)
-  const [characters, setCharacters] = useState<CharacterSummary[]>([])
-  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [showOverrides, setShowOverrides] = useState(false)
   const [overrideDrafts, setOverrideDrafts] = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
 
+  const {
+    data: loadedConfig,
+    isLoading: configLoading,
+    error: loadError,
+  } = useQuery({
+    queryKey: queryKeys.memories.housekeepingConfig,
+    queryFn: ({ signal }) =>
+      apiFetch<{ settings?: Partial<HousekeepingConfig> }>(HOUSEKEEPING_CONFIG_URL, { signal }),
+  })
+
+  // The per-character counts are decoration for the overrides list: a failed
+  // read leaves the list empty rather than failing the card.
+  const { data: loadedCounts, isLoading: countsLoading } = useQuery({
+    queryKey: queryKeys.memories.characterMemoryCounts,
+    queryFn: ({ signal }) =>
+      apiFetch<{ characters?: unknown }>(CHARACTER_MEMORY_COUNTS_URL, { signal }),
+  })
+  const loading = configLoading || countsLoading
+
+  const rawCharacters = loadedCounts?.characters
+  const characters: CharacterSummary[] = (Array.isArray(rawCharacters) ? rawCharacters : []).map(
+    (c: { id: string; name: string; memoryCount: number }) => ({
+      id: c.id,
+      name: c.name,
+      memoryCount: c.memoryCount,
+    }),
+  )
+
+  // Seed the editable form from the server's settings whenever a fresh read lands.
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const [configResponse, charsResponse] = await Promise.all([
-          fetch('/api/v1/memories?action=housekeeping-config'),
-          fetch('/api/v1/memories?action=character-memory-counts'),
-        ])
-        if (!configResponse.ok) {
-          throw new Error('Failed to load housekeeping settings')
-        }
-        const configData = await configResponse.json()
-        let charSummaries: CharacterSummary[] = []
-        if (charsResponse.ok) {
-          const charsData = await charsResponse.json()
-          const rawList = Array.isArray(charsData?.characters) ? charsData.characters : []
-          charSummaries = rawList.map((c: { id: string; name: string; memoryCount: number }) => ({
-            id: c.id,
-            name: c.name,
-            memoryCount: c.memoryCount,
-          }))
-        }
-        if (!cancelled) {
-          if (configData.settings) {
-            setConfig({ ...DEFAULT_CONFIG, ...configData.settings })
-          }
-          setCharacters(charSummaries)
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(getErrorMessage(err, 'Failed to load housekeeping settings'))
-        }
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the form is local state seeded from the query
+    if (loadedConfig?.settings) setConfig({ ...DEFAULT_CONFIG, ...loadedConfig.settings })
+  }, [loadedConfig])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- surface the read failure in the shared error line
+    if (loadError) setError(readErrorText(loadError, 'Failed to load housekeeping settings'))
+  }, [loadError])
 
   const saveConfig = async (next: Partial<HousekeepingConfig>) => {
     setSaving(true)
     setError(null)
     try {
-      const response = await fetch('/api/v1/memories?action=housekeeping-config', {
+      const response = await fetch(HOUSEKEEPING_CONFIG_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(next),
@@ -181,7 +184,7 @@ export function MemoryHousekeepingCard() {
         Automatic housekeeping prunes low-importance, stale memories once a character approaches its cap. High-importance, manually added, recently accessed, and well-reinforced memories are never touched. Off by default — toggle on once you&rsquo;ve reviewed the limits below.
       </p>
 
-      <label className="flex items-center gap-3 qt-text-body">
+      <label className="flex items-center gap-3 qt-body">
         <input
           type="checkbox"
           checked={config.enabled}
@@ -243,9 +246,9 @@ export function MemoryHousekeepingCard() {
 
                   return (
                     <div key={character.id} className="flex items-center gap-3">
-                      <div className="flex-1 qt-text-body">
+                      <div className="flex-1 qt-body">
                         <span>{character.name}</span>{' '}
-                        <span className={overCap ? 'qt-text-error qt-text-small' : 'qt-text-muted qt-text-small'}>
+                        <span className={overCap ? 'qt-text-destructive qt-text-small' : 'qt-text-muted qt-text-small'}>
                           ({character.memoryCount.toLocaleString()} memories)
                         </span>
                       </div>
@@ -273,7 +276,7 @@ export function MemoryHousekeepingCard() {
         </div>
       )}
 
-      <label className="flex items-center gap-3 qt-text-body">
+      <label className="flex items-center gap-3 qt-body">
         <input
           type="checkbox"
           checked={config.mergeSimilar}
@@ -298,7 +301,7 @@ export function MemoryHousekeepingCard() {
         </span>
       </div>
 
-      {error && <p className="qt-text-small qt-text-error">{error}</p>}
+      {error && <p className="qt-text-small qt-text-destructive">{error}</p>}
     </div>
   )
 }

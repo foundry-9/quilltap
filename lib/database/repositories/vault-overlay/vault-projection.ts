@@ -19,6 +19,12 @@ import { ensureFolderPath } from '@/lib/mount-index/folder-paths';
  * currently in the folder are deleted, so the vault listing matches the
  * incoming array exactly. Naming collisions are disambiguated with
  * `-1`, `-2`, … suffixes.
+ *
+ * `opts.preserveFileNames` exempts specific root-level file names
+ * (case-insensitive) from both the sweep and the projected name pool, so a
+ * hand-kept file like `Wardrobe/instructions.md` survives every projection
+ * and an item whose title maps to the same name lands on a `-1` suffix
+ * instead of overwriting it.
  */
 export async function projectArrayIntoVaultFolder<T>(
   mountPointId: string,
@@ -26,8 +32,10 @@ export async function projectArrayIntoVaultFolder<T>(
   items: readonly T[],
   mapper: (item: T) => { fileName: string; content: string },
   characterId: string,
+  opts?: { preserveFileNames?: readonly string[] },
 ): Promise<void> {
   const repos = getRepositories();
+  const preserved = new Set((opts?.preserveFileNames ?? []).map((name) => name.toLowerCase()));
   const existing = await repos.docMountDocuments.findManyByMountPointsInFolder(
     [mountPointId],
     folder,
@@ -40,7 +48,7 @@ export async function projectArrayIntoVaultFolder<T>(
   }
 
   const writtenPaths = new Set<string>();
-  const seen = new Set<string>();
+  const seen = new Set<string>(preserved);
   for (const item of items) {
     const mapped = mapper(item);
     let candidate = mapped.fileName;
@@ -60,6 +68,8 @@ export async function projectArrayIntoVaultFolder<T>(
 
   for (const [relPath, doc] of existingByPath) {
     if (writtenPaths.has(relPath)) continue;
+    const fileSegment = relPath.slice(relPath.lastIndexOf('/') + 1).toLowerCase();
+    if (preserved.has(fileSegment)) continue;
     try {
       await deleteDatabaseDocument(mountPointId, relPath);
     } catch (err) {

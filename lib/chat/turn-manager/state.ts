@@ -7,8 +7,9 @@
 import { turnManagerLogger as logger } from './logger';
 import type { TurnState, CalculateTurnStateOptions } from './types';
 import type { ChatEvent, ChatParticipantBase, MessageEvent } from '@/lib/schemas/types';
-import { isParticipantPresent } from '@/lib/schemas/chat.types';
+import { hasWhisperTargets } from '@/lib/schemas/chat.types';
 import { isTurnPassMessage } from './skip-signal';
+import { getPresentCharacterSeats } from './utils';
 
 /**
  * Creates a fresh turn state (e.g., for a new chat or after reset)
@@ -63,10 +64,7 @@ export function calculateTurnStateFromHistory(
     }
     if (msg.role !== 'USER' && msg.role !== 'ASSISTANT') continue;
     if (!msg.participantId) continue;
-    const isWhisper = 'targetParticipantIds' in msg
-      && Array.isArray(msg.targetParticipantIds)
-      && msg.targetParticipantIds.length > 0;
-    if (isWhisper) continue;
+    if (hasWhisperTargets(msg)) continue;
     state.lastSpeakerId = msg.participantId;
     break;
   }
@@ -93,10 +91,7 @@ export function updateTurnStateAfterMessage(
   if (message.role !== 'USER' && message.role !== 'ASSISTANT') return currentState;
   if (!message.participantId) return currentState;
   // Whisper messages don't affect turn order
-  const isWhisper = 'targetParticipantIds' in message
-    && Array.isArray(message.targetParticipantIds)
-    && message.targetParticipantIds.length > 0;
-  if (isWhisper) return currentState;
+  if (hasWhisperTargets(message)) return currentState;
 
   const newState = { ...currentState };
   const participantId = message.participantId;
@@ -160,11 +155,7 @@ function advanceSpokenThisCycle(
   // once this cycle, reset to just the new speaker so the next round starts
   // fresh. This matches the wrap behavior `selectNextSpeaker` produces when
   // it returns `cycleComplete: true`.
-  const activeIds = new Set(
-    participants
-      .filter(p => p.type === 'CHARACTER' && isParticipantPresent(p.status) && p.characterId)
-      .map(p => p.id),
-  );
+  const activeIds = new Set(getPresentCharacterSeats(participants).map(p => p.id));
 
   if (activeIds.size > 0) {
     const spokenActive = next.filter(id => activeIds.has(id));
@@ -185,11 +176,7 @@ export function computeSpokenThisCycleAfterMessage(
   if (message.type !== 'message') return null;
   if (message.role !== 'USER' && message.role !== 'ASSISTANT') return null;
   if (!message.participantId) return null;
-
-  const isWhisper = 'targetParticipantIds' in message
-    && Array.isArray(message.targetParticipantIds)
-    && message.targetParticipantIds.length > 0;
-  if (isWhisper) return null;
+  if (hasWhisperTargets(message)) return null;
 
   return advanceSpokenThisCycle(message.participantId, participants, currentSpokenJson);
 }

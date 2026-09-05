@@ -267,7 +267,15 @@ To remove an empty folder:
 1. Right-click file in general storage
 2. Select **Move to Project**
 3. Choose target project
-4. File becomes project-specific
+4. Choose the **Folder** within that project — the dropdown lists the project's
+   existing folders, nested children indented beneath their parents, and the
+   **+** button beside it will run up a new folder on the spot
+5. File becomes project-specific
+
+The Folder dropdown refreshes whenever you change the destination, so a file may
+be despatched straight to its proper shelf rather than being dropped in the
+project's front hall and shuffled along afterwards. A project with no folders of
+its own offers only **/ (Root)**, which is precisely as it should be.
 
 **To move to general storage:**
 

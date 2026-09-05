@@ -10,9 +10,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createContextParamsHandler, enrichProfile } from '@/lib/api/middleware';
 import { getActionParam } from '@/lib/api/middleware/actions';
-import { notFound, badRequest, serverError, messageResponse, successResponse } from '@/lib/api/responses';
+import { notFound, badRequest, serverError, messageResponse, successResponse, validationError } from '@/lib/api/responses';
 import { createImageProvider } from '@/lib/llm/plugin-factory';
 import { executeImageGenerationTool } from '@/lib/tools/handlers/image-generation-handler';
+import { validateProfileLoras } from '@/lib/image-gen/lora-validation';
 import { logger } from '@/lib/logger';
 import { z } from 'zod';
 
@@ -133,6 +134,16 @@ export const PUT = createContextParamsHandler<{ id: string }>(
       if (parameters !== undefined) {
         if (typeof parameters !== 'object' || Array.isArray(parameters)) {
           return badRequest('Parameters must be an object');
+        }
+        // Validate the reserved `loras` key before anything is written — a
+        // malformed adapter list must not save cleanly and fail at generation.
+        const loraError = validateProfileLoras(parameters);
+        if (loraError) {
+          logger.warn('[Image Profiles v1] Rejected an update with a malformed LoRA list', {
+            profileId: id,
+            issues: loraError.issues.map(i => `${i.path.join('.')}: ${i.message}`),
+          });
+          return validationError(loraError);
         }
         updateData.parameters = parameters;
       }

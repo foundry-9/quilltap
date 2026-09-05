@@ -33,6 +33,7 @@ import {
 } from '../ipc-types';
 import { startDispatcher, stopDispatcher, dispatcherWake, getDispatcherSnapshot, handleChildJobResult } from './job-dispatcher';
 import { dispatchHostRpc } from './host-rpc-dispatcher';
+import { applyChildActivityDelta, resetChildActivity } from '../activity-registry';
 
 const log = logger.child({ module: 'jobs:processor-host' });
 
@@ -109,7 +110,7 @@ function getChildEntryPath(): string {
   // `lib/background-jobs/child/child-entry.{js,ts}` is always there.
   //
   // Prefer the precompiled `.js` when present: the standalone tarball
-  // build (`scripts/build-standalone-tarball.ts`) bundles the child entry
+  // build (`scripts/build-standalone-tarball.mjs`) bundles the child entry
   // with esbuild so the forked process — which has no tsx loader and no
   // tsconfig-paths resolver — can `require` it directly. The `.ts`
   // fallback covers `npm run dev`, where tsx is on `process.execArgv`.
@@ -162,6 +163,9 @@ function spawnChild(): ChildProcess {
 
   child.on('exit', (code, signal) => {
     log.warn('Child process exited', { code, signal });
+    // Any activity spans the child had open die with it. Zero the mirror or a
+    // crash mid-generation pins a chip above zero until the server restarts.
+    resetChildActivity();
     const wasShuttingDown = state.shuttingDown;
     state.child = null;
     if (wasShuttingDown) return;
@@ -216,6 +220,12 @@ function handleChildMessage(raw: unknown): void {
     case 'shutdown-ack':
       log.info('Child acknowledged shutdown');
       break;
+    case 'activity':
+      // Inline work inside a job handler (Concierge classification, an
+      // embedding, an image the handler generates itself) mirrored up so the
+      // toolbar chips cover it too.
+      applyChildActivityDelta(msg);
+      break;
     case 'host-rpc':
       dispatchHostRpc(msg)
         .then(response => sendToChild(response))
@@ -238,7 +248,12 @@ function replayLogRecord(record: { level: string; message: string; timestamp: st
     case 'error': log.error(record.message, meta); break;
     case 'warn':  log.warn(record.message, meta); break;
     case 'info':  log.info(record.message, meta); break;
-    default:      log.info(record.message, meta); break;
+    case 'trace': log.trace(record.message, meta); break;
+    // 'debug' and anything unrecognised: re-emit at debug, never at info. The
+    // child has already filtered against the shared LOG_LEVEL (it inherits the
+    // parent's env), so promoting an unknown level here would only mislabel it
+    // and let it slip past a level filter downstream.
+    default:      log.debug(record.message, meta); break;
   }
 }
 

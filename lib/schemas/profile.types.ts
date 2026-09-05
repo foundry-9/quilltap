@@ -92,8 +92,58 @@ export const ConnectionProfileSchema = z.object({
    *                   format. Kept for compatibility while users migrate.
    */
   pseudoToolMode: z.enum(['auto', 'native', 'simple-json', 'text-block']).default('auto'),
+  /**
+   * How a multi-character chat anchors a reply to the character whose turn it
+   * is.
+   *
+   * - `true` (default) — append an assistant message containing
+   *   `[Character Name]`, so the model structurally continues only that
+   *   character's line. The tag is stripped downstream.
+   * - `false` — append a prose instruction to the system prompt instead,
+   *   leaving the conversation ending on a user message.
+   *
+   * Turn it off for models that cannot take an assistant prefill (Anthropic
+   * 4.6+ rejects the request outright), that lose a capability to it (Ollama's
+   * thinking channel is opened by the chat template at the start of the
+   * assistant turn, so a prefill suppresses reasoning entirely), or that
+   * visibly spend their reply deciding whether `[Name]` was an instruction or
+   * a previous speaker's slip. Single-character chats never use either anchor.
+   *
+   * `null`/absent means "not chosen yet" — rows written before
+   * `add-profile-multi-character-prefill-field-v1` and profiles imported from
+   * a pre-4.9 bundle. Never read this field directly: resolve it through
+   * `profileUsesNamePrefill()` in `lib/llm/multi-character-prefill.ts`, which
+   * falls back to the provider default (off for Anthropic, on elsewhere).
+   */
+  multiCharacterPrefill: z.boolean().nullable().optional(),
   /** Optional model class name for capability tier classification (e.g., 'Compact', 'Standard', 'Extended', 'Deep') */
   modelClass: z.string().nullable().optional(),
+  /**
+   * The understudy: another connection profile to try when a call through this
+   * one fails outright (auth, rate limit, network, missing model, 5xx, empty
+   * response, moderation refusal).
+   *
+   * Chains do NOT recurse — when A falls back to B, B's own
+   * `fallbackProfileId` is not followed. That keeps a cycle (A->B, B->A)
+   * harmless and caps any call at three attempts. The only config-time rules
+   * are "not yourself" and "not a Courier profile" (a Courier transport needs
+   * a human to carry the request by hand, which is no kind of failover).
+   *
+   * Never read this field directly to build a chain: go through
+   * `buildFallbackChain()` in `lib/llm/fallback/engine.ts`, which drops a
+   * target that has since been deleted or switched to Courier.
+   */
+  fallbackProfileId: UUIDSchema.nullable().optional(),
+  /**
+   * Whether, after both this profile and its named understudy have failed,
+   * Quilltap may draft ONE more candidate from the rest of the company —
+   * a profile of the same or better `modelClass` quality, preferring a
+   * different provider than the one that just failed.
+   *
+   * Off by default: an auto-picked replacement spends money at a provider the
+   * user did not choose for this call.
+   */
+  allowTierFallback: z.boolean().default(false),
   /** Optional override for the context window size in tokens (caps how much input the model accepts) */
   maxContext: z.number().int().positive().nullable().optional(),
   /** Optional override for the maximum output/completion tokens the model can generate */
@@ -136,6 +186,29 @@ export type ConnectionProfilesFile = z.infer<typeof ConnectionProfilesFileSchema
 // ============================================================================
 // IMAGE PROFILES
 // ============================================================================
+
+/**
+ * One LoRA adapter stored on an image profile, under the reserved
+ * `parameters.loras` key.
+ *
+ * Deliberately permissive about `scale`: per-model bounds are the editor's
+ * and the plugin's business, and a profile may legitimately be edited before
+ * a model is chosen. Storage only refuses what no provider could mean — an
+ * empty source, or a scale that is not a finite number in a sane global range.
+ */
+export const ImageLoraSpecSchema = z.object({
+  source: z.string().trim().min(1, 'LoRA source is required'),
+  scale: z
+    .number()
+    .finite('LoRA scale must be a finite number')
+    .min(0, 'LoRA scale cannot be negative')
+    .max(10, 'LoRA scale cannot exceed 10')
+    .optional(),
+  triggerPhrase: z.string().optional(),
+  label: z.string().optional(),
+});
+
+export type ImageLoraSpecStored = z.infer<typeof ImageLoraSpecSchema>;
 
 export const ImageProfileSchema = z.object({
   id: UUIDSchema,

@@ -10,8 +10,9 @@
  * - Embeddings support through compatible models
  */
 
-import type { TextProviderPlugin, EmbeddingModelInfo } from './types';
+import type { TextProviderPlugin, EmbeddingModelInfo, ProviderOptionsSchema } from './types';
 import { OllamaProvider } from './provider';
+import { DEFAULT_REQUEST_TIMEOUT_SECONDS } from './profile-options';
 import { OllamaEmbeddingProvider } from './embedding-provider';
 import {
   createPluginLogger,
@@ -56,7 +57,11 @@ const capabilities = {
   imageGeneration: false,
   embeddings: true,
   webSearch: false,
-  toolUse: false,
+  // The provider forwards native tool definitions and normalizes tool_calls,
+  // and modern local models (Qwen3 family, Llama 3.x, …) handle them. The
+  // per-profile "Allow tool use" checkbox remains the gate; models without
+  // template tool support can use the pseudo-tool (simple-json) format.
+  toolUse: true,
 } as const;
 
 /**
@@ -87,6 +92,132 @@ const cheapModels = {
 };
 
 /**
+ * Connection-profile options schema rendered by the Quilltap host.
+ *
+ * Every key is stored in the profile's `parameters` blob and read back by the
+ * provider off `LLMParams.profileParameters` at call time — the control keys
+ * through `resolveThinkSetting` / `resolveProfileTimeoutMs`, and the rest
+ * through the allow-lists in `profile-options.ts`, which is the one place that
+ * says what a profile may set. A field here whose key is in neither list goes
+ * nowhere.
+ */
+const optionsSchema: ProviderOptionsSchema = {
+  groups: [
+    {
+      title: 'Ollama Options',
+      fields: [
+        {
+          key: 'enable_thinking',
+          label: 'Enable Thinking',
+          type: 'boolean',
+          default: false,
+          helpText:
+            'Let thinking-capable models (Qwen3, DeepSeek-R1, and kin) reason before answering. ' +
+            'Reasoning streams into the thinking display rather than the reply. When off (the default), ' +
+            'the model is asked to answer directly — best when you need clean output such as JSON. ' +
+            'Either way, any <think> blocks that leak into the reply are routed to the thinking display.',
+        },
+        {
+          key: 'thinking_effort',
+          label: 'Thinking Effort',
+          type: 'enum',
+          default: '',
+          showIf: { field: 'enable_thinking', equals: true },
+          enumValues: [
+            { value: '', label: 'Model default', description: 'Let the model decide how long to think' },
+            { value: 'low', label: 'Low', description: 'Shortest reasoning, quickest replies' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High' },
+            { value: 'max', label: 'Maximum', description: 'Longest reasoning, slowest replies' },
+          ],
+          helpText:
+            'How long the model may reason before answering. On a local machine every reasoning token is ' +
+            'wall-clock time, so this is the largest speed control you have. Needs a recent Ollama and a ' +
+            'model whose template understands effort levels; older servers fall back to plain thinking.',
+        },
+        {
+          key: 'keep_alive',
+          label: 'Keep Model Loaded',
+          type: 'enum',
+          default: '',
+          enumValues: [
+            { value: '', label: 'Server default', description: 'Whatever your Ollama is configured to do' },
+            { value: '0', label: 'Unload immediately', description: 'Free the memory as soon as the reply is done' },
+            { value: '5m', label: '5 minutes' },
+            { value: '30m', label: '30 minutes' },
+            { value: '1h', label: '1 hour' },
+            { value: '-1', label: 'Keep loaded', description: 'Never unload while the server runs' },
+          ],
+          helpText:
+            'How long Ollama keeps this model in memory after a reply. The server unloads after five ' +
+            'minutes by default, and reloading a large model costs half a minute on the next message. ' +
+            'Set per profile, so a big chat model can stay resident while a small utility one unloads at ' +
+            'once. Leave on "Server default" and your OLLAMA_KEEP_ALIVE setting is left entirely alone.',
+        },
+        {
+          key: 'request_timeout_seconds',
+          label: 'Request Timeout (seconds)',
+          type: 'number',
+          default: DEFAULT_REQUEST_TIMEOUT_SECONDS,
+          helpText:
+            `How long to wait for the server before giving up (default ${DEFAULT_REQUEST_TIMEOUT_SECONDS}). ` +
+            'While streaming this covers only the wait for the first token, so a long answer is never cut ' +
+            'off mid-sentence — but loading a large model and reading a long prompt both happen before that ' +
+            'first token. Raise it if big models on a busy machine abort with "operation was aborted"; ' +
+            'lower it if you would rather a stalled server fail quickly. Leave blank for the default.',
+        },
+      ],
+    },
+    {
+      title: 'Sampling',
+      helpText:
+        'Sent only when filled in; blank leaves the model’s own default in charge. Model publishers ' +
+        'usually name the values they want — Qwen3 asks for Top K 20 and Min P 0.',
+      fields: [
+        {
+          key: 'top_k',
+          label: 'Top K',
+          type: 'number',
+          helpText: 'Keep only the K most likely next tokens.',
+        },
+        {
+          key: 'min_p',
+          label: 'Min P',
+          type: 'number',
+          helpText: 'Drop tokens less likely than this fraction of the best one.',
+        },
+        {
+          key: 'repeat_penalty',
+          label: 'Repeat Penalty',
+          type: 'number',
+          helpText: 'Penalty applied to tokens already used. Above 1 discourages repetition; 1 disables it.',
+        },
+        {
+          key: 'presence_penalty',
+          label: 'Presence Penalty',
+          type: 'number',
+          helpText:
+            'Discourages tokens that have appeared at all. Some publishers recommend a value for ' +
+            'non-thinking mode (Qwen3.8 asks for 1.5).',
+        },
+        {
+          key: 'frequency_penalty',
+          label: 'Frequency Penalty',
+          type: 'number',
+          helpText: 'Discourages tokens in proportion to how often they have already appeared.',
+        },
+        {
+          key: 'seed',
+          label: 'Seed',
+          type: 'number',
+          helpText: 'Fixes the sampler so the same prompt gives the same answer.',
+        },
+      ],
+    },
+  ],
+};
+
+/**
  * The Ollama Provider Plugin
  * Implements the LLMProviderPlugin interface for Quilltap
  */
@@ -112,6 +243,27 @@ export const plugin: TextProviderPlugin = {
   toolFormat: 'openai', // Ollama uses OpenAI-compatible format
   cheapModels,
   defaultContextWindow: 8192, // Conservative default for local models
+
+  /**
+   * Connection-profile options schema rendered by the host's profile editor.
+   */
+  getProviderOptionsSchema: () => optionsSchema,
+
+  /**
+   * Which profile option decides whether a turn will be a thinking turn.
+   * The host needs the answer to pick the multi-character turn anchor: Ollama
+   * opens a thinking model's reasoning block from the chat template at the
+   * start of the assistant turn, so a `[Name]` prefill means the block is
+   * never opened and the reasoning is lost entirely (bug 68). No
+   * `thinksByDefault` fallback applies here — Ollama's models are whatever the
+   * user has pulled, so an unticked box is the only honest answer, and a
+   * thinking-off profile rightly keeps the stronger prefill anchor.
+   */
+  thinkingTurnRule: {
+    optionKey: 'enable_thinking',
+    enabledValues: [true],
+    disabledValues: [false],
+  },
 
   /**
    * Factory method to create an Ollama LLM provider instance

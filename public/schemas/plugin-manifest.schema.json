@@ -547,6 +547,9 @@
           "default": true,
           "type": "boolean"
         },
+        "acceptsApiKey": {
+          "type": "boolean"
+        },
         "requiresBaseUrl": {
           "default": false,
           "type": "boolean"
@@ -688,13 +691,9 @@
         },
         "extendsTheme": {
           "description": "Plugin name of theme to extend",
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "string",
+            "null"
           ]
         },
         "tags": {

@@ -10,15 +10,18 @@
 import { describe, it, expect, beforeEach } from '@jest/globals'
 import { join } from 'node:path'
 
-jest.mock('@/lib/logger', () => ({
-  __esModule: true,
-  logger: {
+jest.mock('@/lib/logger', () => {
+  // `child` is needed because the chunker (reached through help-doc-chunking)
+  // builds a service logger at module load.
+  const base: Record<string, unknown> = {
     debug: jest.fn(),
     info: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
-  },
-}))
+  }
+  base.child = jest.fn(() => base)
+  return { __esModule: true, logger: base }
+})
 
 jest.mock('node:fs', () => ({
   __esModule: true,
@@ -78,6 +81,7 @@ function helpDocRow(overrides: Record<string, unknown> = {}) {
 
 describe('help-doc-sync', () => {
   let mockHelpDocs: Record<string, jest.Mock>
+  let mockHelpDocChunks: Record<string, jest.Mock>
   let mockEmbeddingStatus: Record<string, jest.Mock>
 
   beforeEach(() => {
@@ -94,12 +98,18 @@ describe('help-doc-sync', () => {
       findAllNeedingEmbedding: jest.fn().mockResolvedValue([]),
       delete: jest.fn().mockResolvedValue(true),
     }
+    mockHelpDocChunks = {
+      replaceForDoc: jest.fn().mockResolvedValue(0),
+      deleteByDocId: jest.fn().mockResolvedValue(0),
+      count: jest.fn().mockResolvedValue(0),
+    }
     mockEmbeddingStatus = {
       deleteByEntity: jest.fn().mockResolvedValue(1),
     }
 
     mockedGetRepositories.mockReturnValue({
       helpDocs: mockHelpDocs,
+      helpDocChunks: mockHelpDocChunks,
       embeddingStatus: mockEmbeddingStatus,
       embeddingProfiles: {
         findAll: jest.fn().mockResolvedValue([{ id: 'profile-1', isDefault: true }]),
@@ -159,6 +169,46 @@ describe('help-doc-sync', () => {
       expect(result.deleted).toBe(1)
       expect(mockHelpDocs.delete).toHaveBeenCalledWith('gone-id')
       expect(mockEmbeddingStatus.deleteByEntity).toHaveBeenCalledWith('HELP_DOC', 'gone-id')
+    })
+
+    it('writes section chunks for every doc it creates', async () => {
+      givenHelpDirContains({
+        'aurora.md': '---\nurl: /aurora\n---\n# Aurora\n\n## First section\n\nBody one.\n\n## Second section\n\nBody two.',
+      })
+
+      const result = await syncHelpDocs()
+
+      expect(mockHelpDocChunks.replaceForDoc).toHaveBeenCalledWith(
+        'id-for-help/aurora.md',
+        expect.arrayContaining([
+          expect.objectContaining({ chunkIndex: 0, content: expect.stringContaining('Body one.') }),
+        ])
+      )
+      expect(result.chunksWritten).toBeGreaterThan(0)
+    })
+
+    it('does not re-slice a doc whose content hash is unchanged', async () => {
+      const content = '# Aurora\n\nBody.'
+      givenHelpDirContains({ 'aurora.md': content })
+      const { createHash } = await import('node:crypto')
+      const hash = createHash('sha256').update(content).digest('hex')
+      mockHelpDocs.findAll.mockResolvedValue([helpDocRow({ contentHash: hash })])
+
+      const result = await syncHelpDocs()
+
+      expect(mockHelpDocChunks.replaceForDoc).not.toHaveBeenCalled()
+      expect(result.chunksWritten).toBe(0)
+    })
+
+    it('removes a pruned doc\'s chunks along with the doc', async () => {
+      givenHelpDirContains({ 'aurora.md': '# Aurora' })
+      mockHelpDocs.findAll.mockResolvedValue([
+        helpDocRow({ id: 'gone-id', path: 'help/retired.md' }),
+      ])
+
+      await syncHelpDocs()
+
+      expect(mockHelpDocChunks.deleteByDocId).toHaveBeenCalledWith('gone-id')
     })
 
     it('never prunes when the help directory is missing', async () => {
@@ -238,6 +288,55 @@ describe('help-doc-sync', () => {
       )
     })
 
+    it('backfills sections for an instance whose docs are already synced', async () => {
+      // The upgrade case: every content hash matches, so syncHelpDocs would
+      // skip every file and the chunk table would stay empty forever.
+      const content = '# Aurora\n\nBody.'
+      givenHelpDirContains({ 'aurora.md': content })
+      const { createHash } = await import('node:crypto')
+      const hash = createHash('sha256').update(content).digest('hex')
+      mockHelpDocs.findAll.mockResolvedValue([
+        helpDocRow({ contentHash: hash, content: '# Aurora\n\nBody.' }),
+      ])
+
+      await ensureHelpDocsSynced()
+
+      expect(mockHelpDocChunks.replaceForDoc).toHaveBeenCalledWith(
+        'existing-id',
+        expect.arrayContaining([expect.objectContaining({ chunkIndex: 0 })])
+      )
+      // The doc's own embedding is present, so only the chunk backfill can
+      // enqueue the job that fills the section vectors.
+      expect(mockedEnqueue).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ entityType: 'HELP_DOC', entityId: 'existing-id' })
+      )
+    })
+
+    it('does not backfill when sections already exist', async () => {
+      const content = '# Aurora\n\nBody.'
+      givenHelpDirContains({ 'aurora.md': content })
+      const { createHash } = await import('node:crypto')
+      const hash = createHash('sha256').update(content).digest('hex')
+      mockHelpDocs.findAll.mockResolvedValue([helpDocRow({ contentHash: hash })])
+      mockHelpDocChunks.count.mockResolvedValue(42)
+
+      await ensureHelpDocsSynced()
+
+      expect(mockHelpDocChunks.replaceForDoc).not.toHaveBeenCalled()
+    })
+
+    it('still loads help when the section backfill throws', async () => {
+      const content = '# Aurora\n\nBody.'
+      givenHelpDirContains({ 'aurora.md': content })
+      const { createHash } = await import('node:crypto')
+      const hash = createHash('sha256').update(content).digest('hex')
+      mockHelpDocs.findAll.mockResolvedValue([helpDocRow({ contentHash: hash })])
+      mockHelpDocChunks.count.mockRejectedValue(new Error('no such table'))
+
+      await expect(ensureHelpDocsSynced()).resolves.toBeUndefined()
+    })
+
     it('syncs when a row has no file on disk, so the prune is reachable', async () => {
       givenHelpDirContains({ 'aurora.md': '# Aurora' })
       const { createHash } = await import('node:crypto')
@@ -257,6 +356,9 @@ describe('help-doc-sync', () => {
     it('does not sync when disk and database agree', async () => {
       givenHelpDirContains({ 'aurora.md': '# Aurora' })
       mockHelpDocs.findAll.mockResolvedValue([helpDocRow()])
+      // Sections already present too, so there is genuinely nothing to do —
+      // an empty chunk table is its own reason to act (see the backfill tests).
+      mockHelpDocChunks.count.mockResolvedValue(12)
 
       await ensureHelpDocsSynced()
 

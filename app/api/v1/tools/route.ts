@@ -395,6 +395,13 @@ const BUILT_IN_TOOLS = [
     source: 'built-in' as const,
     category: 'photos',
   },
+  {
+    id: 'describe_image',
+    name: 'Describe Image',
+    description: 'Look at an image and report what it depicts',
+    source: 'built-in' as const,
+    category: 'photos',
+  },
   // Note: request_full_context and submit_final_response are intentionally excluded
   // - request_full_context is a safety valve that should always be available
   // - submit_final_response is an agent-mode internal tool

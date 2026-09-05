@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * OutfitSlotsPreview — read-only four-slot render of a decided outfit.
+ * OutfitSlotsPreview — read-only per-slot render of a decided outfit.
  *
  * Used by the chat-creation status dialog to show what an LLM-run character
  * chose to wear. Deliberately presentational: no add/remove/clear controls (the
@@ -12,22 +12,22 @@
  */
 
 import type { OutfitPreviewSlots } from '@/lib/chat/creation-progress'
+import { WARDROBE_SLOT_TYPES, WARDROBE_SLOT_META } from '@/lib/schemas/wardrobe.types'
 
-const SLOTS: { key: keyof OutfitPreviewSlots; label: string; badge: string }[] = [
-  { key: 'top', label: 'Top', badge: 'qt-badge-wardrobe-top' },
-  { key: 'bottom', label: 'Bottom', badge: 'qt-badge-wardrobe-bottom' },
-  { key: 'footwear', label: 'Footwear', badge: 'qt-badge-wardrobe-footwear' },
-  { key: 'accessories', label: 'Accessories', badge: 'qt-badge-wardrobe-accessories' },
-]
+const SLOTS = WARDROBE_SLOT_TYPES.map((key) => ({
+  key,
+  label: WARDROBE_SLOT_META[key].label,
+  badge: WARDROBE_SLOT_META[key].badgeClass,
+}))
 
 export function OutfitSlotsPreview({ slots }: { slots: OutfitPreviewSlots }) {
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       {SLOTS.map(({ key, label, badge }) => {
-        const entries = slots[key]
+        const entries = slots[key] ?? []
         return (
           <div key={key} className="qt-card p-2">
-            <div className="qt-text-tertiary mb-1 text-xs uppercase tracking-wide">{label}</div>
+            <div className="qt-text-secondary mb-1 text-xs uppercase tracking-wide">{label}</div>
             {entries.length === 0 ? (
               <div className="qt-text-muted text-xs italic">nothing</div>
             ) : (

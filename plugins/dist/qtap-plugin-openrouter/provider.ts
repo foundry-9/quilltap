@@ -74,7 +74,19 @@ type OpenAIContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } };
 
-const SUPPORTED_IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+/**
+ * Image MIME types OpenRouter will serialise as `image_url` content-parts and
+ * forward to the routed model. This is the single source of truth: `index.ts`
+ * imports it for `attachmentSupport.supportedMimeTypes`, so the declaration
+ * the plugin registry reads can no longer drift from what the wire actually
+ * carries (bug 97).
+ */
+export const SUPPORTED_IMAGE_MIME_TYPES: string[] = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+];
 
 export class OpenRouterProvider implements TextProvider {
   readonly supportsFileAttachments = true;

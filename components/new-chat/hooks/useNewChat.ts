@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useWorkspaceNavigate } from '@/components/workspace/useWorkspaceNavigate'
 import { useCreationProgress } from '@/components/providers/creation-progress-provider'
 import { showErrorToast, showSuccessToast } from '@/lib/toast'
+import { withArchivedParam } from '@/components/scenarios/archived-query'
 import type {
   Character,
   ConnectionProfile,
@@ -18,6 +19,9 @@ import type {
   UserControlledCharacter,
 } from '../types'
 import type { TimestampConfig } from '@/lib/schemas/types'
+import type { ConciergeState } from '@/lib/services/dangerous-content/chat-override'
+import { toScenarioOption, type ScenarioOption } from '@/components/scenario/types'
+import { toAutonomousSettingsHint } from '../autonomous-settings-hint'
 
 interface UseNewChatOptions {
   initialCharacterId?: string
@@ -39,6 +43,12 @@ interface UseNewChatOptions {
   initialImageProfileId?: string | null
   initialAvatarGenerationEnabled?: boolean
   initialTimestampConfig?: TimestampConfig | null
+  /**
+   * Concierge state to pre-select (continuation mode). A spicy conversation
+   * that changes venue stays spicy by default; the user can still override it
+   * on the form before creating.
+   */
+  initialConciergeState?: ConciergeState | null
   /**
    * When true, the form starts in autonomous-room mode: `state.autonomous.enabled`
    * is true at mount, and freshness-window / visibility defaults are seeded
@@ -86,6 +96,13 @@ interface UseNewChatReturn {
   /** Currently chosen project ID, or null for "no project (general)". */
   selectedProjectId: string | null
   setSelectedProjectId: (id: string | null) => void
+  /**
+   * "Show archived" for the scenario picker. Flipping it refetches every
+   * scenario tier with `?includeArchived=true` rather than filtering what's
+   * already loaded — the server owns the hiding.
+   */
+  showArchivedScenarios: boolean
+  setShowArchivedScenarios: (next: boolean) => void
   // Form state
   selectedCharacters: SelectedCharacter[]
   setSelectedCharacters: React.Dispatch<React.SetStateAction<SelectedCharacter[]>>
@@ -97,6 +114,7 @@ interface UseNewChatReturn {
 
 const INITIAL_STATE: NewChatFormState = {
   imageProfileId: '',
+  conciergeState: 'monitored',
   roleplayTemplateId: null,
   roleplayTemplateTouched: false,
   scenario: '',
@@ -142,6 +160,7 @@ export function useNewChat({
   initialImageProfileId,
   initialAvatarGenerationEnabled,
   initialTimestampConfig,
+  initialConciergeState,
   initialAutonomous = false,
 }: UseNewChatOptions = {}): UseNewChatReturn {
   const navigate = useWorkspaceNavigate()
@@ -167,6 +186,7 @@ export function useNewChat({
   // re-syncs whenever the prop changes — the same props-as-state pattern
   // NewChatModal previously implemented locally for continuation mode.
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(projectId ?? null)
+  const [showArchivedScenarios, setShowArchivedScenarios] = useState(false)
   const [lastSeenProjectIdProp, setLastSeenProjectIdProp] = useState<string | undefined>(projectId)
   if (projectId !== lastSeenProjectIdProp) {
     setLastSeenProjectIdProp(projectId)
@@ -203,14 +223,17 @@ export function useNewChat({
           fetch('/api/v1/characters'),
           fetch('/api/v1/connection-profiles'),
           fetch('/api/v1/image-profiles'),
-          fetch('/api/v1/scenarios'),
+          fetch(withArchivedParam('/api/v1/scenarios', showArchivedScenarios)),
           fetch('/api/v1/settings/chat'),
           fetch('/api/v1/projects'),
           fetch('/api/v1/roleplay-templates'),
         ]
         if (selectedProjectId) {
           requests.push(fetch(`/api/v1/projects/${selectedProjectId}`))
-          requests.push(fetch(`/api/v1/projects/${selectedProjectId}/scenarios`))
+          requests.push(fetch(withArchivedParam(
+            `/api/v1/projects/${selectedProjectId}/scenarios`,
+            showArchivedScenarios,
+          )))
         }
         if (initialCharacterId) {
           requests.push(fetch(`/api/v1/characters/${initialCharacterId}`))
@@ -219,7 +242,10 @@ export function useNewChat({
         // Fetch group scenarios when LLM characters are selected
         if (selectedLlmCharacterIds.length > 0) {
           requests.push(
-            fetch(`/api/v1/groups/scenarios?characterIds=${selectedLlmCharacterIds.join(',')}`)
+            fetch(withArchivedParam(
+              `/api/v1/groups/scenarios?characterIds=${selectedLlmCharacterIds.join(',')}`,
+              showArchivedScenarios,
+            ))
           )
         }
 
@@ -270,14 +296,7 @@ export function useNewChat({
         let loadedGeneralScenarios: GeneralScenarioOption[] = []
         if (generalScenariosRes.ok) {
           const data = await generalScenariosRes.json()
-          loadedGeneralScenarios = (data.scenarios || []).map((s: { path: string; filename: string; name: string; description?: string; isDefault: boolean; body: string }) => ({
-            path: s.path,
-            filename: s.filename,
-            name: s.name,
-            ...(s.description !== undefined && { description: s.description }),
-            isDefault: s.isDefault,
-            body: s.body,
-          }))
+          loadedGeneralScenarios = (data.scenarios || []).map((s: ScenarioOption) => toScenarioOption(s))
         } else {
           console.warn('[useNewChat] Failed to load general scenarios', {
             status: generalScenariosRes.status,
@@ -326,14 +345,7 @@ export function useNewChat({
         if (projectScenariosRes && projectScenariosRes.ok) {
           const data = await projectScenariosRes.json()
           // Server returns full ParsedProjectScenario[]; pick the fields the UI needs.
-          loadedProjectScenarios = (data.scenarios || []).map((s: { path: string; filename: string; name: string; description?: string; isDefault: boolean; body: string }) => ({
-            path: s.path,
-            filename: s.filename,
-            name: s.name,
-            ...(s.description !== undefined && { description: s.description }),
-            isDefault: s.isDefault,
-            body: s.body,
-          }))
+          loadedProjectScenarios = (data.scenarios || []).map((s: ScenarioOption) => toScenarioOption(s))
         } else if (projectScenariosRes && !projectScenariosRes.ok) {
           console.warn('[useNewChat] Failed to load project scenarios', {
             projectId: selectedProjectId,
@@ -350,14 +362,9 @@ export function useNewChat({
             const scenarios = group.scenarios || []
             for (const s of scenarios) {
               loadedGroupScenarios.push({
+                ...toScenarioOption(s),
                 groupId: group.groupId,
                 groupName: group.groupName,
-                path: s.path,
-                filename: s.filename,
-                name: s.name,
-                ...(s.description !== undefined && { description: s.description }),
-                isDefault: s.isDefault,
-                body: s.body,
               })
             }
           }
@@ -391,13 +398,9 @@ export function useNewChat({
           try {
             const settings = await chatSettingsRes.json()
             userDefaultRoleplayTemplateId = settings?.defaultRoleplayTemplateId ?? null
-            const ar = settings?.autonomousRoomSettings ?? {}
-            if (typeof ar.defaultFreshnessWindowMs === 'number' && ar.defaultFreshnessWindowMs > 0) {
-              autonomousSeedFreshnessHours = Math.round(ar.defaultFreshnessWindowMs / (60 * 60 * 1000))
-            }
-            if (ar.destructiveToolPolicy === 'always_refuse') {
-              autonomousSeedDestructivePolicyAlwaysRefuse = true
-            }
+            const hint = toAutonomousSettingsHint(settings)
+            autonomousSeedFreshnessHours = hint?.defaultFreshnessHours ?? null
+            autonomousSeedDestructivePolicyAlwaysRefuse = hint?.destructiveToolPolicy === 'always_refuse'
           } catch (err) {
             console.warn('[useNewChat] Failed to parse chat-settings response', {
               error: err instanceof Error ? err.message : String(err),
@@ -438,10 +441,14 @@ export function useNewChat({
         // Project default wins over general default for pre-selection. When a
         // project default exists, seed `projectScenarioPath`; otherwise fall
         // back to the general default.
+        // `!s.archived` is belt-and-braces: the server already refuses to let
+        // an archived file win default resolution, but with "Show archived"
+        // ticked an archived row carrying a stale `isDefault: true` would
+        // otherwise be a candidate for auto-selection here.
         const projectDefaultScenarioPath =
-          loadedProjectScenarios.find((s) => s.isDefault)?.path ?? null
+          loadedProjectScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
         const generalDefaultScenarioPath =
-          loadedGeneralScenarios.find((s) => s.isDefault)?.path ?? null
+          loadedGeneralScenarios.find((s) => s.isDefault && !s.archived)?.path ?? null
         const seededGeneralScenarioPath = projectDefaultScenarioPath
           ? null
           : generalDefaultScenarioPath
@@ -505,6 +512,7 @@ export function useNewChat({
               initialAvatarGenerationEnabled ??
               loadedProject?.defaultAvatarGenerationEnabled ??
               prev.avatarGenerationEnabled,
+            conciergeState: initialConciergeState ?? prev.conciergeState,
           }))
         }
         // Seed selected character + defaults when initialCharacterId is provided
@@ -630,7 +638,9 @@ export function useNewChat({
     initialUserCharacterId,
     initialImageProfileId,
     initialAvatarGenerationEnabled,
+    initialConciergeState,
     selectedLlmCharacterIdsKey,
+    showArchivedScenarios,
   ])
 
   // When exactly one LLM character is selected (and it wasn't seeded), propagate their defaults.
@@ -757,6 +767,13 @@ export function useNewChat({
 
       if (state.imageProfileId) {
         requestBody.imageProfileId = state.imageProfileId
+      }
+
+      // Omitted when Monitored so a plain create stays byte-identical to what it
+      // has always been; the server treats absence and 'monitored' the same way
+      // (no write, no Concierge bubble).
+      if (state.conciergeState !== 'monitored') {
+        requestBody.conciergeState = state.conciergeState
       }
 
       // Sent — including `null` for "No Template" — so the value the user saw in
@@ -900,6 +917,8 @@ export function useNewChat({
     availableProjects,
     selectedProjectId,
     setSelectedProjectId,
+    showArchivedScenarios,
+    setShowArchivedScenarios,
     selectedCharacters,
     setSelectedCharacters,
     state,

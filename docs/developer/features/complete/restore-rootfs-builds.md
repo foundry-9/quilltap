@@ -1,3 +1,12 @@
+> **SUPERSEDED (2026-08-27).** Quilltap no longer ships managed Lima (macOS) or
+> WSL2 (Windows) VM modes — `quilltap-shell` 4.2.0 removed them, and this repo
+> followed: the `lima/` directory, `scripts/build-rootfs.mjs`, the `wsl2` stage
+> in `Dockerfile.ci`, and the rootfs jobs in the release workflow are all gone.
+> The release assets are now the Docker images and the standalone tarball
+> (`quilltap-standalone-*.tar.gz`, which is what both the `quilltap` CLI and the
+> Electron shell download). The sandboxed option is Docker, or a virtual machine
+> the user builds and manages themselves. Kept for the historical record.
+
 ## Restore rootfs tarball builds for Lima/WSL2 VM modes
 
 ### Problem

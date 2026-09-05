@@ -8,8 +8,12 @@
 import { getRepositories } from '@/lib/repositories/factory';
 import { BackgroundJobType } from '@/lib/schemas/types';
 import { logger } from '@/lib/logger';
+import type { EquippedSlots } from '@/lib/schemas/wardrobe.types';
 import type { QueueStats } from '@/lib/database/repositories';
 import { ensureProcessorRunning } from './processor';
+import { ACTIVITY_KINDS, emptyActivityCounts, type ActivityKind } from './activity-kinds';
+import { getActivityCounts, getActivityStartTotals } from './activity-registry';
+import { publishRealtime } from '@/lib/realtime/bus';
 import {
   COMPLETED_JOB_RETENTION_DAYS,
   DEAD_JOB_RETENTION_DAYS,
@@ -207,12 +211,7 @@ export interface CharacterAvatarGenerationPayload {
    * when the user generates from a "fitting room" composition that does
    * not match what the character is actually wearing in the chat.
    */
-  equippedSlotsOverride?: {
-    top: string[];
-    bottom: string[];
-    footwear: string[];
-    accessories: string[];
-  } | null;
+  equippedSlotsOverride?: EquippedSlots | null;
 }
 
 /**
@@ -452,6 +451,10 @@ export async function enqueueJob(
   });
 
   logger.info('Background job enqueued', { jobId: job.id, type, userId });
+
+  // Tell every open tab the queue moved. The bus coalesces, so a batch of
+  // enqueues arrives as one hint rather than one per job.
+  publishRealtime('jobs');
 
   // Auto-start the processor when a job is enqueued
   ensureProcessorRunning();
@@ -1088,6 +1091,7 @@ export async function enqueueMemoryExtractionBatch(
   });
 
   if (jobIds.length > 0) {
+    publishRealtime('jobs');
     ensureProcessorRunning();
   }
 
@@ -1119,11 +1123,37 @@ export async function getActiveCountsByType(userId?: string): Promise<Record<str
 }
 
 /**
+ * Get active (PENDING + PROCESSING) job counts grouped by activity kind,
+ * merged with non-job work currently registered in the activity registry.
+ *
+ * This is what the toolbar chips read: a chip stays lit for the whole span of
+ * the work it names, whether that work is a queued job or something running
+ * inline in a request.
+ */
+export async function getActivitySnapshot(userId?: string): Promise<{
+  active: Record<ActivityKind, number>;
+  started: Record<ActivityKind, number>;
+}> {
+  const repos = getRepositories();
+  const jobCounts = await repos.backgroundJobs.getActiveCountsByKind(userId);
+  const inline = getActivityCounts();
+
+  const active = emptyActivityCounts();
+  for (const kind of ACTIVITY_KINDS) {
+    active[kind] = jobCounts[kind] + inline[kind];
+  }
+
+  return { active, started: getActivityStartTotals() };
+}
+
+/**
  * Cancel a pending job
  */
 export async function cancelJob(jobId: string): Promise<boolean> {
   const repos = getRepositories();
-  return repos.backgroundJobs.cancel(jobId);
+  const cancelled = await repos.backgroundJobs.cancel(jobId);
+  if (cancelled) publishRealtime('jobs');
+  return cancelled;
 }
 
 /**

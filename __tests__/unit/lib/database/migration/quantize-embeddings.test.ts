@@ -108,6 +108,12 @@ beforeEach(() => {
   );
 });
 
+afterEach(() => {
+  // Native handles left open across tests are the kind of loose end the other
+  // real-binding suites all tie off — close per test, not at process exit.
+  try { db.close(); } catch { /* already closed */ }
+});
+
 describe('quantize-embeddings-v1', () => {
   it('declares its metadata and dependencies', () => {
     expect(quantizeEmbeddingsMigration.id).toBe('quantize-embeddings-v1');
