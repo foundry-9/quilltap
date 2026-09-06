@@ -57079,6 +57079,12 @@ var SAFETY_CATEGORIES = [
   "HARM_CATEGORY_HARASSMENT"
 ];
 var UNSUPPORTED_SCHEMA_FIELDS = [
+  // Bug 125: Google refuses `additionalProperties` anywhere inside a
+  // declaration — the top-level one is dropped by construction (only
+  // `properties` + `required` are forwarded), but the one Zod emits on an
+  // array's `items` object (wardrobe_wear / wardrobe_take_off `operations`)
+  // reached the wire and 400'd the whole tool-enabled turn.
+  "additionalProperties",
   "propertyNames",
   "additionalItems",
   "contains",
