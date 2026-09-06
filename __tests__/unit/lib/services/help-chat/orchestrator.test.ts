@@ -17,6 +17,11 @@ if (!globalThis.TextDecoder) {
 }
 
 import { handleHelpChatMessage } from '@/lib/services/help-chat/orchestrator.service'
+import { buildTools, streamMessage } from '@/lib/services/chat-message/streaming.service'
+import {
+  detectToolCallsInResponse,
+  processToolCalls,
+} from '@/lib/services/chat-message/tool-execution.service'
 import { resolveAllHelpContentForUrl } from '@/lib/help-chat/context-resolver'
 import { buildHelpChatSystemPrompt } from '@/lib/help-chat/system-prompt-builder'
 
@@ -112,6 +117,10 @@ jest.mock('@/lib/help-chat/context-resolver', () => ({
   resolveAllHelpContentForUrl: jest.fn().mockResolvedValue([]),
 }))
 
+const mockBuildTools = buildTools as jest.MockedFunction<typeof buildTools>
+const mockStreamMessage = streamMessage as jest.MockedFunction<typeof streamMessage>
+const mockDetectToolCalls = detectToolCallsInResponse as jest.MockedFunction<typeof detectToolCallsInResponse>
+const mockProcessToolCalls = processToolCalls as jest.MockedFunction<typeof processToolCalls>
 const mockResolveAllHelpContentForUrl = resolveAllHelpContentForUrl as jest.MockedFunction<
   typeof resolveAllHelpContentForUrl
 >
@@ -324,5 +333,89 @@ describe('handleHelpChatMessage', () => {
     expect(stream).toBeInstanceOf(ReadableStream)
     const content = await drainStream(stream)
     expect(content).toContain('error')
+  })
+
+  // ─── 9: Bug 124 — tool results are threaded back by call id ─────────────────
+
+  describe('tool-call threading (bug 124)', () => {
+    /**
+     * Drive one native tool turn: the first stream yields a tool call, the
+     * second yields the final answer. Returns the message slate the second
+     * stream was given — what the model actually sees after the tool ran.
+     */
+    async function runOneToolTurn(callId: string | undefined) {
+      mockBuildTools.mockResolvedValueOnce({
+        tools: [{ name: 'help_search' }],
+        modelSupportsNativeTools: true,
+      } as unknown as Awaited<ReturnType<typeof buildTools>>)
+
+      async function* toolCallStream() {
+        yield { content: '', usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 }, rawResponse: { marker: 'tool-call' } }
+      }
+      async function* answerStream() {
+        yield { content: 'The theme lives under Appearance.', usage: { promptTokens: 20, completionTokens: 8, totalTokens: 28 }, rawResponse: null }
+      }
+      mockStreamMessage
+        .mockImplementationOnce(() => toolCallStream() as never)
+        .mockImplementationOnce(() => answerStream() as never)
+
+      mockDetectToolCalls
+        .mockReturnValueOnce([{ name: 'help_search', arguments: { query: 'theme' }, callId }])
+        .mockReturnValueOnce(null as never)
+
+      mockProcessToolCalls.mockResolvedValueOnce({
+        toolMessages: [
+          { toolName: 'help_search', success: true, content: '{"results":[{"title":"Calliope"}]}', callId, arguments: { query: 'theme' } },
+        ],
+        generatedImagePaths: [],
+      } as unknown as Awaited<ReturnType<typeof processToolCalls>>)
+
+      const stream = await handleHelpChatMessage(repos as any, 'chat-1', 'user-1', {
+        content: 'Where do I change the theme?',
+      })
+      const output = await drainStream(stream)
+
+      expect(mockStreamMessage).toHaveBeenCalledTimes(2)
+      const secondCall = mockStreamMessage.mock.calls[1][0] as { messages: Array<Record<string, unknown>> }
+      return { output, messages: secondCall.messages }
+    }
+
+    it('pairs the tool row to the assistant turn by toolCallId when the provider issued one', async () => {
+      const { output, messages } = await runOneToolTurn('call_1')
+
+      const assistantTurn = messages.find((m) => m.role === 'assistant')
+      expect(assistantTurn).toBeDefined()
+      expect(assistantTurn!.toolCalls).toEqual([
+        { id: 'call_1', type: 'function', function: { name: 'help_search', arguments: JSON.stringify({ query: 'theme' }) } },
+      ])
+
+      const toolRow = messages.find((m) => m.role === 'tool')
+      expect(toolRow).toBeDefined()
+      expect(toolRow!.toolCallId).toBe('call_1')
+      expect(toolRow!.name).toBe('help_search')
+      expect(JSON.parse(toolRow!.content as string)).toEqual({
+        tool: 'help_search',
+        success: true,
+        result: '{"results":[{"title":"Calliope"}]}',
+      })
+      // The tool row sits right after the assistant turn that requested it.
+      expect(messages.indexOf(toolRow!)).toBe(messages.indexOf(assistantTurn!) + 1)
+
+      expect(output).toContain('The theme lives under Appearance.')
+    })
+
+    it('frames an id-less result as [Tool Result] user text instead of an orphan tool row', async () => {
+      const { messages } = await runOneToolTurn(undefined)
+
+      expect(messages.some((m) => m.role === 'tool')).toBe(false)
+      const assistantTurn = messages.find((m) => m.role === 'assistant')
+      expect(assistantTurn!.toolCalls).toBeUndefined()
+
+      const framed = messages.find(
+        (m) => m.role === 'user' && typeof m.content === 'string' && m.content.startsWith('[Tool Result: help_search]'),
+      )
+      expect(framed).toBeDefined()
+      expect(framed!.content).toContain('"result":"{\\"results\\":[{\\"title\\":\\"Calliope\\"}]}"')
+    })
   })
 })

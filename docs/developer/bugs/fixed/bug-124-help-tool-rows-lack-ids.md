@@ -2,15 +2,35 @@
 
 | | |
 |---|---|
-| **Status** | **Open — UNCONFIRMED on live v4.** Found on the v5 port's dogfood copy of Friday (2026-09-06); the v4 side is established by reading the shipped code, not by a live run. One live gesture confirms or refutes it (see Verification). |
+| **Status** | Fixed in v4 (2026-09-06). Filed from the v5 port's dogfood copy of Friday; the v4 side was confirmed by source reading — the id-less `tool` row at `:509` met the eight plugins' guards exactly as described — and pinned by unit test rather than a live gesture |
 | **Found** | 2026-09-06 |
-| **Fixed** | — |
+| **Fixed** | 2026-09-06 |
 | **Severity** | **Medium** (nothing errors and nothing is lost — the Help dialog simply shows *nothing* after a question that makes the character reach for `help_search` or `help_navigate`: the tools run, every model turn comes back empty, the duplicate-call guard ends the loop, and no assistant row is written. On a GOOGLE seat the same question works, which is what makes it look like the character's mood rather than a defect) |
 | **Who it bites** | any help chat whose answering character sits on OpenAI, Anthropic, OpenRouter, Grok, Ollama, DeepSeek, NanoGPT or Z.AI — i.e. every seat but a Google one — the moment the question needs a tool |
 | **Provenance** | Live on the v5 port (Friday copy, chat `37c6289c…`, Riya on NanoGPT: *"Where do I change the app's theme? Take me there."* → 8 empty ASSISTANT turns, 10 TOOL rows, the guard at turn 9, an EMPTY forced final, nothing on screen; repeated on chat `ff942ee4…` with three identical `help_search` calls). v4's shape is read from source: the help loop's tool rows and the plugins' guards are quoted below. |
 | **Defect site** | `lib/services/help-chat/orchestrator.service.ts:509` (the tool-result row is pushed as `{ role: 'tool', content }` with **no `toolCallId`**) meeting `plugins/dist/qtap-plugin-nanogpt/provider.ts:174` `if (!msg.toolCallId) continue;` and the same guard in the deepseek, z-ai, openai (`:94`), grok (`:93`), anthropic (`:174`), openrouter (`:180`) and ollama (`:107`) plugins. Only `qtap-plugin-google/provider.ts:377-388` keeps an id-less tool row (`functionResponse` named `unknown_function`). |
-| **v5 status** | **Reproduces faithfully** (the per-provider drop was ported deliberately at the `p4.9i2` unification, GOOGLE keeping the row). v5 will absorb v4's fix at the next drift catch-up; dogfood finding #112. |
-| **Index** | [bugs.md](../bugs.md) |
+| **Fix site** | `lib/services/help-chat/orchestrator.service.ts` — the loop now builds its assistant turn and result rows through `buildAssistantToolCallMessage` / `buildToolResultMessages` (`lib/services/chat-message/tool-call-threading.ts`), the same chokepoint the Salon and the Brahma Console use, so a result with a provider call id is a native `tool` row paired by `toolCallId` and one without (the pseudo-tool path) is `[Tool Result: …]` user text |
+| **v5 status** | **Reproduces faithfully** (the per-provider drop was ported deliberately at the `p4.9i2` unification, GOOGLE keeping the row). v4 is now fixed; v5 absorbs it at the next drift catch-up — thread the help loop through the port's tool-call-threading primitive rather than mirroring the pre-fix row shape; dogfood finding #112 |
+| **Index** | [bugs.md](../../bugs.md) |
+
+---
+
+**FIXED in v4 (2026-09-06).** The help loop no longer hand-rolls its
+assistant turn and tool rows. After a tool batch runs it pushes
+`buildAssistantToolCallMessage(toolCalls, currentResponse)` — the assistant turn
+carrying the `toolCalls` array whenever any call has a provider id — followed by
+`buildToolResultMessages(...)`, which pairs each result to its call by
+`toolCallId` (and names the tool) or, for an id-less result from the text-block
+path, frames it as a `[Tool Result: <name>]` user message. Both helpers are the
+ones the Salon's native loop and the Brahma Console already use, so the three
+agent loops can no longer drift on this. The stuck-loop nudge tracks the last
+result's content directly instead of searching the slate by role, since a
+framed result is no longer a `tool` row. Pinned by two cases in
+`__tests__/unit/lib/services/help-chat/orchestrator.test.ts` that drive one
+native tool turn through the loop and assert the slate the **second** stream
+receives: with a call id, an assistant turn whose `toolCalls[0].id` matches and
+a `tool` row with the same `toolCallId` immediately after it; without one, no
+`tool` row at all and a `[Tool Result: help_search]` user message instead.
 
 ---
 
