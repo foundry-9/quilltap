@@ -34,6 +34,10 @@ import {
   createToolContext,
 } from '@/lib/services/chat-message/tool-execution.service'
 import {
+  buildAssistantToolCallMessage,
+  buildToolResultMessages,
+} from '@/lib/services/chat-message/tool-call-threading'
+import {
   buildNativeToolSystemInstructions,
   checkShouldUseTextBlockTools,
   buildTextBlockSystemInstructions,
@@ -333,6 +337,11 @@ async function processHelpResponse(
   const totalUsage = { promptTokens: 0, completionTokens: 0 }
   const toolCallHistory: string[] = [] // Track tool call signatures for loop detection
   const MAX_DUPLICATE_TOOL_CALLS = 2 // Force response after this many identical calls
+  // The most recent tool result this turn produced, kept for the stuck-loop
+  // nudge. Tracked here rather than searched for by role, because a result
+  // without a provider call id is threaded as `[Tool Result: …]` user text
+  // (see buildToolResultMessages) and would not be found under role 'tool'.
+  let lastToolResultContent: string | null = null
 
   while (agentTurnCount <= maxAgentTurns) {
     agentTurnCount++
@@ -438,10 +447,9 @@ async function processHelpResponse(
           toolNames: toolCallsToProcess.map(tc => tc.name),
         })
 
-        // Find the most recent tool result in conversation to echo back to the model
-        const lastToolResult = [...conversationMessages].reverse().find(m => m.role === 'tool')
-        const toolDataReminder = lastToolResult
-          ? `\n\nHere is the data you already received from your previous tool call:\n${lastToolResult.content}`
+        // Echo the most recent tool result back to the model
+        const toolDataReminder = lastToolResultContent
+          ? `\n\nHere is the data you already received from your previous tool call:\n${lastToolResultContent}`
           : ''
 
         // Nudge the model: inject a message telling it to use the data it already has
@@ -469,7 +477,15 @@ async function processHelpResponse(
         createdAt: new Date().toISOString(),
       }
       await repos.chats.addMessage(chatId, assistantMessage)
-      conversationMessages.push({ role: 'assistant', content: currentResponse })
+
+      // Bug 124: the assistant turn must carry the `toolCalls` it made and
+      // each result must be paired back by `toolCallId`, exactly as the
+      // Salon's native loop does. Every plugin but Google drops an id-less
+      // `tool` row, so without the pairing the model never saw its own
+      // results, searched again, and the duplicate guard forced an empty
+      // final. The shared helpers frame id-less results (pseudo-tool path)
+      // as `[Tool Result: …]` user text instead.
+      conversationMessages.push(buildAssistantToolCallMessage(toolCallsToProcess, currentResponse))
 
       // Per-tool status updates are now emitted inside processToolCalls
 
@@ -503,13 +519,24 @@ async function processHelpResponse(
           character.id,
         )
 
-        // Add tool results to conversation for next iteration
-        for (const tm of toolResult.toolMessages) {
-          conversationMessages.push({
-            role: 'tool',
-            content: JSON.stringify({ tool: tm.toolName, success: tm.success, result: tm.content }),
-          })
-        }
+        // Add tool results to conversation for next iteration, paired to the
+        // call that produced them
+        const threadedResults = toolResult.toolMessages.map((tm) => ({
+          ...tm,
+          content: JSON.stringify({ tool: tm.toolName, success: tm.success, result: tm.content }),
+        }))
+        const resultMessages = buildToolResultMessages(threadedResults)
+        conversationMessages.push(...resultMessages)
+        lastToolResultContent = resultMessages[resultMessages.length - 1]?.content ?? null
+
+        logger.debug('Threaded help-chat tool results into the conversation', {
+          chatId,
+          characterName: character.name,
+          turn: agentTurnCount,
+          toolNames: toolResult.toolMessages.map((tm) => tm.toolName),
+          pairedByCallId: toolResult.toolMessages.filter((tm) => tm.callId).length,
+          framedAsText: toolResult.toolMessages.filter((tm) => !tm.callId).length,
+        })
       }
 
 

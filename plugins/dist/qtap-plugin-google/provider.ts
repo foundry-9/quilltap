@@ -29,8 +29,15 @@ const SAFETY_CATEGORIES = [
 ];
 
 // Fields that Google's function calling API doesn't support
-// These are valid JSON Schema fields but not accepted by Google
-const UNSUPPORTED_SCHEMA_FIELDS = [
+// These are valid JSON Schema fields but not accepted by Google.
+// Exported so the unit pin can hold the list against the schemas we send.
+export const UNSUPPORTED_SCHEMA_FIELDS = [
+  // Bug 125: Google refuses `additionalProperties` anywhere inside a
+  // declaration — the top-level one is dropped by construction (only
+  // `properties` + `required` are forwarded), but the one Zod emits on an
+  // array's `items` object (wardrobe_wear / wardrobe_take_off `operations`)
+  // reached the wire and 400'd the whole tool-enabled turn.
+  'additionalProperties',
   'propertyNames',
   'additionalItems',
   'contains',
@@ -60,7 +67,7 @@ const UNSUPPORTED_SCHEMA_FIELDS = [
  * Recursively sanitize a JSON Schema object for Google's function calling API
  * Removes unsupported fields that would cause API errors
  */
-function sanitizeSchemaForGoogle(schema: any): any {
+export function sanitizeSchemaForGoogle(schema: any): any {
   if (!schema || typeof schema !== 'object') {
     return schema;
   }
