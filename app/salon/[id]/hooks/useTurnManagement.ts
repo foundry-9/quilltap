@@ -10,6 +10,7 @@ import {
   nudgeParticipant,
   addToQueue,
   removeFromQueue,
+  isUserDrivenSeat,
 } from '@/lib/chat/turn-manager'
 import type { ChatParticipantBase, Character } from '@/lib/schemas/types'
 import type { ParticipantData } from '@/components/chat/ParticipantCard'
@@ -114,6 +115,8 @@ export function useTurnManagement(
   triggerContinueMode: (participantId: string, nudge?: boolean) => Promise<void>,
   isPaused?: boolean,
   onUnpause?: () => Promise<void>,
+  /** Seats the human is impersonating this session (Bug 44 overlay; their `controlledBy` stays `'llm'`). */
+  impersonatingParticipantIds: readonly string[] = [],
 ) {
   const hasActiveCharacters = useMemo(() => {
     return participantsAsBase.filter(p => p.type === 'CHARACTER' && p.isActive && p.controlledBy !== 'user').length > 0
@@ -204,11 +207,24 @@ export function useTurnManagement(
     }
   }, [chatId, hasActiveCharacters, userParticipantId, turnState, setTurnState, setTurnSelectionResult, triggerContinueMode])
 
+  // Skip is offered whenever the human can type as a seat — their own character
+  // OR one they are impersonating — whether or not the rotation has formally
+  // landed on it (bug 123). The server's `skipUserTurn` accepts any user-driven
+  // seat (`isUserDrivenSeat`), records the pass, and picks the next speaker from
+  // there; the client's guard must agree, so it reads the overlay too rather than
+  // the bare `controlledBy` column (Bug 44).
   const handleSkipUserTurn = useCallback(async (participantId: string) => {
     const participant = participantsAsBase.find(p => p.id === participantId)
-    if (participant?.controlledBy !== 'user') {
-      showErrorToast('Only user-controlled characters can be skipped.')
+    if (!participant || !isUserDrivenSeat(participant, impersonatingParticipantIds)) {
+      showErrorToast('Only a character you are speaking as can be skipped.')
       return
+    }
+
+    // Skipping is an explicit "let someone else respond" — like a nudge, it
+    // lifts a pause first, or the next speaker it hands the floor to would be
+    // refused by the pause guard and the skip would appear to do nothing.
+    if (isPaused && onUnpause) {
+      await onUnpause()
     }
 
     const response = await callTurnAction(chatId, 'skipUserTurn', participantId)
@@ -220,10 +236,10 @@ export function useTurnManagement(
     applyServerResponse(response, setTurnState, setTurnSelectionResult, turnState)
 
     const { nextSpeakerId, nextSpeakerControlledBy } = response.turn
-    if (nextSpeakerId && nextSpeakerControlledBy !== 'user') {
+    if (nextSpeakerId && nextSpeakerControlledBy !== 'user' && !impersonatingParticipantIds.includes(nextSpeakerId)) {
       triggerContinueMode(nextSpeakerId)
     }
-  }, [chatId, participantsAsBase, turnState, setTurnState, setTurnSelectionResult, triggerContinueMode])
+  }, [chatId, participantsAsBase, turnState, setTurnState, setTurnSelectionResult, triggerContinueMode, isPaused, onUnpause, impersonatingParticipantIds])
 
   return {
     handleNudge,

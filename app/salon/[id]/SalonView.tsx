@@ -528,11 +528,12 @@ export function SalonView({ chatId }: SalonViewProps) {
   triggerContinueModeRef.current = sseStreaming.triggerContinueMode
   streamingRef.current = sseStreaming.streaming || sseStreaming.waitingForResponse
 
-  // The character the human is currently speaking as — resolved exactly the way
-  // the server attributes a typed message (`findActiveUserParticipant`, honouring
-  // the impersonation overlay), then hydrated with its avatar for the composer-side
-  // cue. Null when the human plays no character (e.g. an all-LLM room).
-  const speakingAsSeat = useMemo(() => {
+  // The seat the human is currently speaking as — resolved exactly the way the
+  // server attributes a typed message (`findActiveUserParticipant`, honouring
+  // the impersonation overlay). Null when the human plays no character (e.g. an
+  // all-LLM room). Feeds both the composer's voice cue and the Skip banner: if
+  // the composer will take words as this seat, Skip is offered for it too.
+  const speakingSeat = useMemo(() => {
     const resolved = findActiveUserParticipant(
       participantsWithImpersonation.participantsAsBase,
       impersonation.activeTypingParticipantId,
@@ -540,7 +541,17 @@ export function SalonView({ chatId }: SalonViewProps) {
     )
     const seatId = resolved?.id ?? impersonation.activeTypingParticipantId
     if (!seatId) return null
-    const p = participantsWithImpersonation.participantData.find(pp => pp.id === seatId)
+    return participantsWithImpersonation.participantData.find(pp => pp.id === seatId) ?? null
+  }, [
+    participantsWithImpersonation.participantsAsBase,
+    participantsWithImpersonation.participantData,
+    impersonation.activeTypingParticipantId,
+    impersonation.impersonatingParticipantIds,
+  ])
+
+  // The same seat hydrated with its avatar for the composer-side cue.
+  const speakingAsSeat = useMemo(() => {
+    const p = speakingSeat
     if (!p?.character) return null
     return {
       name: p.character.name,
@@ -550,12 +561,7 @@ export function SalonView({ chatId }: SalonViewProps) {
         avatarUrl: p.character.avatarUrl ?? null,
       },
     }
-  }, [
-    participantsWithImpersonation.participantsAsBase,
-    participantsWithImpersonation.participantData,
-    impersonation.activeTypingParticipantId,
-    impersonation.impersonatingParticipantIds,
-  ])
+  }, [speakingSeat])
 
   // Bug 49: the composer's speaking-as follows the current user-driven turn.
   // When the rotation lands on a seat the human drives — their own character OR
@@ -697,6 +703,7 @@ export function SalonView({ chatId }: SalonViewProps) {
     stableTriggerContinueMode,
     isPaused,
     unpauseChat,
+    impersonation.impersonatingParticipantIds,
   )
 
   // --- Document title ---
@@ -1450,19 +1457,21 @@ export function SalonView({ chatId }: SalonViewProps) {
           </div>
         )}
 
-        {/* User-turn indicator: shown when the rotation has landed on a seat the
-            human drives — a genuine user-controlled character OR a seat they are
-            impersonating this session (Bug 46: impersonation is an overlay,
-            `controlledBy` stays `'llm'`, so an impersonated seat's own turn must
-            be announced via the overlay, not the bare column). The human can type
-            as them, or Skip to let the rotation move on to the next LLM character. */}
+        {/* Skip banner: shown whenever the human can type as a seat — their own
+            character OR one they are impersonating this session (Bug 46: the
+            overlay, not the bare `controlledBy` column) — and not only when the
+            rotation has formally landed on it (bug 123). If the composer will
+            take words as this seat, Skip is offered for it too: a pass is "let
+            someone else respond", and that is as meaningful mid-rotation as it
+            is on-turn. The wording says whose turn it is; only the must-speak
+            guard withholds the button. */}
         {(() => {
-          if (sseStreaming.streaming || sseStreaming.waitingForResponse) return null
-          const nextId = turnSelectionResult?.nextSpeakerId
-          if (!nextId) return null
-          const next = participantsWithImpersonation.participantData.find(p => p.id === nextId)
-          if (!next || !isUserDrivenSeat({ id: next.id, controlledBy: next.controlledBy ?? 'llm' }, impersonation.impersonatingParticipantIds)) return null
-          const name = next.character?.name ?? 'this character'
+          if (sseStreaming.streaming || sseStreaming.waitingForResponse || sseStreaming.sending) return null
+          if (!participantsWithImpersonation.hasActiveCharacters) return null
+          const seat = speakingSeat
+          if (!seat || !isUserDrivenSeat({ id: seat.id, controlledBy: seat.controlledBy ?? 'llm' }, impersonation.impersonatingParticipantIds)) return null
+          const name = seat.character?.name ?? 'this character'
+          const isSeatsTurn = turnSelectionResult?.nextSpeakerId === seat.id
 
           // Must-speak guard: when every other active character has passed since
           // the last substantive message, the floor falls to this participant and
@@ -1471,12 +1480,12 @@ export function SalonView({ chatId }: SalonViewProps) {
           // client and server agree. Best-effort: any failure leaves Skip enabled.
           let mustSpeak = false
           try {
-            if (next.character) {
+            if (seat.character) {
               const eligibility = computeSkipEligibility({
                 events: toTurnEvents(messages),
                 participants: participantsWithImpersonation.participantsAsBase as unknown as ChatParticipantBase[],
-                respondingParticipantId: next.id,
-                respondingCharacter: next.character as unknown as Character,
+                respondingParticipantId: seat.id,
+                respondingCharacter: seat.character as unknown as Character,
                 summoned: false,
                 turnSkippingEnabled: chat?.turnSkippingEnabled !== false,
               })
@@ -1491,12 +1500,14 @@ export function SalonView({ chatId }: SalonViewProps) {
               <span className="qt-text-secondary">
                 {mustSpeak
                   ? `Everyone else has passed — it falls to ${name} to say something.`
-                  : `${name}'s turn — type as them, or skip to let someone else respond.`}
+                  : isSeatsTurn
+                    ? `${name}'s turn — type as them, or skip to let someone else respond.`
+                    : `Speaking as ${name} — type, or skip to let someone else take the floor.`}
               </span>
               {!mustSpeak && (
                 <button
                   type="button"
-                  onClick={() => turnManagement.handleSkipUserTurn(next.id)}
+                  onClick={() => turnManagement.handleSkipUserTurn(seat.id)}
                   className="qt-button-secondary px-3 py-1 rounded text-sm"
                 >
                   Skip

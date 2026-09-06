@@ -156,7 +156,14 @@ export function useChatControls({
 
   // Sync storyBackgroundsEnabled state when chatSettings loads - handled in page via chatSettings
 
-  // Initialize isPaused from chat data
+  // Reconcile the local pause flag with the server's on EVERY fetch, not only
+  // when the fetched value changes. Keying this on `chat?.isPaused` alone let
+  // the two drift (bug 123): Resume flipped local state and persisted it but
+  // left the fetched object saying paused, so when the server re-paused (a
+  // chain error) the next fetch went paused→paused — no transition, no sync —
+  // and the Salon kept reporting "not paused" while every message got exactly
+  // one reply. `chat` is replaced wholesale by each fetch, so it is the right
+  // key; a same-value set is a no-op for React.
   useEffect(() => {
     if (chat?.isPaused !== undefined) {
       setIsPaused(chat.isPaused)
@@ -164,7 +171,7 @@ export function useChatControls({
         userStoppedStreamRef.current = true
       }
     }
-  }, [chat?.isPaused, setIsPaused])
+  }, [chat, setIsPaused])
 
   // Initialize documentEditingMode from chat data
   useEffect(() => {
@@ -210,12 +217,14 @@ export function useChatControls({
   )
 
   // Set the pause state and persist it. No rollback: a failed write leaves the
-  // local pause in place and is only logged.
+  // local pause in place and is only logged. The fetched chat object is updated
+  // too, so it never disagrees with the local flag between fetches (bug 123).
   const setPauseState = useCallback(async (paused: boolean) => {
     setIsPaused(paused)
     userStoppedStreamRef.current = paused
+    setChat((prev) => (prev ? { ...prev, isPaused: paused } : prev))
     await persistChatField(chatId, { isPaused: paused }, 'pause state')
-  }, [chatId, setIsPaused])
+  }, [chatId, setIsPaused, setChat])
 
   // Toggle pause state
   const togglePause = useCallback(async () => {
