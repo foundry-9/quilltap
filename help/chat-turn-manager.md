@@ -238,10 +238,10 @@ When everyone in the rotation (including any user-controlled characters) has tak
 
 ### User-Controlled Characters
 
-Characters you're impersonating sit in the same weighted rotation as the LLM characters. When the rotation lands on one of them, the chat pauses with a banner above the composer that names them — "Alice's turn — type as them, or skip…" — and offers a Skip button.
+Characters you're impersonating sit in the same weighted rotation as the LLM characters. When the rotation lands on one of them, the chat waits for you, and the banner above the composer says so — "Alice's turn — type as them, or skip…" The banner and its **Skip** button are present whenever you could speak as a character at all, not only on that character's turn; between turns it reads "Speaking as Alice — type, or skip to let someone else take the floor."
 
 - Type your character's response in the composer and send normally
-- Or hit **Skip** to record their turn as taken (no message) and let the next character respond
+- Or hit **Skip** to record their turn as taken (no message) and let the next character respond — on their turn or off it. If the conversation was paused, Skip resumes it first
 - Talkativeness applies to user characters too — a chatty user character will come up more often than a quiet one
 - Other LLM characters continue their turns normally; you can still queue an impersonated character with the sidebar's Queue button if you want them up sooner
 - When the rotation reaches a seat you're driving, the composer defaults the voice above the input to *that* seat, so you're already speaking as whoever's turn it is. Taking up a character's pen also hands them the floor at once, rather than making you wait for the rotation to come round. A voice you pick by hand for the turn still stands; the composer only re-defaults as the turn moves on.
@@ -289,6 +289,10 @@ If all eligible characters have zero talkativeness:
 - Click **Resume** to continue
 - Turn manager resumes normal operation
 - Next eligible character speaks
+
+### When a Turn Fails
+
+If a character's turn fails outright — its connection profile errors and every understudy in the fallback chain comes back empty — the Turn Manager pauses the conversation rather than knock on the same broken door turn after turn. A notice says so, and the sidebar button reads **Resume**. Mend the profile (or pick another from the character's card), then press **Resume**, nudge someone, or Skip your own turn; any of the three lifts the pause. Until you do, each message you send draws a single reply and the rotation goes no further.
 
 ### Auto-Pause
 

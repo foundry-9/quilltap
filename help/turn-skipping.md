@@ -30,7 +30,9 @@ A room where everyone passes would fall silent forever, so a single rule prevent
 
 ## The Skip Button
 
-When the rotation lands on a character *you* control, the composer shows a small banner with a **Skip** button. Pressing it passes your turn exactly as a character's pass does: the Host notes it, and play advances. Because your passes feed the same stall guard as everyone else's, the Skip button quietly disappears — and a direct request is refused — when every other character has already passed and it truly falls to you to speak. The banner then reads *"Everyone else has passed — it falls to \<name\> to say something."*
+Whenever the composer will take your words as a character — your own, or one whose pen you have taken up for the evening — a small banner sits above it with a **Skip** button. It is there every time you *could* speak, not merely when the rotation has formally come round to you. When it is your character's turn, the banner says so: *"\<name\>'s turn — type as them, or skip to let someone else respond."* Between turns it reads *"Speaking as \<name\> — type, or skip to let someone else take the floor."* Either way, pressing Skip passes exactly as a character's pass does: the Host notes it, and the floor moves to the next character who is minded to speak. Should the conversation have been paused, a Skip lifts the pause first — a pass is, after all, an instruction to carry on without you.
+
+Because your passes feed the same stall guard as everyone else's, the Skip button quietly disappears — and a direct request is refused — when every other character has already passed and it truly falls to you to speak. The banner then reads *"Everyone else has passed — it falls to \<name\> to say something."*
 
 ## Turning It On or Off
 

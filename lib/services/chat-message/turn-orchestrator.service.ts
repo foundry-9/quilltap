@@ -319,7 +319,7 @@ export async function executeTurnChain({
   // A skipped initial turn ("nothing to add") is NOT terminal — it advanced the
   // rotation via a Host turn-pass record, so the chain must continue to the next
   // speaker. Only a genuinely empty (no content, no skip) initial turn stops here.
-  if (!initialResult.isMultiCharacter || (!initialResult.hasContent && !initialResult.skipped) || initialResult.isPaused) {
+  if (!initialResult.isMultiCharacter || (!initialResult.hasContent && !initialResult.skipped)) {
     return
   }
 
@@ -333,6 +333,25 @@ export async function executeTurnChain({
       chatId,
       userId,
     })
+    return
+  }
+
+  // A paused chat stops here too — but never silently. The flag may have been
+  // set by the Pause button, by the all-LLM threshold, or by the chain-error
+  // handler below on an earlier turn, and the client's copy of it can be stale
+  // (bug 123: a re-pause that fetched as paused→paused never reached the Salon,
+  // so every later message got exactly one reply and no explanation). Emit the
+  // same `paused` chain-complete a mid-chain pause decision would, so the client
+  // refetches, reconciles its pause state, and can tell the user.
+  if (initialResult.isPaused) {
+    logger.info('[TurnOrchestrator] Chat paused, not chaining after initial turn', { chatId, userId })
+    await persistTurnParticipant(repos, chatId, null)
+    safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
+      reason: 'paused',
+      nextSpeakerId: null,
+      chainDepth: 0,
+      paused: true,
+    }))
     return
   }
 
@@ -361,6 +380,7 @@ export async function executeTurnChain({
         reason: decision.reason as 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete',
         nextSpeakerId: finalNextSpeaker,
         chainDepth,
+        paused: decision.reason === 'paused',
       }))
       break
     }
@@ -397,6 +417,10 @@ export async function executeTurnChain({
           reason: 'error',
           nextSpeakerId: null,
           chainDepth,
+          // An empty reply stops the chain but does NOT pause the chat — the
+          // next user message chains normally. Said explicitly so the client
+          // never infers a pause from `reason: 'error'` alone.
+          paused: false,
         }))
         break
       }
@@ -408,12 +432,16 @@ export async function executeTurnChain({
         error: chainError instanceof Error ? chainError.message : String(chainError),
       })
 
+      // Safety stop: pause so a failing provider cannot be re-polled turn after
+      // turn. The pause outlives this stream — the user lifts it with Resume —
+      // so it must be announced (`paused: true`), not just recorded (bug 123).
       await repos.chats.update(chatId, { isPaused: true })
       await persistTurnParticipant(repos, chatId, null)
       safeEnqueue(controller, encodeChainCompleteEvent(encoder, {
         reason: 'error',
         nextSpeakerId: null,
         chainDepth,
+        paused: true,
       }))
       break
     }
