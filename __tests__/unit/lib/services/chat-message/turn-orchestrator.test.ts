@@ -452,10 +452,158 @@ describe('turn-orchestrator.service', () => {
 
       expect(repos.chats.update).toHaveBeenCalledWith('chat-1', { isPaused: true });
       expect(persistTurnParticipant).toHaveBeenCalledWith(repos, 'chat-1', null);
+      // Bug 123: the safety-stop pause outlives the stream, so the event must
+      // say it paused — `reason: 'error'` alone cannot (an empty response also
+      // stops with 'error' and does NOT pause).
       expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
         reason: 'error',
         nextSpeakerId: null,
+        paused: true,
       }));
+    });
+
+    it('does not flag an empty-response error stop as paused', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest.fn().mockResolvedValue({
+        chain: true,
+        participantId: 'llm-1',
+        characterName: 'Alice',
+        reason: 'continue',
+      });
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      const processChainedMessage = jest.fn().mockResolvedValue({
+        ...initialResult,
+        hasContent: false,
+        messageId: null,
+      });
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult,
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      expect(repos.chats.update).not.toHaveBeenCalledWith('chat-1', { isPaused: true });
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'error',
+        paused: false,
+      }));
+    });
+
+    it('flags a mid-chain paused decision as paused', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest.fn().mockResolvedValue({
+        chain: false,
+        participantId: null,
+        reason: 'paused',
+      });
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult,
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage: jest.fn(),
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'paused',
+        paused: true,
+      }));
+    });
+
+    it('announces a paused stop when the INITIAL result is paused instead of returning silently (bug 123)', async () => {
+      // Before the fix this path returned with no event and no log: the client
+      // never refetched, so a stale "not paused" stuck until a reload, and each
+      // user message drew exactly one reply. Now it emits the same `paused`
+      // chain-complete a mid-chain pause decision does.
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const decideNextTurn = jest.fn();
+      const persistTurnParticipant = jest.fn().mockResolvedValue(undefined);
+      const processChainedMessage = jest.fn();
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult: { ...initialResult, isPaused: true },
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage,
+        decideNextTurn,
+        persistTurnParticipant,
+      });
+
+      expect(decideNextTurn).not.toHaveBeenCalled();
+      expect(processChainedMessage).not.toHaveBeenCalled();
+      expect(persistTurnParticipant).toHaveBeenCalledWith(repos, 'chat-1', null);
+      expect(controller.enqueue).toHaveBeenCalledTimes(1);
+      expect(controller.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+        reason: 'paused',
+        nextSpeakerId: null,
+        chainDepth: 0,
+        paused: true,
+      }));
+    });
+
+    it('stays silent for a paused single-character result (no chain to announce)', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult: { ...initialResult, isMultiCharacter: false, isPaused: true },
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage: jest.fn(),
+        decideNextTurn: jest.fn(),
+        persistTurnParticipant: jest.fn(),
+      });
+
+      expect(controller.enqueue).not.toHaveBeenCalled();
+    });
+
+    it('lets singleTurn win over a paused initial result (the autonomous runner owns its lifecycle)', async () => {
+      const repos = createMockRepos();
+      const controller = { enqueue: jest.fn() } as any;
+      const persistTurnParticipant = jest.fn();
+
+      await executeTurnChain({
+        repos: repos as any,
+        chatId: 'chat-1',
+        userId: 'user-1',
+        initialResult: { ...initialResult, isPaused: true },
+        initialContinueMode: false,
+        controller,
+        encoder,
+        processChainedMessage: jest.fn(),
+        decideNextTurn: jest.fn(),
+        persistTurnParticipant,
+        singleTurn: true,
+      });
+
+      expect(controller.enqueue).not.toHaveBeenCalled();
+      expect(persistTurnParticipant).not.toHaveBeenCalled();
     });
   });
 

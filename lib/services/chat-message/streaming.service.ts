@@ -735,6 +735,15 @@ export function encodeChainCompleteEvent(
     reason: 'user_turn' | 'paused' | 'max_depth' | 'max_time' | 'error' | 'no_next_speaker' | 'cycle_complete'
     nextSpeakerId: string | null
     chainDepth: number
+    /**
+     * True when the chat is (or has just been) marked `isPaused` as part of this
+     * stop — a `paused` decision, the paused early-return, or the chain-error
+     * handler that pauses as its safety stop. `reason` alone cannot say so: an
+     * `error` stop pauses when a chained turn threw but not when it merely came
+     * back empty. The Salon uses this to announce the pause instead of letting
+     * the room fall silent with no explanation (bug 123).
+     */
+    paused?: boolean
   }
 ): Uint8Array {
   return encoder.encode(`data: ${JSON.stringify({ chainComplete: true, ...data })}\n\n`)

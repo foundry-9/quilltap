@@ -5,7 +5,7 @@ import { showSuccessToast, showErrorToast, showWarningToast, showInfoToast } fro
 import { getErrorMessage } from '@/lib/error-utils'
 import { notifyQueueChange } from '@/components/layout/queue-status-badges'
 import type { ChatParticipantBase } from '@/lib/schemas/types'
-import { findActiveUserParticipant } from '@/lib/chat/turn-manager'
+import { findActiveUserParticipant, isAllLLMChat } from '@/lib/chat/turn-manager'
 import type { Message, MessageAttachment, Chat, PendingToolResult } from '../types'
 import type { ComposerEditorHandle } from '@/components/chat/lexical/types'
 import { useToolExecutionStatus } from './useToolExecutionStatus'
@@ -95,6 +95,8 @@ interface SSEEvent {
   chainDepth?: number
   nextSpeakerId?: string | null
   reason?: string
+  /** chainComplete: the chat is (or was just) marked paused as part of this stop (bug 123). */
+  paused?: boolean
   isSilentMessage?: boolean
   // The Courier: { pendingExternalTurn: true, messageId, participantId, characterName }
   pendingExternalTurn?: boolean
@@ -364,6 +366,32 @@ export function useSSEStreaming({
     setStreaming(false)
   }, [resetStreamingContent])
 
+  // Mirrors `isPaused` so a callback closed over an earlier render can still ask
+  // whether a pause is *news* — a stop the user did not cause themselves.
+  const isPausedRef = useRef(isPaused)
+  useEffect(() => {
+    isPausedRef.current = isPaused
+  }, [isPaused])
+
+  /**
+   * Bug 123: a chain that stops because the chat is paused used to do so in
+   * silence — the room simply stopped answering, one reply per message, and the
+   * sidebar's Pause button was the only place the state was visible (and, with
+   * the sync drift the same bug fixed, not even there). Say so. Skipped when the
+   * user pressed Pause themselves (they already got the toggle's toast) and in
+   * an all-LLM room, where AllLLMPauseModal explains the stop.
+   */
+  const announceChainPause = useCallback((event: { reason: string; paused: boolean }) => {
+    if (!event.paused) return
+    if (isPausedRef.current) return
+    if (isAllLLMChat(participantsAsBase)) return
+    if (event.reason === 'error') {
+      showWarningToast('A character\'s turn failed, so auto-responses are paused. Press Resume in the sidebar to carry on.')
+    } else {
+      showInfoToast('Auto-responses are paused. Press Resume in the sidebar to let the others answer.')
+    }
+  }, [participantsAsBase])
+
   // Patch a message in place with its resolved answer-confirmation state. On a
   // re-affirmation rewrite (`content` present) the optimistic bubble text is
   // replaced with the corrected reply — a deliberate, visible transparency swap.
@@ -505,7 +533,7 @@ export function useSSEStreaming({
       onIntermediateDone?: (fullContent: string, data: SSEEvent) => void | Promise<void>
       onTurnStart?: (event: { participantId: string; characterName: string; chainDepth: number }) => void
       onTurnComplete?: (event: { participantId: string; messageId: string; chainDepth: number }) => void | Promise<void>
-      onChainComplete?: (event: { reason: string; nextSpeakerId: string | null; chainDepth: number }) => void | Promise<void>
+      onChainComplete?: (event: { reason: string; nextSpeakerId: string | null; chainDepth: number; paused: boolean }) => void | Promise<void>
     }
   ): Promise<string> => {
     const decoder = new TextDecoder()
@@ -659,6 +687,7 @@ export function useSSEStreaming({
             reason: data.reason || 'no_next_speaker',
             nextSpeakerId: data.nextSpeakerId ?? null,
             chainDepth: data.chainDepth || 0,
+            paused: data.paused === true,
           })
         }
       }
@@ -924,6 +953,7 @@ export function useSSEStreaming({
           setRespondingParticipantId(null)
           scrollOnStreamComplete()
           await fetchChat()
+          announceChainPause(event)
           notifyQueueChange()
           focusInput()
         },
@@ -961,7 +991,7 @@ export function useSSEStreaming({
       focusInput()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onToolResultCallback is a stable page-level callback
-  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, sending, isPaused, chat, respondingParticipantId, setMessages, scrollOnUserMessage, scrollOnStreamComplete, fetchChat, setAttachedFiles, setRespondingParticipantId, getFirstCharacterParticipant, readSSEStream, extractErrorMessage, focusInput, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   /**
    * Trigger continue mode - request AI to generate a response from a specific participant.
@@ -1099,6 +1129,7 @@ export function useSSEStreaming({
           setRespondingParticipantId(null)
           scrollOnStreamComplete()
           await fetchChat()
+          announceChainPause(event)
           notifyQueueChange()
           focusInput()
         },
@@ -1122,7 +1153,7 @@ export function useSSEStreaming({
       notifyQueueChange()
       focusInput()
     }
-  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
+  }, [chatId, streaming, waitingForResponse, isPaused, participantsAsBase, hasActiveCharacters, setMessages, scrollOnStreamComplete, setRespondingParticipantId, readSSEStream, extractErrorMessage, focusInput, fetchChat, resetStreamingContent, surfaceMessage, finishSkippedTurn, announceChainPause, trackToolsDetected, trackToolResult, applyConfirmationResult, clearPendingToolExecutionStatus])
 
   const stopStreaming = useCallback(() => {
     if (abortControllerRef.current) {

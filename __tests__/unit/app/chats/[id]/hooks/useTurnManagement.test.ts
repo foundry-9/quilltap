@@ -6,6 +6,7 @@
  * - handleQueue: Add participant to turn queue
  * - handleDequeue: Remove participant from turn queue
  * - handleContinue: Pass turn to next character
+ * - handleSkipUserTurn: Pass the turn of a seat the human speaks as (bug 123)
  */
 
 import { renderHook, act } from '@testing-library/react'
@@ -34,6 +35,9 @@ jest.mock('@/lib/chat/turn-manager', () => ({
     ...state,
     queue: state.queue.filter((id: string) => id !== participantId),
   })),
+  // Real semantics (owner OR impersonation overlay) — the Skip guard depends on it.
+  isUserDrivenSeat: (p: { id: string; controlledBy?: string }, ids?: readonly string[] | null) =>
+    p.controlledBy === 'user' || (Array.isArray(ids) && ids.includes(p.id)),
 }))
 
 // Import the hook and mocked modules after mocks are set up
@@ -699,6 +703,144 @@ describe('useTurnManagement', () => {
       expect(mockShowInfoToast).toHaveBeenCalledWith(
         'No characters available to speak. Try adding or activating a character.'
       )
+      expect(triggerContinueMode).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('handleSkipUserTurn', () => {
+    const skipResponse = (nextSpeakerId: string | null, nextSpeakerControlledBy: string | null = 'llm') => ({
+      ok: true,
+      json: async () => ({
+        ...createMockTurnResponse({ nextSpeakerId, nextSpeakerControlledBy }),
+        action: 'skipUserTurn',
+      }),
+    })
+
+    it('skips a user-owned seat and hands the floor to the next LLM speaker', async () => {
+      mockFetch.mockResolvedValue(skipResponse('p1'))
+
+      const { result } = renderHook(() =>
+        useTurnManagement(
+          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          setTurnState, setTurnSelectionResult, triggerContinueMode,
+        )
+      )
+
+      await act(async () => {
+        await result.current.handleSkipUserTurn('p3')
+      })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ action: 'skipUserTurn', participantId: 'p3' }),
+        })
+      )
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
+      expect(mockShowErrorToast).not.toHaveBeenCalled()
+    })
+
+    it('skips an impersonated seat whose durable controlledBy is still llm (Bug 44 overlay)', async () => {
+      mockFetch.mockResolvedValue(skipResponse('p2'))
+
+      const { result } = renderHook(() =>
+        useTurnManagement(
+          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          setTurnState, setTurnSelectionResult, triggerContinueMode,
+          false, undefined,
+          ['p1'], // impersonating Alice
+        )
+      )
+
+      await act(async () => {
+        await result.current.handleSkipUserTurn('p1')
+      })
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        `/api/v1/chats/${TEST_CHAT_ID}?action=turn`,
+        expect.objectContaining({
+          body: JSON.stringify({ action: 'skipUserTurn', participantId: 'p1' }),
+        })
+      )
+      expect(triggerContinueMode).toHaveBeenCalledWith('p2')
+      expect(mockShowErrorToast).not.toHaveBeenCalled()
+    })
+
+    it('refuses an LLM seat the human is not speaking as', async () => {
+      const { result } = renderHook(() =>
+        useTurnManagement(
+          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          setTurnState, setTurnSelectionResult, triggerContinueMode,
+        )
+      )
+
+      await act(async () => {
+        await result.current.handleSkipUserTurn('p1')
+      })
+
+      expect(mockFetch).not.toHaveBeenCalled()
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Only a character you are speaking as can be skipped.')
+      expect(triggerContinueMode).not.toHaveBeenCalled()
+    })
+
+    it('lifts a pause before skipping so the next speaker is not refused by the pause guard', async () => {
+      mockFetch.mockResolvedValue(skipResponse('p1'))
+      const callOrder: string[] = []
+      onUnpause.mockImplementation(async () => { callOrder.push('unpause') })
+      mockFetch.mockImplementation(async () => { callOrder.push('skip'); return skipResponse('p1') })
+
+      const { result } = renderHook(() =>
+        useTurnManagement(
+          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          setTurnState, setTurnSelectionResult, triggerContinueMode,
+          true, // isPaused
+          onUnpause,
+        )
+      )
+
+      await act(async () => {
+        await result.current.handleSkipUserTurn('p3')
+      })
+
+      expect(callOrder).toEqual(['unpause', 'skip'])
+      expect(triggerContinueMode).toHaveBeenCalledWith('p1')
+    })
+
+    it('does not hand the floor to another seat the human drives', async () => {
+      mockFetch.mockResolvedValue(skipResponse('p1', 'llm'))
+
+      const { result } = renderHook(() =>
+        useTurnManagement(
+          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          setTurnState, setTurnSelectionResult, triggerContinueMode,
+          false, undefined,
+          ['p1'], // the "next speaker" is a seat the human is impersonating
+        )
+      )
+
+      await act(async () => {
+        await result.current.handleSkipUserTurn('p3')
+      })
+
+      expect(triggerContinueMode).not.toHaveBeenCalled()
+    })
+
+    it('shows an error toast when the skip request fails', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 400, json: async () => ({ error: 'nope' }) })
+
+      const { result } = renderHook(() =>
+        useTurnManagement(
+          TEST_CHAT_ID, participantsAsBase, charactersMap, turnState, 'p3', participantData,
+          setTurnState, setTurnSelectionResult, triggerContinueMode,
+        )
+      )
+
+      await act(async () => {
+        await result.current.handleSkipUserTurn('p3')
+      })
+
+      expect(mockShowErrorToast).toHaveBeenCalledWith('Failed to skip turn. Please try again.')
       expect(triggerContinueMode).not.toHaveBeenCalled()
     })
   })
